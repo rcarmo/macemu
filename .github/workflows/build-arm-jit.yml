@@ -53,7 +53,7 @@ jobs:
             NO_CONFIGURE=1 ./autogen.sh || autoconf
           fi
           
-          # Cross-compile for armhf
+          # Cross-compile for armhf with JIT enabled
           export CC=arm-linux-gnueabihf-gcc
           export CXX=arm-linux-gnueabihf-g++
           export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
@@ -63,9 +63,15 @@ jobs:
             --build=aarch64-linux-gnu \
             --enable-sdl-video \
             --enable-sdl-audio \
+            --enable-jit-compiler \
+            --enable-addressing=direct \
+            --enable-fpe=ieee \
+            --disable-vosf \
             --disable-gtk \
             --without-mon \
             --without-x \
+            --without-esd \
+            --disable-nls \
             --with-sdl2
 
       - name: Build BasiliskII with ARM32 JIT

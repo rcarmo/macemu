@@ -7,6 +7,22 @@ SDL_VERSION = 2.32.8
 SDL_BUILD_DIR = $(CURDIR)/SDL2-$(SDL_VERSION)
 SDL_INSTALL_DIR = $(CURDIR)/sdl2-local
 
+# Detect architecture for JIT support
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+# Enable JIT on architectures that support it (i386, amd64, armhf)
+# ARM64 (aarch64) does not have JIT support in BasiliskII
+JIT_OPTION = --disable-jit-compiler
+ifeq ($(DEB_HOST_ARCH),i386)
+  JIT_OPTION = --enable-jit-compiler --enable-addressing=direct --enable-fpe=ieee
+endif
+ifeq ($(DEB_HOST_ARCH),amd64)
+  JIT_OPTION = --enable-jit-compiler --enable-addressing=direct --enable-fpe=ieee
+endif
+ifeq ($(DEB_HOST_ARCH),armhf)
+  JIT_OPTION = --enable-jit-compiler --enable-addressing=direct --enable-fpe=ieee
+endif
+
 %:
 	dh $@
 
@@ -25,7 +41,7 @@ override_dh_auto_configure:
 		--disable-video-wayland
 	$(MAKE) -C $(SDL_BUILD_DIR) -j$$(nproc)
 	$(MAKE) -C $(SDL_BUILD_DIR) install
-	# Configure BasiliskII
+	# Configure BasiliskII (JIT enabled on supported architectures)
 	cd src/Unix && NO_CONFIGURE=1 ./autogen.sh
 	cd src/Unix && PKG_CONFIG_PATH=$(SDL_INSTALL_DIR)/lib/pkgconfig ./configure \
 		--prefix=/usr \
@@ -36,7 +52,7 @@ override_dh_auto_configure:
 		--without-mon \
 		--without-esd \
 		--without-gtk \
-		--disable-jit-compiler \
+		$(JIT_OPTION) \
 		--disable-nls
 
 override_dh_auto_build:

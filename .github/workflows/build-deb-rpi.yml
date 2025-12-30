@@ -263,10 +263,10 @@ jobs:
           make -j$(nproc)
           sudo make install
 
-      - name: Build BasiliskII (cross-compile)
+      - name: Build BasiliskII (cross-compile with JIT)
         run: |
           set -e
-          echo "=== Building BasiliskII (armhf) ==="
+          echo "=== Building BasiliskII (armhf) with JIT ==="
           cd BasiliskII/src/Unix
           NO_CONFIGURE=1 ./autogen.sh
           export PKG_CONFIG_PATH=/usr/local/armhf/lib/pkgconfig
@@ -277,11 +277,13 @@ jobs:
             --prefix=/usr \
             --enable-sdl-audio \
             --enable-sdl-video \
+            --enable-jit-compiler \
+            --enable-addressing=direct \
+            --enable-fpe=ieee \
             --disable-vosf \
             --without-mon \
             --without-esd \
             --without-gtk \
-            --disable-jit-compiler \
             --disable-nls
           make -j$(nproc)
 
@@ -348,7 +350,7 @@ jobs:
           Installed-Size: ${INSTALLED_SIZE}
           Maintainer: Rui Carmo <https://github.com/rcarmo>
           Homepage: https://github.com/rcarmo/macemu
-          Description: 68k Macintosh emulator (SDL build)
+          Description: 68k Macintosh emulator (SDL build with JIT)
            Basilisk II is an Open Source 68k Macintosh emulator. It enables
            you to run 68k MacOS software on your computer, even if you are
            using a different operating system.
@@ -356,8 +358,12 @@ jobs:
            This is a lightweight SDL2 build optimized for Raspberry Pi,
            using framebuffer/KMS display without X11, Wayland, or GTK.
            .
+           This build includes the ARM JIT compiler for significantly improved
+           68k emulation performance on 32-bit ARM hardware.
+           .
            Features include:
             - Emulates Mac Classic or Mac II series machines
+            - JIT compiler for accelerated 68k emulation
             - Color video display via SDL2 (framebuffer/KMS)
             - CD quality sound output via SDL2/ALSA
             - Floppy disk driver (1.44MB disks)
