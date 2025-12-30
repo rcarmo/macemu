@@ -1480,7 +1480,7 @@ else
       dnl Requires VOSF screen updates
       if [[ "x$CAN_VOSF" = "xyes" ]]; then
         ADDRESSING_MODE="direct"
-        DEFINES="$DEFINES -DDIRECT_ADDRESSING"
+        DEFINES="$DEFINES -DDIRECT_ADDRESSING=1"
         break
       fi
       ;;

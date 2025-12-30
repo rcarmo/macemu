@@ -23,7 +23,7 @@
 #ifndef UAE_MEMORY_H
 #define UAE_MEMORY_H
 
-#if DIRECT_ADDRESSING
+#ifdef DIRECT_ADDRESSING
 extern uintptr MEMBaseDiff;
 #endif
 
@@ -55,7 +55,7 @@ extern void Exception (int, uaecptr);
     #define VOLATILE
 #endif /* EXCEPTIONS_VIA_LONGJMP */
 
-#if DIRECT_ADDRESSING
+#ifdef DIRECT_ADDRESSING
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
 	return (uae_u8 *)MEMBaseDiff + addr;

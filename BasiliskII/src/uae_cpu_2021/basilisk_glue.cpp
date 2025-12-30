@@ -48,7 +48,7 @@ uint32 MacFrameSize;		// Size of frame buffer
 int MacFrameLayout;			// Frame buffer layout
 #endif
 
-#if DIRECT_ADDRESSING
+#ifdef DIRECT_ADDRESSING
 uintptr MEMBaseDiff;		// Global offset between a Mac address and its Host equivalent
 #endif
 
