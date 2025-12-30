@@ -1638,6 +1638,7 @@ CPUSRCS="cpuemu1.cpp cpuemu2.cpp cpuemu3.cpp cpuemu4.cpp cpuemu5.cpp cpuemu6.cpp
 dnl (gb) JITSRCS will be emptied later if the JIT is not available
 dnl Other platforms should define their own set of noflags file variants
 CAN_JIT=no
+CAN_JIT_FPU=no
 JITSRCS="compemu1.cpp compemu2.cpp compemu3.cpp compemu4.cpp compemu5.cpp compemu6.cpp compemu7.cpp compemu8.cpp"
 
 if [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_I386" = "xyes" ]]; then
@@ -1648,6 +1649,7 @@ if [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_I386" = "xyes" ]]; then
     DEFINES="$DEFINES -DX86_ASSEMBLY -DOPTIMIZED_FLAGS -DSAHF_SETO_PROFITABLE"
     JITSRCS="cpuemu1_nf.cpp cpuemu2_nf.cpp cpuemu3_nf.cpp cpuemu4_nf.cpp cpuemu5_nf.cpp cpuemu6_nf.cpp cpuemu7_nf.cpp cpuemu8_nf.cpp $JITSRCS"
     CAN_JIT=yes
+    CAN_JIT_FPU=yes
   fi
 elif [[ "x$HAVE_GCC30" = "xyes" -a "x$HAVE_X86_64" = "xyes" ]]; then
   dnl x86-64 CPU
@@ -1657,6 +1659,7 @@ elif [[ "x$HAVE_GCC30" = "xyes" -a "x$HAVE_X86_64" = "xyes" ]]; then
     DEFINES="$DEFINES -DX86_64_ASSEMBLY -DOPTIMIZED_FLAGS"
     JITSRCS="cpuemu1_nf.cpp cpuemu2_nf.cpp cpuemu3_nf.cpp cpuemu4_nf.cpp cpuemu5_nf.cpp cpuemu6_nf.cpp cpuemu7_nf.cpp cpuemu8_nf.cpp $JITSRCS"
     CAN_JIT=yes
+    CAN_JIT_FPU=yes
   fi
 elif [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_SPARC" = "xyes" -a "x$HAVE_GAS" = "xyes" ]]; then
   dnl SPARC CPU
@@ -1702,8 +1705,15 @@ fi
 
 dnl Enable JIT compiler, if possible.
 if [[ "x$WANT_JIT" = "xyes" -a "x$CAN_JIT" = "xyes" ]]; then
-  JITSRCS="$JITSRCS $UAE_PATH/compiler/compemu_support.cpp $UAE_PATH/compiler/compemu_fpp.cpp compstbl.o cpustbl_nf.o"
-  DEFINES="$DEFINES -DUSE_JIT -DUSE_JIT_FPU"
+  JITSRCS="$JITSRCS $UAE_PATH/compiler/compemu_support.cpp"
+  if [[ "x$CAN_JIT_FPU" = "xyes" ]]; then
+    JITSRCS="$JITSRCS $UAE_PATH/compiler/compemu_fpp.cpp"
+    DEFINES="$DEFINES -DUSE_JIT_FPU"
+  else
+    AC_MSG_WARN([FPU JIT not supported on this architecture; falling back to interpreted FPU instructions.])
+  fi
+  JITSRCS="$JITSRCS compstbl.o cpustbl_nf.o"
+  DEFINES="$DEFINES -DUSE_JIT"
   
   if [[ "x$WANT_JIT_DEBUG" = "xyes" ]]; then
     if [[ "x$WANT_MON" = "xyes" ]]; then
