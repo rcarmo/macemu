@@ -46,11 +46,14 @@ jobs:
             crossbuild-essential-armhf \
             file
           
-          # Install armhf libraries
+          # Install armhf libraries (including OpenGL ES 2 for SDL rendering)
           apt-get install -y \
             libsdl2-dev:armhf \
             libasound2-dev:armhf \
-            libmpfr-dev:armhf
+            libmpfr-dev:armhf \
+            libgles2:armhf \
+            libgles-dev:armhf \
+            libudev-dev:armhf
 
       - name: Configure BasiliskII for ARM32 with JIT
         run: |
@@ -167,12 +170,13 @@ jobs:
             ### Features
             - JIT compiler for ARM32 (armhf) ported from ARAnyM
             - Targets Raspberry Pi with 32-bit Raspberry Pi OS
-            - SDL2 video and audio support
+            - SDL2 video and audio support with OpenGL ES 2 rendering
             
             ### Requirements
             - 32-bit Raspberry Pi OS (armhf)
             - SDL2 runtime libraries (`sudo apt install libsdl2-2.0-0`)
             - MPFR library (`sudo apt install libmpfr6`)
+            - OpenGL ES 2 libraries (`sudo apt install libgles2-mesa`)
             
             ### ⚠️ Warning
             This build is experimental and may have bugs or stability issues.
