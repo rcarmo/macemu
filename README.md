@@ -109,3 +109,79 @@ $ make
 https://github.com/kanjitalk755/macemu/blob/master/SheepShaver/doc/Linux/gnome_keybindings.txt
 
 (from https://github.com/kanjitalk755/macemu/issues/59)
+
+---
+
+## Raspberry Pi Builds
+
+This fork provides experimental pre-built packages and Docker images optimized for Raspberry Pi, using SDL2 with framebuffer/KMS display (no X11 or desktop environment required).
+
+### Pre-built .deb Packages
+
+Download from [GitHub Releases](https://github.com/rcarmo/macemu/releases) or build from source.
+
+#### Install from release:
+```bash
+wget https://github.com/rcarmo/macemu/releases/latest/download/basiliskii-sdl_<version>_arm64.deb
+sudo dpkg -i basiliskii-sdl_<version>_arm64.deb
+```
+
+#### Build from source on Raspberry Pi:
+```bash
+# Install dependencies
+sudo apt-get install build-essential autoconf automake wget
+
+# Build SDL2 (optimized for Pi, no X11/Wayland)
+wget https://www.libsdl.org/release/SDL2-2.32.8.tar.gz
+tar -zxvf SDL2-2.32.8.tar.gz
+cd SDL2-2.32.8
+./configure --disable-video-opengl --disable-video-x11 --disable-pulseaudio --disable-esd --disable-video-wayland
+make -j4 && sudo make install
+cd ..
+
+# Build BasiliskII
+cd macemu/BasiliskII/src/Unix
+NO_CONFIGURE=1 ./autogen.sh
+./configure --enable-sdl-audio --enable-sdl-framework --enable-sdl-video \
+            --disable-vosf --without-mon --without-esd --without-gtk \
+            --disable-jit-compiler --disable-nls
+CPATH=$CPATH:/usr/local/include/SDL2 make -j4
+sudo make install
+```
+
+### Docker Container
+
+A Docker image is available for running BasiliskII in a privileged container with direct hardware access.
+
+#### Quick start:
+```bash
+cd BasiliskII/docker
+mkdir -p data
+cp /path/to/mac.rom data/rom
+cp /path/to/disk.img data/hd.img
+cp data/basiliskii_prefs.example data/basiliskii_prefs
+# Edit data/basiliskii_prefs as needed
+
+docker compose up -d
+```
+
+#### Pull pre-built image:
+```bash
+docker pull ghcr.io/rcarmo/basiliskii-sdl:latest
+```
+
+The container requires privileged mode for access to:
+- `/dev/fb0` - Framebuffer
+- `/dev/dri` - KMS/DRM video
+- `/dev/input` - Keyboard/mouse
+- `/dev/snd` - Audio
+
+See [BasiliskII/docker/README.md](BasiliskII/docker/README.md) for detailed configuration options.
+
+### GitHub Actions CI
+
+This repository includes automated builds:
+- **`.github/workflows/build-deb-rpi.yml`** - Builds `.deb` packages for ARM64 and ARMhf
+- **`.github/workflows/docker-rpi.yml`** - Builds and pushes Docker images to GHCR
+
+Packages are automatically uploaded to GitHub Releases when a version tag is pushed.
