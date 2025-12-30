@@ -11,9 +11,9 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/basiliskii-sdl
 
 jobs:
-  build-arm64:
+  build-arm64-native:
     runs-on: ubuntu-24.04-arm
-    name: Build ARM64 Docker image
+    name: ARM64 (native build on ARM runner)
     permissions:
       contents: read
       packages: write
@@ -45,9 +45,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-armhf:
-    runs-on: ubuntu-24.04-arm
-    name: Build ARMhf Docker image (cross-compiled)
+  build-armhf-qemu:
+    runs-on: ubuntu-latest
+    name: ARMhf (QEMU emulation on x86_64 runner)
     permissions:
       contents: read
       packages: write
@@ -85,8 +85,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   create-manifest:
-    needs: [build-arm64, build-armhf]
-    runs-on: ubuntu-24.04-arm
+    needs: [build-arm64-native, build-armhf-qemu]
+    runs-on: ubuntu-latest
+    name: Create multi-arch manifest
     permissions:
       contents: read
       packages: write
