@@ -17,29 +17,37 @@ on:
 
 jobs:
   build-arm32-jit:
-    name: Experimental ARM32 JIT (cross-compile on ARM64)
+    name: Experimental ARM32 JIT (cross-compile on ARM64, Debian 12)
     runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:bookworm
     
     steps:
+      - name: Install git and dependencies
+        run: |
+          apt-get update
+          apt-get install -y git ca-certificates
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup ARM32 cross-compilation
         run: |
           # Enable armhf architecture on ARM64 host
-          sudo dpkg --add-architecture armhf
-          sudo apt-get update
+          dpkg --add-architecture armhf
+          apt-get update
           
           # Install cross-compiler and native build tools
-          sudo apt-get install -y \
+          apt-get install -y \
             autoconf \
             automake \
             libtool \
             pkg-config \
-            crossbuild-essential-armhf
+            crossbuild-essential-armhf \
+            file
           
           # Install armhf libraries
-          sudo apt-get install -y \
+          apt-get install -y \
             libsdl2-dev:armhf \
             libasound2-dev:armhf \
             libmpfr-dev:armhf
