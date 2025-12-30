@@ -384,6 +384,16 @@ bool Init680x0(void)
         return false;
     }
     
+    // Configure TCG translation cache size (64MB for better JIT caching)
+    // This helps performance by caching more translated code blocks
+    const size_t tcg_cache_size = 64 * 1024 * 1024;  // 64MB
+    err = uc_ctl_set_tcg_buffer_size(uc, tcg_cache_size);
+    if (err == UC_ERR_OK) {
+        D(bug("Unicorn: TCG cache size set to %zu MB\n", tcg_cache_size / (1024*1024)));
+    } else {
+        D(bug("Unicorn: Warning: Could not set TCG cache size: %s (using default)\n", uc_strerror(err)));
+    }
+    
     // Map RAM
     // Unicorn requires page-aligned addresses and sizes (4KB alignment)
     size_t ram_size_aligned = (RAMSize + 0xFFF) & ~0xFFF;
