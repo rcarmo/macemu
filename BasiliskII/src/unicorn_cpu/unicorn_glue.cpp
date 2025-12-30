@@ -460,6 +460,23 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
 {
     total_instructions++;
     
+    // Early progress indicator (first 100 instructions in detail, then milestones)
+    if (total_instructions <= 100) {
+        // Print every 10th instruction in the first 100
+        if (total_instructions % 10 == 0) {
+            uint32_t a7;
+            uc_reg_read(uc, UC_M68K_REG_A7, &a7);
+            printf("Unicorn: [%llu] PC=0x%08llx A7=0x%08x\n",
+                   (unsigned long long)total_instructions, (unsigned long long)address, a7);
+            fflush(stdout);
+        }
+    } else if (total_instructions == 1000 || total_instructions == 10000 || 
+               total_instructions == 100000 || total_instructions % 1000000 == 0) {
+        printf("Unicorn: Progress: %llu instructions, PC=0x%08llx\n",
+               (unsigned long long)total_instructions, (unsigned long long)address);
+        fflush(stdout);
+    }
+    
     // Periodically call tick handler to pump SDL events
     if (++tick_counter >= TICK_INTERVAL) {
         tick_counter = 0;
@@ -929,13 +946,24 @@ void Start680x0(void)
     fflush(stdout);
     
     err = uc_emu_start(uc, initial_pc, 0, 0, 0);
+    
+    // Always print detailed status when emulation stops
+    uint32_t final_pc, final_sp, final_sr;
+    uc_reg_read(uc, UC_M68K_REG_PC, &final_pc);
+    uc_reg_read(uc, UC_M68K_REG_A7, &final_sp);
+    uc_reg_read(uc, UC_M68K_REG_SR, &final_sr);
+    
+    printf("Unicorn: uc_emu_start returned: %s (%d)\n", uc_strerror(err), err);
+    printf("Unicorn: Final state - PC=0x%08x, A7=0x%08x, SR=0x%04x\n", final_pc, final_sp, final_sr);
+    printf("Unicorn: Total instructions executed: %llu\n", total_instructions);
+    fflush(stdout);
+    
     if (err != UC_ERR_OK && !quit_program) {
-        uint32_t pc;
-        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
-        printf("Unicorn: Emulation error: %s (PC=0x%08x)\n", uc_strerror(err), pc);
+        printf("Unicorn: Emulation error: %s (PC=0x%08x)\n", uc_strerror(err), final_pc);
     }
     
     printf("Unicorn: Emulation ended\n");
+    fflush(stdout);
 }
 
 /*
