@@ -770,6 +770,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 			m * window_height,
 			window_flags);
 		if (!sdl_window) {
+			printf("ERROR: SDL_CreateWindow failed: %s\n", SDL_GetError());
 			shutdown_sdl_video();
 			return NULL;
 		}
@@ -789,6 +790,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		const char *render_driver = PrefsFindString("sdlrender");
 		if (render_driver) {
 			SDL_SetHint(SDL_HINT_RENDER_DRIVER, render_driver);
+			printf("Requesting SDL_Renderer driver: %s\n", render_driver);
 		}
 		else {
 #ifdef WIN32
@@ -808,6 +810,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		sdl_renderer = SDL_CreateRenderer(sdl_window, -1, 0);
 
 		if (!sdl_renderer) {
+			printf("ERROR: SDL_CreateRenderer failed: %s\n", SDL_GetError());
 			shutdown_sdl_video();
 			return NULL;
 		}
@@ -830,6 +833,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 	sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, width, height);
 #endif
     if (!sdl_texture) {
+        printf("ERROR: SDL_CreateTexture failed: %s\n", SDL_GetError());
         shutdown_sdl_video();
         return NULL;
     }

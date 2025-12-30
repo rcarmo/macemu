@@ -1,4 +1,4 @@
-# BasiliskII SDL Docker Image for Raspberry Pi
+# BasiliskII SDL Docker Image (x86_64 native build)
 # Optimized for framebuffer/KMS display without X11
 
 FROM debian:bookworm-slim AS builder
