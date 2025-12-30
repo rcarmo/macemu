@@ -163,11 +163,9 @@ union cacheline {
 
 /* Functions exposed to newcpu, or to what was moved from newcpu.c to
  * compemu_support.c */
-#ifdef WINUAE_ARANYM
 extern void compiler_init(void);
 extern void compiler_exit(void);
 extern bool compiler_use_jit(void);
-#endif
 extern void flush(int save_regs);
 void flush_reg(int reg);
 extern void set_target(uae_u8* t);
