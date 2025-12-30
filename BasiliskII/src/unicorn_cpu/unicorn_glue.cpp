@@ -666,3 +666,50 @@ int intlev(void)
 {
     return InterruptFlags ? 1 : 0;
 }
+
+/*
+ * Dump CPU state (for debugging/crash dumps)
+ */
+
+extern "C" void m68k_dumpstate(uaecptr *nextpc)
+{
+    if (!uc) {
+        printf("Unicorn: CPU not initialized\n");
+        return;
+    }
+    
+    uint32_t regs[16];
+    uint32_t pc, sr;
+    
+    // Read data registers
+    uc_reg_read(uc, UC_M68K_REG_D0, &regs[0]);
+    uc_reg_read(uc, UC_M68K_REG_D1, &regs[1]);
+    uc_reg_read(uc, UC_M68K_REG_D2, &regs[2]);
+    uc_reg_read(uc, UC_M68K_REG_D3, &regs[3]);
+    uc_reg_read(uc, UC_M68K_REG_D4, &regs[4]);
+    uc_reg_read(uc, UC_M68K_REG_D5, &regs[5]);
+    uc_reg_read(uc, UC_M68K_REG_D6, &regs[6]);
+    uc_reg_read(uc, UC_M68K_REG_D7, &regs[7]);
+    
+    // Read address registers
+    uc_reg_read(uc, UC_M68K_REG_A0, &regs[8]);
+    uc_reg_read(uc, UC_M68K_REG_A1, &regs[9]);
+    uc_reg_read(uc, UC_M68K_REG_A2, &regs[10]);
+    uc_reg_read(uc, UC_M68K_REG_A3, &regs[11]);
+    uc_reg_read(uc, UC_M68K_REG_A4, &regs[12]);
+    uc_reg_read(uc, UC_M68K_REG_A5, &regs[13]);
+    uc_reg_read(uc, UC_M68K_REG_A6, &regs[14]);
+    uc_reg_read(uc, UC_M68K_REG_A7, &regs[15]);
+    
+    uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+    uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+    
+    printf("D0: %08x D1: %08x D2: %08x D3: %08x\n", regs[0], regs[1], regs[2], regs[3]);
+    printf("D4: %08x D5: %08x D6: %08x D7: %08x\n", regs[4], regs[5], regs[6], regs[7]);
+    printf("A0: %08x A1: %08x A2: %08x A3: %08x\n", regs[8], regs[9], regs[10], regs[11]);
+    printf("A4: %08x A5: %08x A6: %08x A7: %08x\n", regs[12], regs[13], regs[14], regs[15]);
+    printf("PC: %08x SR: %04x\n", pc, sr);
+    
+    if (nextpc)
+        *nextpc = pc + 2;  // Approximate next PC
+}
