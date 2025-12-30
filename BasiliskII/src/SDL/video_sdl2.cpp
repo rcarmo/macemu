@@ -778,6 +778,23 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
 	
+	// On KMSDRM (and other console video drivers), we need to explicitly
+	// grab input since there's no window manager to give us focus
+	const char *video_driver = SDL_GetCurrentVideoDriver();
+	if (video_driver && (strcmp(video_driver, "KMSDRM") == 0 || 
+	                     strcmp(video_driver, "kmsdrm") == 0 ||
+	                     strcmp(video_driver, "fbcon") == 0 ||
+	                     strcmp(video_driver, "directfb") == 0)) {
+		printf("KMSDRM/console video driver detected, grabbing input...\n");
+		SDL_SetWindowGrab(sdl_window, SDL_TRUE);
+		SDL_RaiseWindow(sdl_window);
+		SDL_SetWindowInputFocus(sdl_window);
+		// Show the window to ensure it can receive events
+		SDL_ShowWindow(sdl_window);
+		printf("Window grab: %d, Input focus set\n", SDL_GetWindowGrab(sdl_window));
+		fflush(stdout);
+	}
+	
 	// Some SDL events (regarding some native-window events), need processing
 	// as they are generated.  SDL2 has a facility, SDL_AddEventWatch(), which
 	// allows events to be processed as they are generated.
