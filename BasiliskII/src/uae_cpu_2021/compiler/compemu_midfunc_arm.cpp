@@ -75,6 +75,39 @@ MIDFUNC(0,duplicate_carry,(void))
 	log_vwrite(FLAGX);
 }
 
+/*
+ * Handle flag updates for shift operations when count may be zero.
+ * When count is zero, X flag should be unchanged and Z/N should reflect data.
+ * When count is non-zero, X flag should be updated from carry.
+ */
+MIDFUNC(3,setcc_for_cntzero,(RR4 cnt, RR4 data, int size))
+{
+	/* Simplified ARM implementation:
+	 * Test if count is zero, if so test data to set Z/N flags,
+	 * otherwise update X flag from carry.
+	 */
+	evict(FLAGX);
+	make_flags_live_internal();
+	
+	cnt = readreg(cnt, 4);
+	/* Test count for zero */
+	raw_test_l_rr(cnt, cnt);
+	unlock2(cnt);
+	
+	/* If count was non-zero, update X from carry */
+	COMPCALL(setcc_m)((uintptr)live.state[FLAGX].mem, NATIVE_CC_CS);
+	log_vwrite(FLAGX);
+	
+	/* Now test data to set Z/N flags properly */
+	data = readreg(data, size);
+	switch (size) {
+		case 1: raw_test_b_rr(data, data); break;
+		case 2: raw_test_w_rr(data, data); break;
+		case 4: raw_test_l_rr(data, data); break;
+	}
+	unlock2(data);
+}
+
 MIDFUNC(0,restore_carry,(void))
 {
 #if defined(USE_JIT2)

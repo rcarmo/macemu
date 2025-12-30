@@ -181,6 +181,8 @@ DECLARE_MIDFUNC(nop(void));
 
 DECLARE_MIDFUNC(f_forget_about(FW r));
 
+DECLARE_MIDFUNC(setcc_for_cntzero(RR4 cnt, RR4 data, int size));
+
 
 
 
