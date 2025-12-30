@@ -60,6 +60,21 @@ enum {
  * These directly access host memory with address translation
  */
 
+#if DIRECT_ADDRESSING
+// With direct addressing, conversion is simple offset arithmetic
+static inline uint8 *Mac2HostAddr(uint32 addr)
+{
+    return (uint8 *)(MEMBaseDiff + addr);
+}
+
+static inline uint32 Host2MacAddr(uint8 *addr)
+{
+    return (uint32)((uintptr)addr - MEMBaseDiff);
+}
+
+#else
+// Without direct addressing, use region-based translation
+
 // Convert Mac address to host pointer
 static inline uint8 *Mac2HostAddr(uint32 addr)
 {
@@ -93,6 +108,7 @@ static inline uint32 Host2MacAddr(uint8 *addr)
 #endif
     return 0;
 }
+#endif
 
 // Read Mac memory (big-endian)
 static inline uint32 ReadMacInt32(uint32 addr)
