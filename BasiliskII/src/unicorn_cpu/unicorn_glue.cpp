@@ -374,33 +374,47 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
 
 static void hook_intr(uc_engine *uc, uint32_t intno, void *user_data)
 {
-    D(bug("Unicorn: Exception/Interrupt %d\n", intno));
-    
-    uint32_t pc;
+    uint32_t pc, a7, sr;
     uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+    uc_reg_read(uc, UC_M68K_REG_A7, &a7);
+    uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+    
+    printf("Unicorn: EXCEPTION %d at PC=0x%08x A7=0x%08x SR=0x%04x\n", intno, pc, a7, sr);
+    fflush(stdout);
     
     switch (intno) {
+        case 2:  // Bus error
+            printf("Unicorn: Bus Error!\n");
+            uc_emu_stop(uc);
+            return;
+            
+        case 3:  // Address error
+            printf("Unicorn: Address Error!\n");
+            uc_emu_stop(uc);
+            return;
+            
         case M68K_EXCEPTION_LINEA:
             // A-line trap - already handled in hook_code, but Unicorn may also trigger this
-            D(bug("Unicorn: A-line exception at PC=0x%08x\n", pc));
+            printf("Unicorn: A-line exception at PC=0x%08x\n", pc);
             break;
             
         case M68K_EXCEPTION_LINEF:
             // F-line trap (FPU) - may need software FPU emulation
-            D(bug("Unicorn: F-line exception at PC=0x%08x\n", pc));
+            printf("Unicorn: F-line exception at PC=0x%08x\n", pc);
             break;
             
         case M68K_EXCEPTION_ILLEGAL:
-            D(bug("Unicorn: Illegal instruction at PC=0x%08x\n", pc));
-            break;
+            printf("Unicorn: Illegal instruction at PC=0x%08x\n", pc);
+            uc_emu_stop(uc);
+            return;
             
         case M68K_EXCEPTION_PRIVILEGE:
-            D(bug("Unicorn: Privilege violation at PC=0x%08x\n", pc));
+            printf("Unicorn: Privilege violation at PC=0x%08x\n", pc);
             break;
             
         default:
             if (intno >= M68K_EXCEPTION_TRAP_BASE && intno < M68K_EXCEPTION_TRAP_BASE + 16) {
-                D(bug("Unicorn: TRAP #%d at PC=0x%08x\n", intno - M68K_EXCEPTION_TRAP_BASE, pc));
+                printf("Unicorn: TRAP #%d at PC=0x%08x\n", intno - M68K_EXCEPTION_TRAP_BASE, pc);
             }
             break;
     }
@@ -578,12 +592,29 @@ void Start680x0(void)
     printf("Unicorn: Initial SP=0x%08x, PC=0x%08x (ROM+0x2a)\n", initial_sp, initial_pc);
     
     // Set initial registers
-    uc_reg_write(uc, UC_M68K_REG_A7, &initial_sp);
-    uc_reg_write(uc, UC_M68K_REG_PC, &initial_pc);
+    uc_err err;
+    err = uc_reg_write(uc, UC_M68K_REG_A7, &initial_sp);
+    if (err != UC_ERR_OK) {
+        printf("Unicorn: Failed to set A7: %s\n", uc_strerror(err));
+    }
+    err = uc_reg_write(uc, UC_M68K_REG_PC, &initial_pc);
+    if (err != UC_ERR_OK) {
+        printf("Unicorn: Failed to set PC: %s\n", uc_strerror(err));
+    }
     
     // Set supervisor mode
     uint32_t sr = 0x2700;  // Supervisor mode, interrupts disabled
-    uc_reg_write(uc, UC_M68K_REG_SR, &sr);
+    err = uc_reg_write(uc, UC_M68K_REG_SR, &sr);
+    if (err != UC_ERR_OK) {
+        printf("Unicorn: Failed to set SR: %s\n", uc_strerror(err));
+    }
+    
+    // Verify registers were set
+    uint32_t verify_a7, verify_pc, verify_sr;
+    uc_reg_read(uc, UC_M68K_REG_A7, &verify_a7);
+    uc_reg_read(uc, UC_M68K_REG_PC, &verify_pc);
+    uc_reg_read(uc, UC_M68K_REG_SR, &verify_sr);
+    printf("Unicorn: Verified - A7=0x%08x, PC=0x%08x, SR=0x%04x\n", verify_a7, verify_pc, verify_sr);
     
     // Clear data registers
     uint32_t zero = 0;
