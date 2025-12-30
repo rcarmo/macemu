@@ -2359,8 +2359,8 @@ static SDL_mutex *event_mutex = NULL;
 // Called from main thread (one_tick or similar) to pump SDL events
 void SDL_PumpEventsFromMainThread(void)
 {
-	if (!sdl_events_need_pump)
-		return;
+	// Always pump events when called from main thread context
+	// This ensures events are processed even if handle_events hasn't signaled yet
 	
 	if (!event_mutex)
 		event_mutex = SDL_CreateMutex();
@@ -2368,14 +2368,16 @@ void SDL_PumpEventsFromMainThread(void)
 	// Pump events in main thread context
 	SDL_PumpEvents();
 	
-	// Grab events while holding mutex
-	SDL_LockMutex(event_mutex);
-	main_thread_event_count = SDL_PeepEvents(main_thread_events, 64, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
-	if (main_thread_event_count < 0)
-		main_thread_event_count = 0;
-	SDL_UnlockMutex(event_mutex);
-	
-	sdl_events_need_pump = false;
+	// If someone requested event pumping, grab all events to buffer
+	if (sdl_events_need_pump) {
+		SDL_LockMutex(event_mutex);
+		main_thread_event_count = SDL_PeepEvents(main_thread_events, 64, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+		if (main_thread_event_count < 0)
+			main_thread_event_count = 0;
+		SDL_UnlockMutex(event_mutex);
+		
+		sdl_events_need_pump = false;
+	}
 }
 
 static void handle_events(void)
@@ -2387,142 +2389,144 @@ static void handle_events(void)
 	// Signal that we need events pumped, then process any that were pumped by main thread
 	sdl_events_need_pump = true;
 	
+	// Create mutex if it doesn't exist yet
+	if (!event_mutex)
+		event_mutex = SDL_CreateMutex();
+	
 	// First process events from main thread buffer
-	if (event_mutex) {
-		SDL_LockMutex(event_mutex);
-		int buffered_count = main_thread_event_count;
-		SDL_Event buffered_events[64];
-		if (buffered_count > 0) {
-			memcpy(buffered_events, main_thread_events, buffered_count * sizeof(SDL_Event));
-			main_thread_event_count = 0;
-		}
-		SDL_UnlockMutex(event_mutex);
+	SDL_LockMutex(event_mutex);
+	int buffered_count = main_thread_event_count;
+	SDL_Event buffered_events[64];
+	if (buffered_count > 0) {
+		memcpy(buffered_events, main_thread_events, buffered_count * sizeof(SDL_Event));
+		main_thread_event_count = 0;
+	}
+	SDL_UnlockMutex(event_mutex);
+	
+	// Process buffered events
+	for (int i = 0; i < buffered_count; i++) {
+		SDL_Event & event = buffered_events[i];
 		
-		// Process buffered events
-		for (int i = 0; i < buffered_count; i++) {
-			SDL_Event & event = buffered_events[i];
-			
-			switch (event.type) {
+		switch (event.type) {
 
-			// Mouse button
-			case SDL_MOUSEBUTTONDOWN: {
-				unsigned int button = event.button.button;
-				if (button == SDL_BUTTON_LEFT)
-					ADBMouseDown(0);
-				else if (button == SDL_BUTTON_RIGHT)
-					ADBMouseDown(1);
-				else if (button == SDL_BUTTON_MIDDLE)
-					ADBMouseDown(2);
-				break;
+		// Mouse button
+		case SDL_MOUSEBUTTONDOWN: {
+			unsigned int button = event.button.button;
+			if (button == SDL_BUTTON_LEFT)
+				ADBMouseDown(0);
+			else if (button == SDL_BUTTON_RIGHT)
+				ADBMouseDown(1);
+			else if (button == SDL_BUTTON_MIDDLE)
+				ADBMouseDown(2);
+			break;
+		}
+		case SDL_MOUSEBUTTONUP: {
+			unsigned int button = event.button.button;
+			if (button == SDL_BUTTON_LEFT)
+				ADBMouseUp(0);
+			else if (button == SDL_BUTTON_RIGHT)
+				ADBMouseUp(1);
+			else if (button == SDL_BUTTON_MIDDLE)
+				ADBMouseUp(2);
+			break;
+		}
+
+		// Mouse moved
+		case SDL_MOUSEMOTION:
+			if (mouse_grabbed) {
+				drv->mouse_moved(event.motion.xrel, event.motion.yrel);
+			} else {
+				drv->mouse_moved(event.motion.x, event.motion.y);
 			}
-			case SDL_MOUSEBUTTONUP: {
-				unsigned int button = event.button.button;
-				if (button == SDL_BUTTON_LEFT)
-					ADBMouseUp(0);
-				else if (button == SDL_BUTTON_RIGHT)
-					ADBMouseUp(1);
-				else if (button == SDL_BUTTON_MIDDLE)
-					ADBMouseUp(2);
-				break;
+			break;
+
+		case SDL_MOUSEWHEEL:
+			if (!event.wheel.y) break;
+			if (!mouse_wheel_mode) {
+				int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x79 : 0x74;	// Page up/down
+				ADBKeyDown(key);
+				ADBKeyUp(key);
 			}
-
-			// Mouse moved
-			case SDL_MOUSEMOTION:
-				if (mouse_grabbed) {
-					drv->mouse_moved(event.motion.xrel, event.motion.yrel);
-				} else {
-					drv->mouse_moved(event.motion.x, event.motion.y);
-				}
-				break;
-
-			case SDL_MOUSEWHEEL:
-				if (!event.wheel.y) break;
-				if (!mouse_wheel_mode) {
-					int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x79 : 0x74;	// Page up/down
+			else {
+				int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x3d : 0x3e;	// Cursor up/down
+				for (int i = 0; i < mouse_wheel_lines; i++) {
 					ADBKeyDown(key);
 					ADBKeyUp(key);
 				}
-				else {
-					int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x3d : 0x3e;	// Cursor up/down
-					for (int i = 0; i < mouse_wheel_lines; i++) {
-						ADBKeyDown(key);
-						ADBKeyUp(key);
-					}
-				}
+			}
 			break;
 
-			// Keyboard
-			case SDL_KEYDOWN: {
-				if (event.key.repeat)
-					break;
-				int code = CODE_INVALID;
-				if (use_keycodes && event2keycode(event.key, true) != CODE_HOTKEY)
-					code = keycode_table[event.key.keysym.scancode & 0xff];
-				if (code == CODE_INVALID)
-					code = event2keycode(event.key, true);
-				if (code >= 0) {
-					if (!emul_suspended) {
-						code = modify_opt_cmd(code);
-						if (code == 0x39)
-							(SDL_GetModState() & KMOD_CAPS ? ADBKeyDown : ADBKeyUp)(code);
-						else
-							ADBKeyDown(code);
-						if (code == 0x36)
-							ctrl_down = true;
-						if (code == 0x3a)
-							opt_down = true;
-						if (code == 0x37)
-							cmd_down = true;
-						
-					} else {
-						if (code == 0x31)
-							drv->resume();	// Space wakes us up
-					}
-				}
+		// Keyboard
+		case SDL_KEYDOWN: {
+			if (event.key.repeat)
 				break;
-			}
-			case SDL_KEYUP: {
-				int code = CODE_INVALID;
-				if (use_keycodes && event2keycode(event.key, false) != CODE_HOTKEY)
-					code = keycode_table[event.key.keysym.scancode & 0xff];
-				if (code == CODE_INVALID)
-					code = event2keycode(event.key, false);
-				if (code >= 0) {
+			int code = CODE_INVALID;
+			if (use_keycodes && event2keycode(event.key, true) != CODE_HOTKEY)
+				code = keycode_table[event.key.keysym.scancode & 0xff];
+			if (code == CODE_INVALID)
+				code = event2keycode(event.key, true);
+			if (code >= 0) {
+				if (!emul_suspended) {
 					code = modify_opt_cmd(code);
-					if (code != 0x39)
-						ADBKeyUp(code);
+					if (code == 0x39)
+						(SDL_GetModState() & KMOD_CAPS ? ADBKeyDown : ADBKeyUp)(code);
+					else
+						ADBKeyDown(code);
 					if (code == 0x36)
-						ctrl_down = false;
+						ctrl_down = true;
 					if (code == 0x3a)
-						opt_down = false;
+						opt_down = true;
 					if (code == 0x37)
-						cmd_down = false;
-				}
-				break;
-			}
-			
-			case SDL_WINDOWEVENT: {
-				switch (event.window.event) {
-					// Hidden parts exposed, force complete refresh of window
-					case SDL_WINDOWEVENT_EXPOSED:
-						force_complete_window_refresh();
-						break;
+						cmd_down = true;
 					
-					// Force a complete window refresh when activating, to avoid redraw artifacts otherwise.
-					case SDL_WINDOWEVENT_RESTORED:
-						force_complete_window_refresh();
-						break;
+				} else {
+					if (code == 0x31)
+						drv->resume();	// Space wakes us up
 				}
-				break;
 			}
+			break;
+		}
+		case SDL_KEYUP: {
+			int code = CODE_INVALID;
+			if (use_keycodes && event2keycode(event.key, false) != CODE_HOTKEY)
+				code = keycode_table[event.key.keysym.scancode & 0xff];
+			if (code == CODE_INVALID)
+				code = event2keycode(event.key, false);
+			if (code >= 0) {
+				code = modify_opt_cmd(code);
+				if (code != 0x39)
+					ADBKeyUp(code);
+				if (code == 0x36)
+					ctrl_down = false;
+				if (code == 0x3a)
+					opt_down = false;
+				if (code == 0x37)
+					cmd_down = false;
+			}
+			break;
+		}
+		
+		case SDL_WINDOWEVENT: {
+			switch (event.window.event) {
+				// Hidden parts exposed, force complete refresh of window
+				case SDL_WINDOWEVENT_EXPOSED:
+					force_complete_window_refresh();
+					break;
+				
+				// Force a complete window refresh when activating, to avoid redraw artifacts otherwise.
+				case SDL_WINDOWEVENT_RESTORED:
+					force_complete_window_refresh();
+					break;
+			}
+			break;
+		}
 
-			// Window "close" widget clicked
-			case SDL_QUIT:
-				if (SDL_GetModState() & (KMOD_LALT | KMOD_RALT)) break;
-				ADBKeyDown(0x7f);	// Power key
-				ADBKeyUp(0x7f);
-				break;
-			}
+		// Window "close" widget clicked
+		case SDL_QUIT:
+			if (SDL_GetModState() & (KMOD_LALT | KMOD_RALT)) break;
+			ADBKeyDown(0x7f);	// Power key
+			ADBKeyUp(0x7f);
+			break;
 		}
 	}
 }

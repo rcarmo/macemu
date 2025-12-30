@@ -439,9 +439,20 @@ static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
 static int hook_call_count = 0;
 static uint64_t last_pc = 0;
 static int same_pc_count = 0;
+static int tick_counter = 0;
+static const int TICK_INTERVAL = 1000;  // Check ticks every N instructions
+
+// Forward declaration - implemented in main_unix.cpp
+extern void cpu_do_check_ticks(void);
 
 static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
 {
+    // Periodically call tick handler to pump SDL events and handle interrupts
+    if (++tick_counter >= TICK_INTERVAL) {
+        tick_counter = 0;
+        cpu_do_check_ticks();
+    }
+    
     // Detect stuck loops
     if (address == last_pc) {
         same_pc_count++;
