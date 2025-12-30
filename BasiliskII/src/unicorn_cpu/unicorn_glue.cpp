@@ -442,25 +442,73 @@ static int same_pc_count = 0;
 static int tick_counter = 0;
 static const int TICK_INTERVAL = 1000;  // Check ticks every N instructions
 
-// Forward declaration - implemented in main_unix.cpp
+// External declarations from main_unix.cpp
 extern void cpu_do_check_ticks(void);
+extern void VideoRefresh(void);
+
+// Called externally to pump events - we call this directly
+extern "C" void SDL_PumpEventsFromMainThread(void);
+
+// Need to mimic one_tick() behavior for Unicorn since the pthread tick thread
+// uses signals that Unicorn doesn't handle
+static int tick_60hz_counter = 0;
+static const int TICK_60HZ_INTERVAL = 16000;  // ~60Hz at 1M instructions/sec
+static uint64_t total_instructions = 0;
+static int status_counter = 0;
 
 static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
 {
-    // Periodically call tick handler to pump SDL events and handle interrupts
+    total_instructions++;
+    
+    // Periodically call tick handler to pump SDL events
     if (++tick_counter >= TICK_INTERVAL) {
         tick_counter = 0;
         cpu_do_check_ticks();
     }
     
-    // Detect stuck loops
+    // Generate 60Hz VBL interrupt (needed for Mac OS to progress)
+    // The pthread tick thread uses signals that Unicorn doesn't receive
+    tick_60hz_counter++;
+    if (tick_60hz_counter >= TICK_60HZ_INTERVAL) {
+        tick_60hz_counter = 0;
+        status_counter++;
+        
+        // Pump SDL events
+        SDL_PumpEventsFromMainThread();
+        
+        // Check if Mac is initialized (warm start flag at 0xCFC = 'WLSC')
+        uint32_t warm_start = ReadMacInt32(0xcfc);
+        bool mac_started = (warm_start == 0x574C5343);  // 'WLSC'
+        
+        // Periodic status output
+        if (status_counter % 60 == 0) {  // Every ~1 second
+            uint32_t sr;
+            uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+            printf("Unicorn: %lluM instructions, PC=0x%08llx, SR=0x%04x, IPL=%d, warm=0x%08x, started=%d\n",
+                   (unsigned long long)(total_instructions / 1000000),
+                   (unsigned long long)address, sr, (sr >> 8) & 7, warm_start, mac_started);
+            fflush(stdout);
+        }
+        
+        // Trigger 60Hz interrupt if Mac has started or ROM is not Classic
+        // (Similar to one_tick() in main_unix.cpp)
+        if (mac_started) {
+            SetInterruptFlag(INTFLAG_60HZ);
+            pending_interrupt = 1;  // Set directly since TriggerInterrupt uses signals
+        }
+    }
+            pending_interrupt = 1;  // Set directly since TriggerInterrupt uses signals
+        }
+    }
+    
+    // Detect stuck loops (high threshold - tight loops are normal)
     if (address == last_pc) {
         same_pc_count++;
-        if (same_pc_count == 100) {
+        if (same_pc_count == 100000) {  // 100K iterations before stopping
             uint32_t a7, sr;
             uc_reg_read(uc, UC_M68K_REG_A7, &a7);
             uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-            printf("Unicorn: STUCK at PC=0x%08llx (100 iterations), A7=0x%08x, SR=0x%04x\n",
+            printf("Unicorn: STUCK at PC=0x%08llx (100K iterations), A7=0x%08x, SR=0x%04x\n",
                    (unsigned long long)address, a7, sr);
             printf("Unicorn: Stopping emulation due to infinite loop\n");
             fflush(stdout);
@@ -472,8 +520,8 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
         last_pc = address;
     }
     
-    // Diagnostic output for first 50 instructions
-    if (hook_call_count < 50) {
+    // Diagnostic output - only first 10 instructions for startup verification
+    if (hook_call_count < 10) {
         uint16_t opcode;
         if (uc_mem_read(uc, address, &opcode, 2) == UC_ERR_OK) {
             opcode = (opcode >> 8) | (opcode << 8);  // big-endian swap
@@ -481,21 +529,6 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
             uc_reg_read(uc, UC_M68K_REG_A7, &a7);
             printf("Unicorn: [%d] PC=0x%08llx opcode=0x%04x A7=0x%08x\n", 
                    hook_call_count, (unsigned long long)address, opcode, a7);
-            
-            // For MOVEM (0x48xx), show more context
-            if ((opcode & 0xFFC0) == 0x48C0 || (opcode & 0xFFC0) == 0x48E0) {
-                uint16_t mask;
-                if (uc_mem_read(uc, address + 2, &mask, 2) == UC_ERR_OK) {
-                    mask = (mask >> 8) | (mask << 8);
-                    printf("Unicorn:   MOVEM mask=0x%04x, target addr=0x%08x\n", mask, a7);
-                    
-                    // Test if stack area is writable
-                    uint8_t test_byte = 0xAA;
-                    uc_err werr = uc_mem_write(uc, a7 - 4, &test_byte, 1);
-                    printf("Unicorn:   Stack write test at 0x%08x: %s\n", 
-                           a7 - 4, werr == UC_ERR_OK ? "OK" : uc_strerror(werr));
-                }
-            }
             fflush(stdout);
         }
         hook_call_count++;
