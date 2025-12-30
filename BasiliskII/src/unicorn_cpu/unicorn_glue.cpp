@@ -28,6 +28,7 @@
 #include "main.h"
 #include "emul_op.h"
 #include "prefs.h"
+#include "rom_patches.h"  // For ROMVersion
 
 #include <unicorn/unicorn.h>
 
@@ -493,6 +494,10 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
         // Pump SDL events
         SDL_PumpEventsFromMainThread();
         
+        // CRITICAL: Call VideoRefresh unconditionally!
+        // Without this, nothing ever appears on screen
+        VideoRefresh();
+        
         // Check if Mac is initialized (warm start flag at 0xCFC = 'WLSC')
         uint32_t warm_start = ReadMacInt32(0xcfc);
         bool mac_started = (warm_start == 0x574C5343);  // 'WLSC'
@@ -507,9 +512,10 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
             fflush(stdout);
         }
         
-        // Trigger 60Hz interrupt if Mac has started or ROM is not Classic
-        // (Similar to one_tick() in main_unix.cpp)
-        if (mac_started) {
+        // Trigger 60Hz interrupt if Mac has started OR ROM is not Classic
+        // Non-Classic ROMs need interrupts during initialization too!
+        // (Same logic as one_tick() in main_unix.cpp)
+        if (ROMVersion != ROM_VERSION_CLASSIC || mac_started) {
             SetInterruptFlag(INTFLAG_60HZ);
             pending_interrupt = 1;  // Set directly since TriggerInterrupt uses signals
         }
