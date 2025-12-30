@@ -1706,6 +1706,12 @@ fi
 dnl Enable JIT compiler, if possible.
 if [[ "x$WANT_JIT" = "xyes" -a "x$CAN_JIT" = "xyes" ]]; then
   JITSRCS="$JITSRCS $UAE_PATH/compiler/compemu_support.cpp"
+  dnl Add architecture-specific JIT backend sources
+  if [[ "x$HAVE_ARM" = "xyes" ]]; then
+    JITSRCS="$JITSRCS $UAE_PATH/compiler/codegen_arm.cpp $UAE_PATH/compiler/compemu_midfunc_arm.cpp $UAE_PATH/compiler/compemu_midfunc_arm2.cpp"
+  elif [[ "x$HAVE_I386" = "xyes" -o "x$HAVE_X86_64" = "xyes" ]]; then
+    JITSRCS="$JITSRCS $UAE_PATH/compiler/codegen_x86.cpp $UAE_PATH/compiler/compemu_midfunc_x86.cpp"
+  fi
   if [[ "x$CAN_JIT_FPU" = "xyes" ]]; then
     JITSRCS="$JITSRCS $UAE_PATH/compiler/compemu_fpp.cpp"
     DEFINES="$DEFINES -DUSE_JIT_FPU"
