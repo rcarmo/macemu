@@ -671,7 +671,7 @@ int intlev(void)
  * Dump CPU state (for debugging/crash dumps)
  */
 
-extern "C" void m68k_dumpstate(uaecptr *nextpc)
+extern "C" void m68k_dumpstate(uint32 *nextpc)
 {
     if (!uc) {
         printf("Unicorn: CPU not initialized\n");
