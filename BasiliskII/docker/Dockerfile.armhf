@@ -35,6 +35,8 @@ RUN wget -q https://www.libsdl.org/release/SDL2-${SDL_VERSION}.tar.gz \
         --disable-pulseaudio \
         --disable-esd \
         --disable-video-wayland \
+        --enable-libudev \
+        --enable-input-events \
     && make -j$(nproc) \
     && make install
 
