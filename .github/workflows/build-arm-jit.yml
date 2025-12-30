@@ -17,7 +17,7 @@ on:
 
 jobs:
   build-arm32-jit:
-    name: Build ARM32 JIT (cross-compile on ARM64)
+    name: Experimental ARM32 JIT (cross-compile on ARM64)
     runs-on: ubuntu-24.04-arm
     
     steps:
@@ -57,6 +57,14 @@ jobs:
           export CC=arm-linux-gnueabihf-gcc
           export CXX=arm-linux-gnueabihf-g++
           export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+          
+          # Set cross-compile variables for ARM Linux signal handling
+          # Modern ARM Linux uses siginfo_t with extended signals
+          export BII_CROSS_HAVE_EXTENDED_SIGNALS=yes
+          export BII_CROSS_SIGSEGV_SKIP_INSTRUCTION=yes
+          export BII_CROSS_MMAP_ANON=yes
+          export BII_CROSS_MMAP_SUPPORTS_MAP_ANONYMOUS=yes
+          export BII_CROSS_MPROTECT_WORKS=yes
           
           ./configure \
             --host=arm-linux-gnueabihf \

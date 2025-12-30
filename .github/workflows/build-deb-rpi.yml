@@ -272,6 +272,14 @@ jobs:
           export PKG_CONFIG_PATH=/usr/local/armhf/lib/pkgconfig
           export CPPFLAGS="-I/usr/local/armhf/include -I/usr/local/armhf/include/SDL2"
           export LDFLAGS="-L/usr/local/armhf/lib -Wl,-rpath,/usr/local/armhf/lib"
+          
+          # Set cross-compile variables for ARM Linux signal handling
+          export BII_CROSS_HAVE_EXTENDED_SIGNALS=yes
+          export BII_CROSS_SIGSEGV_SKIP_INSTRUCTION=yes
+          export BII_CROSS_MMAP_ANON=yes
+          export BII_CROSS_MMAP_SUPPORTS_MAP_ANONYMOUS=yes
+          export BII_CROSS_MPROTECT_WORKS=yes
+          
           ./configure \
             --host=arm-linux-gnueabihf \
             --prefix=/usr \
