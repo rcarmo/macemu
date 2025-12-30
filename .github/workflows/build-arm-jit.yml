@@ -1,4 +1,4 @@
-name: Build ARM JIT
+name: Build ARM32 JIT
 
 on:
   push:
@@ -100,70 +100,63 @@ jobs:
             grep -E "CAN_JIT|CPU_arm" config.h || true
           fi
 
+      - name: Prepare release artifact
+        run: |
+          cd BasiliskII/src/Unix
+          mkdir -p release
+          cp BasiliskII release/BasiliskII-arm32-jit
+          cp ../../../README.md release/ || true
+          
+          # Create info file
+          cat > release/BUILD-INFO.txt << EOF
+          BasiliskII ARM32 JIT Build
+          ==========================
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git Commit: ${{ github.sha }}
+          Git Branch: ${{ github.ref_name }}
+          
+          This is an EXPERIMENTAL build with ARM JIT support.
+          Target: Raspberry Pi (32-bit Raspberry Pi OS)
+          
+          JIT code ported from ARAnyM project.
+          EOF
+
       - name: Upload ARM32 JIT binary
         uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: basilisk2-arm32-jit
           path: |
-            BasiliskII/src/Unix/BasiliskII
-          retention-days: 7
+            BasiliskII/src/Unix/release/
+          retention-days: 30
 
-  build-arm64-interpreter:
-    name: Build ARM64 Interpreter
-    runs-on: ubuntu-24.04-arm
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            build-essential \
-            libsdl2-dev \
-            libasound2-dev \
-            libmpfr-dev
-
-      - name: Configure BasiliskII for ARM64 (interpreter only)
-        run: |
-          cd BasiliskII/src/Unix
-          
-          if [ ! -f configure ]; then
-            NO_CONFIGURE=1 ./autogen.sh || autoconf
-          fi
-          
-          # No JIT for ARM64 yet - using interpreter
-          ./configure \
-            --enable-sdl-video \
-            --enable-sdl-audio \
-            --disable-jit-compiler \
-            --disable-gtk \
-            --without-mon \
-            --without-x \
-            --with-sdl2
-
-      - name: Build BasiliskII for ARM64
-        run: |
-          cd BasiliskII/src/Unix
-          make -j$(nproc)
-
-      - name: Verify ARM64 binary
-        run: |
-          cd BasiliskII/src/Unix
-          file BasiliskII || echo "Binary not found"
-          uname -m
-
-      - name: Upload ARM64 binary
-        uses: actions/upload-artifact@v4
-        if: success()
+      - name: Create experimental release
+        if: github.ref == 'refs/heads/feature/arm-jit' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
         with:
-          name: basilisk2-arm64-interpreter
-          path: |
-            BasiliskII/src/Unix/BasiliskII
-          retention-days: 7
+          tag_name: arm-jit-experimental
+          name: "ARM JIT Experimental Build"
+          prerelease: true
+          make_latest: false
+          body: |
+            ## ⚠️ Experimental ARM JIT Build
+            
+            This is an **experimental** build of BasiliskII with ARM JIT support for 32-bit Raspberry Pi.
+            
+            ### Features
+            - JIT compiler for ARM32 (armhf) ported from ARAnyM
+            - Targets Raspberry Pi with 32-bit Raspberry Pi OS
+            - SDL2 video and audio support
+            
+            ### Requirements
+            - 32-bit Raspberry Pi OS (armhf)
+            - SDL2 runtime libraries (`sudo apt install libsdl2-2.0-0`)
+            - MPFR library (`sudo apt install libmpfr6`)
+            
+            ### ⚠️ Warning
+            This build is experimental and may have bugs or stability issues.
+            The JIT compiler code was ported from ARAnyM and may not be fully tested.
+            
+            ### Commit
+            Built from commit: ${{ github.sha }}
+          files: |
+            BasiliskII/src/Unix/release/*
