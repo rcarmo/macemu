@@ -194,12 +194,16 @@ HAVE_M68K=no
 HAVE_SPARC=no
 HAVE_POWERPC=no
 HAVE_X86_64=no
+HAVE_ARM=no
+HAVE_ARM64=no
 case "$target_cpu" in
   i386* | i486* | i586* | i686* | i786* ) HAVE_I386=yes;;
   m68k* ) HAVE_M68K=yes;;
   sparc* ) HAVE_SPARC=yes;;
   powerpc* ) HAVE_POWERPC=yes;;
   x86_64* | amd64* ) HAVE_X86_64=yes;;
+  arm* ) HAVE_ARM=yes;;
+  aarch64* ) HAVE_ARM64=yes;;
 esac
 
 dnl Check if we should really be assuming x86_64 even if we detected HAVE_I386 above.
@@ -1676,6 +1680,13 @@ elif [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_SPARC" = "xyes" -a "x$HAVE_GAS" = "xy
     esac
     ;;
   esac
+elif [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_ARM" = "xyes" ]]; then
+  dnl ARM CPU (32-bit) - JIT support ported from ARAnyM
+  DEFINES="$DEFINES -DUNALIGNED_PROFITABLE -DCPU_arm"
+  ASM_OPTIMIZATIONS="ARM"
+  DEFINES="$DEFINES -DARM_ASSEMBLY -DOPTIMIZED_FLAGS -DARMV6_ASSEMBLY"
+  JITSRCS="cpuemu1_nf.cpp cpuemu2_nf.cpp cpuemu3_nf.cpp cpuemu4_nf.cpp cpuemu5_nf.cpp cpuemu6_nf.cpp cpuemu7_nf.cpp cpuemu8_nf.cpp $JITSRCS"
+  CAN_JIT=yes
 elif [[ "x$WANT_NATIVE_M68K" = "xyes" ]]; then
   dnl Native m68k, no emulation
   CPUINCLUDES="-I../native_cpu"
