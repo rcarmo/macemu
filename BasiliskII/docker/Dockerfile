@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libudev-dev \
     libdbus-1-dev \
     libsamplerate0-dev \
+    libmpfr-dev \
+    libgmp-dev \
     wget \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -64,6 +66,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsamplerate0 \
     libudev1 \
     libdbus-1-3 \
+    libmpfr6 \
+    libgmp10 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy SDL2 libraries
