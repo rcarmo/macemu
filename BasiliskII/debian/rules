@@ -1,0 +1,58 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+SDL_VERSION = 2.32.8
+SDL_BUILD_DIR = $(CURDIR)/SDL2-$(SDL_VERSION)
+SDL_INSTALL_DIR = $(CURDIR)/sdl2-local
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# Build SDL2 from source with Raspberry Pi optimized settings
+	if [ ! -f SDL2-$(SDL_VERSION).tar.gz ]; then \
+		wget -q https://www.libsdl.org/release/SDL2-$(SDL_VERSION).tar.gz; \
+	fi
+	tar -zxf SDL2-$(SDL_VERSION).tar.gz
+	cd $(SDL_BUILD_DIR) && ./configure \
+		--prefix=$(SDL_INSTALL_DIR) \
+		--disable-video-opengl \
+		--disable-video-x11 \
+		--disable-pulseaudio \
+		--disable-esd \
+		--disable-video-wayland
+	$(MAKE) -C $(SDL_BUILD_DIR) -j$$(nproc)
+	$(MAKE) -C $(SDL_BUILD_DIR) install
+	# Configure BasiliskII
+	cd src/Unix && NO_CONFIGURE=1 ./autogen.sh
+	cd src/Unix && PKG_CONFIG_PATH=$(SDL_INSTALL_DIR)/lib/pkgconfig ./configure \
+		--prefix=/usr \
+		--enable-sdl-audio \
+		--enable-sdl-framework \
+		--enable-sdl-video \
+		--disable-vosf \
+		--without-mon \
+		--without-esd \
+		--without-gtk \
+		--disable-jit-compiler \
+		--disable-nls
+
+override_dh_auto_build:
+	CPATH=$(SDL_INSTALL_DIR)/include/SDL2 $(MAKE) -C src/Unix -j$$(nproc)
+
+override_dh_auto_install:
+	$(MAKE) -C src/Unix DESTDIR=$(CURDIR)/debian/basiliskii-sdl install
+	# Install bundled SDL2 library
+	mkdir -p $(CURDIR)/debian/basiliskii-sdl/usr/lib/basiliskii-sdl
+	cp $(SDL_INSTALL_DIR)/lib/libSDL2-2.0.so.0 $(CURDIR)/debian/basiliskii-sdl/usr/lib/basiliskii-sdl/
+
+override_dh_auto_clean:
+	rm -rf $(SDL_BUILD_DIR) $(SDL_INSTALL_DIR)
+	if [ -f src/Unix/Makefile ]; then \
+		$(MAKE) -C src/Unix distclean || true; \
+	fi
+
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(CURDIR)/debian/basiliskii-sdl/usr/lib/basiliskii-sdl

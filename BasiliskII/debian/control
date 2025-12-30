@@ -1,0 +1,43 @@
+Source: basiliskii-sdl
+Section: otherosfs
+Priority: optional
+Maintainer: Rui Carmo <https://github.com/rcarmo>
+Build-Depends: debhelper-compat (= 13),
+               autoconf,
+               automake,
+               build-essential,
+               libasound2-dev,
+               libsamplerate0-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/rcarmo/macemu
+Vcs-Browser: https://github.com/rcarmo/macemu
+Vcs-Git: https://github.com/rcarmo/macemu.git
+
+Package: basiliskii-sdl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Conflicts: basiliskii
+Provides: basiliskii
+Replaces: basiliskii
+Description: 68k Macintosh emulator (SDL build)
+ Basilisk II is an Open Source 68k Macintosh emulator. It enables
+ you to run 68k MacOS software on your computer, even if you are
+ using a different operating system.
+ .
+ This is a lightweight SDL2 build optimized for Raspberry Pi,
+ using framebuffer/KMS display without X11, Wayland, or GTK.
+ .
+ Features include:
+  - Emulates Mac Classic or Mac II series machines
+  - Color video display via SDL2 (framebuffer/KMS)
+  - CD quality sound output via SDL2/ALSA
+  - Floppy disk driver (1.44MB disks)
+  - HFS partitions and hardfiles support
+  - CD-ROM driver with basic audio functions
+  - Host directory tree file exchange
+  - Ethernet and serial drivers
+  - SCSI Manager emulation
+  - Extended ADB keyboard and 3-button mouse
+ .
+ Note: You need a Macintosh ROM image and a copy of MacOS to use
+ this emulator.
