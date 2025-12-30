@@ -176,6 +176,178 @@ static void set_regs(const M68kRegisters *r)
 }
 
 /*
+ * Helper: Emulate MOVEM instruction (Unicorn's 68k doesn't support it)
+ * Returns true if handled, false if not a MOVEM instruction
+ */
+static bool emulate_movem(uint32_t pc)
+{
+    uint16_t opcode, mask;
+    
+    // Read opcode
+    if (uc_mem_read(uc, pc, &opcode, 2) != UC_ERR_OK) return false;
+    opcode = (opcode >> 8) | (opcode << 8);  // big-endian swap
+    
+    // Check for MOVEM opcodes:
+    // 0x48xx = MOVEM.W/L regs,<ea> (register to memory)
+    // 0x4Cxx = MOVEM.W/L <ea>,regs (memory to register)
+    if ((opcode & 0xFB80) != 0x4880) return false;
+    
+    // Read register mask
+    if (uc_mem_read(uc, pc + 2, &mask, 2) != UC_ERR_OK) return false;
+    mask = (mask >> 8) | (mask << 8);
+    
+    bool is_long = (opcode & 0x0040) != 0;  // bit 6: 0=word, 1=long
+    bool to_mem = (opcode & 0x0400) == 0;   // bit 10: 0=reg-to-mem, 1=mem-to-reg
+    int mode = (opcode >> 3) & 7;
+    int reg = opcode & 7;
+    int size = is_long ? 4 : 2;
+    
+    uint32_t addr;
+    uint32_t regs[16];  // D0-D7, A0-A7
+    
+    // Read all registers
+    uc_reg_read(uc, UC_M68K_REG_D0, &regs[0]);
+    uc_reg_read(uc, UC_M68K_REG_D1, &regs[1]);
+    uc_reg_read(uc, UC_M68K_REG_D2, &regs[2]);
+    uc_reg_read(uc, UC_M68K_REG_D3, &regs[3]);
+    uc_reg_read(uc, UC_M68K_REG_D4, &regs[4]);
+    uc_reg_read(uc, UC_M68K_REG_D5, &regs[5]);
+    uc_reg_read(uc, UC_M68K_REG_D6, &regs[6]);
+    uc_reg_read(uc, UC_M68K_REG_D7, &regs[7]);
+    uc_reg_read(uc, UC_M68K_REG_A0, &regs[8]);
+    uc_reg_read(uc, UC_M68K_REG_A1, &regs[9]);
+    uc_reg_read(uc, UC_M68K_REG_A2, &regs[10]);
+    uc_reg_read(uc, UC_M68K_REG_A3, &regs[11]);
+    uc_reg_read(uc, UC_M68K_REG_A4, &regs[12]);
+    uc_reg_read(uc, UC_M68K_REG_A5, &regs[13]);
+    uc_reg_read(uc, UC_M68K_REG_A6, &regs[14]);
+    uc_reg_read(uc, UC_M68K_REG_A7, &regs[15]);
+    
+    int inst_len = 4;  // Base: opcode + mask
+    
+    // Get effective address based on mode
+    switch (mode) {
+        case 2:  // (An)
+            addr = regs[8 + reg];
+            break;
+        case 3:  // (An)+
+            addr = regs[8 + reg];
+            break;
+        case 4:  // -(An)
+            addr = regs[8 + reg];
+            break;
+        case 5:  // (d16,An)
+            {
+                int16_t disp;
+                uc_mem_read(uc, pc + 4, &disp, 2);
+                disp = (disp >> 8) | (disp << 8);
+                addr = regs[8 + reg] + disp;
+                inst_len += 2;
+            }
+            break;
+        case 7:  // Absolute or PC-relative
+            if (reg == 0) {  // (xxx).W
+                int16_t abs_addr;
+                uc_mem_read(uc, pc + 4, &abs_addr, 2);
+                abs_addr = (abs_addr >> 8) | (abs_addr << 8);
+                addr = (int32_t)abs_addr;
+                inst_len += 2;
+            } else if (reg == 1) {  // (xxx).L
+                uint32_t abs_addr;
+                uc_mem_read(uc, pc + 4, &abs_addr, 4);
+                abs_addr = __builtin_bswap32(abs_addr);
+                addr = abs_addr;
+                inst_len += 4;
+            } else {
+                return false;  // Unsupported
+            }
+            break;
+        default:
+            return false;  // Unsupported mode
+    }
+    
+    D(bug("Unicorn: MOVEM emulation: %s, mode=%d, reg=%d, addr=0x%08x, mask=0x%04x\n",
+          to_mem ? "mem-to-reg" : "reg-to-mem", mode, reg, addr, mask));
+    
+    if (to_mem && mode == 4) {
+        // -(An) predecrement mode: registers stored in reverse order (A7-A0, D7-D0)
+        // and address decrements before each store
+        for (int i = 15; i >= 0; i--) {
+            if (mask & (1 << (15 - i))) {
+                addr -= size;
+                if (is_long) {
+                    WriteMacInt32(addr, regs[i]);
+                } else {
+                    WriteMacInt16(addr, regs[i] & 0xFFFF);
+                }
+            }
+        }
+        // Update the address register
+        regs[8 + reg] = addr;
+        uc_reg_write(uc, UC_M68K_REG_A0 + reg, &regs[8 + reg]);
+    } else if (to_mem) {
+        // Register to memory (normal order D0-D7, A0-A7)
+        for (int i = 0; i < 16; i++) {
+            if (mask & (1 << i)) {
+                if (is_long) {
+                    WriteMacInt32(addr, regs[i]);
+                } else {
+                    WriteMacInt16(addr, regs[i] & 0xFFFF);
+                }
+                addr += size;
+            }
+        }
+        if (mode == 3) {  // (An)+ postincrement
+            regs[8 + reg] = addr;
+            uc_reg_write(uc, UC_M68K_REG_A0 + reg, &regs[8 + reg]);
+        }
+    } else {
+        // Memory to register (normal order D0-D7, A0-A7)
+        for (int i = 0; i < 16; i++) {
+            if (mask & (1 << i)) {
+                if (is_long) {
+                    regs[i] = ReadMacInt32(addr);
+                } else {
+                    regs[i] = (int16_t)ReadMacInt16(addr);  // Sign extend
+                }
+                addr += size;
+            }
+        }
+        // Write back modified registers
+        if (mask & 0x00FF) {  // D registers
+            if (mask & 0x0001) uc_reg_write(uc, UC_M68K_REG_D0, &regs[0]);
+            if (mask & 0x0002) uc_reg_write(uc, UC_M68K_REG_D1, &regs[1]);
+            if (mask & 0x0004) uc_reg_write(uc, UC_M68K_REG_D2, &regs[2]);
+            if (mask & 0x0008) uc_reg_write(uc, UC_M68K_REG_D3, &regs[3]);
+            if (mask & 0x0010) uc_reg_write(uc, UC_M68K_REG_D4, &regs[4]);
+            if (mask & 0x0020) uc_reg_write(uc, UC_M68K_REG_D5, &regs[5]);
+            if (mask & 0x0040) uc_reg_write(uc, UC_M68K_REG_D6, &regs[6]);
+            if (mask & 0x0080) uc_reg_write(uc, UC_M68K_REG_D7, &regs[7]);
+        }
+        if (mask & 0xFF00) {  // A registers
+            if (mask & 0x0100) uc_reg_write(uc, UC_M68K_REG_A0, &regs[8]);
+            if (mask & 0x0200) uc_reg_write(uc, UC_M68K_REG_A1, &regs[9]);
+            if (mask & 0x0400) uc_reg_write(uc, UC_M68K_REG_A2, &regs[10]);
+            if (mask & 0x0800) uc_reg_write(uc, UC_M68K_REG_A3, &regs[11]);
+            if (mask & 0x1000) uc_reg_write(uc, UC_M68K_REG_A4, &regs[12]);
+            if (mask & 0x2000) uc_reg_write(uc, UC_M68K_REG_A5, &regs[13]);
+            if (mask & 0x4000) uc_reg_write(uc, UC_M68K_REG_A6, &regs[14]);
+            if (mask & 0x8000) uc_reg_write(uc, UC_M68K_REG_A7, &regs[15]);
+        }
+        if (mode == 3) {  // (An)+ postincrement
+            regs[8 + reg] = addr;
+            uc_reg_write(uc, UC_M68K_REG_A0 + reg, &regs[8 + reg]);
+        }
+    }
+    
+    // Advance PC past the instruction
+    uint32_t new_pc = pc + inst_len;
+    uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
+    
+    return true;
+}
+
+/*
  * Helper: Build 68k exception stack frame and jump to handler
  * This emulates what the 68k does when taking an exception
  */
@@ -443,6 +615,11 @@ static void hook_intr(uc_engine *uc, uint32_t intno, void *user_data)
             break;
             
         case M68K_EXCEPTION_ILLEGAL:
+            // Try to emulate MOVEM (Unicorn doesn't support it)
+            if (emulate_movem(pc)) {
+                printf("Unicorn: Emulated MOVEM at PC=0x%08x\n", pc);
+                return;  // Continue execution
+            }
             printf("Unicorn: Illegal instruction at PC=0x%08x\n", pc);
             uc_emu_stop(uc);
             return;
