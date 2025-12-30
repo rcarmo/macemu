@@ -669,9 +669,10 @@ int intlev(void)
 
 /*
  * Dump CPU state (for debugging/crash dumps)
+ * Called from main_unix.cpp sigsegv handler
  */
 
-extern "C" void m68k_dumpstate(uint32 *nextpc)
+void m68k_dumpstate(uint32 *nextpc)
 {
     if (!uc) {
         printf("Unicorn: CPU not initialized\n");
