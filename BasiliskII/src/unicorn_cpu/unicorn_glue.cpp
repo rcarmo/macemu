@@ -386,6 +386,8 @@ bool Init680x0(void)
     
     // Configure TCG translation cache size (64MB for better JIT caching)
     // This helps performance by caching more translated code blocks
+    // Note: uc_ctl_set_tcg_buffer_size is only available in Unicorn 2.0.2+
+#ifdef UC_CTL_TCG_BUFFER_SIZE
     const size_t tcg_cache_size = 64 * 1024 * 1024;  // 64MB
     err = uc_ctl_set_tcg_buffer_size(uc, tcg_cache_size);
     if (err == UC_ERR_OK) {
@@ -393,6 +395,9 @@ bool Init680x0(void)
     } else {
         D(bug("Unicorn: Warning: Could not set TCG cache size: %s (using default)\n", uc_strerror(err)));
     }
+#else
+    D(bug("Unicorn: TCG cache size API not available (using default)\n"));
+#endif
     
     // Map RAM
     // Unicorn requires page-aligned addresses and sizes (4KB alignment)
