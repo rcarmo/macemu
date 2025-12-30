@@ -162,6 +162,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: arm-jit-experimental
+          target_commitish: ${{ github.sha }}
           name: "ARM JIT Experimental Build"
           prerelease: true
           make_latest: false
@@ -189,3 +190,5 @@ jobs:
             Built from commit: ${{ github.sha }}
           files: |
             BasiliskII/src/Unix/release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
