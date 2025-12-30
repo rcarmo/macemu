@@ -817,6 +817,17 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		
 		printf("Window grab: %d\n", SDL_GetWindowGrab(sdl_window));
 		
+		// Ensure BasiliskII also switches to relative mouse mode so we process motion events
+		if (drv && !mouse_grabbed && !PrefsFindBool("hardcursor")) {
+			printf("Enabling BasiliskII mouse grab for console video driver\n");
+			drv->grab_mouse();
+		}
+		else if (!mouse_grabbed) {
+			// Fall back to forcing relative mode in the ADB layer even if grab_mouse() isn't available yet
+			mouse_grabbed = true;
+			ADBSetRelMouseMode(true);
+		}
+		
 		// Pump events again to process the grab/focus events
 		SDL_PumpEvents();
 		
