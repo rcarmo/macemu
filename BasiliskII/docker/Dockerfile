@@ -43,11 +43,13 @@ COPY BasiliskII /build/BasiliskII
 
 # Build BasiliskII
 WORKDIR /build/BasiliskII/src/Unix
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+ENV CPPFLAGS="-I/usr/local/include -I/usr/local/include/SDL2"
+ENV LDFLAGS="-L/usr/local/lib"
 RUN NO_CONFIGURE=1 ./autogen.sh \
     && ./configure \
         --prefix=/usr \
         --enable-sdl-audio \
-        --enable-sdl-framework \
         --enable-sdl-video \
         --disable-vosf \
         --without-mon \
@@ -55,7 +57,7 @@ RUN NO_CONFIGURE=1 ./autogen.sh \
         --without-gtk \
         --disable-jit-compiler \
         --disable-nls \
-    && CPATH=/usr/local/include/SDL2 make -j$(nproc)
+    && make -j$(nproc)
 
 # Runtime image
 FROM debian:bookworm-slim
