@@ -1,0 +1,87 @@
+# BasiliskII SDL Docker Compose for Raspberry Pi
+# Run with: docker compose up -d
+#
+# Prerequisites:
+# 1. Place your ROM file in ./data/rom
+# 2. Place disk images in ./data/
+# 3. Create basiliskii_prefs config file in ./data/
+#
+# Example basiliskii_prefs:
+#   rom /data/rom
+#   disk /data/hd.img
+#   ramsize 67108864
+#   frameskip 0
+#   screen win/800/600
+
+services:
+  basiliskii:
+    build:
+      context: ../..
+      dockerfile: BasiliskII/docker/Dockerfile
+    image: basiliskii-sdl:latest
+    container_name: basiliskii
+    
+    # Required for direct hardware access
+    privileged: true
+    
+    # Alternative to privileged (more secure, but may need adjustment):
+    # cap_add:
+    #   - SYS_RAWIO
+    #   - SYS_ADMIN
+    # security_opt:
+    #   - apparmor:unconfined
+    
+    # Device access for Raspberry Pi
+    devices:
+      # Framebuffer for video output
+      - /dev/fb0:/dev/fb0
+      # DRM/KMS for modern video output
+      - /dev/dri:/dev/dri
+      # Input devices (keyboard, mouse)
+      - /dev/input:/dev/input
+      # Sound devices
+      - /dev/snd:/dev/snd
+      # USB devices (optional, for USB peripherals)
+      # - /dev/bus/usb:/dev/bus/usb
+    
+    # Volume mounts
+    volumes:
+      # Data directory for ROM, disk images, and config
+      - ./data:/data
+      # Share host ALSA configuration (optional)
+      - /etc/asound.conf:/etc/asound.conf:ro
+      # For hardware access
+      - /dev/shm:/dev/shm
+    
+    # Environment variables
+    environment:
+      # Use KMS/DRM for video (recommended for Pi)
+      - SDL_VIDEODRIVER=kmsdrm
+      # Alternative: use framebuffer directly
+      # - SDL_VIDEODRIVER=fbdev
+      # Use ALSA for audio
+      - SDL_AUDIODRIVER=alsa
+      # Disable mouse acceleration
+      - SDL_MOUSE_RELATIVE_SPEED_SCALE=1.0
+      # Optional: specify audio device
+      # - AUDIODEV=hw:0,0
+    
+    # Network mode - use host for simplicity with networking features
+    network_mode: host
+    
+    # Keep container running for interactive use
+    stdin_open: true
+    tty: true
+    
+    # Restart policy
+    restart: unless-stopped
+
+  # Optional: Build-only service for creating the image
+  builder:
+    build:
+      context: ../..
+      dockerfile: BasiliskII/docker/Dockerfile
+    image: basiliskii-sdl:latest
+    profiles:
+      - build
+    command: ["--help"]
