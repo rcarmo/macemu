@@ -1714,7 +1714,7 @@ if [[ "x$WANT_JIT" = "xyes" -a "x$CAN_JIT" = "xyes" ]]; then
     AC_MSG_WARN([FPU JIT not supported on this architecture; falling back to interpreted FPU instructions.])
   fi
   JITSRCS="$JITSRCS compstbl.o cpustbl_nf.o"
-  DEFINES="$DEFINES -DUSE_JIT"
+  DEFINES="$DEFINES -DUSE_JIT -DJIT"
   
   if [[ "x$WANT_JIT_DEBUG" = "xyes" ]]; then
     if [[ "x$WANT_MON" = "xyes" ]]; then
