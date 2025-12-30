@@ -672,6 +672,33 @@ int main(int argc, char **argv)
 	// Check mouse focus
 	SDL_Window *mouse_focused = SDL_GetMouseFocus();
 	printf("Mouse focus window: %p\n", (void*)mouse_focused);
+	
+	// Check what SDL subsystems were initialized
+	Uint32 init_flags = SDL_WasInit(SDL_INIT_EVERYTHING);
+	printf("SDL initialized subsystems: 0x%x\n", init_flags);
+	printf("  VIDEO=%d AUDIO=%d EVENTS=%d JOYSTICK=%d HAPTIC=%d GAMECONTROLLER=%d\n",
+	       (init_flags & SDL_INIT_VIDEO) ? 1 : 0,
+	       (init_flags & SDL_INIT_AUDIO) ? 1 : 0,
+	       (init_flags & SDL_INIT_EVENTS) ? 1 : 0,
+	       (init_flags & SDL_INIT_JOYSTICK) ? 1 : 0,
+	       (init_flags & SDL_INIT_HAPTIC) ? 1 : 0,
+	       (init_flags & SDL_INIT_GAMECONTROLLER) ? 1 : 0);
+	
+	// Check for joysticks/gamepads (sometimes mice show up here on some SDL builds)
+	int num_joysticks = SDL_NumJoysticks();
+	printf("Number of joysticks: %d\n", num_joysticks);
+	for (int i = 0; i < num_joysticks && i < 5; i++) {
+		printf("  Joystick %d: %s\n", i, SDL_JoystickNameForIndex(i));
+	}
+	
+	// Try to check SDL hints that affect input
+	const char *hint_grab = SDL_GetHint(SDL_HINT_GRAB_KEYBOARD);
+	const char *hint_mouse = SDL_GetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP);
+	const char *hint_kmsdrm = SDL_GetHint(SDL_HINT_KMSDRM_REQUIRE_DRM_MASTER);
+	printf("SDL Hints: GRAB_KEYBOARD=%s, MOUSE_RELATIVE_MODE_WARP=%s, KMSDRM_REQUIRE_DRM_MASTER=%s\n",
+	       hint_grab ? hint_grab : "(null)",
+	       hint_mouse ? hint_mouse : "(null)", 
+	       hint_kmsdrm ? hint_kmsdrm : "(null)");
 	fflush(stdout);
 #endif
 
