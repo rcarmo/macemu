@@ -644,12 +644,39 @@ bool Init680x0(void)
 {
     D(bug("Unicorn: Init680x0\n"));
     
-    // Create Unicorn instance for 68040 (most compatible)
+    // Create Unicorn instance for M68K
     uc_err err = uc_open(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, &uc);
     if (err != UC_ERR_OK) {
         printf("Unicorn: Failed to create engine: %s\n", uc_strerror(err));
         return false;
     }
+    
+    // CRITICAL: Set CPU model to M68000 (or M68040 for FPU support)
+    // By default Unicorn uses Coldfire which doesn't support classic 68k instructions
+    // like MOVEM, ADDI, DBF, etc. Setting to M68000 enables proper 68k emulation.
+    // Models: UC_CPU_M68K_M68000=0, M68020, M68030, M68040, M68060
+#ifdef UC_CPU_M68K_M68040
+    err = uc_ctl_set_cpu_model(uc, UC_CPU_M68K_M68040);
+    if (err == UC_ERR_OK) {
+        printf("Unicorn: CPU model set to M68040\n");
+    } else {
+        printf("Unicorn: Warning: Could not set CPU model: %s\n", uc_strerror(err));
+    }
+#else
+    // Older Unicorn without model constants - try raw value
+    // M68040 = 3 in the enum
+    err = uc_ctl_set_cpu_model(uc, 3);
+    if (err == UC_ERR_OK) {
+        printf("Unicorn: CPU model set to M68040 (raw)\n");
+    } else {
+        printf("Unicorn: Warning: Could not set CPU model: %s (trying M68000)\n", uc_strerror(err));
+        // Try M68000 = 0
+        err = uc_ctl_set_cpu_model(uc, 0);
+        if (err == UC_ERR_OK) {
+            printf("Unicorn: CPU model set to M68000\n");
+        }
+    }
+#endif
     
     // Configure TCG translation cache size (64MB for better JIT caching)
     // This helps performance by caching more translated code blocks
