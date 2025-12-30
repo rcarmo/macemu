@@ -2351,6 +2351,9 @@ static int SDLCALL on_sdl_event_generated(void *userdata, SDL_Event * event)
 
 static void handle_events(void)
 {
+	// Pump events from the windowing system - required before SDL_PeepEvents
+	SDL_PumpEvents();
+
 	SDL_Event events[10];
 	const int n_max_events = sizeof(events) / sizeof(events[0]);
 	int n_events;
