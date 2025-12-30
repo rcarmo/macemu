@@ -70,6 +70,20 @@ static uc_engine *uc = NULL;
 
 // Note: InterruptFlags is defined in main_unix.cpp, declared in main.h
 
+// RAM and ROM pointers (normally in main_unix.cpp when !EMULATED_68K)
+uint32 RAMBaseMac;          // RAM base (Mac address space)
+uint8 *RAMBaseHost;         // RAM base (host address space)
+uint32 RAMSize;             // Size of RAM
+uint32 ROMBaseMac;          // ROM base (Mac address space)
+uint8 *ROMBaseHost;         // ROM base (host address space)
+uint32 ROMSize;             // Size of ROM
+
+#if !REAL_ADDRESSING
+uint8 *MacFrameBaseHost;    // Frame buffer base (host address space)
+uint32 MacFrameSize;        // Size of frame buffer
+int MacFrameLayout;         // Frame buffer layout
+#endif
+
 // Direct addressing offset
 #if DIRECT_ADDRESSING
 uintptr MEMBaseDiff;
