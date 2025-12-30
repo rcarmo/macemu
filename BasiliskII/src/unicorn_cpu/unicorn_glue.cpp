@@ -446,8 +446,8 @@ static const int TICK_INTERVAL = 1000;  // Check ticks every N instructions
 extern void cpu_do_check_ticks(void);
 extern void VideoRefresh(void);
 
-// Called externally to pump events - we call this directly
-extern "C" void SDL_PumpEventsFromMainThread(void);
+// Declared in video.h - pump SDL events from main thread
+extern void SDL_PumpEventsFromMainThread(void);
 
 // Need to mimic one_tick() behavior for Unicorn since the pthread tick thread
 // uses signals that Unicorn doesn't handle
