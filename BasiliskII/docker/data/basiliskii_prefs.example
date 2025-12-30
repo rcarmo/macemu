@@ -1,0 +1,50 @@
+# Example BasiliskII preferences file for Docker
+# Copy this to basiliskii_prefs and adjust paths
+
+# ROM file (required)
+rom /data/rom
+
+# Hard disk image (create with dd if=/dev/zero of=hd.img bs=1M count=500)
+disk /data/hd.img
+
+# RAM size in bytes (64MB)
+ramsize 67108864
+
+# Display settings
+# Format: screen <win|dga>/<width>/<height>
+screen win/800/600
+
+# Frame skip (0 = no skip, higher = skip more frames)
+frameskip 0
+
+# Serial ports (disable if not needed)
+seriala /dev/null
+serialb /dev/null
+
+# Ethernet (disable if not needed)
+# ether slirp
+
+# CD-ROM (optional)
+# cdrom /dev/cdrom
+
+# Floppy (optional)
+# floppy /dev/fd0
+
+# Sound settings
+nosound false
+
+# Mouse settings
+# mousewheelmode 1
+# mousewheellines 3
+
+# Model ID (5 = Mac IIci)
+modelid 5
+
+# CPU type (4 = 68040)
+cpu 4
+
+# FPU enabled
+fpu true
+
+# Don't start GUI on startup
+nogui true

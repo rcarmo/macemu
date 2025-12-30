@@ -1,0 +1,5 @@
+# BasiliskII Docker data directory
+# Place your files here:
+# - rom          : Macintosh ROM file
+# - *.img        : Disk image files
+# - basiliskii_prefs : Configuration file
