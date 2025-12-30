@@ -155,17 +155,27 @@ jobs:
             BasiliskII/src/Unix/release/
           retention-days: 30
 
+      - name: Delete existing release tag
+        if: github.ref == 'refs/heads/feature/unicorn-cpu' && github.event_name == 'push'
+        run: |
+          gh release delete arm64-unicorn-experimental --yes || true
+          git push origin :refs/tags/arm64-unicorn-experimental || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Create experimental release
         if: github.ref == 'refs/heads/feature/unicorn-cpu' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: arm64-unicorn-${{ github.sha }}
-          name: "ARM64 Unicorn Build - ${{ github.sha }}"
+          tag_name: arm64-unicorn-experimental
+          name: "ARM64 Unicorn Experimental Build"
           prerelease: true
           make_latest: false
           generate_release_notes: true
           body: |
             ## ⚠️ Experimental ARM64 Unicorn Build
+            
+            **Fixed download URL:** https://github.com/${{ github.repository }}/releases/download/arm64-unicorn-experimental/BasiliskII-arm64-unicorn
             
             This is an **experimental** build of BasiliskII using Unicorn Engine for 68k emulation.
             
