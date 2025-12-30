@@ -366,4 +366,8 @@ void AddPlatformPrefsDefaults(void)
 	PrefsReplaceString("mixer", "/dev/mixer");
 #endif
 	PrefsAddBool("idlewait", true);
+#if defined(USE_SDL_VIDEO) && defined(__arm__)
+	// Default to OpenGL ES 2 renderer on ARM for better performance
+	PrefsReplaceString("sdlrender", "opengles2");
+#endif
 }
