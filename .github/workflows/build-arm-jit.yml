@@ -15,13 +15,10 @@ on:
       - 'BasiliskII/src/**'
   workflow_dispatch:
 
-env:
-  SDL_VERSION: "2.32.8"
-
 jobs:
   build-arm32:
     name: Build ARM32 JIT
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     
     steps:
       - name: Checkout repository
@@ -35,41 +32,9 @@ jobs:
             automake \
             libtool \
             pkg-config \
-            crossbuild-essential-armhf \
-            libasound2-dev:armhf \
-            libgtk-3-dev:armhf \
-            libvte-2.91-dev:armhf || true
-
-      - name: Setup ARM cross-compilation environment
-        run: |
-          sudo dpkg --add-architecture armhf
-          sudo apt-get update
-          # Install cross-compile toolchain
-          sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
-
-      - name: Build SDL2 for ARM
-        run: |
-          cd /tmp
-          wget -q https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL2-${SDL_VERSION}.tar.gz
-          tar xzf SDL2-${SDL_VERSION}.tar.gz
-          cd SDL2-${SDL_VERSION}
-          
-          export CC=arm-linux-gnueabihf-gcc
-          export CXX=arm-linux-gnueabihf-g++
-          
-          ./configure \
-            --prefix=/usr/local/arm-sdl2 \
-            --host=arm-linux-gnueabihf \
-            --enable-video-kmsdrm \
-            --enable-video-opengles \
-            --enable-video-opengles2 \
-            --disable-video-x11 \
-            --disable-video-wayland \
-            --disable-pulseaudio \
-            --disable-jack
-          
-          make -j$(nproc)
-          sudo make install
+            build-essential \
+            libsdl2-dev \
+            libasound2-dev
 
       - name: Configure BasiliskII for ARM with JIT
         run: |
@@ -80,14 +45,7 @@ jobs:
             NO_CONFIGURE=1 ./autogen.sh || autoconf
           fi
           
-          export CC=arm-linux-gnueabihf-gcc
-          export CXX=arm-linux-gnueabihf-g++
-          export PKG_CONFIG_PATH=/usr/local/arm-sdl2/lib/pkgconfig
-          export SDL_CONFIG=/usr/local/arm-sdl2/bin/sdl2-config
-          
           ./configure \
-            --host=arm-linux-gnueabihf \
-            --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
             --enable-sdl-video \
             --enable-sdl-audio \
             --enable-sdl-framework \
@@ -100,9 +58,6 @@ jobs:
         run: |
           cd BasiliskII/src/Unix
           
-          export CC=arm-linux-gnueabihf-gcc
-          export CXX=arm-linux-gnueabihf-g++
-          
           # Try building - capture both success and failure info
           make -j$(nproc) 2>&1 | tee build.log || {
             echo "=== Build failed - showing errors ==="
@@ -114,6 +69,7 @@ jobs:
         run: |
           cd BasiliskII/src/Unix
           file BasiliskII || echo "Binary not found"
+          uname -m
           
           # Check if JIT was enabled
           if grep -q "USE_JIT" config.h 2>/dev/null; then
@@ -134,7 +90,7 @@ jobs:
 
   build-arm64:
     name: Build ARM64 (No JIT yet)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     
     steps:
       - name: Checkout repository
@@ -148,37 +104,9 @@ jobs:
             automake \
             libtool \
             pkg-config \
-            crossbuild-essential-arm64
-
-      - name: Setup ARM64 cross-compilation environment
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Build SDL2 for ARM64
-        run: |
-          cd /tmp
-          wget -q https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL2-${SDL_VERSION}.tar.gz
-          tar xzf SDL2-${SDL_VERSION}.tar.gz
-          cd SDL2-${SDL_VERSION}
-          
-          export CC=aarch64-linux-gnu-gcc
-          export CXX=aarch64-linux-gnu-g++
-          
-          ./configure \
-            --prefix=/usr/local/arm64-sdl2 \
-            --host=aarch64-linux-gnu \
-            --enable-video-kmsdrm \
-            --enable-video-opengles \
-            --enable-video-opengles2 \
-            --disable-video-x11 \
-            --disable-video-wayland \
-            --disable-pulseaudio \
-            --disable-jack
-          
-          make -j$(nproc)
-          sudo make install
+            build-essential \
+            libsdl2-dev \
+            libasound2-dev
 
       - name: Configure BasiliskII for ARM64 (interpreter only)
         run: |
@@ -188,15 +116,8 @@ jobs:
             NO_CONFIGURE=1 ./autogen.sh || autoconf
           fi
           
-          export CC=aarch64-linux-gnu-gcc
-          export CXX=aarch64-linux-gnu-g++
-          export PKG_CONFIG_PATH=/usr/local/arm64-sdl2/lib/pkgconfig
-          export SDL_CONFIG=/usr/local/arm64-sdl2/bin/sdl2-config
-          
           # No JIT for ARM64 yet - using interpreter
           ./configure \
-            --host=aarch64-linux-gnu \
-            --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
             --enable-sdl-video \
             --enable-sdl-audio \
             --enable-sdl-framework \
@@ -209,16 +130,13 @@ jobs:
       - name: Build BasiliskII for ARM64
         run: |
           cd BasiliskII/src/Unix
-          
-          export CC=aarch64-linux-gnu-gcc
-          export CXX=aarch64-linux-gnu-g++
-          
           make -j$(nproc)
 
       - name: Verify ARM64 binary
         run: |
           cd BasiliskII/src/Unix
           file BasiliskII || echo "Binary not found"
+          uname -m
 
       - name: Upload ARM64 binary
         uses: actions/upload-artifact@v4
