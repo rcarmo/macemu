@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - feature/unicorn-cpu
-      - feature/arm-jit
-      - main
     paths:
       - 'BasiliskII/src/**'
       - '.github/workflows/build-arm64-unicorn.yml'
