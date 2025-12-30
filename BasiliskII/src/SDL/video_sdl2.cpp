@@ -2349,18 +2349,58 @@ static int SDLCALL on_sdl_event_generated(void *userdata, SDL_Event * event)
 }
 
 
+// Flag to signal main thread should pump SDL events
+volatile bool sdl_events_need_pump = false;
+// Buffer for events pumped by main thread
+static SDL_Event main_thread_events[64];
+static int main_thread_event_count = 0;
+static SDL_mutex *event_mutex = NULL;
+
+// Called from main thread (one_tick or similar) to pump SDL events
+void SDL_PumpEventsFromMainThread(void)
+{
+	if (!sdl_events_need_pump)
+		return;
+	
+	if (!event_mutex)
+		event_mutex = SDL_CreateMutex();
+	
+	// Pump events in main thread context
+	SDL_PumpEvents();
+	
+	// Grab events while holding mutex
+	SDL_LockMutex(event_mutex);
+	main_thread_event_count = SDL_PeepEvents(main_thread_events, 64, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+	if (main_thread_event_count < 0)
+		main_thread_event_count = 0;
+	SDL_UnlockMutex(event_mutex);
+	
+	sdl_events_need_pump = false;
+}
+
 static void handle_events(void)
 {
-	// Pump events from the windowing system - required before SDL_PeepEvents
-	SDL_PumpEvents();
-
 	SDL_Event events[10];
 	const int n_max_events = sizeof(events) / sizeof(events[0]);
 	int n_events;
 
-	while ((n_events = SDL_PeepEvents(events, n_max_events, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) > 0) {
-		for (int i = 0; i < n_events; i++) {
-			SDL_Event & event = events[i];
+	// Signal that we need events pumped, then process any that were pumped by main thread
+	sdl_events_need_pump = true;
+	
+	// First process events from main thread buffer
+	if (event_mutex) {
+		SDL_LockMutex(event_mutex);
+		int buffered_count = main_thread_event_count;
+		SDL_Event buffered_events[64];
+		if (buffered_count > 0) {
+			memcpy(buffered_events, main_thread_events, buffered_count * sizeof(SDL_Event));
+			main_thread_event_count = 0;
+		}
+		SDL_UnlockMutex(event_mutex);
+		
+		// Process buffered events
+		for (int i = 0; i < buffered_count; i++) {
+			SDL_Event & event = buffered_events[i];
 			
 			switch (event.type) {
 
