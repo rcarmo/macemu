@@ -786,12 +786,45 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 	                     strcmp(video_driver, "fbcon") == 0 ||
 	                     strcmp(video_driver, "directfb") == 0)) {
 		printf("KMSDRM/console video driver detected, grabbing input...\n");
+		fflush(stdout);
+		
+		// Pump events once to let SDL process any pending setup
+		SDL_PumpEvents();
+		
 		SDL_SetWindowGrab(sdl_window, SDL_TRUE);
 		SDL_RaiseWindow(sdl_window);
-		SDL_SetWindowInputFocus(sdl_window);
+		
+		int focus_result = SDL_SetWindowInputFocus(sdl_window);
+		printf("SDL_SetWindowInputFocus returned: %d (0=success)\n", focus_result);
+		if (focus_result != 0) {
+			printf("SDL_SetWindowInputFocus error: %s\n", SDL_GetError());
+		}
+		
 		// Show the window to ensure it can receive events
 		SDL_ShowWindow(sdl_window);
-		printf("Window grab: %d, Input focus set\n", SDL_GetWindowGrab(sdl_window));
+		
+		// Try relative mouse mode - this forces SDL to capture mouse input
+		// and is often more reliable on KMSDRM
+		int rel_result = SDL_SetRelativeMouseMode(SDL_TRUE);
+		printf("SDL_SetRelativeMouseMode returned: %d (0=success)\n", rel_result);
+		if (rel_result != 0) {
+			printf("SDL_SetRelativeMouseMode error: %s\n", SDL_GetError());
+			// If relative mode fails, try to at least warp mouse to center
+			int w, h;
+			SDL_GetWindowSize(sdl_window, &w, &h);
+			SDL_WarpMouseInWindow(sdl_window, w/2, h/2);
+		}
+		
+		printf("Window grab: %d\n", SDL_GetWindowGrab(sdl_window));
+		
+		// Pump events again to process the grab/focus events
+		SDL_PumpEvents();
+		
+		// Check focus after setup
+		SDL_Window *kb_focus = SDL_GetKeyboardFocus();
+		SDL_Window *mouse_focus = SDL_GetMouseFocus();
+		printf("After setup - Keyboard focus: %p, Mouse focus: %p, Our window: %p\n",
+		       (void*)kb_focus, (void*)mouse_focus, (void*)sdl_window);
 		fflush(stdout);
 	}
 	
