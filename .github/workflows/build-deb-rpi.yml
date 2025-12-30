@@ -34,6 +34,8 @@ jobs:
             libudev-dev \
             libdbus-1-dev \
             libsamplerate0-dev \
+            libmpfr-dev \
+            libgmp-dev \
             wget \
             git \
             debhelper \
@@ -134,7 +136,7 @@ jobs:
           Section: otherosfs
           Priority: optional
           Architecture: ${ARCH}
-          Depends: libc6, libasound2, libsamplerate0
+          Depends: libc6, libasound2, libsamplerate0, libmpfr6, libgmp10
           Conflicts: basiliskii
           Provides: basiliskii
           Replaces: basiliskii
@@ -236,6 +238,8 @@ jobs:
             libudev-dev:armhf \
             libdbus-1-dev:armhf \
             libsamplerate0-dev:armhf \
+            libmpfr-dev:armhf \
+            libgmp-dev:armhf \
             wget \
             git \
             debhelper \
@@ -340,7 +344,7 @@ jobs:
           Section: otherosfs
           Priority: optional
           Architecture: ${ARCH}
-          Depends: libc6, libasound2, libsamplerate0
+          Depends: libc6, libasound2, libsamplerate0, libmpfr6, libgmp10
           Conflicts: basiliskii
           Provides: basiliskii
           Replaces: basiliskii
