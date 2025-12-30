@@ -615,6 +615,8 @@ int main(int argc, char **argv)
 #ifdef USE_SDL_AUDIO
 	sdl_flags |= SDL_INIT_AUDIO;
 #endif
+	// Explicitly init events subsystem for KMSDRM input
+	sdl_flags |= SDL_INIT_EVENTS;
 	assert(sdl_flags != 0);
 
 	// Set hints before SDL_Init for proper input handling
@@ -625,6 +627,10 @@ int main(int argc, char **argv)
 	SDL_SetHint(SDL_HINT_KMSDRM_REQUIRE_DRM_MASTER, "0");
 	// Enable input when video is minimized/unfocused
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+	// Try to help KMSDRM find input devices
+	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
+	// Ensure video driver doesn't disable input
+	SDL_SetHint(SDL_HINT_VIDEO_EXTERNAL_CONTEXT, "0");
 #endif
 
 	if (SDL_Init(sdl_flags) == -1) {
@@ -648,6 +654,24 @@ int main(int argc, char **argv)
 		printf(" %s", SDL_GetVideoDriver(i));
 	}
 	printf("\n");
+	fflush(stdout);
+	
+	// Check if SDL can see the mouse
+	int mouse_x, mouse_y;
+	Uint32 mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+	printf("Initial mouse state: buttons=0x%x, pos=(%d,%d)\n", mouse_state, mouse_x, mouse_y);
+	
+	// Check global mouse state (may work better on KMSDRM)
+	Uint32 global_state = SDL_GetGlobalMouseState(&mouse_x, &mouse_y);
+	printf("Global mouse state: buttons=0x%x, pos=(%d,%d)\n", global_state, mouse_x, mouse_y);
+	
+	// Check if we have keyboard focus
+	SDL_Window *focused = SDL_GetKeyboardFocus();
+	printf("Keyboard focus window: %p\n", (void*)focused);
+	
+	// Check mouse focus
+	SDL_Window *mouse_focused = SDL_GetMouseFocus();
+	printf("Mouse focus window: %p\n", (void*)mouse_focused);
 	fflush(stdout);
 #endif
 

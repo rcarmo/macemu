@@ -2370,6 +2370,16 @@ void SDL_PumpEventsFromMainThread(void)
 	pump_call_count++;
 	if (pump_call_count <= 10 || (pump_call_count % 100) == 0) {
 		printf("SDL_PumpEventsFromMainThread called (count=%d)\n", pump_call_count);
+		
+		// Check mouse state directly
+		int mx, my;
+		Uint32 mstate = SDL_GetMouseState(&mx, &my);
+		printf("  Mouse state: buttons=0x%x pos=(%d,%d)\n", mstate, mx, my);
+		
+		// Check if there are any pending events without removing them
+		SDL_Event peek_event;
+		int has_events = SDL_PeepEvents(&peek_event, 1, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+		printf("  Pending events before pump: %d\n", has_events);
 		fflush(stdout);
 	}
 	
