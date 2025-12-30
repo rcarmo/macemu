@@ -33,6 +33,11 @@ extern uint32 ROMBaseMac;           // ROM base (Mac address space)
 extern uint8 *ROMBaseHost;          // ROM base (host address space)
 extern uint32 ROMSize;              // Size of ROM
 
+// Direct addressing offset (Mac address + MEMBaseDiff = host address)
+#if DIRECT_ADDRESSING
+extern uintptr MEMBaseDiff;
+#endif
+
 #if !REAL_ADDRESSING
 // If we are not using real addressing, the Mac frame buffer gets mapped here
 const uint32 MacFrameBaseMac = 0xa0000000;

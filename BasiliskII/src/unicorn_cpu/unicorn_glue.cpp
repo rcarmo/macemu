@@ -71,6 +71,11 @@ static uc_engine *uc = NULL;
 // Interrupt flags (defined here, declared in main.h)
 uint32 InterruptFlags = 0;
 
+// Direct addressing offset
+#if DIRECT_ADDRESSING
+uintptr MEMBaseDiff;
+#endif
+
 // Pending interrupt level (0 = none, 1-7 = interrupt level)
 static volatile int pending_interrupt = 0;
 
