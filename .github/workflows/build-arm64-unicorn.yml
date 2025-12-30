@@ -1,0 +1,178 @@
+name: Build ARM64 with Unicorn
+
+on:
+  push:
+    branches:
+      - feature/unicorn-cpu
+      - feature/arm-jit
+      - main
+    paths:
+      - 'BasiliskII/src/**'
+      - '.github/workflows/build-arm64-unicorn.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'BasiliskII/src/**'
+  workflow_dispatch:
+
+jobs:
+  build-arm64-unicorn:
+    name: ARM64 with Unicorn JIT
+    runs-on: ubuntu-24.04-arm
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          
+          # Install build tools
+          sudo apt-get install -y \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            build-essential
+          
+          # Install SDL2 and other libraries
+          sudo apt-get install -y \
+            libsdl2-dev \
+            libasound2-dev \
+            libmpfr-dev
+          
+          # Install Unicorn Engine
+          sudo apt-get install -y libunicorn-dev || {
+            # If not in repos, build from source
+            echo "Building Unicorn from source..."
+            git clone https://github.com/unicorn-engine/unicorn.git /tmp/unicorn
+            cd /tmp/unicorn
+            mkdir build && cd build
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            make -j$(nproc)
+            sudo make install
+            sudo ldconfig
+          }
+          
+          # Verify Unicorn installation
+          pkg-config --exists unicorn && echo "✓ Unicorn found via pkg-config" || true
+          ls -la /usr/include/unicorn/ || ls -la /usr/local/include/unicorn/ || true
+
+      - name: Configure BasiliskII with Unicorn CPU
+        run: |
+          cd BasiliskII/src/Unix
+          
+          # Run autogen if configure doesn't exist
+          if [ ! -f configure ]; then
+            NO_CONFIGURE=1 ./autogen.sh || autoconf
+          fi
+          
+          # Configure with Unicorn CPU backend
+          ./configure \
+            --enable-unicorn-cpu \
+            --enable-sdl-video \
+            --enable-sdl-audio \
+            --enable-addressing=direct \
+            --enable-fpe=ieee \
+            --disable-vosf \
+            --disable-gtk \
+            --without-mon \
+            --without-x \
+            --without-esd \
+            --disable-nls \
+            --with-sdl2
+
+      - name: Build BasiliskII with Unicorn
+        run: |
+          cd BasiliskII/src/Unix
+          
+          # Build and capture output
+          make -j$(nproc) 2>&1 | tee build.log || {
+            echo "=== Build failed - showing errors ==="
+            grep -i "error:" build.log | head -50
+            exit 1
+          }
+
+      - name: Verify ARM64 Unicorn binary
+        run: |
+          cd BasiliskII/src/Unix
+          file BasiliskII || echo "Binary not found"
+          
+          # Verify it's ARM64
+          file BasiliskII | grep -q "ARM aarch64" && echo "✓ ARM64 binary confirmed"
+          file BasiliskII | grep -q "64-bit" && echo "✓ 64-bit confirmed"
+          
+          # Check if Unicorn was enabled
+          if grep -q "USE_UNICORN_CPU" config.h 2>/dev/null; then
+            echo "✓ Unicorn CPU enabled"
+            grep "USE_UNICORN" config.h
+          else
+            echo "✗ Unicorn not enabled in config"
+            cat config.h | grep -E "UNICORN|CPU" || true
+          fi
+          
+          # Check linked libraries
+          ldd BasiliskII | grep -i unicorn && echo "✓ Linked against libunicorn" || echo "✗ libunicorn not linked"
+
+      - name: Prepare release artifact
+        run: |
+          cd BasiliskII/src/Unix
+          mkdir -p release
+          cp BasiliskII release/BasiliskII-arm64-unicorn
+          cp ../../../README.md release/ || true
+          
+          # Create info file
+          cat > release/BUILD-INFO.txt << EOF
+          BasiliskII ARM64 Unicorn Build
+          ===============================
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git Commit: ${{ github.sha }}
+          Git Branch: ${{ github.ref_name }}
+          
+          This build uses Unicorn Engine for JIT-accelerated 68k emulation.
+          Target: ARM64 Linux (Raspberry Pi 64-bit, Apple Silicon Linux VMs, etc.)
+          
+          Unicorn Engine provides portable JIT via QEMU's TCG.
+          EOF
+
+      - name: Upload ARM64 Unicorn binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: basilisk2-arm64-unicorn
+          path: |
+            BasiliskII/src/Unix/release/
+          retention-days: 30
+
+      - name: Create experimental release
+        if: github.ref == 'refs/heads/feature/unicorn-cpu' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: arm64-unicorn-experimental
+          name: "ARM64 Unicorn Experimental Build"
+          prerelease: true
+          make_latest: false
+          body: |
+            ## ⚠️ Experimental ARM64 Unicorn Build
+            
+            This is an **experimental** build of BasiliskII using Unicorn Engine for 68k emulation.
+            
+            ### Features
+            - JIT-accelerated 68k emulation via Unicorn (QEMU TCG)
+            - Native ARM64 binary
+            - SDL2 video and audio support
+            
+            ### Requirements
+            - 64-bit ARM Linux (Raspberry Pi OS 64-bit, Ubuntu ARM64, etc.)
+            - SDL2 runtime libraries (`sudo apt install libsdl2-2.0-0`)
+            - Unicorn Engine (`sudo apt install libunicorn2` or build from source)
+            
+            ### ⚠️ Warning
+            This build is experimental and may have bugs or stability issues.
+            The Unicorn CPU backend is a prototype.
+            
+            ### Commit
+            Built from commit: ${{ github.sha }}
+          files: |
+            BasiliskII/src/Unix/release/*
