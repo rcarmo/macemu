@@ -1,3 +1,10 @@
+# Build ARM32 JIT GitHub Action Workflow
+# Requirements:
+# - Cross-compilation for ARM32 (armhf) on Debian 12 Bookworm on an ARM runner
+# - Uses system SDL2 package (has evdev/libinput support in Debian)
+# - Configure BasiliskII with JIT enabled for ARM32
+# - Target Raspberry Pi with 32-bit Raspberry Pi OS or 64-bit with armhf multiarch
+
 name: Build ARM32 JIT
 
 on:
@@ -20,32 +27,50 @@ permissions:
 
 jobs:
   build-arm32-jit:
-    name: Experimental ARM32 JIT (cross-compile on ARM64)
+    name: Experimental ARM32 JIT (Debian 12 cross-compile)
     runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:bookworm
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup ARM32 cross-compilation
+      - name: Setup ARM32 cross-compilation environment
         run: |
-          # Enable armhf architecture on ARM64 host
-          sudo dpkg --add-architecture armhf
-          sudo apt-get update
+          # Enable armhf architecture
+          dpkg --add-architecture armhf
+          apt-get update
           
           # Install cross-compiler and native build tools
-          sudo apt-get install -y \
+          apt-get install -y \
+            build-essential \
             autoconf \
             automake \
             libtool \
             pkg-config \
-            crossbuild-essential-armhf
+            crossbuild-essential-armhf \
+            git \
+            ca-certificates
           
-          # Install armhf libraries
-          sudo apt-get install -y \
+          # Install armhf development libraries including system SDL2
+          # Debian's SDL2 package includes evdev/libinput support
+          apt-get install -y \
             libsdl2-dev:armhf \
             libasound2-dev:armhf \
-            libmpfr-dev:armhf
+            libmpfr-dev:armhf \
+            libudev-dev:armhf \
+            libevdev-dev:armhf \
+            libinput-dev:armhf \
+            libdrm-dev:armhf \
+            libgbm-dev:armhf
+          
+          # Verify SDL2 and input libraries are available
+          echo "=== Checking SDL2 armhf package ==="
+          dpkg -l | grep -i sdl2.*armhf || true
+          ls -la /usr/lib/arm-linux-gnueabihf/libSDL2* || true
+          echo "=== Checking input libraries ==="
+          dpkg -l | grep -E "(libevdev|libinput|libudev).*armhf" || true
 
       - name: Configure BasiliskII for ARM32 with JIT
         run: |
@@ -62,7 +87,6 @@ jobs:
           export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
           
           # Set cross-compile variables for ARM Linux signal handling
-          # Modern ARM Linux uses siginfo_t with extended signals
           export BII_CROSS_HAVE_EXTENDED_SIGNALS=yes
           export BII_CROSS_SIGSEGV_SKIP_INSTRUCTION=yes
           export BII_CROSS_MMAP_ANON=yes
@@ -71,7 +95,7 @@ jobs:
           
           ./configure \
             --host=arm-linux-gnueabihf \
-            --build=aarch64-linux-gnu \
+            --build=x86_64-linux-gnu \
             --enable-sdl-video \
             --enable-sdl-audio \
             --enable-jit-compiler \
@@ -91,6 +115,7 @@ jobs:
           
           export CC=arm-linux-gnueabihf-gcc
           export CXX=arm-linux-gnueabihf-g++
+          export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
           
           # Build and capture output
           make -j$(nproc) 2>&1 | tee build.log || {
@@ -107,6 +132,10 @@ jobs:
           # Verify it's actually ARM32
           file BasiliskII | grep -q "ARM" && echo "✓ ARM binary confirmed"
           file BasiliskII | grep -q "32-bit" && echo "✓ 32-bit confirmed"
+          
+          # Check linked libraries
+          echo "=== Linked libraries ==="
+          arm-linux-gnueabihf-objdump -p BasiliskII | grep NEEDED || true
           
           # Check if JIT was enabled
           if grep -q "USE_JIT" config.h 2>/dev/null; then
@@ -162,12 +191,20 @@ jobs:
             ### Features
             - JIT compiler for ARM32 (armhf) ported from ARAnyM
             - Targets Raspberry Pi with 32-bit Raspberry Pi OS
-            - SDL2 video and audio support
+            - Uses Debian system SDL2 with evdev/libinput input support
+            - ALSA audio support
             
             ### Requirements
-            - 32-bit Raspberry Pi OS (armhf)
-            - SDL2 runtime libraries (`sudo apt install libsdl2-2.0-0`)
-            - MPFR library (`sudo apt install libmpfr6`)
+            - 32-bit Raspberry Pi OS (armhf) / Debian 12 Bookworm
+            - Runtime libraries:
+              ```bash
+              sudo apt install libmpfr6 libasound2 libudev1 libevdev2 libinput10 libdrm2 libgbm1
+              ```
+            - User must be in `input` group for console/KMSDRM input:
+              ```bash
+              sudo usermod -a -G input $USER
+              # Then logout and login
+              ```
             
             ### ⚠️ Warning
             This build is experimental and may have bugs or stability issues.

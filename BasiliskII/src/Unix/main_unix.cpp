@@ -639,6 +639,27 @@ int main(int argc, char **argv)
 	// Print video driver info for debugging
 	const char *video_driver = SDL_GetCurrentVideoDriver();
 	printf("Using SDL video driver: %s\n", video_driver ? video_driver : "(null)");
+	
+	// List available video drivers
+	int num_drivers = SDL_GetNumVideoDrivers();
+	printf("Available SDL video drivers (%d):", num_drivers);
+	for (int i = 0; i < num_drivers; i++) {
+		printf(" %s", SDL_GetVideoDriver(i));
+	}
+	printf("\n");
+	
+	// Check if KMSDRM is being used - may need special input handling
+	if (video_driver && (strcmp(video_driver, "KMSDRM") == 0 || strcmp(video_driver, "kmsdrm") == 0)) {
+		printf("KMSDRM driver detected - ensure user has permissions for /dev/input/* devices\n");
+		printf("If input doesn't work, try: sudo usermod -a -G input $USER (then logout/login)\n");
+	}
+	
+	// Print joystick/input info for debugging
+	int num_joysticks = SDL_NumJoysticks();
+	printf("Number of joysticks/gamepads: %d\n", num_joysticks);
+	for (int i = 0; i < num_joysticks; i++) {
+		printf("  Joystick %d: %s\n", i, SDL_JoystickNameForIndex(i));
+	}
 #endif
 
 #if SDL_PLATFORM_MACOS && SDL_VERSION_ATLEAST(2,0,0)
