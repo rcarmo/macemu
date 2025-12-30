@@ -1477,8 +1477,9 @@ else
       break
       ;;
     direct)
-      dnl Requires VOSF screen updates
-      if [[ "x$CAN_VOSF" = "xyes" ]]; then
+      dnl Requires VOSF screen updates (except for ARM which uses uae_cpu_2021)
+      dnl uae_cpu_2021 requires direct addressing - it has no bank-based fallback
+      if [[ "x$CAN_VOSF" = "xyes" -o "x$HAVE_ARM" = "xyes" -o "x$HAVE_ARM64" = "xyes" ]]; then
         ADDRESSING_MODE="direct"
         DEFINES="$DEFINES -DDIRECT_ADDRESSING=1"
         break
