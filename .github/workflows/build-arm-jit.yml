@@ -49,14 +49,15 @@ jobs:
             crossbuild-essential-armhf \
             file
           
-          # Install armhf libraries (including OpenGL ES 2 for SDL rendering)
+          # Install armhf libraries (Debian SDL2 + evdev/udev input stack)
           apt-get install -y \
             libsdl2-dev:armhf \
             libasound2-dev:armhf \
             libmpfr-dev:armhf \
             libgles2:armhf \
             libgles-dev:armhf \
-            libudev-dev:armhf
+            libudev-dev:armhf \
+            libevdev-dev:armhf
 
       - name: Configure BasiliskII for ARM32 with JIT
         run: |
