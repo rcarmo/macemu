@@ -545,18 +545,14 @@ void Start680x0(void)
         return;
     }
     
-    // Reset - read initial SP and PC from ROM
-    printf("Unicorn: Reading initial SP/PC from ROM at 0x%08x\n", ROMBaseMac);
-    uint32_t initial_sp = ReadMacInt32(ROMBaseMac);
-    uint32_t initial_pc = ReadMacInt32(ROMBaseMac + 4);
+    // Mac ROM entry point is NOT at reset vectors (0, 4)
+    // BasiliskII uses fixed values (see uae_cpu/newcpu.cpp m68k_reset):
+    // - SP = 0x2000 (low RAM)
+    // - PC = ROMBaseMac + 0x2a (entry point in ROM)
+    uint32_t initial_sp = 0x2000;
+    uint32_t initial_pc = ROMBaseMac + 0x2a;
     
-    printf("Unicorn: Initial SP=0x%08x, PC=0x%08x\n", initial_sp, initial_pc);
-    
-    // Sanity check - PC should be in ROM area
-    if (initial_pc < ROMBaseMac || initial_pc >= ROMBaseMac + ROMSize) {
-        printf("Unicorn: WARNING: Initial PC (0x%08x) is outside ROM (0x%08x-0x%08x)\n",
-               initial_pc, ROMBaseMac, ROMBaseMac + ROMSize);
-    }
+    printf("Unicorn: Initial SP=0x%08x, PC=0x%08x (ROM+0x2a)\n", initial_sp, initial_pc);
     
     // Set initial registers
     uc_reg_write(uc, UC_M68K_REG_A7, &initial_sp);
