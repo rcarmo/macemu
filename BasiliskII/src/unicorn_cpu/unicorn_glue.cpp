@@ -401,6 +401,17 @@ bool Init680x0(void)
     
     // Map RAM
     // Unicorn requires page-aligned addresses and sizes (4KB alignment)
+    printf("Unicorn: RAMSize=0x%08x RAMBaseHost=%p\n", RAMSize, RAMBaseHost);
+    printf("Unicorn: ROMBaseMac=0x%08x ROMSize=0x%08x ROMBaseHost=%p\n", ROMBaseMac, ROMSize, ROMBaseHost);
+    
+    if (RAMSize == 0 || RAMBaseHost == NULL) {
+        printf("Unicorn: ERROR: RAM not initialized (RAMSize=%u, RAMBaseHost=%p)\n", RAMSize, RAMBaseHost);
+        printf("Unicorn: Init680x0() may have been called before memory setup\n");
+        uc_close(uc);
+        uc = NULL;
+        return false;
+    }
+    
     size_t ram_size_aligned = (RAMSize + 0xFFF) & ~0xFFF;
     err = uc_mem_map_ptr(uc, 0, ram_size_aligned, UC_PROT_ALL, RAMBaseHost);
     if (err != UC_ERR_OK) {
@@ -410,19 +421,38 @@ bool Init680x0(void)
         return false;
     }
     ram_mapped = true;
-    D(bug("Unicorn: Mapped RAM at 0x00000000, size 0x%08x\n", (unsigned)ram_size_aligned));
+    printf("Unicorn: Mapped RAM at 0x00000000, size 0x%08zx\n", ram_size_aligned);
     
     // Map ROM
-    size_t rom_size_aligned = (ROMSize + 0xFFF) & ~0xFFF;
-    err = uc_mem_map_ptr(uc, ROMBaseMac, rom_size_aligned, UC_PROT_READ | UC_PROT_EXEC, ROMBaseHost);
-    if (err != UC_ERR_OK) {
-        printf("Unicorn: Failed to map ROM: %s\n", uc_strerror(err));
-        uc_close(uc);
-        uc = NULL;
-        return false;
+    if (ROMSize == 0 || ROMBaseHost == NULL) {
+        printf("Unicorn: Warning: ROM not initialized, skipping ROM mapping\n");
+    } else {
+        // ROM address must not overlap with RAM
+        size_t rom_size_aligned = (ROMSize + 0xFFF) & ~0xFFF;
+        uint32_t rom_base_aligned = ROMBaseMac & ~0xFFF;
+        
+        printf("Unicorn: ROM base 0x%08x (aligned: 0x%08x), size 0x%08x (aligned: 0x%08zx)\n",
+              ROMBaseMac, rom_base_aligned, ROMSize, rom_size_aligned);
+        
+        // Check for overlap with RAM
+        if (rom_base_aligned < ram_size_aligned) {
+            printf("Unicorn: Warning: ROM (0x%08x) overlaps with RAM (0-0x%08zx)\n",
+                   rom_base_aligned, ram_size_aligned);
+            // ROM immediately follows RAM in host memory, so just adjust the base
+            rom_base_aligned = ram_size_aligned;
+            printf("Unicorn: Adjusted ROM base to 0x%08x\n", rom_base_aligned);
+        }
+        
+        err = uc_mem_map_ptr(uc, rom_base_aligned, rom_size_aligned, UC_PROT_READ | UC_PROT_EXEC, ROMBaseHost);
+        if (err != UC_ERR_OK) {
+            printf("Unicorn: Failed to map ROM at 0x%08x: %s\n", rom_base_aligned, uc_strerror(err));
+            uc_close(uc);
+            uc = NULL;
+            return false;
+        }
+        rom_mapped = true;
+        printf("Unicorn: Mapped ROM at 0x%08x, size 0x%08zx\n", rom_base_aligned, rom_size_aligned);
     }
-    rom_mapped = true;
-    D(bug("Unicorn: Mapped ROM at 0x%08x, size 0x%08x\n", ROMBaseMac, (unsigned)rom_size_aligned));
     
 #if !REAL_ADDRESSING
     // Map frame buffer if present
