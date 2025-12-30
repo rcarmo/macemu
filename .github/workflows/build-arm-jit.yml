@@ -15,6 +15,9 @@ on:
       - 'BasiliskII/src/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-arm32-jit:
     name: Experimental ARM32 JIT (cross-compile on ARM64)

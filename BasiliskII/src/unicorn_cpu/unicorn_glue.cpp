@@ -226,11 +226,35 @@ static void hook_mem_unmapped(uc_engine *uc, uc_mem_type type,
                                uint64_t address, int size, int64_t value,
                                void *user_data)
 {
-    D(bug("Unicorn: Unmapped memory access at 0x%08llx, type=%d, size=%d\n",
-          (unsigned long long)address, type, size));
+    printf("Unicorn: Unmapped memory access at 0x%08llx, type=%d, size=%d\n",
+          (unsigned long long)address, type, size);
+    fflush(stdout);
     
     // For now, just ignore unmapped accesses
     // In future, this would handle I/O regions
+}
+
+// Hook for invalid memory accesses
+static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
+                             uint64_t address, int size, int64_t value,
+                             void *user_data)
+{
+    const char *type_str = "UNKNOWN";
+    switch (type) {
+        case UC_MEM_READ_UNMAPPED: type_str = "READ_UNMAPPED"; break;
+        case UC_MEM_WRITE_UNMAPPED: type_str = "WRITE_UNMAPPED"; break;
+        case UC_MEM_FETCH_UNMAPPED: type_str = "FETCH_UNMAPPED"; break;
+        case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
+        case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
+        case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
+        default: break;
+    }
+    printf("Unicorn: INVALID MEMORY %s at 0x%08llx, size=%d, value=0x%llx\n",
+           type_str, (unsigned long long)address, size, (unsigned long long)value);
+    fflush(stdout);
+    
+    // Return false to stop emulation on invalid access
+    return false;
 }
 
 /*
@@ -274,6 +298,21 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
             uc_reg_read(uc, UC_M68K_REG_A7, &a7);
             printf("Unicorn: [%d] PC=0x%08llx opcode=0x%04x A7=0x%08x\n", 
                    hook_call_count, (unsigned long long)address, opcode, a7);
+            
+            // For MOVEM (0x48xx), show more context
+            if ((opcode & 0xFFC0) == 0x48C0 || (opcode & 0xFFC0) == 0x48E0) {
+                uint16_t mask;
+                if (uc_mem_read(uc, address + 2, &mask, 2) == UC_ERR_OK) {
+                    mask = (mask >> 8) | (mask << 8);
+                    printf("Unicorn:   MOVEM mask=0x%04x, target addr=0x%08x\n", mask, a7);
+                    
+                    // Test if stack area is writable
+                    uint8_t test_byte = 0xAA;
+                    uc_err werr = uc_mem_write(uc, a7 - 4, &test_byte, 1);
+                    printf("Unicorn:   Stack write test at 0x%08x: %s\n", 
+                           a7 - 4, werr == UC_ERR_OK ? "OK" : uc_strerror(werr));
+                }
+            }
             fflush(stdout);
         }
         hook_call_count++;
@@ -547,6 +586,17 @@ bool Init680x0(void)
         D(bug("Unicorn: Warning: Failed to add memory hook: %s\n", uc_strerror(err)));
     }
     
+    // Add hook for invalid memory accesses (protection violations, etc.)
+    uc_hook hh_mem_invalid;
+    err = uc_hook_add(uc, &hh_mem_invalid, 
+                      UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | 
+                      UC_HOOK_MEM_FETCH_UNMAPPED | UC_HOOK_MEM_READ_PROT |
+                      UC_HOOK_MEM_WRITE_PROT | UC_HOOK_MEM_FETCH_PROT,
+                      (void *)hook_mem_invalid, NULL, 1, 0);
+    if (err != UC_ERR_OK) {
+        printf("Unicorn: Warning: Failed to add invalid memory hook: %s\n", uc_strerror(err));
+    }
+    
     printf("Unicorn: 68k emulation initialized successfully\n");
     return true;
 }
@@ -633,7 +683,7 @@ void Start680x0(void)
     printf("Unicorn: Starting emulation at PC=0x%08x\n", initial_pc);
     fflush(stdout);
     
-    uc_err err = uc_emu_start(uc, initial_pc, 0, 0, 0);
+    err = uc_emu_start(uc, initial_pc, 0, 0, 0);
     if (err != UC_ERR_OK && !quit_program) {
         uint32_t pc;
         uc_reg_read(uc, UC_M68K_REG_PC, &pc);
