@@ -2,11 +2,8 @@ name: Build Debian Package for Raspberry Pi
 
 on:
   push:
-    branches: [ master, main ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ master, main ]
   workflow_dispatch:
 
 env:
@@ -272,6 +269,9 @@ jobs:
           echo "=== Building BasiliskII (armhf) ==="
           cd BasiliskII/src/Unix
           NO_CONFIGURE=1 ./autogen.sh
+          export PKG_CONFIG_PATH=/usr/local/armhf/lib/pkgconfig
+          export CPPFLAGS="-I/usr/local/armhf/include -I/usr/local/armhf/include/SDL2"
+          export LDFLAGS="-L/usr/local/armhf/lib -Wl,-rpath,/usr/local/armhf/lib"
           ./configure \
             --host=arm-linux-gnueabihf \
             --prefix=/usr \
@@ -283,9 +283,6 @@ jobs:
             --without-gtk \
             --disable-jit-compiler \
             --disable-nls
-          CPATH=$CPATH:/usr/local/armhf/include/SDL2 \
-          LDFLAGS="-L/usr/local/armhf/lib" \
-          PKG_CONFIG_PATH=/usr/local/armhf/lib/pkgconfig \
           make -j$(nproc)
 
       - name: Create Debian package

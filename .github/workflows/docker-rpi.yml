@@ -2,16 +2,8 @@ name: Build Docker Image for Raspberry Pi
 
 on:
   push:
-    branches: [ master, main ]
     tags:
       - 'v*'
-    paths:
-      - 'BasiliskII/**'
-      - '.github/workflows/docker-rpi.yml'
-  pull_request:
-    branches: [ master, main ]
-    paths:
-      - 'BasiliskII/**'
   workflow_dispatch:
 
 env:
