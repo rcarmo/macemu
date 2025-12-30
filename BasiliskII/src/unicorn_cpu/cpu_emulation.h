@@ -171,8 +171,7 @@ extern "C" void Execute68kTrap(uint16 trap, struct M68kRegisters *r);   // Execu
 extern void TriggerInterrupt(void); // Trigger interrupt level 1
 extern void TriggerNMI(void);       // Trigger interrupt level 7
 
-// Interrupt flags
-extern volatile uint32 InterruptFlags;
+// Note: InterruptFlags is declared in main.h, don't redeclare here
 
 // CPU looping handlers
 extern int intlev(void);

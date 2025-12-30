@@ -68,8 +68,8 @@
 // Unicorn engine instance
 static uc_engine *uc = NULL;
 
-// Interrupt flags
-volatile uint32 InterruptFlags = 0;
+// Interrupt flags (defined here, declared in main.h)
+uint32 InterruptFlags = 0;
 
 // Pending interrupt level (0 = none, 1-7 = interrupt level)
 static volatile int pending_interrupt = 0;
