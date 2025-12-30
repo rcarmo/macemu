@@ -48,7 +48,6 @@ jobs:
           ./configure \
             --enable-sdl-video \
             --enable-sdl-audio \
-            --enable-sdl-framework \
             --disable-gtk \
             --without-mon \
             --without-x \
@@ -120,7 +119,6 @@ jobs:
           ./configure \
             --enable-sdl-video \
             --enable-sdl-audio \
-            --enable-sdl-framework \
             --disable-jit-compiler \
             --disable-gtk \
             --without-mon \
