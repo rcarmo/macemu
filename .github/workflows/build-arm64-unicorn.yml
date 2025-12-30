@@ -16,6 +16,9 @@ on:
       - 'BasiliskII/src/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-arm64-unicorn:
     name: ARM64 with Unicorn JIT (Debian 12)
