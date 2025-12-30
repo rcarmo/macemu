@@ -34,7 +34,8 @@ jobs:
             pkg-config \
             build-essential \
             libsdl2-dev \
-            libasound2-dev
+            libasound2-dev \
+            libmpfr-dev
 
       - name: Configure BasiliskII for ARM with JIT
         run: |
@@ -105,7 +106,8 @@ jobs:
             pkg-config \
             build-essential \
             libsdl2-dev \
-            libasound2-dev
+            libasound2-dev \
+            libmpfr-dev
 
       - name: Configure BasiliskII for ARM64 (interpreter only)
         run: |
