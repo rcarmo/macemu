@@ -497,9 +497,6 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
             pending_interrupt = 1;  // Set directly since TriggerInterrupt uses signals
         }
     }
-            pending_interrupt = 1;  // Set directly since TriggerInterrupt uses signals
-        }
-    }
     
     // Detect stuck loops (high threshold - tight loops are normal)
     if (address == last_pc) {
