@@ -639,6 +639,16 @@ int main(int argc, char **argv)
 	// Print video driver info for debugging
 	const char *video_driver = SDL_GetCurrentVideoDriver();
 	printf("Using SDL video driver: %s\n", video_driver ? video_driver : "(null)");
+	fflush(stdout);
+	
+	// Print available video drivers
+	int num_drivers = SDL_GetNumVideoDrivers();
+	printf("Available SDL video drivers (%d):", num_drivers);
+	for (int i = 0; i < num_drivers; i++) {
+		printf(" %s", SDL_GetVideoDriver(i));
+	}
+	printf("\n");
+	fflush(stdout);
 #endif
 
 #if SDL_PLATFORM_MACOS && SDL_VERSION_ATLEAST(2,0,0)
