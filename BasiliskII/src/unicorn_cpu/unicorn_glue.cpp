@@ -241,16 +241,39 @@ static void hook_mem_unmapped(uc_engine *uc, uc_mem_type type,
  */
 
 static int hook_call_count = 0;
+static uint64_t last_pc = 0;
+static int same_pc_count = 0;
 
 static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
 {
-    // Diagnostic output for first 20 instructions
-    if (hook_call_count < 20) {
+    // Detect stuck loops
+    if (address == last_pc) {
+        same_pc_count++;
+        if (same_pc_count == 100) {
+            uint32_t a7, sr;
+            uc_reg_read(uc, UC_M68K_REG_A7, &a7);
+            uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+            printf("Unicorn: STUCK at PC=0x%08llx (100 iterations), A7=0x%08x, SR=0x%04x\n",
+                   (unsigned long long)address, a7, sr);
+            printf("Unicorn: Stopping emulation due to infinite loop\n");
+            fflush(stdout);
+            uc_emu_stop(uc);
+            return;
+        }
+    } else {
+        same_pc_count = 0;
+        last_pc = address;
+    }
+    
+    // Diagnostic output for first 50 instructions
+    if (hook_call_count < 50) {
         uint16_t opcode;
         if (uc_mem_read(uc, address, &opcode, 2) == UC_ERR_OK) {
             opcode = (opcode >> 8) | (opcode << 8);  // big-endian swap
-            printf("Unicorn: [%d] PC=0x%08llx opcode=0x%04x\n", 
-                   hook_call_count, (unsigned long long)address, opcode);
+            uint32_t a7;
+            uc_reg_read(uc, UC_M68K_REG_A7, &a7);
+            printf("Unicorn: [%d] PC=0x%08llx opcode=0x%04x A7=0x%08x\n", 
+                   hook_call_count, (unsigned long long)address, opcode, a7);
             fflush(stdout);
         }
         hook_call_count++;
