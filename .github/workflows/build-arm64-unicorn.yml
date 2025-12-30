@@ -18,33 +18,42 @@ on:
 
 jobs:
   build-arm64-unicorn:
-    name: ARM64 with Unicorn JIT
+    name: ARM64 with Unicorn JIT (Debian 12)
     runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:bookworm
     
     steps:
+      - name: Install git and dependencies
+        run: |
+          apt-get update
+          apt-get install -y git ca-certificates
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
+          apt-get update
           
           # Install build tools
-          sudo apt-get install -y \
+          apt-get install -y \
             autoconf \
             automake \
             libtool \
             pkg-config \
-            build-essential
+            build-essential \
+            file \
+            cmake
           
           # Install SDL2 and other libraries
-          sudo apt-get install -y \
+          apt-get install -y \
             libsdl2-dev \
             libasound2-dev \
             libmpfr-dev
           
           # Install Unicorn Engine
-          sudo apt-get install -y libunicorn-dev || {
+          apt-get install -y libunicorn-dev || {
             # If not in repos, build from source
             echo "Building Unicorn from source..."
             git clone https://github.com/unicorn-engine/unicorn.git /tmp/unicorn
@@ -52,8 +61,8 @@ jobs:
             mkdir build && cd build
             cmake .. -DCMAKE_BUILD_TYPE=Release
             make -j$(nproc)
-            sudo make install
-            sudo ldconfig
+            make install
+            ldconfig
           }
           
           # Verify Unicorn installation
