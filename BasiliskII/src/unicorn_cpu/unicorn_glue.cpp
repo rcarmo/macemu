@@ -240,8 +240,22 @@ static void hook_mem_unmapped(uc_engine *uc, uc_mem_type type,
  * We also need to detect our special EMUL_OP opcodes (0x71XX).
  */
 
+static int hook_call_count = 0;
+
 static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
 {
+    // Diagnostic output for first 20 instructions
+    if (hook_call_count < 20) {
+        uint16_t opcode;
+        if (uc_mem_read(uc, address, &opcode, 2) == UC_ERR_OK) {
+            opcode = (opcode >> 8) | (opcode << 8);  // big-endian swap
+            printf("Unicorn: [%d] PC=0x%08llx opcode=0x%04x\n", 
+                   hook_call_count, (unsigned long long)address, opcode);
+            fflush(stdout);
+        }
+        hook_call_count++;
+    }
+    
     // Check for EXEC_RETURN marker
     if (address == EXEC_RETURN_ADDR) {
         D(bug("Unicorn: EXEC_RETURN hit, stopping execution\n"));
@@ -524,7 +538,7 @@ void Exit680x0(void)
 
 void Start680x0(void)
 {
-    D(bug("Unicorn: Start680x0\n"));
+    printf("Unicorn: Start680x0\n");
     
     if (!uc) {
         printf("Unicorn: Engine not initialized!\n");
@@ -532,10 +546,17 @@ void Start680x0(void)
     }
     
     // Reset - read initial SP and PC from ROM
+    printf("Unicorn: Reading initial SP/PC from ROM at 0x%08x\n", ROMBaseMac);
     uint32_t initial_sp = ReadMacInt32(ROMBaseMac);
     uint32_t initial_pc = ReadMacInt32(ROMBaseMac + 4);
     
-    D(bug("Unicorn: Initial SP=0x%08x, PC=0x%08x\n", initial_sp, initial_pc));
+    printf("Unicorn: Initial SP=0x%08x, PC=0x%08x\n", initial_sp, initial_pc);
+    
+    // Sanity check - PC should be in ROM area
+    if (initial_pc < ROMBaseMac || initial_pc >= ROMBaseMac + ROMSize) {
+        printf("Unicorn: WARNING: Initial PC (0x%08x) is outside ROM (0x%08x-0x%08x)\n",
+               initial_pc, ROMBaseMac, ROMBaseMac + ROMSize);
+    }
     
     // Set initial registers
     uc_reg_write(uc, UC_M68K_REG_A7, &initial_sp);
@@ -559,7 +580,8 @@ void Start680x0(void)
     quit_program = 0;
     
     // Start emulation
-    D(bug("Unicorn: Starting emulation at PC=0x%08x\n", initial_pc));
+    printf("Unicorn: Starting emulation at PC=0x%08x\n", initial_pc);
+    fflush(stdout);
     
     uc_err err = uc_emu_start(uc, initial_pc, 0, 0, 0);
     if (err != UC_ERR_OK && !quit_program) {
@@ -568,7 +590,7 @@ void Start680x0(void)
         printf("Unicorn: Emulation error: %s (PC=0x%08x)\n", uc_strerror(err), pc);
     }
     
-    D(bug("Unicorn: Emulation ended\n"));
+    printf("Unicorn: Emulation ended\n");
 }
 
 /*
