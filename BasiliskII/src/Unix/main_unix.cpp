@@ -393,6 +393,10 @@ void cpu_do_check_ticks(void)
 		delay = PrefsFindInt32("delay");
 	if (delay)
 		usleep(delay);
+	
+	// Pump SDL events from main thread context (required for KMSDRM/evdev input)
+	// This is called periodically from the CPU emulation loop
+	SDL_PumpEventsFromMainThread();
 }
 #endif
 
@@ -1330,6 +1334,9 @@ static void one_tick(...)
 		tick_counter = 0;
 		one_second();
 	}
+
+	// Pump SDL events from main thread context (required for KMSDRM/evdev input)
+	SDL_PumpEventsFromMainThread();
 
 #ifndef USE_PTHREADS_SERVICES
 	// Threads not used to trigger interrupts, perform video refresh from here

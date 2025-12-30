@@ -2766,3 +2766,6 @@ static void *redraw_func(void *arg)
 	return NULL;
 }
 #endif
+
+// Stub for non-SDL video - X11 handles events differently
+void SDL_PumpEventsFromMainThread(void) {}

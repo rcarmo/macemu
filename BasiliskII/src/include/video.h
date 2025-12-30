@@ -274,4 +274,8 @@ extern void VideoQuitFullScreen(void);
 extern void VideoInterrupt(void);
 extern void VideoRefresh(void);
 
+// SDL event pumping - must be called from main thread for KMSDRM/evdev input
+// Defined in video_sdl2.cpp, no-op stub in other backends
+extern void SDL_PumpEventsFromMainThread(void);
+
 #endif

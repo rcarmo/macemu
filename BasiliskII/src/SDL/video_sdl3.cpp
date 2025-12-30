@@ -2863,4 +2863,11 @@ void video_set_dirty_area(int x, int y, int w, int h)
 }
 #endif
 
+// SDL3 may need similar main-thread event pump for KMSDRM
+// For now, SDL3's event handling should work from any thread
+void SDL_PumpEventsFromMainThread(void) {
+	// SDL3's event system may have better threading support
+	// If needed, implement similar to video_sdl2.cpp
+}
+
 #endif	// ends: SDL version check

@@ -2389,4 +2389,7 @@ void video_set_gamma(int n_colors)
 }
 #endif
 
+// Stub for SDL1 - SDL2's KMSDRM needs special handling
+void SDL_PumpEventsFromMainThread(void) {}
+
 #endif	// ends: SDL version check
