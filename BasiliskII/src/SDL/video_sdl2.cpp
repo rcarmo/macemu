@@ -798,6 +798,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 #elif defined(__MACOSX__) && SDL_VERSION_ATLEAST(2,0,14)
 			SDL_SetHint(SDL_HINT_RENDER_DRIVER, window_flags & SDL_WINDOW_METAL ? "metal" : "opengl");
 #else
+			// Let SDL auto-detect the best renderer (will use GPU if available)
 			SDL_SetHint(SDL_HINT_RENDER_DRIVER, "");
 #endif
 	    }
