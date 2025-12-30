@@ -10,13 +10,13 @@ name: Build ARM32 JIT
 on:
   push:
     branches:
-      - arm-jit
+      - feature/arm-jit
     paths:
       - 'BasiliskII/src/**'
       - '.github/workflows/build-arm-jit.yml'
   pull_request:
     branches:
-      - arm-jit
+      - feature/arm-jit
     paths:
       - 'BasiliskII/src/**'
   workflow_dispatch:
@@ -175,13 +175,15 @@ jobs:
           retention-days: 30
 
       - name: Create experimental release
-        if: github.ref == 'refs/heads/arm-jit' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/feature/arm-jit' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: arm-jit-experimental
+          target_commitish: ${{ github.sha }}
           name: "ARM JIT Experimental Build"
           prerelease: true
           make_latest: false
+          overwrite: true
           body: |
             ## ⚠️ Experimental ARM JIT Build
             
