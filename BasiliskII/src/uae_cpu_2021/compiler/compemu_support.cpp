@@ -196,6 +196,11 @@ static inline int distrust_addr(void)
 #define canbang 1
 #define op_illg op_illg_1
 
+/* BasiliskII compatibility definitions */
+#ifndef WINUAE_ARANYM
+#define panicbug bug
+#endif
+
 #ifdef WINUAE_ARANYM
 void jit_abort(const char *format, ...)
 {
@@ -3583,11 +3588,12 @@ void get_n_addr(int address, int dest, int tmp)
 
 void get_n_addr_jmp(int address, int dest, int tmp)
 {
-#ifdef WINUAE_ARANYM
+#if defined(WINUAE_ARANYM) || defined(NATMEM_OFFSET)
 	/* For this, we need to get the same address as the rest of UAE
 	 would --- otherwise we end up translating everything twice */
 	get_n_addr(address,dest,tmp);
 #else
+#ifdef UAE
 	int f=tmp;
 	if (address!=dest)
 		f=dest;
@@ -3597,6 +3603,10 @@ void get_n_addr_jmp(int address, int dest, int tmp)
 	add_l(dest,address);
 	and_l_ri (dest, ~1);
 	forget_about(tmp);
+#else
+	/* BasiliskII: use direct addressing */
+	get_n_addr(address,dest,tmp);
+#endif
 #endif
 }
 
@@ -4426,6 +4436,17 @@ void build_comp(void)
 		int cpu_level = (currprefs.cpu_model - 68000) / 10;
 		if (cpu_level > 4)
 			cpu_level--;
+#else
+		/* BasiliskII: determine cpu_level from CPUType */
+		int cpu_level = 0;	// 68000 (default)
+		if (CPUType == 4)
+			cpu_level = 4;			// 68040 with FPU
+		else if (FPUType)
+			cpu_level = 3;		// 68020 with FPU
+		else if (CPUType >= 2)
+			cpu_level = 2;		// 68020
+		else if (CPUType == 1)
+			cpu_level = 1;		// 68010
 #endif
 		if ((instrmnem)table68k[opcode].mnemo == i_ILLG || table68k[opcode].clev > cpu_level)
 			continue;
@@ -4526,8 +4547,8 @@ void flush_icache_hard(void)
 	blockinfo* bi, *dbi;
 
 #ifndef UAE
-	jit_log("JIT: Flush Icache_hard(%d/%x/%p), %u KB",
-		n,regs.pc,regs.pc_p,current_cache_size/1024);
+	jit_log("JIT: Flush Icache_hard(pc=%x/%p), %u KB",
+		regs.pc,regs.pc_p,current_cache_size/1024);
 #endif
 	bi=active;
 	while(bi) {
