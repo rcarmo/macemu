@@ -68,8 +68,7 @@
 // Unicorn engine instance
 static uc_engine *uc = NULL;
 
-// Interrupt flags (defined here, declared in main.h)
-uint32 InterruptFlags = 0;
+// Note: InterruptFlags is defined in main_unix.cpp, declared in main.h
 
 // Direct addressing offset
 #if DIRECT_ADDRESSING
@@ -79,7 +78,7 @@ uintptr MEMBaseDiff;
 // Pending interrupt level (0 = none, 1-7 = interrupt level)
 static volatile int pending_interrupt = 0;
 
-// Quit control
+// Quit control (normally from uae_cpu/newcpu.cpp, we define here)
 int quit_program = 0;
 int exit_val = 0;
 
