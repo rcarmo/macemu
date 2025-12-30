@@ -16,28 +16,35 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-arm32:
-    name: Build ARM32 JIT
+  build-arm32-jit:
+    name: Build ARM32 JIT (cross-compile on ARM64)
     runs-on: ubuntu-24.04-arm
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Setup ARM32 cross-compilation
         run: |
+          # Enable armhf architecture on ARM64 host
+          sudo dpkg --add-architecture armhf
           sudo apt-get update
+          
+          # Install cross-compiler and native build tools
           sudo apt-get install -y \
             autoconf \
             automake \
             libtool \
             pkg-config \
-            build-essential \
-            libsdl2-dev \
-            libasound2-dev \
-            libmpfr-dev
+            crossbuild-essential-armhf
+          
+          # Install armhf libraries
+          sudo apt-get install -y \
+            libsdl2-dev:armhf \
+            libasound2-dev:armhf \
+            libmpfr-dev:armhf
 
-      - name: Configure BasiliskII for ARM with JIT
+      - name: Configure BasiliskII for ARM32 with JIT
         run: |
           cd BasiliskII/src/Unix
           
@@ -46,7 +53,14 @@ jobs:
             NO_CONFIGURE=1 ./autogen.sh || autoconf
           fi
           
+          # Cross-compile for armhf
+          export CC=arm-linux-gnueabihf-gcc
+          export CXX=arm-linux-gnueabihf-g++
+          export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+          
           ./configure \
+            --host=arm-linux-gnueabihf \
+            --build=aarch64-linux-gnu \
             --enable-sdl-video \
             --enable-sdl-audio \
             --disable-gtk \
@@ -54,22 +68,28 @@ jobs:
             --without-x \
             --with-sdl2
 
-      - name: Build BasiliskII with ARM JIT
+      - name: Build BasiliskII with ARM32 JIT
         run: |
           cd BasiliskII/src/Unix
           
-          # Try building - capture both success and failure info
+          export CC=arm-linux-gnueabihf-gcc
+          export CXX=arm-linux-gnueabihf-g++
+          
+          # Build and capture output
           make -j$(nproc) 2>&1 | tee build.log || {
             echo "=== Build failed - showing errors ==="
             grep -i "error:" build.log | head -50
             exit 1
           }
 
-      - name: Verify ARM JIT binary
+      - name: Verify ARM32 JIT binary
         run: |
           cd BasiliskII/src/Unix
           file BasiliskII || echo "Binary not found"
-          uname -m
+          
+          # Verify it's actually ARM32
+          file BasiliskII | grep -q "ARM" && echo "✓ ARM binary confirmed"
+          file BasiliskII | grep -q "32-bit" && echo "✓ 32-bit confirmed"
           
           # Check if JIT was enabled
           if grep -q "USE_JIT" config.h 2>/dev/null; then
@@ -77,9 +97,10 @@ jobs:
             grep "USE_JIT" config.h
           else
             echo "✗ JIT not enabled in config"
+            grep -E "CAN_JIT|CPU_arm" config.h || true
           fi
 
-      - name: Upload ARM JIT binary
+      - name: Upload ARM32 JIT binary
         uses: actions/upload-artifact@v4
         if: success()
         with:
@@ -88,8 +109,8 @@ jobs:
             BasiliskII/src/Unix/BasiliskII
           retention-days: 7
 
-  build-arm64:
-    name: Build ARM64 (No JIT yet)
+  build-arm64-interpreter:
+    name: Build ARM64 Interpreter
     runs-on: ubuntu-24.04-arm
     
     steps:
@@ -142,7 +163,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: basilisk2-arm64
+          name: basilisk2-arm64-interpreter
           path: |
             BasiliskII/src/Unix/BasiliskII
           retention-days: 7
