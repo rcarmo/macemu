@@ -54,7 +54,11 @@ jobs:
             --disable-video-x11 \
             --disable-pulseaudio \
             --disable-esd \
-            --disable-video-wayland
+            --disable-video-wayland \
+            --enable-libudev \
+            --enable-input-events
+          echo "=== SDL2 configure summary (input related) ==="
+          grep -i -E '(udev|evdev|input|kmsdrm)' config.log | tail -20 || true
           make -j$(nproc)
           sudo make install
           sudo ldconfig
@@ -133,7 +137,7 @@ jobs:
           Section: otherosfs
           Priority: optional
           Architecture: ${ARCH}
-          Depends: libc6, libasound2, libsamplerate0, libmpfr6, libgmp10
+          Depends: libc6, libasound2, libsamplerate0, libmpfr6, libgmp10, libudev1
           Conflicts: basiliskii
           Provides: basiliskii
           Replaces: basiliskii
@@ -259,7 +263,11 @@ jobs:
             --disable-video-x11 \
             --disable-pulseaudio \
             --disable-esd \
-            --disable-video-wayland
+            --disable-video-wayland \
+            --enable-libudev \
+            --enable-input-events
+          echo "=== SDL2 configure summary (input related) ==="
+          grep -i -E '(udev|evdev|input|kmsdrm)' config.log | tail -20 || true
           make -j$(nproc)
           sudo make install
 
@@ -341,7 +349,7 @@ jobs:
           Section: otherosfs
           Priority: optional
           Architecture: ${ARCH}
-          Depends: libc6, libasound2, libsamplerate0, libmpfr6, libgmp10
+          Depends: libc6, libasound2, libsamplerate0, libmpfr6, libgmp10, libudev1
           Conflicts: basiliskii
           Provides: basiliskii
           Replaces: basiliskii
