@@ -612,6 +612,17 @@ int main(int argc, char **argv)
 	sdl_flags |= SDL_INIT_AUDIO;
 #endif
 	assert(sdl_flags != 0);
+
+	// Set hints before SDL_Init for proper input handling
+	// These help with KMSDRM and console-mode operation on Raspberry Pi
+#if SDL_VERSION_ATLEAST(2,0,0)
+	SDL_SetHint(SDL_HINT_GRAB_KEYBOARD, "1");
+	// Allow running without being DRM master (needed for input when not root)
+	SDL_SetHint(SDL_HINT_KMSDRM_REQUIRE_DRM_MASTER, "0");
+	// Enable input when video is minimized/unfocused
+	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+#endif
+
 	if (SDL_Init(sdl_flags) == -1) {
 		char str[256];
 		sprintf(str, "Could not initialize SDL: %s.\n", SDL_GetError());
@@ -619,6 +630,12 @@ int main(int argc, char **argv)
 		QuitEmulator();
 	}
 	atexit(SDL_Quit);
+
+#if SDL_VERSION_ATLEAST(2,0,0)
+	// Print video driver info for debugging
+	const char *video_driver = SDL_GetCurrentVideoDriver();
+	printf("Using SDL video driver: %s\n", video_driver ? video_driver : "(null)");
+#endif
 
 #if SDL_PLATFORM_MACOS && SDL_VERSION_ATLEAST(2,0,0)
 	// On Mac OS X hosts, SDL2 will create its own menu bar.  This is mostly OK,

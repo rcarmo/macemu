@@ -798,6 +798,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 #elif defined(__MACOSX__) && SDL_VERSION_ATLEAST(2,0,14)
 			SDL_SetHint(SDL_HINT_RENDER_DRIVER, window_flags & SDL_WINDOW_METAL ? "metal" : "opengl");
 #else
+			// Let SDL auto-detect the best renderer (will use GPU if available)
 			SDL_SetHint(SDL_HINT_RENDER_DRIVER, "");
 #endif
 	    }
@@ -810,7 +811,15 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		sdl_renderer = SDL_CreateRenderer(sdl_window, -1, 0);
 
 		if (!sdl_renderer) {
-			printf("ERROR: SDL_CreateRenderer failed: %s\n", SDL_GetError());
+			printf("WARNING: SDL_CreateRenderer failed: %s\n", SDL_GetError());
+			// Try falling back to software renderer
+			printf("Trying software renderer as fallback...\n");
+			SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+			sdl_renderer = SDL_CreateRenderer(sdl_window, -1, 0);
+		}
+
+		if (!sdl_renderer) {
+			printf("ERROR: SDL_CreateRenderer failed with software fallback: %s\n", SDL_GetError());
 			shutdown_sdl_video();
 			return NULL;
 		}
