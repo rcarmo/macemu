@@ -48,7 +48,6 @@ jobs:
               libtool \
               pkg-config \
               libasound2-dev \
-              libpulse-dev \
               libudev-dev \
               libdbus-1-dev \
               libsamplerate0-dev \
@@ -264,7 +263,6 @@ jobs:
               libtool \
               pkg-config \
               libasound2-dev \
-              libpulse-dev \
               libudev-dev \
               libdbus-1-dev \
               libsamplerate0-dev \
