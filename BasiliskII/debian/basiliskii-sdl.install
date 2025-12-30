@@ -1,0 +1,3 @@
+src/Unix/keycodes usr/share/basiliskii-sdl
+src/Unix/fbdevices usr/share/basiliskii-sdl
+src/Unix/tunconfig usr/share/basiliskii-sdl

@@ -1,0 +1,447 @@
+name: Build Debian Package for Raspberry Pi
+
+on:
+  push:
+    branches: [ master, main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  SDL_VERSION: "2.32.8"
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+    name: Build ARM64 .deb package
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build in ARM64 container
+        uses: uraimo/run-on-arch-action@v2
+        id: build
+        with:
+          arch: aarch64
+          distro: bookworm
+          githubToken: ${{ github.token }}
+
+          # Mount the workspace
+          dockerRunArgs: |
+            --volume "${PWD}:/workspace"
+
+          # Install dependencies in the container
+          install: |
+            apt-get update -q -y
+            apt-get install -q -y \
+              build-essential \
+              autoconf \
+              automake \
+              libtool \
+              pkg-config \
+              libasound2-dev \
+              libpulse-dev \
+              libudev-dev \
+              libdbus-1-dev \
+              libsamplerate0-dev \
+              wget \
+              git \
+              debhelper \
+              devscripts \
+              dh-make \
+              fakeroot \
+              lintian
+
+          # Build SDL2 and BasiliskII
+          run: |
+            set -e
+            cd /workspace
+
+            echo "=== Building SDL2 ${SDL_VERSION} from source ==="
+            wget -q https://www.libsdl.org/release/SDL2-${SDL_VERSION}.tar.gz
+            tar -zxf SDL2-${SDL_VERSION}.tar.gz
+            cd SDL2-${SDL_VERSION}
+            ./configure \
+              --prefix=/usr/local \
+              --disable-video-opengl \
+              --disable-video-x11 \
+              --disable-pulseaudio \
+              --disable-esd \
+              --disable-video-wayland
+            make -j$(nproc)
+            make install
+            ldconfig
+            cd /workspace
+
+            echo "=== Building BasiliskII ==="
+            cd BasiliskII/src/Unix
+            NO_CONFIGURE=1 ./autogen.sh
+            ./configure \
+              --prefix=/usr \
+              --enable-sdl-audio \
+              --enable-sdl-framework \
+              --enable-sdl-video \
+              --disable-vosf \
+              --without-mon \
+              --without-esd \
+              --without-gtk \
+              --disable-jit-compiler \
+              --disable-nls
+            CPATH=$CPATH:/usr/local/include/SDL2 make -j$(nproc)
+
+            echo "=== Creating Debian package ==="
+            cd /workspace
+
+            # Get version from git or use default
+            if git describe --tags --exact-match 2>/dev/null; then
+              VERSION=$(git describe --tags --exact-match | sed 's/^v//')
+            else
+              VERSION="1.0.$(date +%Y%m%d)"
+            fi
+
+            ARCH="arm64"
+            PKG_NAME="basiliskii-sdl"
+            PKG_DIR="${PKG_NAME}_${VERSION}_${ARCH}"
+
+            # Create package directory structure
+            mkdir -p ${PKG_DIR}/DEBIAN
+            mkdir -p ${PKG_DIR}/usr/bin
+            mkdir -p ${PKG_DIR}/usr/share/basiliskii-sdl
+            mkdir -p ${PKG_DIR}/usr/share/man/man1
+            mkdir -p ${PKG_DIR}/usr/share/doc/basiliskii-sdl
+            mkdir -p ${PKG_DIR}/usr/lib
+
+            # Copy binary
+            cp BasiliskII/src/Unix/BasiliskII ${PKG_DIR}/usr/bin/
+            strip ${PKG_DIR}/usr/bin/BasiliskII
+
+            # Copy data files
+            cp BasiliskII/src/Unix/keycodes ${PKG_DIR}/usr/share/basiliskii-sdl/
+            cp BasiliskII/src/Unix/fbdevices ${PKG_DIR}/usr/share/basiliskii-sdl/
+            cp BasiliskII/src/Unix/tunconfig ${PKG_DIR}/usr/share/basiliskii-sdl/
+
+            # Copy man page
+            cp BasiliskII/src/Unix/BasiliskII.1 ${PKG_DIR}/usr/share/man/man1/
+            gzip -9 ${PKG_DIR}/usr/share/man/man1/BasiliskII.1
+
+            # Copy documentation
+            cp BasiliskII/README ${PKG_DIR}/usr/share/doc/basiliskii-sdl/
+            cp BasiliskII/COPYING ${PKG_DIR}/usr/share/doc/basiliskii-sdl/copyright
+            cp BasiliskII/ChangeLog ${PKG_DIR}/usr/share/doc/basiliskii-sdl/changelog
+            gzip -9 ${PKG_DIR}/usr/share/doc/basiliskii-sdl/changelog
+
+            # Copy SDL2 shared library
+            cp /usr/local/lib/libSDL2-2.0.so.0 ${PKG_DIR}/usr/lib/
+
+            # Calculate installed size
+            INSTALLED_SIZE=$(du -sk ${PKG_DIR} | cut -f1)
+
+            # Create control file
+            cat > ${PKG_DIR}/DEBIAN/control << EOF
+            Package: basiliskii-sdl
+            Version: ${VERSION}
+            Section: otherosfs
+            Priority: optional
+            Architecture: ${ARCH}
+            Depends: libc6, libasound2, libsamplerate0
+            Conflicts: basiliskii
+            Provides: basiliskii
+            Replaces: basiliskii
+            Installed-Size: ${INSTALLED_SIZE}
+            Maintainer: Rui Carmo <https://github.com/rcarmo>
+            Homepage: https://github.com/rcarmo/macemu
+            Description: 68k Macintosh emulator (SDL build)
+             Basilisk II is an Open Source 68k Macintosh emulator. It enables
+             you to run 68k MacOS software on your computer, even if you are
+             using a different operating system.
+             .
+             This is a lightweight SDL2 build optimized for Raspberry Pi,
+             using framebuffer/KMS display without X11, Wayland, or GTK.
+             .
+             Features include:
+              - Emulates Mac Classic or Mac II series machines
+              - Color video display via SDL2 (framebuffer/KMS)
+              - CD quality sound output via SDL2/ALSA
+              - Floppy disk driver (1.44MB disks)
+              - HFS partitions and hardfiles support
+              - CD-ROM driver with basic audio functions
+              - Host directory tree file exchange
+              - Ethernet and serial drivers
+              - SCSI Manager emulation
+              - Extended ADB keyboard and 3-button mouse
+             .
+             This package is built for Raspberry Pi (ARM64).
+            EOF
+
+            # Remove leading whitespace from control file
+            sed -i 's/^            //' ${PKG_DIR}/DEBIAN/control
+
+            # Create postinst script
+            cat > ${PKG_DIR}/DEBIAN/postinst << 'EOF'
+            #!/bin/bash
+            set -e
+            ldconfig
+            EOF
+            chmod 755 ${PKG_DIR}/DEBIAN/postinst
+
+            # Create postrm script
+            cat > ${PKG_DIR}/DEBIAN/postrm << 'EOF'
+            #!/bin/bash
+            set -e
+            ldconfig
+            EOF
+            chmod 755 ${PKG_DIR}/DEBIAN/postrm
+
+            # Set proper permissions
+            find ${PKG_DIR} -type d -exec chmod 755 {} \;
+            find ${PKG_DIR}/usr -type f -exec chmod 644 {} \;
+            chmod 755 ${PKG_DIR}/usr/bin/BasiliskII
+            chmod 755 ${PKG_DIR}/usr/lib/libSDL2-2.0.so.0
+
+            # Build the package
+            dpkg-deb --build --root-owner-group ${PKG_DIR}
+
+            # Move package to output directory
+            mkdir -p /workspace/dist
+            mv ${PKG_DIR}.deb /workspace/dist/
+
+            echo "=== Package built successfully ==="
+            ls -la /workspace/dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: basiliskii-sdl-arm64-deb
+          path: dist/*.deb
+          retention-days: 30
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-armhf:
+    runs-on: ubuntu-latest
+    name: Build ARMhf (32-bit) .deb package
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      - name: Build in ARMhf container
+        uses: uraimo/run-on-arch-action@v2
+        id: build
+        with:
+          arch: armv7
+          distro: bookworm
+          githubToken: ${{ github.token }}
+
+          dockerRunArgs: |
+            --volume "${PWD}:/workspace"
+
+          install: |
+            apt-get update -q -y
+            apt-get install -q -y \
+              build-essential \
+              autoconf \
+              automake \
+              libtool \
+              pkg-config \
+              libasound2-dev \
+              libpulse-dev \
+              libudev-dev \
+              libdbus-1-dev \
+              libsamplerate0-dev \
+              wget \
+              git \
+              debhelper \
+              devscripts \
+              dh-make \
+              fakeroot \
+              lintian
+
+          run: |
+            set -e
+            cd /workspace
+
+            echo "=== Building SDL2 ${SDL_VERSION} from source ==="
+            wget -q https://www.libsdl.org/release/SDL2-${SDL_VERSION}.tar.gz
+            tar -zxf SDL2-${SDL_VERSION}.tar.gz
+            cd SDL2-${SDL_VERSION}
+            ./configure \
+              --prefix=/usr/local \
+              --disable-video-opengl \
+              --disable-video-x11 \
+              --disable-pulseaudio \
+              --disable-esd \
+              --disable-video-wayland
+            make -j$(nproc)
+            make install
+            ldconfig
+            cd /workspace
+
+            echo "=== Building BasiliskII ==="
+            cd BasiliskII/src/Unix
+            NO_CONFIGURE=1 ./autogen.sh
+            ./configure \
+              --prefix=/usr \
+              --enable-sdl-audio \
+              --enable-sdl-framework \
+              --enable-sdl-video \
+              --disable-vosf \
+              --without-mon \
+              --without-esd \
+              --without-gtk \
+              --disable-jit-compiler \
+              --disable-nls
+            CPATH=$CPATH:/usr/local/include/SDL2 make -j$(nproc)
+
+            echo "=== Creating Debian package ==="
+            cd /workspace
+
+            # Get version from git or use default
+            if git describe --tags --exact-match 2>/dev/null; then
+              VERSION=$(git describe --tags --exact-match | sed 's/^v//')
+            else
+              VERSION="1.0.$(date +%Y%m%d)"
+            fi
+
+            ARCH="armhf"
+            PKG_NAME="basiliskii-sdl"
+            PKG_DIR="${PKG_NAME}_${VERSION}_${ARCH}"
+
+            # Create package directory structure
+            mkdir -p ${PKG_DIR}/DEBIAN
+            mkdir -p ${PKG_DIR}/usr/bin
+            mkdir -p ${PKG_DIR}/usr/share/basiliskii-sdl
+            mkdir -p ${PKG_DIR}/usr/share/man/man1
+            mkdir -p ${PKG_DIR}/usr/share/doc/basiliskii-sdl
+            mkdir -p ${PKG_DIR}/usr/lib
+
+            # Copy binary
+            cp BasiliskII/src/Unix/BasiliskII ${PKG_DIR}/usr/bin/
+            strip ${PKG_DIR}/usr/bin/BasiliskII
+
+            # Copy data files
+            cp BasiliskII/src/Unix/keycodes ${PKG_DIR}/usr/share/basiliskii-sdl/
+            cp BasiliskII/src/Unix/fbdevices ${PKG_DIR}/usr/share/basiliskii-sdl/
+            cp BasiliskII/src/Unix/tunconfig ${PKG_DIR}/usr/share/basiliskii-sdl/
+
+            # Copy man page
+            cp BasiliskII/src/Unix/BasiliskII.1 ${PKG_DIR}/usr/share/man/man1/
+            gzip -9 ${PKG_DIR}/usr/share/man/man1/BasiliskII.1
+
+            # Copy documentation
+            cp BasiliskII/README ${PKG_DIR}/usr/share/doc/basiliskii-sdl/
+            cp BasiliskII/COPYING ${PKG_DIR}/usr/share/doc/basiliskii-sdl/copyright
+            cp BasiliskII/ChangeLog ${PKG_DIR}/usr/share/doc/basiliskii-sdl/changelog
+            gzip -9 ${PKG_DIR}/usr/share/doc/basiliskii-sdl/changelog
+
+            # Copy SDL2 shared library
+            cp /usr/local/lib/libSDL2-2.0.so.0 ${PKG_DIR}/usr/lib/
+
+            # Calculate installed size
+            INSTALLED_SIZE=$(du -sk ${PKG_DIR} | cut -f1)
+
+            # Create control file
+            cat > ${PKG_DIR}/DEBIAN/control << EOF
+            Package: basiliskii-sdl
+            Version: ${VERSION}
+            Section: otherosfs
+            Priority: optional
+            Architecture: ${ARCH}
+            Depends: libc6, libasound2, libsamplerate0
+            Conflicts: basiliskii
+            Provides: basiliskii
+            Replaces: basiliskii
+            Installed-Size: ${INSTALLED_SIZE}
+            Maintainer: Rui Carmo <https://github.com/rcarmo>
+            Homepage: https://github.com/rcarmo/macemu
+            Description: 68k Macintosh emulator (SDL build)
+             Basilisk II is an Open Source 68k Macintosh emulator. It enables
+             you to run 68k MacOS software on your computer, even if you are
+             using a different operating system.
+             .
+             This is a lightweight SDL2 build optimized for Raspberry Pi,
+             using framebuffer/KMS display without X11, Wayland, or GTK.
+             .
+             Features include:
+              - Emulates Mac Classic or Mac II series machines
+              - Color video display via SDL2 (framebuffer/KMS)
+              - CD quality sound output via SDL2/ALSA
+              - Floppy disk driver (1.44MB disks)
+              - HFS partitions and hardfiles support
+              - CD-ROM driver with basic audio functions
+              - Host directory tree file exchange
+              - Ethernet and serial drivers
+              - SCSI Manager emulation
+              - Extended ADB keyboard and 3-button mouse
+             .
+             This package is built for Raspberry Pi (ARMhf/32-bit).
+            EOF
+
+            # Remove leading whitespace from control file
+            sed -i 's/^            //' ${PKG_DIR}/DEBIAN/control
+
+            # Create postinst script
+            cat > ${PKG_DIR}/DEBIAN/postinst << 'EOF'
+            #!/bin/bash
+            set -e
+            ldconfig
+            EOF
+            chmod 755 ${PKG_DIR}/DEBIAN/postinst
+
+            # Create postrm script
+            cat > ${PKG_DIR}/DEBIAN/postrm << 'EOF'
+            #!/bin/bash
+            set -e
+            ldconfig
+            EOF
+            chmod 755 ${PKG_DIR}/DEBIAN/postrm
+
+            # Set proper permissions
+            find ${PKG_DIR} -type d -exec chmod 755 {} \;
+            find ${PKG_DIR}/usr -type f -exec chmod 644 {} \;
+            chmod 755 ${PKG_DIR}/usr/bin/BasiliskII
+            chmod 755 ${PKG_DIR}/usr/lib/libSDL2-2.0.so.0
+
+            # Build the package
+            dpkg-deb --build --root-owner-group ${PKG_DIR}
+
+            # Move package to output directory
+            mkdir -p /workspace/dist
+            mv ${PKG_DIR}.deb /workspace/dist/
+
+            echo "=== Package built successfully ==="
+            ls -la /workspace/dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: basiliskii-sdl-armhf-deb
+          path: dist/*.deb
+          retention-days: 30
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

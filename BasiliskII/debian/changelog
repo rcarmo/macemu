@@ -1,0 +1,8 @@
+basiliskii-sdl (1.0-1) unstable; urgency=medium
+
+  * Initial Debian packaging for Raspberry Pi.
+  * Lightweight SDL2 build without X11, Wayland, GTK, or PulseAudio.
+  * Optimized for framebuffer/KMS display on Raspberry Pi.
+  * JIT compiler disabled for ARM compatibility.
+
+ -- Rui Carmo <https://github.com/rcarmo>  Mon, 30 Dec 2024 12:00:00 +0000
