@@ -1,7 +1,7 @@
-# BasiliskII SDL Docker Image for Raspberry Pi
-# Optimized for framebuffer/KMS display without X11
+# BasiliskII SDL Docker Image for Raspberry Pi (ARMhf/32-bit)
+# Cross-compiled build optimized for framebuffer/KMS display without X11
 
-FROM debian:bookworm-slim AS builder
+FROM arm32v7/debian:bookworm-slim AS builder
 
 ARG SDL_VERSION=2.32.8
 
@@ -60,7 +60,7 @@ RUN NO_CONFIGURE=1 ./autogen.sh \
     && make -j$(nproc)
 
 # Runtime image
-FROM debian:bookworm-slim
+FROM arm32v7/debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
