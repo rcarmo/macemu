@@ -48,10 +48,22 @@ jobs:
             cmake
           
           # Install SDL2 and other libraries
+          # Include evdev/libinput/DRM/GBM for KMSDRM display and input on Raspberry Pi
           apt-get install -y \
             libsdl2-dev \
             libasound2-dev \
-            libmpfr-dev
+            libmpfr-dev \
+            libudev-dev \
+            libevdev-dev \
+            libinput-dev \
+            libdrm-dev \
+            libgbm-dev
+          
+          # Verify SDL2 and input libraries
+          echo "=== Checking SDL2 package ==="
+          dpkg -l | grep -i sdl2 || true
+          echo "=== Checking input libraries ==="
+          dpkg -l | grep -E "(libevdev|libinput|libudev|libdrm|libgbm)" || true
           
           # Install Unicorn Engine
           apt-get install -y libunicorn-dev || {
