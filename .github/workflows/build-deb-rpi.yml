@@ -69,7 +69,6 @@ jobs:
           ./configure \
             --prefix=/usr \
             --enable-sdl-audio \
-            --enable-sdl-framework \
             --enable-sdl-video \
             --disable-vosf \
             --without-mon \
@@ -273,7 +272,6 @@ jobs:
             --host=arm-linux-gnueabihf \
             --prefix=/usr \
             --enable-sdl-audio \
-            --enable-sdl-framework \
             --enable-sdl-video \
             --disable-vosf \
             --without-mon \
