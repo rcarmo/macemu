@@ -159,14 +159,21 @@ jobs:
         if: github.ref == 'refs/heads/feature/unicorn-cpu' && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: arm64-unicorn-experimental
-          name: "ARM64 Unicorn Experimental Build"
+          tag_name: arm64-unicorn-${{ github.sha }}
+          name: "ARM64 Unicorn Build - ${{ github.sha }}"
           prerelease: true
           make_latest: false
+          generate_release_notes: true
           body: |
             ## ⚠️ Experimental ARM64 Unicorn Build
             
             This is an **experimental** build of BasiliskII using Unicorn Engine for 68k emulation.
+            
+            ### Build Info
+            - **Commit:** ${{ github.sha }}
+            - **Branch:** ${{ github.ref_name }}
+            - **Build Date:** ${{ github.event.head_commit.timestamp }}
+            - **Commit Message:** ${{ github.event.head_commit.message }}
             
             ### Features
             - JIT-accelerated 68k emulation via Unicorn (QEMU TCG)
@@ -181,8 +188,5 @@ jobs:
             ### ⚠️ Warning
             This build is experimental and may have bugs or stability issues.
             The Unicorn CPU backend is a prototype.
-            
-            ### Commit
-            Built from commit: ${{ github.sha }}
           files: |
             BasiliskII/src/Unix/release/*
