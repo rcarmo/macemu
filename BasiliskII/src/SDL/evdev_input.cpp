@@ -63,9 +63,29 @@ static bool is_mouse_device(int fd)
 	return (relbits & (1 << REL_X)) && (relbits & (1 << REL_Y));
 }
 
+static const char *get_env_mouse_device(void)
+{
+	const char *path = getenv("B2_EVDEV_MOUSE");
+	if (path && *path)
+		return path;
+	return NULL;
+}
+
 // Find and open a mouse device
 static int find_mouse_device(void)
 {
+	if (const char *env_path = get_env_mouse_device()) {
+		int fd = open(env_path, O_RDONLY | O_NONBLOCK);
+		if (fd >= 0) {
+			if (is_mouse_device(fd))
+				return fd;
+			close(fd);
+			printf("evdev: B2_EVDEV_MOUSE=\"%s\" is not a relative mouse device\n", env_path);
+		} else {
+			printf("evdev: Cannot open B2_EVDEV_MOUSE=\"%s\": %s\n", env_path, strerror(errno));
+		}
+	}
+
 	DIR *dir = opendir("/dev/input");
 	if (!dir) {
 		if (evdev_debug_enabled())
