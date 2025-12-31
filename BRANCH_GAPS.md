@@ -4,8 +4,9 @@ This document tracks the development status, known issues, and actionable items 
 
 ## Current Status
 
-**Build**: ✅ Compiles successfully via GitHub Actions (ARM32 cross-compilation on Debian 12)
-**Runtime**: ⚠️ Runs but has display corruption issues
+**Build**: ✅ Compiles successfully via GitHub Actions (ARM32 cross-compilation on Debian 12)  
+**Runtime**: ⚠️ Runs but has display corruption issues  
+**Fix in progress**: 🔧 RGB565 blitter fix pushed (commit 7211573a) — awaiting hardware validation
 
 ## Known Issues
 
@@ -81,20 +82,20 @@ Mac framebuffer (1/2/4/8-bit) → guest_surface (8-bit paletted)
 - Check palette application in `update_palette()`
 - Confirm SDL_BlitSurface color conversion is correct
 
-#### Gap 2: 16-bit Color Pixel Format
+#### Gap 2: 16-bit Color Pixel Format — 🔧 FIX APPLIED
 
-**Location**: [video_sdl2.cpp#L944-L946](BasiliskII/src/SDL/video_sdl2.cpp#L944-L946)
+**Location**: [video_sdl2.cpp#L944-L946](BasiliskII/src/SDL/video_sdl2.cpp#L944-L946), [video_blit.cpp#L212-L240](BasiliskII/src/CrossPlatform/video_blit.cpp#L212-L240)
 
-**Problem**: Mac 16-bit is RGB555 big-endian, SDL surface is RGB565. The `Screen_blit` function selection may be incorrect.
+**Problem**: Mac 16-bit is RGB555 big-endian, SDL surface is RGB565. Two bugs found:
 
-**Current code**:
+1. `native_byte_order=true` was passed to `Screen_blitter_init()`, selecting NBO blitter
+2. `Blit_RGB565_OBO` formula was marked "untested" and was completely wrong
 
-```cpp
-case VIDEO_DEPTH_16BIT:
-    guest_surface = SDL_CreateRGBSurface(0, width, height, 16, 0xf800, 0x07e0, 0x001f, 0);
-```
+**Fix applied** (commit 7211573a):
+- Changed `native_byte_order` to `false` on little-endian hosts
+- Rewrote `Blit_RGB565_OBO` formula with correct bit extraction (validated with Python)
 
-**Issue**: Creates RGB565, but Mac uses RGB555. The blitter `Blit_RGB565_NBO` is selected, but source data is RGB555.
+**Status**: ⏳ Awaiting hardware test to confirm fix
 
 #### Gap 3: VOSF Disabled on ARM
 
@@ -116,16 +117,16 @@ case VIDEO_DEPTH_16BIT:
 
 ### High Priority
 
-1. **[BUG]** Add diagnostic mode to dump pixel data before/after Screen_blit
+1. ~~**[BUG]** Add diagnostic mode to dump pixel data before/after Screen_blit~~ ✅ DONE
 
-   - Location: `update_display_static_bbox()` in video_sdl2.cpp
-   - Action: Add `B2_DUMP_PIXELS` env var to write raw bytes to file for analysis
+   - Added `B2_DEBUG_PIXELS` env var (commit 7211573a)
+   - Added blitter selection logging to `Screen_blitter_init()`
 
-2. **[BUG]** Verify 16-bit format conversion
+2. ~~**[BUG]** Verify 16-bit format conversion~~ ✅ FIX APPLIED
 
-   - Location: video_blit.cpp `Screen_blitter_init()`
-   - Action: Check if RGB555→RGB565 conversion is being applied correctly
-   - Test: Force `Blit_RGB555_NBO` and compare output
+   - Fixed `native_byte_order` parameter in video_sdl2.cpp
+   - Fixed `Blit_RGB565_OBO` formula in video_blit.cpp
+   - Validated with Python test suite (all colors pass)
 
 3. **[BUG]** Test with raw memcpy for low bit depths
 
@@ -173,12 +174,53 @@ case VIDEO_DEPTH_16BIT:
 
 ## Debug Environment Variables
 
-| Variable         | Purpose                            |
-| ---------------- | ---------------------------------- |
-| `B2_DEBUG_VIDEO` | Enable video pipeline logging      |
-| `B2_DEBUG_INPUT` | Enable evdev input logging         |
-| `B2_RAW_16BIT`   | Bypass Screen_blit for 16-bit mode |
+| Variable          | Purpose                                        |
+| ----------------- | ---------------------------------------------- |
+| `B2_DEBUG_VIDEO`  | Enable video pipeline logging                  |
+| `B2_DEBUG_PIXELS` | Dump pixel values before/after blit (16-bit)   |
+| `B2_DEBUG_INPUT`  | Enable evdev input logging                     |
+| `B2_RAW_16BIT`    | Bypass Screen_blit for 16-bit mode             |
 | `B2_EVDEV_MOUSE` | Override evdev mouse device path   |
+
+---
+
+## Tasks That Don't Require Hardware
+
+The following can be done purely through code analysis and CI builds:
+
+### Code Analysis & Fixes
+
+| Task | Difficulty | Impact | Status |
+|------|------------|--------|--------|
+| Fix remaining OBO blitters (RGB555, RGB888) | Medium | Medium | 🔲 Not started |
+| Audit `Blit_Expand_*_To_*` functions for endianness | Medium | High | 🔲 Not started |
+| Add Python validation for all blitter formulas | Easy | High | 🔲 Not started |
+| Static analysis with cppcheck/clang-tidy | Easy | Low | 🔲 Not started |
+| Review pitch calculations in update_display_static | Medium | High | 🔲 Not started |
+
+### Testing Infrastructure
+
+| Task | Difficulty | Impact | Status |
+|------|------------|--------|--------|
+| Unit tests for pixel format conversions | Medium | High | 🔲 Not started |
+| CI matrix for ARM32/ARM64 builds | Easy | Medium | 🔲 Not started |
+| Add build with `--disable-jit` for comparison | Easy | Medium | 🔲 Not started |
+| Headless test mode (no display) | Hard | Low | 🔲 Not started |
+
+### Documentation & Cleanup
+
+| Task | Difficulty | Impact | Status |
+|------|------------|--------|--------|
+| Document all debug env vars | Easy | Medium | 🔲 Not started |
+| Remove dead code from video_sdl2.cpp | Easy | Low | 🔲 Not started |
+| Add architecture diagram for video pipeline | Medium | Medium | 🔲 Not started |
+
+### Next Recommended Actions (No Hardware Needed)
+
+1. **Audit other OBO blitters** — The same `native_byte_order` bug likely affects other formats
+2. **Write Python validation** for all `Blit_*` formulas (like we did for RGB565)
+3. **Add CI build variant** with JIT disabled to isolate JIT vs video bugs
+4. **Review `update_display_static()`** for low bit depths — different code path than 8+ bits
 
 ---
 
