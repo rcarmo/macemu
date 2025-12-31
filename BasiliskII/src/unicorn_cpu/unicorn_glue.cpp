@@ -441,7 +441,8 @@ bool Init680x0(void)
             rom_base = ram_size_aligned;
         }
         
-        err = uc_mem_map_ptr(uc, rom_base, rom_size_aligned, UC_PROT_READ | UC_PROT_EXEC, ROMBaseHost);
+        // ROM needs write permission for ROM patches and self-modifying code
+        err = uc_mem_map_ptr(uc, rom_base, rom_size_aligned, UC_PROT_ALL, ROMBaseHost);
         if (err != UC_ERR_OK) {
             printf("Unicorn: Failed to map ROM: %s\n", uc_strerror(err));
             uc_close(uc);
@@ -449,7 +450,7 @@ bool Init680x0(void)
             return false;
         }
         rom_mapped = true;
-        printf("Unicorn: Mapped ROM 0x%08x-0x%08x\n", rom_base, (unsigned)(rom_base + rom_size_aligned));
+        printf("Unicorn: Mapped ROM 0x%08x-0x%08x (read-write for patches)\n", rom_base, (unsigned)(rom_base + rom_size_aligned));
     }
     
 #if !REAL_ADDRESSING
