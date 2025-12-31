@@ -1024,6 +1024,10 @@ static int g_present_debug_count = 0;
 static bool g_bbox_16bit_debug = false;
 static int g_use_raw_16bit = -1;
 
+// Option to use SDL_UpdateTexture instead of SDL_LockTexture
+// SDL_LockTexture with partial rects can have issues on some OpenGL ES/KMSDRM drivers
+static int g_use_update_texture = -1;
+
 void reset_video_debug_flags(void) {
 	g_present_debug_count = 0;
 	g_bbox_16bit_debug = false;
@@ -1058,22 +1062,6 @@ static int present_sdl_video()
 	// modifying it!
 	LOCK_PALETTE;
 	SDL_LockMutex(sdl_update_video_mutex);
-
-	if (getenv("B2_DEBUG_VIDEO") && g_present_debug_count == 0) {
-		printf("VIDEO: present_sdl_video: update_rect x=%d y=%d w=%d h=%d\n",
-		       sdl_update_video_rect.x, sdl_update_video_rect.y,
-		       sdl_update_video_rect.w, sdl_update_video_rect.h);
-		printf("VIDEO: present_sdl_video: host_surface pitch=%d BytesPerPixel=%d\n",
-		       host_surface ? host_surface->pitch : -1,
-		       host_surface ? host_surface->format->BytesPerPixel : -1);
-		printf("VIDEO: present_sdl_video: guest_surface pitch=%d BytesPerPixel=%d\n",
-		       guest_surface ? guest_surface->pitch : -1,
-		       guest_surface ? guest_surface->format->BytesPerPixel : -1);
-		printf("VIDEO: present_sdl_video: host_surface==guest_surface? %s\n",
-		       (host_surface == guest_surface) ? "YES" : "NO");
-	}
-	g_present_debug_count++;
-
     // Convert from the guest OS' pixel format, to the host OS' texture, if necessary.
     if (host_surface != guest_surface &&
 		host_surface != NULL &&
@@ -1090,28 +1078,17 @@ static int present_sdl_video()
 	UNLOCK_PALETTE; // passed potential deadlock, can unlock palette
 	
     // Update the host OS' texture
+	// Use SDL_UpdateTexture instead of SDL_LockTexture for better compatibility
+	// with KMSDRM/OpenGL ES backends where partial texture updates via 
+	// SDL_LockTexture can cause visual glitches (diagonal scrolling).
 	uint8_t *srcPixels = (uint8_t *)host_surface->pixels +
 		sdl_update_video_rect.y * host_surface->pitch +
 		sdl_update_video_rect.x * host_surface->format->BytesPerPixel;
 
-	uint8_t *dstPixels;
-	int dstPitch;
-	if (SDL_LockTexture(sdl_texture, &sdl_update_video_rect, (void **)&dstPixels, &dstPitch) < 0) {
+	if (SDL_UpdateTexture(sdl_texture, &sdl_update_video_rect, srcPixels, host_surface->pitch) < 0) {
 		SDL_UnlockMutex(sdl_update_video_mutex);
 		return -1;
 	}
-
-	if (getenv("B2_DEBUG_VIDEO") && g_present_debug_count == 1) {
-		printf("VIDEO: present_sdl_video: texture dstPitch=%d, copying width=%d (bytes: %d)\n",
-		       dstPitch, sdl_update_video_rect.w, sdl_update_video_rect.w << 2);
-	}
-
-	for (int y = 0; y < sdl_update_video_rect.h; y++) {
-		memcpy(dstPixels, srcPixels, sdl_update_video_rect.w << 2);
-		srcPixels += host_surface->pitch;
-		dstPixels += dstPitch;
-	}
-	SDL_UnlockTexture(sdl_texture);
 
     // We are done working with pixels in host_surface.  Reset sdl_update_video_rect, then let
     // other threads modify it, as-needed.
