@@ -668,11 +668,12 @@ void Dump68kRegs(void)
 
 /*
  * m68k_dumpstate - called by main_unix.cpp sigsegv_dump_state
+ * Two overloads to match UAE CPU interface
  */
-extern "C" void m68k_dumpstate(uint32_t *nextpc)
+void m68k_dumpstate(uaecptr *nextpc)
 {
     if (!uc) {
-        printf("m68k_dumpstate: Unicorn not initialized\n");
+        fprintf(stderr, "m68k_dumpstate: Unicorn not initialized\n");
         if (nextpc) *nextpc = 0;
         return;
     }
@@ -684,4 +685,10 @@ extern "C" void m68k_dumpstate(uint32_t *nextpc)
         uc_reg_read(uc, UC_M68K_REG_PC, &pc);
         *nextpc = pc;
     }
+}
+
+void m68k_dumpstate(FILE *out, uaecptr *nextpc)
+{
+    (void)out;  // We always print to stderr via Dump68kRegs
+    m68k_dumpstate(nextpc);
 }
