@@ -72,22 +72,23 @@
 
 static uc_engine *uc = NULL;
 
-// Memory pointers (global for cpu_emulation.h)
-uint32 RAMBaseMac;
-uint8 *RAMBaseHost;
-uint32 RAMSize;
-uint32 ROMBaseMac;
-uint8 *ROMBaseHost;
-uint32 ROMSize;
+// Memory pointers - defined in main_unix.cpp, declared in cpu_emulation.h
+// These are initialized before Init680x0 is called
+extern uint32 RAMBaseMac;
+extern uint8 *RAMBaseHost;
+extern uint32 RAMSize;
+extern uint32 ROMBaseMac;
+extern uint8 *ROMBaseHost;
+extern uint32 ROMSize;
 
 #if !REAL_ADDRESSING
-uint8 *MacFrameBaseHost;
-uint32 MacFrameSize;
-int MacFrameLayout;
+extern uint8 *MacFrameBaseHost;
+extern uint32 MacFrameSize;
+extern int MacFrameLayout;
 #endif
 
 #if DIRECT_ADDRESSING
-uintptr MEMBaseDiff;
+extern uintptr MEMBaseDiff;
 #endif
 
 // Interrupt handling
