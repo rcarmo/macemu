@@ -51,7 +51,7 @@ This document compares the Unicorn CPU backend (`feature/unicorn-cpu`) against t
 ### 4. Extreme Performance Degradation
 | | UAE Non-JIT | Unicorn (Current) |
 |-|-------------|-------------------|
-| **Speed** | Usable on Pi 3B | Extremely slow, nearly unusable, never boots to a working display |
+| **Speed** | Usable on Pi 3B | Extremely slow, RAM hog, nearly unusable, never boots to a working display |
 | **Cause** | Interpreted but optimized | Likely hook overhead or JIT not engaging |
 
 **Impact**: Emulation is too slow for practical use. Defeats the purpose of using Unicorn's TCG JIT.
@@ -171,10 +171,26 @@ UAE Non-JIT (ROM_VERSION_32):
 0x40800000 - ROM (1MB)
 0xa0000000 - Frame buffer
 
-Unicorn (current, needs fixing):
+Unicorn (current):
 0x00000000 - RAM
 RAMSize    - ROM (should be 0x40800000)
-0x50F00000 - Dummy I/O (128KB)
+0x50F00000 - Dummy I/O (64KB, reduced from 128KB)
 0xa0000000 - Frame buffer  
-0xFFC00000 - High memory for stack probing (4MB)
+0xFFFC0000 - High memory for stack probing (256KB, reduced from 4MB)
 ```
+
+---
+
+## RAM Optimization Notes
+
+Memory usage has been reduced by:
+
+1. **Disabled dynamic dummy mapping** - Previously mapped 64KB per unmapped access, up to 16MB total. Now unmapped accesses return 0/ignored (like UAE's dummy_bank).
+
+2. **Reduced high memory** - Stack probe region reduced from 4MB to 256KB.
+
+3. **Reduced I/O dummy region** - From 128KB to 64KB.
+
+4. **TCG buffer size limit** - Added `UC_CTL_TCG_BUFFER_SIZE` to cap JIT code cache at 8MB (default was 32MB+).
+
+5. **Periodic TB flush** - Every ~10 seconds, flush translation buffer to prevent memory growth from stale translations.

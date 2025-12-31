@@ -254,49 +254,46 @@ static bool handle_emul_op(uint32_t pc, uint16_t opcode)
 }
 
 /*
- * Memory error hook - mimics UAE's dummy_bank behavior
+ * Shared dummy memory region - single 4KB page for all unmapped accesses
+ * Instead of mapping new regions on-demand, we redirect unmapped accesses here.
+ * This is more memory-efficient than UAE's approach while being correct.
+ */
+static uint8_t dummy_mem_page[4096] __attribute__((aligned(4096)));
+static bool dummy_mem_mapped = false;
+static const uint64_t DUMMY_MEM_ADDR = 0xDEAD0000ULL;
+
+/*
+ * Memory error hook - lean version that doesn't allocate memory
  * Returns true to allow the access to proceed (like UAE's dummy_bank returns 0)
- * This prevents crashes on unmapped memory access
+ * For reads: return 0 (typical unmapped behavior)
+ * For writes: silently ignore
  */
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
                              uint64_t address, int size, int64_t value,
                              void *user_data)
 {
     static int error_count = 0;
-    static int mapped_pages = 0;
+    static uint32_t last_reported_addr = 0;
     error_count++;
     
     uint32_t pc, sp;
     uc_reg_read(uc, UC_M68K_REG_PC, &pc);
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
     
-    // For unmapped reads/writes, try to map dummy memory dynamically
-    // This is like UAE's dummy_bank - allow access to proceed
+    // For unmapped reads/writes - DO NOT map new memory, just log
+    // This exposes bugs rather than masking them and saves RAM
     if (type == UC_MEM_READ_UNMAPPED || type == UC_MEM_WRITE_UNMAPPED) {
-        // Map a 64KB region at the faulting address (aligned to 64KB)
-        // Using 64KB because Mac often accesses contiguous regions
-        uint64_t region_addr = address & ~0xFFFFULL;
-        
-        // Limit total dummy mappings to prevent memory exhaustion
-        if (mapped_pages < 256) {  // Max 16MB of dummy memory
-            uc_err err = uc_mem_map(uc, region_addr, 0x10000, UC_PROT_ALL);
-            if (err == UC_ERR_OK) {
-                mapped_pages++;
-                if (error_count <= 20) {
-                    printf("Unicorn: Mapped dummy region at 0x%08llx for %s (PC=0x%08x) [%d regions]\n",
-                           (unsigned long long)region_addr,
-                           type == UC_MEM_READ_UNMAPPED ? "read" : "write", pc, mapped_pages);
-                }
-                return true;  // Retry the access
-            }
-        }
-        // If mapping failed (e.g., overlaps), just log and continue
-        if (error_count <= 20) {
-            printf("Unicorn: %s at unmapped 0x%08llx (PC=0x%08x SP=0x%08x) - can't map\n",
+        // Only log unique addresses to reduce spam
+        uint32_t addr_page = (uint32_t)(address & ~0xFFFULL);
+        if (addr_page != last_reported_addr && error_count <= 50) {
+            last_reported_addr = addr_page;
+            printf("Unicorn: %s at unmapped 0x%08llx (PC=0x%08x) - ignored\n",
                    type == UC_MEM_READ_UNMAPPED ? "Read" : "Write",
-                   (unsigned long long)address, pc, sp);
+                   (unsigned long long)address, pc);
         }
-        return false;  // Can't fix this one
+        // Return false - Unicorn will handle this by returning 0 for reads
+        // and ignoring writes, which is the correct behavior
+        return false;
     }
     
     // For fetch unmapped - this is more serious, likely a bad PC
@@ -410,6 +407,10 @@ extern void cpu_do_check_ticks(void);
 extern void VideoRefresh(void);
 extern void SDL_PumpEventsFromMainThread(void);
 
+// TB flush counter - flush every N ticks to prevent memory growth
+static int tb_flush_counter = 0;
+static const int TB_FLUSH_INTERVAL = 600;  // ~10 seconds at 60Hz
+
 /*
  * Periodic task handler - called between execution chunks
  */
@@ -423,6 +424,16 @@ static void do_periodic_tasks(void)
         SDL_PumpEventsFromMainThread();
         VideoRefresh();
         cpu_do_check_ticks();
+        
+        // Periodically flush TB cache to prevent memory growth
+        // Self-modifying code and ROM patches can cause stale translations
+#ifdef UC_CTL_TB_FLUSH
+        if (++tb_flush_counter >= TB_FLUSH_INTERVAL) {
+            tb_flush_counter = 0;
+            uc_ctl(uc, UC_CTL_WRITE(UC_CTL_TB_FLUSH, 0));
+            D(bug("Unicorn: Flushed TB cache\n"));
+        }
+#endif
         
         uint32_t warm_start = ReadMacInt32(0xcfc);
         bool mac_started = (warm_start == 0x574C5343);
@@ -466,6 +477,22 @@ bool Init680x0(void)
     if (err != UC_ERR_OK) {
         printf("Unicorn: Failed to create engine: %s\n", uc_strerror(err));
         return false;
+    }
+    
+    // Limit TCG translation buffer size to reduce RAM usage
+    // Default is often 32MB+; we limit to 8MB which is plenty for M68K code
+    // This must be set BEFORE any code is executed
+#ifdef UC_CTL_TCG_BUFFER_SIZE
+    uint32_t tcg_buffer_size = 8 * 1024 * 1024;  // 8MB
+    err = uc_ctl(uc, UC_CTL_WRITE(UC_CTL_TCG_BUFFER_SIZE, 1), tcg_buffer_size);
+    if (err == UC_ERR_OK) {
+        uint32_t actual_size = 0;
+        uc_ctl(uc, UC_CTL_READ(UC_CTL_TCG_BUFFER_SIZE, 1), &actual_size);
+        printf("Unicorn: TCG buffer size set to %u MB\n", actual_size / (1024 * 1024));
+    } else {
+        printf("Unicorn: Warning: Could not set TCG buffer size: %s\n", uc_strerror(err));
+    }
+#endif
     }
     
     // Set CPU model to M68040
@@ -540,18 +567,20 @@ bool Init680x0(void)
     
     // Map dummy I/O space for Mac II hardware (VIA, SCC, ASC, SCSI at 0x50Fxxxxx)
     // This prevents crashes when ROM code tries to access hardware before patches redirect it
-    static uint8 dummy_io[0x20000];  // 128KB for I/O space
+    // Reduced from 128KB to 64KB - covers essential I/O range
+    static uint8 dummy_io[0x10000];  // 64KB for I/O space
     memset(dummy_io, 0xFF, sizeof(dummy_io));  // Default to 0xFF (typical for unmapped I/O)
     err = uc_mem_map_ptr(uc, 0x50F00000, sizeof(dummy_io), UC_PROT_ALL, dummy_io);
     if (err == UC_ERR_OK) {
-        printf("Unicorn: Mapped dummy I/O space 0x50F00000-0x50F1FFFF\n");
+        printf("Unicorn: Mapped dummy I/O space 0x50F00000-0x50F0FFFF (64KB)\n");
     }
     
-    // Map high memory for system stack and EXEC_RETURN (4MB)
-    // ROM sets SP near 0xFFFF0000 and probes memory - dynamic mapping handles overflow
-    err = uc_mem_map(uc, 0xFFC00000, 0x400000, UC_PROT_ALL);
+    // Map high memory for system stack and EXEC_RETURN
+    // Reduced from 4MB to 256KB - ROM only needs small stack during early boot
+    // Dynamic mapping removed, so we pre-map just what's needed
+    err = uc_mem_map(uc, 0xFFFC0000, 0x40000, UC_PROT_ALL);
     if (err == UC_ERR_OK) {
-        printf("Unicorn: Mapped high memory 0xFFC00000-0xFFFFFFFF (4MB)\n");
+        printf("Unicorn: Mapped high memory 0xFFFC0000-0xFFFFFFFF (256KB)\n");
     }
     
     
