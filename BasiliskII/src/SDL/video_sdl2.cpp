@@ -950,8 +950,10 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 			guest_surface = SDL_CreateRGBSurface(0, width, height, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
 			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface created for 32bit ARGB (VOSF)\n");
 #else
-			guest_surface = SDL_CreateRGBSurfaceFrom(the_buffer, width, height, 32, pitch, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
-			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface from the_buffer for 32bit RGBA (no VOSF)\n");
+			// Mac stores 32-bit as big-endian ARGB. On little-endian ARM, this appears as BGRA.
+			// Use masks matching SDL_PIXELFORMAT_BGRA8888: B=0xff, G=0xff00, R=0xff0000, A=0xff000000
+			guest_surface = SDL_CreateRGBSurfaceFrom(the_buffer, width, height, 32, pitch, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface from the_buffer for 32bit BGRA (no VOSF, little-endian)\n");
 #endif
 			host_surface = guest_surface;
             break;
@@ -1044,16 +1046,16 @@ static int present_sdl_video()
 
 	static int present_debug_count = 0;
 	if (getenv("B2_DEBUG_VIDEO") && present_debug_count == 0) {
-		printf("VIDEO: present_sdl_video: update_rect x=%d y=%d w=%d h=%d\\n",
+		printf("VIDEO: present_sdl_video: update_rect x=%d y=%d w=%d h=%d\n",
 		       sdl_update_video_rect.x, sdl_update_video_rect.y,
 		       sdl_update_video_rect.w, sdl_update_video_rect.h);
-		printf("VIDEO: present_sdl_video: host_surface pitch=%d BytesPerPixel=%d\\n",
+		printf("VIDEO: present_sdl_video: host_surface pitch=%d BytesPerPixel=%d\n",
 		       host_surface ? host_surface->pitch : -1,
 		       host_surface ? host_surface->format->BytesPerPixel : -1);
-		printf("VIDEO: present_sdl_video: guest_surface pitch=%d BytesPerPixel=%d\\n",
+		printf("VIDEO: present_sdl_video: guest_surface pitch=%d BytesPerPixel=%d\n",
 		       guest_surface ? guest_surface->pitch : -1,
 		       guest_surface ? guest_surface->format->BytesPerPixel : -1);
-		printf("VIDEO: present_sdl_video: host_surface==guest_surface? %s\\n",
+		printf("VIDEO: present_sdl_video: host_surface==guest_surface? %s\n",
 		       (host_surface == guest_surface) ? "YES" : "NO");
 	}
 	present_debug_count++;
@@ -1086,7 +1088,7 @@ static int present_sdl_video()
 	}
 
 	if (getenv("B2_DEBUG_VIDEO") && present_debug_count == 1) {
-		printf("VIDEO: present_sdl_video: texture dstPitch=%d, copying width=%d (bytes: %d)\\n",
+		printf("VIDEO: present_sdl_video: texture dstPitch=%d, copying width=%d (bytes: %d)\n",
 		       dstPitch, sdl_update_video_rect.w, sdl_update_video_rect.w << 2);
 	}
 
@@ -1244,13 +1246,13 @@ void driver_base::adapt_to_video_mode() {
 	Screen_blitter_init(visualFormat, true, mac_depth_of_video_depth(VIDEO_MODE_DEPTH));
 
 	if (getenv("B2_DEBUG_VIDEO")) {
-		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_DEPTH=%d mac_depth=%d sdl_depth=%d\\n",
+		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_DEPTH=%d mac_depth=%d sdl_depth=%d\n",
 		       VIDEO_MODE_DEPTH, mac_depth_of_video_depth(VIDEO_MODE_DEPTH), visualFormat.depth);
-		printf("VIDEO: adapt_to_video_mode: surface format Rmask=0x%08x Gmask=0x%08x Bmask=0x%08x\\n",
+		printf("VIDEO: adapt_to_video_mode: surface format Rmask=0x%08x Gmask=0x%08x Bmask=0x%08x\n",
 		       f->Rmask, f->Gmask, f->Bmask);
-		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_ROW_BYTES=%d\\n",
+		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_ROW_BYTES=%d\n",
 		       VIDEO_MODE_X, VIDEO_MODE_Y, VIDEO_MODE_ROW_BYTES);
-		printf("VIDEO: adapt_to_video_mode: surface pitch=%d BytesPerPixel=%d\\n",
+		printf("VIDEO: adapt_to_video_mode: surface pitch=%d BytesPerPixel=%d\n",
 		       s->pitch, f->BytesPerPixel);
 	}
 
@@ -2709,11 +2711,11 @@ static void update_display_static(driver_base *drv)
 
 	// Log once on first call
 	if (getenv("B2_DEBUG_VIDEO") && debug_frame_count == 0) {
-		printf("VIDEO: update_display_static: bytes_per_row=%d VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_DEPTH=%d\\n",
+		printf("VIDEO: update_display_static: bytes_per_row=%d VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_DEPTH=%d\n",
 		       bytes_per_row, VIDEO_MODE_X, VIDEO_MODE_Y, VIDEO_MODE_DEPTH);
-		printf("VIDEO: update_display_static: drv->s->pitch=%d drv->s->format->BytesPerPixel=%d\\n",
+		printf("VIDEO: update_display_static: drv->s->pitch=%d drv->s->format->BytesPerPixel=%d\n",
 		       drv->s->pitch, drv->s->format->BytesPerPixel);
-		printf("VIDEO: update_display_static: the_buffer=%p the_buffer_copy=%p drv->s->pixels=%p\\n",
+		printf("VIDEO: update_display_static: the_buffer=%p the_buffer_copy=%p drv->s->pixels=%p\n",
 		       the_buffer, the_buffer_copy, drv->s->pixels);
 	}
 	debug_frame_count++;
