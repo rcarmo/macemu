@@ -194,7 +194,7 @@ jobs:
           if [ "${{ matrix.sdl_source }}" = "vendored" ]; then
             export PKG_CONFIG_PATH=/opt/sdl2-armhf/lib/pkgconfig
             export LDFLAGS="-L/opt/sdl2-armhf/lib -Wl,-rpath,/opt/sdl2-armhf/lib"
-            export CPPFLAGS="-I/opt/sdl2-armhf/include/SDL2"
+            export CPPFLAGS="-I/opt/sdl2-armhf/include"
           else
             export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
           fi
