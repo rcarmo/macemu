@@ -394,9 +394,6 @@ void cpu_do_check_ticks(void)
 	if (delay)
 		usleep(delay);
 	
-	// Pump SDL events from main thread context (required for KMSDRM/evdev input)
-	// This is called periodically from the CPU emulation loop
-	SDL_PumpEventsFromMainThread();
 }
 #endif
 

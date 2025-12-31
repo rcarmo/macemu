@@ -793,11 +793,6 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		SDL_PumpEvents();
 		
 		SDL_SetWindowGrab(sdl_window, SDL_TRUE);
-#if SDL_VERSION_ATLEAST(2,0,4)
-		if (SDL_CaptureMouse(SDL_TRUE) != 0) {
-			printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
-		}
-#endif
 		SDL_RaiseWindow(sdl_window);
 		
 		int focus_result = SDL_SetWindowInputFocus(sdl_window);
@@ -1328,18 +1323,28 @@ static void update_mouse_grab()
 // Grab mouse, switch to relative mouse mode
 void driver_base::grab_mouse(void)
 {
-	if (!mouse_grabbed) {
-		mouse_grabbed = true;
+	if (mouse_grabbed)
+		return;
+
+	bool capture_ok = true;
 #if SDL_VERSION_ATLEAST(2,0,4)
-		if (SDL_CaptureMouse(SDL_TRUE) != 0) {
-			printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
-		}
-#endif
-		update_mouse_grab();
-		set_window_name();
-		disable_mouse_accel();
-		ADBSetRelMouseMode(true);
+	if (SDL_CaptureMouse(SDL_TRUE) != 0) {
+		printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
+		capture_ok = false;
 	}
+#endif
+
+	if (!capture_ok) {
+		SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+		SDL_SetRelativeMouseMode(SDL_FALSE);
+		return;
+	}
+
+	mouse_grabbed = true;
+	update_mouse_grab();
+	set_window_name();
+	disable_mouse_accel();
+	ADBSetRelMouseMode(true);
 }
 
 // Ungrab mouse, switch to absolute mouse mode
@@ -2441,23 +2446,9 @@ static bool sdl_input_debug_enabled(void)
 	return enabled;
 }
 
-
-// Flag to signal main thread should pump SDL events
-volatile bool sdl_events_need_pump = false;
-// Buffer for events pumped by main thread
-static SDL_Event main_thread_events[64];
-static int main_thread_event_count = 0;
-static SDL_mutex *event_mutex = NULL;
-
 // Called from main thread (one_tick or similar) to pump SDL events
 void SDL_PumpEventsFromMainThread(void)
 {
-	if (!sdl_events_need_pump)
-		return;
-	
-	if (!event_mutex)
-		event_mutex = SDL_CreateMutex();
-
 	const bool debug_input = sdl_input_debug_enabled();
 	static int pump_debug_count = 0;
 	if (debug_input) {
@@ -2469,18 +2460,7 @@ void SDL_PumpEventsFromMainThread(void)
 			       pump_debug_count, buttons, mx, my);
 		}
 	}
-
-	// Pump events in main thread context
 	SDL_PumpEvents();
-	
-	// Grab events while holding mutex
-	SDL_LockMutex(event_mutex);
-	main_thread_event_count = SDL_PeepEvents(main_thread_events, 64, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
-	if (main_thread_event_count < 0)
-		main_thread_event_count = 0;
-	SDL_UnlockMutex(event_mutex);
-	
-	sdl_events_need_pump = false;
 }
 
 static void handle_events(void)
@@ -2488,27 +2468,13 @@ static void handle_events(void)
 	SDL_Event events[10];
 	const int n_max_events = sizeof(events) / sizeof(events[0]);
 	int n_events;
-
-	// Signal that we need events pumped, then process any that were pumped by main thread
-	sdl_events_need_pump = true;
 	const bool debug_input = sdl_input_debug_enabled();
 	bool saw_motion_event = false;
-	
-	// First process events from main thread buffer
-	if (event_mutex) {
-		SDL_LockMutex(event_mutex);
-		int buffered_count = main_thread_event_count;
-		SDL_Event buffered_events[64];
-		if (buffered_count > 0) {
-			memcpy(buffered_events, main_thread_events, buffered_count * sizeof(SDL_Event));
-			main_thread_event_count = 0;
-		}
-		SDL_UnlockMutex(event_mutex);
-		
-		// Process buffered events
-		for (int i = 0; i < buffered_count; i++) {
-			SDL_Event & event = buffered_events[i];
-			
+
+	while ((n_events = SDL_PeepEvents(events, n_max_events, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) > 0) {
+		for (int i = 0; i < n_events; i++) {
+			SDL_Event & event = events[i];
+
 			switch (event.type) {
 
 			// Mouse button
