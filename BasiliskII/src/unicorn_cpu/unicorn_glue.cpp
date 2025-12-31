@@ -547,15 +547,13 @@ bool Init680x0(void)
         printf("Unicorn: Mapped dummy I/O space 0x50F00000-0x50F1FFFF\n");
     }
     
-    // Map high memory region for system stack and EXEC_RETURN
-    // Quadra 800 ROM sets supervisor SP to 0xFFFF0000, and stack grows DOWN
-    // So we need memory BELOW that address for pushes (SP-4, SP-8, etc.)
-    // Map 1MB at 0xFFF00000-0xFFFFFFFF to give plenty of stack room
-    static uint8 high_mem[0x100000];  // 1MB
-    memset(high_mem, 0, sizeof(high_mem));
-    err = uc_mem_map_ptr(uc, 0xFFF00000, sizeof(high_mem), UC_PROT_ALL, high_mem);
+    // Map high memory region for system stack, ROM memory tests, and EXEC_RETURN
+    // Quadra 800 ROM probes/clears large areas of "system memory" during init
+    // Map 256MB from 0xF0000000-0xFFFFFFFF to handle all high address access
+    // This is like UAE's dummy_bank covering all unmapped addresses
+    err = uc_mem_map(uc, 0xF0000000, 0x10000000, UC_PROT_ALL);  // 256MB
     if (err == UC_ERR_OK) {
-        printf("Unicorn: Mapped high memory 0xFFF00000-0xFFFFFFFF (1MB system stack)\n");
+        printf("Unicorn: Mapped high memory 0xF0000000-0xFFFFFFFF (256MB)\n");
     } else {
         printf("Unicorn: Warning: Could not map high memory: %s\n", uc_strerror(err));
     }
