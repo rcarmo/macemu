@@ -600,7 +600,9 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
     
     // Check for EMUL_OP opcodes (0x71XX range - illegal moveq form)
     if ((opcode & 0xFF00) == 0x7100) {
-        D(bug("Unicorn: EMUL_OP 0x%04x at 0x%08llx\n", opcode, (unsigned long long)address));
+        // Log all EMUL_OPs for debugging
+        printf("Unicorn: EMUL_OP 0x%04x at PC=0x%08llx\n", opcode, (unsigned long long)address);
+        fflush(stdout);
         
         // Get current registers
         M68kRegisters r;
@@ -625,7 +627,13 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
     
     // Check for A-line traps (0xAXXX) - Mac OS toolbox calls
     if ((opcode & 0xF000) == 0xA000) {
-        D(bug("Unicorn: A-line trap 0x%04x at 0x%08llx\n", opcode, (unsigned long long)address));
+        // Log first few A-line traps for debugging
+        static int aline_count = 0;
+        if (++aline_count <= 10) {
+            printf("Unicorn: A-line trap 0x%04x at PC=0x%08llx (trap #%d)\n", 
+                   opcode, (unsigned long long)address, aline_count);
+            fflush(stdout);
+        }
         
         // Take Line-A exception - this will jump to the trap dispatcher in ROM
         // The Mac OS trap dispatcher reads the trap word from PC-2 to determine
