@@ -527,6 +527,53 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
         }
     }
     
+    // Detect RAM test loop and skip it
+    // The ROM copies a test routine to RAM and executes it, testing every longword
+    // With 136MB RAM and per-instruction hooks, this takes forever
+    // Detect: PC is in RAM (< ROMBaseMac) and we've been there for many instructions
+    static uint64_t ram_exec_count = 0;
+    static bool ram_test_skipped = false;
+    
+    if (!ram_test_skipped && address < ROMBaseMac) {
+        ram_exec_count++;
+        // After 50K instructions in RAM, assume it's the RAM test and skip it
+        if (ram_exec_count == 50000) {
+            printf("Unicorn: Detected RAM test loop at PC=0x%08llx after %llu instructions in RAM\n",
+                   (unsigned long long)address, (unsigned long long)ram_exec_count);
+            printf("Unicorn: Skipping RAM test by pre-clearing RAM and forcing return...\n");
+            fflush(stdout);
+            
+            // Clear all of RAM (the test would have done this anyway)
+            memset(RAMBaseHost, 0, RAMSize);
+            
+            // Read the return address from the stack - this is where the ROM expects to continue
+            uint32_t sp;
+            uc_reg_read(uc, UC_M68K_REG_A7, &sp);
+            uint32_t return_addr = ReadMacInt32(sp);
+            
+            printf("Unicorn: Stack pointer A7=0x%08x, return address=0x%08x\n", sp, return_addr);
+            
+            // If return address looks valid (in ROM), pop it and jump there
+            if (return_addr >= ROMBaseMac && return_addr < ROMBaseMac + ROMSize) {
+                sp += 4;  // Pop return address
+                uc_reg_write(uc, UC_M68K_REG_A7, &sp);
+                uc_reg_write(uc, UC_M68K_REG_PC, &return_addr);
+                printf("Unicorn: Jumped to return address 0x%08x, RAM test skipped!\n", return_addr);
+            } else {
+                printf("Unicorn: Return address 0x%08x not in ROM, continuing test...\n", return_addr);
+            }
+            
+            ram_test_skipped = true;
+            fflush(stdout);
+            return;  // Skip normal processing this iteration
+        }
+    } else if (address >= ROMBaseMac) {
+        // Back in ROM, reset counter
+        if (ram_exec_count > 0 && !ram_test_skipped) {
+            ram_exec_count = 0;
+        }
+    }
+    
     // Detect stuck loops (high threshold - tight loops are normal)
     if (address == last_pc) {
         same_pc_count++;
@@ -600,9 +647,17 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
     
     // Check for EMUL_OP opcodes (0x71XX range - illegal moveq form)
     if ((opcode & 0xFF00) == 0x7100) {
-        // Log all EMUL_OPs for debugging
-        printf("Unicorn: EMUL_OP 0x%04x at PC=0x%08llx\n", opcode, (unsigned long long)address);
-        fflush(stdout);
+        // Log important EMUL_OPs (skip CLKNOMEM spam - 0x7104)
+        if (opcode != 0x7104) {
+            printf("Unicorn: EMUL_OP 0x%04x at PC=0x%08llx\n", opcode, (unsigned long long)address);
+            fflush(stdout);
+        }
+        
+        // Special logging for key boot milestones
+        if (opcode == 0x710a) {  // INSTALL_DRIVERS
+            printf("Unicorn: *** INSTALL_DRIVERS reached - video driver should initialize ***\n");
+            fflush(stdout);
+        }
         
         // Get current registers
         M68kRegisters r;
