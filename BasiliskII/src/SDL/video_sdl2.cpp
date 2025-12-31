@@ -2416,8 +2416,6 @@ volatile bool sdl_events_need_pump = false;
 static SDL_Event main_thread_events[64];
 static int main_thread_event_count = 0;
 static SDL_mutex *event_mutex = NULL;
-static int pump_call_count = 0;
-static int events_received_count = 0;
 
 // Called from main thread (one_tick or similar) to pump SDL events
 void SDL_PumpEventsFromMainThread(void)
@@ -2427,23 +2425,7 @@ void SDL_PumpEventsFromMainThread(void)
 	
 	if (!event_mutex)
 		event_mutex = SDL_CreateMutex();
-	
-	pump_call_count++;
-	if (pump_call_count <= 10 || (pump_call_count % 100) == 0) {
-		printf("SDL_PumpEventsFromMainThread called (count=%d)\n", pump_call_count);
-		
-		// Check mouse state directly
-		int mx, my;
-		Uint32 mstate = SDL_GetMouseState(&mx, &my);
-		printf("  Mouse state: buttons=0x%x pos=(%d,%d)\n", mstate, mx, my);
-		
-		// Check if there are any pending events without removing them
-		SDL_Event peek_event;
-		int has_events = SDL_PeepEvents(&peek_event, 1, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
-		printf("  Pending events before pump: %d\n", has_events);
-		fflush(stdout);
-	}
-	
+
 	// Pump events in main thread context
 	SDL_PumpEvents();
 	
@@ -2452,15 +2434,6 @@ void SDL_PumpEventsFromMainThread(void)
 	main_thread_event_count = SDL_PeepEvents(main_thread_events, 64, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
 	if (main_thread_event_count < 0)
 		main_thread_event_count = 0;
-	if (main_thread_event_count > 0) {
-		events_received_count += main_thread_event_count;
-		printf("SDL events received: %d (total=%d), types:", main_thread_event_count, events_received_count);
-		for (int i = 0; i < main_thread_event_count && i < 5; i++) {
-			printf(" 0x%x", main_thread_events[i].type);
-		}
-		printf("\n");
-		fflush(stdout);
-	}
 	SDL_UnlockMutex(event_mutex);
 	
 	sdl_events_need_pump = false;
@@ -2475,13 +2448,6 @@ static void handle_events(void)
 	// Signal that we need events pumped, then process any that were pumped by main thread
 	sdl_events_need_pump = true;
 	
-	static int handle_call_count = 0;
-	handle_call_count++;
-	if (handle_call_count <= 10 || (handle_call_count % 100) == 0) {
-		printf("handle_events called (count=%d), event_mutex=%p\n", handle_call_count, (void*)event_mutex);
-		fflush(stdout);
-	}
-	
 	// First process events from main thread buffer
 	if (event_mutex) {
 		SDL_LockMutex(event_mutex);
@@ -2490,8 +2456,6 @@ static void handle_events(void)
 		if (buffered_count > 0) {
 			memcpy(buffered_events, main_thread_events, buffered_count * sizeof(SDL_Event));
 			main_thread_event_count = 0;
-			printf("Processing %d buffered events\n", buffered_count);
-			fflush(stdout);
 		}
 		SDL_UnlockMutex(event_mutex);
 		
