@@ -905,13 +905,18 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 	SDL_assert(sdl_texture == NULL);
 #ifdef ENABLE_VOSF
 	sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+	if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: Created texture with ARGB8888 (VOSF enabled)\n");
 #else
 	sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+	if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: Created texture with BGRA8888 (VOSF disabled)\n");
 #endif
     if (!sdl_texture) {
         printf("ERROR: SDL_CreateTexture failed: %s\n", SDL_GetError());
         shutdown_sdl_video();
         return NULL;
+    }
+    if (getenv("B2_DEBUG_VIDEO")) {
+        printf("VIDEO: init_sdl_video width=%d height=%d depth=%d pitch=%d\n", width, height, depth, pitch);
     }
     sdl_update_video_rect.x = 0;
     sdl_update_video_rect.y = 0;
@@ -925,22 +930,28 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		case VIDEO_DEPTH_2BIT:
 		case VIDEO_DEPTH_4BIT:
 			guest_surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface created for depth %d (1/2/4bit->8bit paletted)\n", depth);
 			break;
 		case VIDEO_DEPTH_8BIT:
 #ifdef ENABLE_VOSF
 			guest_surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface created for 8bit (VOSF)\n");
 #else
 			guest_surface = SDL_CreateRGBSurfaceFrom(the_buffer, width, height, 8, pitch, 0, 0, 0, 0);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface from the_buffer for 8bit (no VOSF)\n");
 #endif
 			break;
 		case VIDEO_DEPTH_16BIT:
 			guest_surface = SDL_CreateRGBSurface(0, width, height, 16, 0xf800, 0x07e0, 0x001f, 0);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface created for 16bit (RGB565)\n");
 			break;
 		case VIDEO_DEPTH_32BIT:
 #ifdef ENABLE_VOSF
 			guest_surface = SDL_CreateRGBSurface(0, width, height, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface created for 32bit ARGB (VOSF)\n");
 #else
 			guest_surface = SDL_CreateRGBSurfaceFrom(the_buffer, width, height, 32, pitch, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
+			if (getenv("B2_DEBUG_VIDEO")) printf("VIDEO: guest_surface from the_buffer for 32bit RGBA (no VOSF)\n");
 #endif
 			host_surface = guest_surface;
             break;
@@ -975,6 +986,19 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
             shutdown_sdl_video();
             return NULL;
         }
+        if (getenv("B2_DEBUG_VIDEO")) {
+            printf("VIDEO: host_surface created: bpp=%d Rmask=0x%08x Gmask=0x%08x Bmask=0x%08x Amask=0x%08x\n",
+                   bpp, Rmask, Gmask, Bmask, Amask);
+        }
+    }
+
+    if (getenv("B2_DEBUG_VIDEO") && guest_surface && host_surface) {
+        printf("VIDEO: guest_surface pitch=%d BytesPerPixel=%d format=%s\n",
+               guest_surface->pitch, guest_surface->format->BytesPerPixel,
+               SDL_GetPixelFormatName(guest_surface->format->format));
+        printf("VIDEO: host_surface pitch=%d BytesPerPixel=%d format=%s\n",
+               host_surface->pitch, host_surface->format->BytesPerPixel,
+               SDL_GetPixelFormatName(host_surface->format->format));
     }
 
 	if (SDL_RenderSetLogicalSize(sdl_renderer, width, height) != 0) {
@@ -1017,6 +1041,23 @@ static int present_sdl_video()
 	// modifying it!
 	LOCK_PALETTE;
 	SDL_LockMutex(sdl_update_video_mutex);
+
+	static int present_debug_count = 0;
+	if (getenv("B2_DEBUG_VIDEO") && present_debug_count == 0) {
+		printf("VIDEO: present_sdl_video: update_rect x=%d y=%d w=%d h=%d\\n",
+		       sdl_update_video_rect.x, sdl_update_video_rect.y,
+		       sdl_update_video_rect.w, sdl_update_video_rect.h);
+		printf("VIDEO: present_sdl_video: host_surface pitch=%d BytesPerPixel=%d\\n",
+		       host_surface ? host_surface->pitch : -1,
+		       host_surface ? host_surface->format->BytesPerPixel : -1);
+		printf("VIDEO: present_sdl_video: guest_surface pitch=%d BytesPerPixel=%d\\n",
+		       guest_surface ? guest_surface->pitch : -1,
+		       guest_surface ? guest_surface->format->BytesPerPixel : -1);
+		printf("VIDEO: present_sdl_video: host_surface==guest_surface? %s\\n",
+		       (host_surface == guest_surface) ? "YES" : "NO");
+	}
+	present_debug_count++;
+
     // Convert from the guest OS' pixel format, to the host OS' texture, if necessary.
     if (host_surface != guest_surface &&
 		host_surface != NULL &&
@@ -1043,6 +1084,12 @@ static int present_sdl_video()
 		SDL_UnlockMutex(sdl_update_video_mutex);
 		return -1;
 	}
+
+	if (getenv("B2_DEBUG_VIDEO") && present_debug_count == 1) {
+		printf("VIDEO: present_sdl_video: texture dstPitch=%d, copying width=%d (bytes: %d)\\n",
+		       dstPitch, sdl_update_video_rect.w, sdl_update_video_rect.w << 2);
+	}
+
 	for (int y = 0; y < sdl_update_video_rect.h; y++) {
 		memcpy(dstPixels, srcPixels, sdl_update_video_rect.w << 2);
 		srcPixels += host_surface->pitch;
@@ -1195,6 +1242,17 @@ void driver_base::adapt_to_video_mode() {
 	visualFormat.Gmask = f->Gmask;
 	visualFormat.Bmask = f->Bmask;
 	Screen_blitter_init(visualFormat, true, mac_depth_of_video_depth(VIDEO_MODE_DEPTH));
+
+	if (getenv("B2_DEBUG_VIDEO")) {
+		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_DEPTH=%d mac_depth=%d sdl_depth=%d\\n",
+		       VIDEO_MODE_DEPTH, mac_depth_of_video_depth(VIDEO_MODE_DEPTH), visualFormat.depth);
+		printf("VIDEO: adapt_to_video_mode: surface format Rmask=0x%08x Gmask=0x%08x Bmask=0x%08x\\n",
+		       f->Rmask, f->Gmask, f->Bmask);
+		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_ROW_BYTES=%d\\n",
+		       VIDEO_MODE_X, VIDEO_MODE_Y, VIDEO_MODE_ROW_BYTES);
+		printf("VIDEO: adapt_to_video_mode: surface pitch=%d BytesPerPixel=%d\\n",
+		       s->pitch, f->BytesPerPixel);
+	}
 
 	// Load gray ramp to 8->16/32 expand map
 	if (!IsDirectMode(mode))
@@ -2640,6 +2698,7 @@ static void handle_events(void)
 // Static display update (fixed frame rate, but incremental)
 static void update_display_static(driver_base *drv)
 {
+	static int debug_frame_count = 0;
 	// Incremental update code
 	int wide = 0, high = 0;
 	uint32 x1, x2, y1, y2;
@@ -2647,6 +2706,17 @@ static void update_display_static(driver_base *drv)
 	int bytes_per_row = VIDEO_MODE_ROW_BYTES;
 	uint8 *p, *p2;
 	uint32 x2_clipped, wide_clipped;
+
+	// Log once on first call
+	if (getenv("B2_DEBUG_VIDEO") && debug_frame_count == 0) {
+		printf("VIDEO: update_display_static: bytes_per_row=%d VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_DEPTH=%d\\n",
+		       bytes_per_row, VIDEO_MODE_X, VIDEO_MODE_Y, VIDEO_MODE_DEPTH);
+		printf("VIDEO: update_display_static: drv->s->pitch=%d drv->s->format->BytesPerPixel=%d\\n",
+		       drv->s->pitch, drv->s->format->BytesPerPixel);
+		printf("VIDEO: update_display_static: the_buffer=%p the_buffer_copy=%p drv->s->pixels=%p\\n",
+		       the_buffer, the_buffer_copy, drv->s->pixels);
+	}
+	debug_frame_count++;
 
 	// Check for first line from top and first line from bottom that have changed
 	y1 = 0;
