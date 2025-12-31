@@ -645,11 +645,7 @@ int intlev(void)
     return InterruptFlags ? 1 : 0;
 }
 
-void QuitEmulator(void)
-{
-    quit_program = 1;
-    stop_execution = true;
-}
+// Note: QuitEmulator() is defined in main_unix.cpp
 
 void Dump68kRegs(void)
 {
@@ -668,4 +664,24 @@ void Dump68kRegs(void)
     printf("A0-A3: %08x %08x %08x %08x\n", a[0], a[1], a[2], a[3]);
     printf("A4-A7: %08x %08x %08x %08x\n", a[4], a[5], a[6], a[7]);
     printf("PC=%08x SR=%04x\n", pc, sr);
+}
+
+/*
+ * m68k_dumpstate - called by main_unix.cpp sigsegv_dump_state
+ */
+extern "C" void m68k_dumpstate(uint32_t *nextpc)
+{
+    if (!uc) {
+        printf("m68k_dumpstate: Unicorn not initialized\n");
+        if (nextpc) *nextpc = 0;
+        return;
+    }
+    
+    Dump68kRegs();
+    
+    if (nextpc) {
+        uint32_t pc;
+        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+        *nextpc = pc;
+    }
 }
