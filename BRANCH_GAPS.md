@@ -97,19 +97,116 @@ Mac framebuffer (1/2/4/8-bit) → guest_surface (8-bit paletted)
 
 **Status**: ⏳ Awaiting hardware test to confirm fix
 
-#### Gap 3: VOSF Disabled on ARM
+#### Gap 3: VOSF on ARM
 
 **Location**: [configure.ac#L1503](BasiliskII/src/Unix/configure.ac#L1503)
 
-**Problem**: VOSF (Video On SEGV Fault) is disabled for ARM, meaning the fallback `update_display_static` path is used. This path has different behavior than VOSF.
+**Analysis**: VOSF (Video On SEGV Fault) CAN be enabled on ARM if signal handling is available. The configure script checks for `sigsegv_recovery` which is set via cross-compile variables.
 
-**Implication**: Cannot use dirty-page tracking; must compare entire framebuffer each frame.
+**CI Build Matrix** now includes VOSF variants:
+| Build | JIT | VOSF | SDL2 |
+|-------|-----|------|------|
+| `basilisk2-arm32-jit` | ✅ | ❌ | System |
+| `basilisk2-arm32-jit-vosf` | ✅ | ✅ | System |
+| `basilisk2-arm32-jit-vendored-sdl` | ✅ | ❌ | Vendored |
+| `basilisk2-arm32-nojit` | ❌ | ❌ | System |
+| `basilisk2-arm32-nojit-vosf` | ❌ | ✅ | System |
 
-#### Gap 4: Direct Addressing without VOSF
+**VOSF benefits**: Uses memory protection to detect dirty pages, only updates changed regions of framebuffer.
 
-**Location**: [configure.ac#L1505](BasiliskII/src/Unix/configure.ac#L1505)
+**Status**: ✅ VOSF builds added to CI matrix
 
-**Problem**: Direct addressing is required for JIT, but normally requires VOSF. ARM is special-cased to allow direct addressing without VOSF, but this may affect video buffer handling.
+#### Gap 4: ROM Patching (JIT vs Non-JIT)
+
+**Location**: [rom_patches.cpp](BasiliskII/src/rom_patches.cpp)
+
+**Analysis**: Verified that `rom_patches.cpp` has NO JIT-specific conditionals. ROM patching is identical for JIT and non-JIT builds.
+
+Both `uae_cpu/basilisk_glue.cpp` and `uae_cpu_2021/basilisk_glue.cpp` include the same `rom_patches.h`.
+
+**Status**: ✅ Validated - no ROM patching differences
+
+#### Gap 5: Monochrome and Greyscale Modes (1/2/4-bit depths)
+
+**Location**: [video_blit.cpp#L331-L390](BasiliskII/src/CrossPlatform/video_blit.cpp#L331-L390), [video_sdl2.cpp#L2746-L2800](BasiliskII/src/SDL/video_sdl2.cpp#L2746-L2800)
+
+**Problem**: Low bit depth modes (1-bit monochrome, 2-bit greyscale, 4-bit greyscale/color) use a different code path with potential endianness issues.
+
+**Pipeline for 1/2/4-bit modes**:
+```
+Mac framebuffer (1/2/4-bit packed)
+    → Blit_Expand_*_To_8() expands to 8-bit indices
+    → ExpandMap[] lookup converts index → SDL pixel value
+    → SDL_BlitSurface → host_surface (32-bit BGRA)
+    → SDL_UpdateTexture → GPU texture
+```
+
+**Key functions in video_blit.cpp**:
+| Function | Input | Output | Notes |
+|----------|-------|--------|-------|
+| `Blit_Expand_1_To_8` | 1 byte (8 pixels) | 8 bytes (8 indices) | Bit extraction MSB-first |
+| `Blit_Expand_2_To_8` | 1 byte (4 pixels) | 4 bytes (4 indices) | 2-bit extraction MSB-first |
+| `Blit_Expand_4_To_8` | 1 byte (2 pixels) | 2 bytes (2 indices) | 4-bit extraction MSB-first |
+
+**`ExpandMap[]` initialization** ([video_sdl2.cpp#L2049](BasiliskII/src/SDL/video_sdl2.cpp#L2049)):
+```c
+ExpandMap[i] = SDL_MapRGB(drv->s->format, pal[c*3+0], pal[c*3+1], pal[c*3+2]);
+```
+
+**Potential issues on ARM little-endian**:
+
+1. **Bit extraction order**: `Blit_Expand_1_To_8` extracts MSB-first (`c >> 7` first), which is correct for Mac's big-endian pixel ordering. This should be endian-neutral since it operates byte-by-byte.
+
+2. **ExpandMap type mismatch**: `ExpandMap` is `uint32` but `Blit_Expand_*_To_8` writes `uint8` indices. The subsequent `Blit_Expand_*_To_16/32` functions use `ExpandMap` as a lookup table. On 16-bit destination, this writes `uint16` values to memory — **potential endianness issue if destination expects different byte order**.
+
+3. **Destination offset calculation** ([video_sdl2.cpp#L2795](BasiliskII/src/SDL/video_sdl2.cpp#L2795)):
+   ```c
+   int di = y1 * dst_bytes_per_row + x1;
+   ```
+   For `x1` in pixel units and destination in bytes, this assumes 1 byte per pixel for the expanded 8-bit surface. But `drv->s` is a 32-bit BGRA surface, so `x1` should be multiplied by `BytesPerPixel`.
+
+4. **Screen_blit function selection**: For low bit depths, `Screen_blitter_init()` selects based on `native_byte_order` which we fixed to `false` for 16-bit. But for 8-bit paletted → 32-bit BGRA, which blitter is used? The `Blit_Expand_8_To_32` path goes through `ExpandMap[]` which already contains SDL-native pixel values.
+
+**Testing needed**:
+- Set Mac to 1-bit B&W mode and check if display inverts or garbles
+- Set Mac to 2-bit/4-bit greyscale and check gradient rendering
+- Check if `ExpandMap` values match expected SDL pixel format
+
+**🐛 BUG FOUND: Default B/W palette is inverted!**
+
+Location: [video_sdl2.cpp#L1221-L1223](BasiliskII/src/SDL/video_sdl2.cpp#L1221-L1223)
+
+```c
+// set default B/W palette
+sdl_palette = SDL_AllocPalette(256);
+sdl_palette->colors[1] = (SDL_Color){ .r = 0, .g = 0, .b = 0, .a = 255 };
+SDL_SetSurfacePalette(s, sdl_palette);
+```
+
+**Problem**: 
+- Only index 1 is set to black; index 0 is uninitialized (likely 0,0,0,0 = black with alpha=0)
+- Mac monochrome convention: **bit 0 = BLACK, bit 1 = WHITE** (inverted from intuition)
+- `Blit_Expand_1_To_8` writes raw bit values (0 or 1) as palette indices
+- Result: Mac white (bit=1) → index 1 → black | Mac black (bit=0) → index 0 → uninitialized black
+- **Both values produce black — monochrome display will be all black!**
+
+**Fix needed**:
+```c
+// set default B/W palette (Mac convention: 0=black, 1=white)
+sdl_palette = SDL_AllocPalette(256);
+sdl_palette->colors[0] = (SDL_Color){ .r = 0,   .g = 0,   .b = 0,   .a = 255 };  // Black
+sdl_palette->colors[1] = (SDL_Color){ .r = 255, .g = 255, .b = 255, .a = 255 };  // White
+SDL_SetSurfacePalette(s, sdl_palette);
+```
+
+**Note**: The MacOS Monitors control panel should send proper palette data via `set_palette()` which will correctly populate `ExpandMap[]` and set the SDL palette. But the **default** palette used before MacOS initializes video is wrong.
+
+**Debug approach**:
+```bash
+# Enable pixel debugging
+export B2_DEBUG_PIXELS=1
+export B2_DEBUG_VIDEO=1
+```
 
 ---
 
@@ -298,9 +395,10 @@ Current ARM32 JIT build flags:
 The original build used a vendored SDL2 with specific configuration:
 
 ```bash
-wget https://www.libsdl.org/release/SDL2-2.32.8.tar.gz
-tar -zxvf SDL2-2.32.8.tar.gz
-cd SDL2-2.32.8 && ./configure --disable-video-opengl --disable-video-x11 \
+# SDL2 2.30.0 is used in CI (2.32.8 does not exist - likely typo in original notes)
+wget https://github.com/libsdl-org/SDL/releases/download/release-2.30.0/SDL2-2.30.0.tar.gz
+tar -zxvf SDL2-2.30.0.tar.gz
+cd SDL2-2.30.0 && ./configure --disable-video-opengl --disable-video-x11 \
     --disable-pulseaudio --disable-esd --disable-video-wayland && make -j4
 
 cd macemu/BasiliskII/src/Unix && NO_CONFIGURE=1 ./autogen.sh && \
@@ -310,6 +408,8 @@ cd macemu/BasiliskII/src/Unix && NO_CONFIGURE=1 ./autogen.sh && \
 ```
 
 Note: This old build **disabled JIT** and used a custom SDL2 without OpenGL.
+
+**Important**: Target is ARM32 (armhf), not ARM64. Even on 64-bit Raspberry Pi OS, the build uses `arm-linux-gnueabihf-gcc` cross-compiler.
 
 ---
 

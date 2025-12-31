@@ -1217,9 +1217,11 @@ void driver_base::init()
 
 	adapt_to_video_mode();
 	
-	// set default B/W palette
+	// set default B/W palette (Mac convention: index 0=black, index 1=white)
+	// Blit_Expand_1_To_8 writes raw bit values as palette indices
 	sdl_palette = SDL_AllocPalette(256);
-	sdl_palette->colors[1] = (SDL_Color){ .r = 0, .g = 0, .b = 0, .a = 255 };
+	sdl_palette->colors[0] = (SDL_Color){ .r = 0,   .g = 0,   .b = 0,   .a = 255 };  // Black
+	sdl_palette->colors[1] = (SDL_Color){ .r = 255, .g = 255, .b = 255, .a = 255 };  // White
 	SDL_SetSurfacePalette(s, sdl_palette);
 
 	if (PrefsFindBool("init_grab") && !PrefsFindBool("hardcursor")) grab_mouse();

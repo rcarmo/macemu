@@ -35,23 +35,40 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Main JIT build with system SDL2
+          # Main JIT build with system SDL2 (no VOSF)
           - name: "JIT (System SDL2)"
             jit_enabled: true
             sdl_source: system
+            vosf_enabled: false
             artifact_suffix: "-jit"
+            
+          # JIT build with VOSF enabled
+          - name: "JIT + VOSF (System SDL2)"
+            jit_enabled: true
+            sdl_source: system
+            vosf_enabled: true
+            artifact_suffix: "-jit-vosf"
             
           # JIT build with vendored SDL2 (built from source)
           - name: "JIT (Vendored SDL2)"
             jit_enabled: true
             sdl_source: vendored
+            vosf_enabled: false
             artifact_suffix: "-jit-vendored-sdl"
             
           # Non-JIT build to isolate video bugs from JIT bugs
           - name: "No-JIT (System SDL2)"
             jit_enabled: false
             sdl_source: system
+            vosf_enabled: false
             artifact_suffix: "-nojit"
+            
+          # Non-JIT build with VOSF to isolate VOSF-specific issues
+          - name: "No-JIT + VOSF (System SDL2)"
+            jit_enabled: false
+            sdl_source: system
+            vosf_enabled: true
+            artifact_suffix: "-nojit-vosf"
     
     steps:
       - name: Checkout repository
@@ -106,7 +123,7 @@ jobs:
             libpulse-dev:armhf
           
           # Download SDL2 source
-          SDL2_VERSION=2.30.0
+          SDL2_VERSION=2.32.8
           wget -q https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz
           tar xzf SDL2-${SDL2_VERSION}.tar.gz
           cd SDL2-${SDL2_VERSION}
@@ -155,7 +172,7 @@ jobs:
           
           Name: sdl2
           Description: Simple DirectMedia Layer
-          Version: 2.30.0
+          Version: 2.32.8
           Libs: -L${libdir} -lSDL2
           Cflags: -I${includedir}/SDL2
           PKGEOF
@@ -197,15 +214,23 @@ jobs:
             JIT_OPT="--disable-jit-compiler"
           fi
           
+          # Build VOSF option
+          VOSF_OPT=""
+          if [ "${{ matrix.vosf_enabled }}" = "true" ]; then
+            VOSF_OPT="--enable-vosf"
+          else
+            VOSF_OPT="--disable-vosf"
+          fi
+          
           ./configure \
             --host=arm-linux-gnueabihf \
             --build=x86_64-linux-gnu \
             --enable-sdl-video \
             --enable-sdl-audio \
             $JIT_OPT \
+            $VOSF_OPT \
             --enable-addressing=direct \
             --enable-fpe=ieee \
-            --disable-vosf \
             --disable-gtk \
             --without-mon \
             --without-x \
@@ -284,6 +309,7 @@ jobs:
           
           Configuration:
           - JIT Enabled: ${{ matrix.jit_enabled }}
+          - VOSF Enabled: ${{ matrix.vosf_enabled }}
           - SDL2 Source: ${{ matrix.sdl_source }}
           
           Target: Raspberry Pi (32-bit armhf)
@@ -309,7 +335,7 @@ jobs:
         run: |
           python3 BasiliskII/src/CrossPlatform/test_blitters.py
           
-  # Create release only from main JIT build
+  # Create release with all build variants
   create-release:
     name: Create Experimental Release
     runs-on: ubuntu-latest
@@ -317,11 +343,35 @@ jobs:
     if: github.ref == 'refs/heads/feature/arm-jit' && github.event_name == 'push'
     
     steps:
-      - name: Download JIT artifact
+      - name: Download JIT (System SDL2) artifact
         uses: actions/download-artifact@v4
         with:
           name: basilisk2-arm32-jit
-          path: release/
+          path: release/jit/
+          
+      - name: Download JIT + VOSF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: basilisk2-arm32-jit-vosf
+          path: release/jit-vosf/
+          
+      - name: Download JIT (Vendored SDL2) artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: basilisk2-arm32-jit-vendored-sdl
+          path: release/jit-vendored-sdl/
+          
+      - name: Download No-JIT artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: basilisk2-arm32-nojit
+          path: release/nojit/
+          
+      - name: Download No-JIT + VOSF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: basilisk2-arm32-nojit-vosf
+          path: release/nojit-vosf/
           
       - name: Create experimental release
         uses: softprops/action-gh-release@v2
@@ -343,10 +393,14 @@ jobs:
             - ALSA audio support
             
             ### Build Variants
-            Three build variants are available as artifacts:
-            1. **JIT (System SDL2)** - Main build with ARM JIT and system SDL2
-            2. **JIT (Vendored SDL2)** - ARM JIT with SDL2 built from source
-            3. **No-JIT (System SDL2)** - Interpreted CPU for debugging video issues
+            Five build variants are available:
+            1. **JIT** - ARM JIT with system SDL2 (no VOSF)
+            2. **JIT + VOSF** - ARM JIT with VOSF screen updates enabled
+            3. **JIT (Vendored SDL2)** - ARM JIT with SDL2 built from source
+            4. **No-JIT** - Interpreted CPU for debugging (no VOSF)
+            5. **No-JIT + VOSF** - Interpreted CPU with VOSF enabled
+            
+            **VOSF** (Video On SEGV Fault) uses memory protection to detect which parts of the Mac framebuffer changed, potentially improving performance for partial screen updates.
             
             ### Requirements
             - 32-bit Raspberry Pi OS (armhf) / Debian 12 Bookworm
@@ -367,4 +421,8 @@ jobs:
             ### Commit
             Built from commit: ${{ github.sha }}
           files: |
-            release/*
+            release/jit/*
+            release/jit-vosf/*
+            release/jit-vendored-sdl/*
+            release/nojit/*
+            release/nojit-vosf/*
