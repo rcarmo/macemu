@@ -35,7 +35,6 @@
 
 #include <unicorn/unicorn.h>
 #include <sys/time.h>
-#include <string.h>
 
 #define DEBUG 0
 #include "debug.h"
@@ -508,8 +507,17 @@ bool Init680x0(void)
         printf("Unicorn: Mapped dummy I/O space 0x50F00000-0x50F1FFFF\n");
     }
     
-    // Map EXEC_RETURN page - needs ALL permissions for stack ops during Execute68k
-    uc_mem_map(uc, EXEC_RETURN_ADDR & ~0xFFF, 0x1000, UC_PROT_ALL);
+    // Map high memory region for system stack and EXEC_RETURN
+    // Quadra 800 ROM sets supervisor SP near 0xfffff000, so we need writable space there
+    // Map 64KB at top of 32-bit address space: 0xFFFF0000-0xFFFFFFFF
+    static uint8 high_mem[0x10000];
+    memset(high_mem, 0, sizeof(high_mem));
+    err = uc_mem_map_ptr(uc, 0xFFFF0000, sizeof(high_mem), UC_PROT_ALL, high_mem);
+    if (err == UC_ERR_OK) {
+        printf("Unicorn: Mapped high memory 0xFFFF0000-0xFFFFFFFF (system stack + EXEC_RETURN)\n");
+    } else {
+        printf("Unicorn: Warning: Could not map high memory: %s\n", uc_strerror(err));
+    }
     
     // Add exception hook - THE KEY TO PERFORMANCE
     uc_hook hh_intr;
