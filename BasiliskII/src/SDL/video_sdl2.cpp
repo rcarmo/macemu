@@ -71,6 +71,7 @@
 #include "video_blit.h"
 #include "vm_alloc.h"
 #include "cdrom.h"
+#include "evdev_input.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -779,67 +780,6 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
 	
-	// On KMSDRM (and other console video drivers), we need to explicitly
-	// grab input since there's no window manager to give us focus
-	const char *video_driver = SDL_GetCurrentVideoDriver();
-	if (video_driver && (strcmp(video_driver, "KMSDRM") == 0 || 
-	                     strcmp(video_driver, "kmsdrm") == 0 ||
-	                     strcmp(video_driver, "fbcon") == 0 ||
-	                     strcmp(video_driver, "directfb") == 0)) {
-		printf("KMSDRM/console video driver detected, grabbing input...\n");
-		fflush(stdout);
-		
-		// Pump events once to let SDL process any pending setup
-		SDL_PumpEvents();
-		
-		SDL_SetWindowGrab(sdl_window, SDL_TRUE);
-		SDL_RaiseWindow(sdl_window);
-		
-		int focus_result = SDL_SetWindowInputFocus(sdl_window);
-		printf("SDL_SetWindowInputFocus returned: %d (0=success)\n", focus_result);
-		if (focus_result != 0) {
-			printf("SDL_SetWindowInputFocus error: %s\n", SDL_GetError());
-		}
-		
-		// Show the window to ensure it can receive events
-		SDL_ShowWindow(sdl_window);
-		
-		// Try relative mouse mode - this forces SDL to capture mouse input
-		// and is often more reliable on KMSDRM
-		int rel_result = SDL_SetRelativeMouseMode(SDL_TRUE);
-		printf("SDL_SetRelativeMouseMode returned: %d (0=success)\n", rel_result);
-		if (rel_result != 0) {
-			printf("SDL_SetRelativeMouseMode error: %s\n", SDL_GetError());
-			// If relative mode fails, try to at least warp mouse to center
-			int w, h;
-			SDL_GetWindowSize(sdl_window, &w, &h);
-			SDL_WarpMouseInWindow(sdl_window, w/2, h/2);
-		}
-		
-		printf("Window grab: %d\n", SDL_GetWindowGrab(sdl_window));
-		
-		// Ensure BasiliskII also switches to relative mouse mode so we process motion events
-		if (drv && !mouse_grabbed && !PrefsFindBool("hardcursor")) {
-			printf("Enabling BasiliskII mouse grab for console video driver\n");
-			drv->grab_mouse();
-		}
-		else if (!mouse_grabbed) {
-			// Fall back to forcing relative mode in the ADB layer even if grab_mouse() isn't available yet
-			mouse_grabbed = true;
-			ADBSetRelMouseMode(true);
-		}
-		
-		// Pump events again to process the grab/focus events
-		SDL_PumpEvents();
-		
-		// Check focus after setup
-		SDL_Window *kb_focus = SDL_GetKeyboardFocus();
-		SDL_Window *mouse_focus = SDL_GetMouseFocus();
-		printf("After setup - Keyboard focus: %p, Mouse focus: %p, Our window: %p\n",
-		       (void*)kb_focus, (void*)mouse_focus, (void*)sdl_window);
-		fflush(stdout);
-	}
-	
 	// Some SDL events (regarding some native-window events), need processing
 	// as they are generated.  SDL2 has a facility, SDL_AddEventWatch(), which
 	// allows events to be processed as they are generated.
@@ -1323,28 +1263,22 @@ static void update_mouse_grab()
 // Grab mouse, switch to relative mouse mode
 void driver_base::grab_mouse(void)
 {
-	if (mouse_grabbed)
-		return;
-
-	bool capture_ok = true;
-#if SDL_VERSION_ATLEAST(2,0,4)
-	if (SDL_CaptureMouse(SDL_TRUE) != 0) {
-		printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
-		capture_ok = false;
+	if (!mouse_grabbed) {
+		mouse_grabbed = true;
+		update_mouse_grab();
+		set_window_name();
+		disable_mouse_accel();
+		ADBSetRelMouseMode(true);
+		
+		// On KMSDRM/console drivers, also enable evdev fallback
+		const char *video_driver = SDL_GetCurrentVideoDriver();
+		if (video_driver && (strcmp(video_driver, "KMSDRM") == 0 || 
+		                     strcmp(video_driver, "kmsdrm") == 0 ||
+		                     strcmp(video_driver, "fbcon") == 0 ||
+		                     strcmp(video_driver, "directfb") == 0)) {
+			evdev_input_enable();
+		}
 	}
-#endif
-
-	if (!capture_ok) {
-		SDL_SetWindowGrab(sdl_window, SDL_FALSE);
-		SDL_SetRelativeMouseMode(SDL_FALSE);
-		return;
-	}
-
-	mouse_grabbed = true;
-	update_mouse_grab();
-	set_window_name();
-	disable_mouse_accel();
-	ADBSetRelMouseMode(true);
 }
 
 // Ungrab mouse, switch to absolute mouse mode
@@ -1352,15 +1286,11 @@ void driver_base::ungrab_mouse(void)
 {
 	if (mouse_grabbed) {
 		mouse_grabbed = false;
-#if SDL_VERSION_ATLEAST(2,0,4)
-		if (SDL_CaptureMouse(SDL_FALSE) != 0) {
-			printf("SDL_CaptureMouse(SDL_FALSE) failed: %s\n", SDL_GetError());
-		}
-#endif
 		update_mouse_grab();
 		set_window_name();
 		restore_mouse_accel();
 		ADBSetRelMouseMode(false);
+		evdev_input_disable();
 	}
 }
 
@@ -1518,6 +1448,9 @@ bool VideoInit(bool classic)
 		return false;
 	if ((frame_buffer_lock = SDL_CreateMutex()) == NULL)
 		return false;
+
+	// Initialize evdev input (for KMSDRM/console fallback)
+	evdev_input_init();
 
 	// Init keycode translation
 	keycode_init();
@@ -1744,6 +1677,9 @@ void SDL_monitor_desc::video_close(void)
 
 void VideoExit(void)
 {
+	// Shutdown evdev input
+	evdev_input_shutdown();
+
 	// Close displays
 	vector<monitor_desc *>::iterator i, end = VideoMonitors.end();
 	for (i = VideoMonitors.begin(); i != end; ++i)
@@ -2430,37 +2366,36 @@ static int SDLCALL on_sdl_event_generated(void *userdata, SDL_Event * event)
 	return EVENT_ADD_TO_QUEUE;
 }
 
-static bool sdl_input_debug_enabled(void)
-{
-	static bool initialized = false;
-	static bool enabled = false;
 
-	if (!initialized) {
-		const char *env = getenv("B2_DEBUG_INPUT");
-		if (env && *env) {
-			if (strcmp(env, "0") != 0 && strcasecmp(env, "false") != 0)
-				enabled = true;
-		}
-		initialized = true;
-	}
-	return enabled;
-}
+// Flag to signal main thread should pump SDL events
+volatile bool sdl_events_need_pump = false;
+// Buffer for events pumped by main thread
+static SDL_Event main_thread_events[64];
+static int main_thread_event_count = 0;
+static SDL_mutex *event_mutex = NULL;
 
 // Called from main thread (one_tick or similar) to pump SDL events
 void SDL_PumpEventsFromMainThread(void)
 {
-	const bool debug_input = sdl_input_debug_enabled();
-	static int pump_debug_count = 0;
-	if (debug_input) {
-		pump_debug_count++;
-		if (pump_debug_count <= 10 || (pump_debug_count % 200) == 0) {
-			int mx, my;
-			Uint32 buttons = SDL_GetMouseState(&mx, &my);
-			printf("SDL_PumpEventsFromMainThread #%d: buttons=0x%x pos=(%d,%d)\n",
-			       pump_debug_count, buttons, mx, my);
-		}
-	}
+	// Always pump events when called from main thread context
+	// This ensures events are processed even if handle_events hasn't signaled yet
+	
+	if (!event_mutex)
+		event_mutex = SDL_CreateMutex();
+	
+	// Pump events in main thread context
 	SDL_PumpEvents();
+	
+	// If someone requested event pumping, grab all events to buffer
+	if (sdl_events_need_pump) {
+		SDL_LockMutex(event_mutex);
+		main_thread_event_count = SDL_PeepEvents(main_thread_events, 64, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+		if (main_thread_event_count < 0)
+			main_thread_event_count = 0;
+		SDL_UnlockMutex(event_mutex);
+		
+		sdl_events_need_pump = false;
+	}
 }
 
 static void handle_events(void)
@@ -2468,152 +2403,154 @@ static void handle_events(void)
 	SDL_Event events[10];
 	const int n_max_events = sizeof(events) / sizeof(events[0]);
 	int n_events;
-	const bool debug_input = sdl_input_debug_enabled();
-	bool saw_motion_event = false;
 
-	while ((n_events = SDL_PeepEvents(events, n_max_events, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) > 0) {
-		for (int i = 0; i < n_events; i++) {
-			SDL_Event & event = events[i];
+	// Signal that we need events pumped, then process any that were pumped by main thread
+	sdl_events_need_pump = true;
+	
+	// Create mutex if it doesn't exist yet
+	if (!event_mutex)
+		event_mutex = SDL_CreateMutex();
+	
+	// First process events from main thread buffer
+	SDL_LockMutex(event_mutex);
+	int buffered_count = main_thread_event_count;
+	SDL_Event buffered_events[64];
+	if (buffered_count > 0) {
+		memcpy(buffered_events, main_thread_events, buffered_count * sizeof(SDL_Event));
+		main_thread_event_count = 0;
+	}
+	SDL_UnlockMutex(event_mutex);
+	
+	// Process buffered events
+	for (int i = 0; i < buffered_count; i++) {
+		SDL_Event & event = buffered_events[i];
+		
+		switch (event.type) {
 
-			switch (event.type) {
+		// Mouse button
+		case SDL_MOUSEBUTTONDOWN: {
+			unsigned int button = event.button.button;
+			if (button == SDL_BUTTON_LEFT)
+				ADBMouseDown(0);
+			else if (button == SDL_BUTTON_RIGHT)
+				ADBMouseDown(1);
+			else if (button == SDL_BUTTON_MIDDLE)
+				ADBMouseDown(2);
+			break;
+		}
+		case SDL_MOUSEBUTTONUP: {
+			unsigned int button = event.button.button;
+			if (button == SDL_BUTTON_LEFT)
+				ADBMouseUp(0);
+			else if (button == SDL_BUTTON_RIGHT)
+				ADBMouseUp(1);
+			else if (button == SDL_BUTTON_MIDDLE)
+				ADBMouseUp(2);
+			break;
+		}
 
-			// Mouse button
-			case SDL_MOUSEBUTTONDOWN: {
-				unsigned int button = event.button.button;
-				if (button == SDL_BUTTON_LEFT)
-					ADBMouseDown(0);
-				else if (button == SDL_BUTTON_RIGHT)
-					ADBMouseDown(1);
-				else if (button == SDL_BUTTON_MIDDLE)
-					ADBMouseDown(2);
-				break;
+		// Mouse moved
+		case SDL_MOUSEMOTION:
+			if (mouse_grabbed) {
+				drv->mouse_moved(event.motion.xrel, event.motion.yrel);
+			} else {
+				drv->mouse_moved(event.motion.x, event.motion.y);
 			}
-			case SDL_MOUSEBUTTONUP: {
-				unsigned int button = event.button.button;
-				if (button == SDL_BUTTON_LEFT)
-					ADBMouseUp(0);
-				else if (button == SDL_BUTTON_RIGHT)
-					ADBMouseUp(1);
-				else if (button == SDL_BUTTON_MIDDLE)
-					ADBMouseUp(2);
-				break;
+			break;
+
+		case SDL_MOUSEWHEEL:
+			if (!event.wheel.y) break;
+			if (!mouse_wheel_mode) {
+				int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x79 : 0x74;	// Page up/down
+				ADBKeyDown(key);
+				ADBKeyUp(key);
 			}
-
-			// Mouse moved
-			case SDL_MOUSEMOTION:
-				saw_motion_event = true;
-				if (debug_input) {
-					printf("SDL_MOUSEMOTION: x=%d y=%d xrel=%d yrel=%d grabbed=%d\n",
-					       event.motion.x, event.motion.y,
-					       event.motion.xrel, event.motion.yrel, mouse_grabbed);
-				}
-				if (mouse_grabbed) {
-					drv->mouse_moved(event.motion.xrel, event.motion.yrel);
-				} else {
-					drv->mouse_moved(event.motion.x, event.motion.y);
-				}
-				break;
-
-			case SDL_MOUSEWHEEL:
-				if (!event.wheel.y) break;
-				if (!mouse_wheel_mode) {
-					int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x79 : 0x74;	// Page up/down
+			else {
+				int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x3d : 0x3e;	// Cursor up/down
+				for (int i = 0; i < mouse_wheel_lines; i++) {
 					ADBKeyDown(key);
 					ADBKeyUp(key);
 				}
-				else {
-					int key = (event.wheel.y < 0) ^ mouse_wheel_reverse ? 0x3d : 0x3e;	// Cursor up/down
-					for (int i = 0; i < mouse_wheel_lines; i++) {
-						ADBKeyDown(key);
-						ADBKeyUp(key);
-					}
-				}
+			}
 			break;
 
-			// Keyboard
-			case SDL_KEYDOWN: {
-				if (event.key.repeat)
-					break;
-				int code = CODE_INVALID;
-				if (use_keycodes && event2keycode(event.key, true) != CODE_HOTKEY)
-					code = keycode_table[event.key.keysym.scancode & 0xff];
-				if (code == CODE_INVALID)
-					code = event2keycode(event.key, true);
-				if (code >= 0) {
-					if (!emul_suspended) {
-						code = modify_opt_cmd(code);
-						if (code == 0x39)
-							(SDL_GetModState() & KMOD_CAPS ? ADBKeyDown : ADBKeyUp)(code);
-						else
-							ADBKeyDown(code);
-						if (code == 0x36)
-							ctrl_down = true;
-						if (code == 0x3a)
-							opt_down = true;
-						if (code == 0x37)
-							cmd_down = true;
-						
-					} else {
-						if (code == 0x31)
-							drv->resume();	// Space wakes us up
-					}
-				}
+		// Keyboard
+		case SDL_KEYDOWN: {
+			if (event.key.repeat)
 				break;
-			}
-			case SDL_KEYUP: {
-				int code = CODE_INVALID;
-				if (use_keycodes && event2keycode(event.key, false) != CODE_HOTKEY)
-					code = keycode_table[event.key.keysym.scancode & 0xff];
-				if (code == CODE_INVALID)
-					code = event2keycode(event.key, false);
-				if (code >= 0) {
+			int code = CODE_INVALID;
+			if (use_keycodes && event2keycode(event.key, true) != CODE_HOTKEY)
+				code = keycode_table[event.key.keysym.scancode & 0xff];
+			if (code == CODE_INVALID)
+				code = event2keycode(event.key, true);
+			if (code >= 0) {
+				if (!emul_suspended) {
 					code = modify_opt_cmd(code);
-					if (code != 0x39)
-						ADBKeyUp(code);
+					if (code == 0x39)
+						(SDL_GetModState() & KMOD_CAPS ? ADBKeyDown : ADBKeyUp)(code);
+					else
+						ADBKeyDown(code);
 					if (code == 0x36)
-						ctrl_down = false;
+						ctrl_down = true;
 					if (code == 0x3a)
-						opt_down = false;
+						opt_down = true;
 					if (code == 0x37)
-						cmd_down = false;
-				}
-				break;
-			}
-			
-			case SDL_WINDOWEVENT: {
-				switch (event.window.event) {
-					// Hidden parts exposed, force complete refresh of window
-					case SDL_WINDOWEVENT_EXPOSED:
-						force_complete_window_refresh();
-						break;
+						cmd_down = true;
 					
-					// Force a complete window refresh when activating, to avoid redraw artifacts otherwise.
-					case SDL_WINDOWEVENT_RESTORED:
-						force_complete_window_refresh();
-						break;
+				} else {
+					if (code == 0x31)
+						drv->resume();	// Space wakes us up
 				}
-				break;
 			}
+			break;
+		}
+		case SDL_KEYUP: {
+			int code = CODE_INVALID;
+			if (use_keycodes && event2keycode(event.key, false) != CODE_HOTKEY)
+				code = keycode_table[event.key.keysym.scancode & 0xff];
+			if (code == CODE_INVALID)
+				code = event2keycode(event.key, false);
+			if (code >= 0) {
+				code = modify_opt_cmd(code);
+				if (code != 0x39)
+					ADBKeyUp(code);
+				if (code == 0x36)
+					ctrl_down = false;
+				if (code == 0x3a)
+					opt_down = false;
+				if (code == 0x37)
+					cmd_down = false;
+			}
+			break;
+		}
+		
+		case SDL_WINDOWEVENT: {
+			switch (event.window.event) {
+				// Hidden parts exposed, force complete refresh of window
+				case SDL_WINDOWEVENT_EXPOSED:
+					force_complete_window_refresh();
+					break;
+				
+				// Force a complete window refresh when activating, to avoid redraw artifacts otherwise.
+				case SDL_WINDOWEVENT_RESTORED:
+					force_complete_window_refresh();
+					break;
+			}
+			break;
+		}
 
-			// Window "close" widget clicked
-			case SDL_QUIT:
-				if (SDL_GetModState() & (KMOD_LALT | KMOD_RALT)) break;
-				ADBKeyDown(0x7f);	// Power key
-				ADBKeyUp(0x7f);
-				break;
-			}
+		// Window "close" widget clicked
+		case SDL_QUIT:
+			if (SDL_GetModState() & (KMOD_LALT | KMOD_RALT)) break;
+			ADBKeyDown(0x7f);	// Power key
+			ADBKeyUp(0x7f);
+			break;
 		}
 	}
 
-	if (!saw_motion_event && mouse_grabbed && SDL_GetRelativeMouseMode()) {
-		int rx = 0, ry = 0;
-		Uint32 buttons = SDL_GetRelativeMouseState(&rx, &ry);
-		if (rx || ry) {
-			if (debug_input) {
-				printf("SDL_GetRelativeMouseState fallback: buttons=0x%x rel=(%d,%d)\n", buttons, rx, ry);
-			}
-			drv->mouse_moved(rx, ry);
-		}
+	// Process evdev input as fallback (for KMSDRM/console when SDL events aren't working)
+	if (evdev_input_active()) {
+		evdev_process_mouse_to_adb(mouse_grabbed);
 	}
 }
 

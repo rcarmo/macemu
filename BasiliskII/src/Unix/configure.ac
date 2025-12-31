@@ -43,6 +43,9 @@ dnl JIT compiler options.
 AC_ARG_ENABLE(jit-compiler,  [  --enable-jit-compiler   enable JIT compiler [default=yes]], [WANT_JIT=$enableval], [WANT_JIT=yes])
 AC_ARG_ENABLE(jit-debug,     [  --enable-jit-debug      activate native code disassemblers [default=no]], [WANT_JIT_DEBUG=$enableval], [WANT_JIT_DEBUG=no])
 
+dnl Unicorn CPU backend (portable JIT via QEMU TCG).
+AC_ARG_ENABLE(unicorn-cpu,   [  --enable-unicorn-cpu    use Unicorn Engine for CPU emulation [default=no]], [WANT_UNICORN=$enableval], [WANT_UNICORN=no])
+
 dnl FPU emulation core.
 AC_ARG_ENABLE(fpe,
 [  --enable-fpe=FPE        specify which fpu emulator to use [default=auto]],
@@ -528,6 +531,26 @@ if [[ "$WANT_GTK" = "no" ]]; then
 fi
 AC_SUBST(STANDALONE_GUI, [$WANT_STANDALONE_GUI])
 
+dnl Check for Unicorn Engine if requested.
+HAVE_UNICORN=no
+if [[ "x$WANT_UNICORN" = "xyes" ]]; then
+  AC_CHECK_HEADER([unicorn/unicorn.h], [
+    AC_CHECK_LIB([unicorn], [uc_open], [
+      HAVE_UNICORN=yes
+      UNICORN_LIBS="-lunicorn"
+      AC_DEFINE(USE_UNICORN_CPU, 1, [Define if using Unicorn CPU emulation.])
+      AC_MSG_NOTICE([Unicorn Engine found, will use Unicorn CPU backend])
+    ], [
+      AC_MSG_WARN([Unicorn library not found, falling back to UAE CPU.])
+      WANT_UNICORN=no
+    ])
+  ], [
+    AC_MSG_WARN([Unicorn headers not found, falling back to UAE CPU.])
+    WANT_UNICORN=no
+  ])
+fi
+AC_SUBST(UNICORN_LIBS)
+
 dnl We use ESD if possible.
 if [[ "x$WANT_ESD" = "xyes" ]]; then
   AM_PATH_ESD(0.2.8, [
@@ -897,7 +920,7 @@ if [[ "x$WANT_SDL" = "xyes" ]]; then
 fi
 if [[ "x$WANT_SDL_VIDEO" = "xyes" ]]; then
   AC_DEFINE(USE_SDL_VIDEO, 1, [Define to enable SDL video graphics support])
-  VIDEOSRCS="../SDL/video_sdl.cpp ../SDL/video_sdl2.cpp ../SDL/video_sdl3.cpp "
+  VIDEOSRCS="../SDL/video_sdl.cpp ../SDL/video_sdl2.cpp ../SDL/video_sdl3.cpp ../SDL/evdev_input.cpp "
   KEYCODES="../SDL/keycodes"
   if [[ "x$ac_cv_framework_Carbon" = "xyes" ]]; then
     AC_MSG_CHECKING([whether __LP64__ is defined])
@@ -1945,13 +1968,23 @@ dnl Check for certain math functions
 AC_CHECK_FUNCS(atanh)
 AC_CHECK_FUNCS(isnan isinf finite isnormal signbit)
 
-dnl UAE CPU sources for all non-m68k-native architectures.
+dnl CPU sources selection.
+dnl Use Unicorn if enabled and available, otherwise UAE CPU.
 if [[ "x$WANT_NATIVE_M68K" = "xno" ]]; then
-  CPUINCLUDES="-I$UAE_PATH"
-  CPUSRCS="$UAE_PATH/basilisk_glue.cpp $UAE_PATH/memory.cpp $UAE_PATH/newcpu.cpp $UAE_PATH/readcpu.cpp $FPUSRCS cpustbl.cpp cpudefs.cpp $CPUSRCS $JITSRCS"
-  if [[ "$target_cpu" = "arm" -o "$target_cpu" = "aarch64" ]]; then
-    CPUSRCS="$CPUSRCS cpufunctbl.cpp"
-	DEFINES="$DEFINES -DUPDATE_UAE"
+  if [[ "x$HAVE_UNICORN" = "xyes" ]]; then
+    dnl Unicorn CPU backend (portable JIT via QEMU TCG)
+    CPUINCLUDES="-I../unicorn_cpu"
+    CPUSRCS="../unicorn_cpu/unicorn_glue.cpp ../unicorn_cpu/memory.cpp"
+    LIBS="$LIBS $UNICORN_LIBS"
+    AC_MSG_NOTICE([Using Unicorn CPU backend])
+  else
+    dnl UAE CPU emulation
+    CPUINCLUDES="-I$UAE_PATH"
+    CPUSRCS="$UAE_PATH/basilisk_glue.cpp $UAE_PATH/memory.cpp $UAE_PATH/newcpu.cpp $UAE_PATH/readcpu.cpp $FPUSRCS cpustbl.cpp cpudefs.cpp $CPUSRCS $JITSRCS"
+    if [[ "$target_cpu" = "arm" -o "$target_cpu" = "aarch64" ]]; then
+      CPUSRCS="$CPUSRCS cpufunctbl.cpp"
+      DEFINES="$DEFINES -DUPDATE_UAE"
+    fi
   fi
 fi
 
