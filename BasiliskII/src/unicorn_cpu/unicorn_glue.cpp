@@ -196,6 +196,15 @@ static void take_exception(int vector, uint32_t fault_pc, int new_ipl = 0)
     
     handler_addr = ReadMacInt32(vbr + vector * 4);
     
+    // Validate handler address - must be in RAM or ROM
+    if (handler_addr >= RAMSize + ROMSize && handler_addr < ROMBaseMac) {
+        printf("Unicorn: Bad exception %d handler 0x%08x (vector at 0x%08x)\n", 
+               vector, handler_addr, vbr + vector * 4);
+        printf("Unicorn: SP=0x%08x fault_pc=0x%08x\n", sp, fault_pc);
+        stop_execution = true;
+        return;
+    }
+    
     D(bug("Unicorn: Exception %d at PC=0x%08x, handler=0x%08x\n", 
           vector, fault_pc, handler_addr));
     
@@ -262,8 +271,11 @@ static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
             case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
             default: break;
         }
-        printf("Unicorn: Memory error %s at 0x%08llx (#%d)\n",
-               type_str, (unsigned long long)address, error_count);
+        uint32_t pc, sp;
+        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+        uc_reg_read(uc, UC_M68K_REG_A7, &sp);
+        printf("Unicorn: Memory error %s at 0x%08llx (PC=0x%08x SP=0x%08x) #%d\n",
+               type_str, (unsigned long long)address, pc, sp, error_count);
         fflush(stdout);
     }
     return false;
@@ -307,10 +319,12 @@ static void hook_intr(uc_engine *uc, uint32_t intno, void *user_data)
         case M68K_EXCEPTION_LINEA:
             // A-line trap - let ROM dispatcher handle it
             take_exception(M68K_EXCEPTION_LINEA, pc);
+            uc_emu_stop(uc);  // Must stop so main loop continues from handler
             return;
             
         case M68K_EXCEPTION_LINEF:
             take_exception(M68K_EXCEPTION_LINEF, pc);
+            uc_emu_stop(uc);  // Must stop so main loop continues from handler
             return;
             
         case M68K_EXCEPTION_BUS_ERROR:
@@ -330,6 +344,7 @@ static void hook_intr(uc_engine *uc, uint32_t intno, void *user_data)
         default:
             if (intno >= M68K_EXCEPTION_TRAP_BASE && intno < M68K_EXCEPTION_TRAP_BASE + 16) {
                 take_exception(intno, pc + 2);
+                uc_emu_stop(uc);  // Must stop so main loop continues from handler
                 return;
             }
             D(bug("Unicorn: Exception %d at PC=0x%08x\n", intno, pc));
