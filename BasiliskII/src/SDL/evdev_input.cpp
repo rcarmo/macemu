@@ -28,6 +28,9 @@
 static int evdev_mouse_fd = -1;
 static bool evdev_initialized = false;
 static bool evdev_enabled = false;
+static int evdev_abs_x = 0;
+static int evdev_abs_y = 0;
+static bool evdev_abs_initialized = false;
 
 // Debug logging
 static bool evdev_debug_enabled(void)
@@ -234,7 +237,7 @@ bool evdev_poll_mouse(int *dx, int *dy, int *buttons_changed, int *button_state)
 }
 
 // Simple helper to feed evdev events directly to ADB
-void evdev_process_mouse_to_adb(bool mouse_grabbed)
+void evdev_process_mouse_to_adb(bool mouse_grabbed, int screen_width, int screen_height)
 {
 	int dx, dy, buttons_changed, button_state;
 	
@@ -261,9 +264,28 @@ void evdev_process_mouse_to_adb(bool mouse_grabbed)
 			ADBMouseUp(2);
 	}
 
-	// Handle movement - for evdev, always use relative mode since that's what we get
+	// Handle movement
 	if (dx || dy) {
-		ADBMouseMoved(dx, dy);
+		if (mouse_grabbed) {
+			ADBMouseMoved(dx, dy);
+		} else {
+			if (!evdev_abs_initialized || screen_width <= 0 || screen_height <= 0) {
+				evdev_abs_x = screen_width > 0 ? screen_width / 2 : 0;
+				evdev_abs_y = screen_height > 0 ? screen_height / 2 : 0;
+				evdev_abs_initialized = true;
+			}
+			evdev_abs_x += dx;
+			evdev_abs_y += dy;
+			if (screen_width > 0) {
+				if (evdev_abs_x < 0) evdev_abs_x = 0;
+				if (evdev_abs_x >= screen_width) evdev_abs_x = screen_width - 1;
+			}
+			if (screen_height > 0) {
+				if (evdev_abs_y < 0) evdev_abs_y = 0;
+				if (evdev_abs_y >= screen_height) evdev_abs_y = screen_height - 1;
+			}
+			ADBMouseMoved(evdev_abs_x, evdev_abs_y);
+		}
 	}
 }
 
@@ -282,6 +304,6 @@ bool evdev_poll_mouse(int *dx, int *dy, int *buttons_changed, int *button_state)
 	*button_state = 0;
 	return false;
 }
-void evdev_process_mouse_to_adb(bool mouse_grabbed) {}
+void evdev_process_mouse_to_adb(bool mouse_grabbed, int screen_width, int screen_height) {}
 
 #endif // __linux__

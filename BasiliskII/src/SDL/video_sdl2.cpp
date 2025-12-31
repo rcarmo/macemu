@@ -2627,7 +2627,8 @@ static void handle_events(void)
 
 	// Process evdev input as fallback (for KMSDRM/console when SDL events aren't working)
 	if (evdev_input_active()) {
-		evdev_process_mouse_to_adb(mouse_grabbed);
+		const VIDEO_MODE &mode = drv->mode;
+		evdev_process_mouse_to_adb(mouse_grabbed, VIDEO_MODE_X, VIDEO_MODE_Y);
 	}
 }
 

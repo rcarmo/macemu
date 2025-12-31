@@ -27,6 +27,6 @@ extern bool evdev_input_active(void);
 extern bool evdev_poll_mouse(int *dx, int *dy, int *buttons_changed, int *button_state);
 
 // Process evdev mouse events and send to ADB
-extern void evdev_process_mouse_to_adb(bool mouse_grabbed);
+extern void evdev_process_mouse_to_adb(bool mouse_grabbed, int screen_width, int screen_height);
 
 #endif // EVDEV_INPUT_H
