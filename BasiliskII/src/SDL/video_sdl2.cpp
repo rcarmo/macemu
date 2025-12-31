@@ -50,6 +50,7 @@
 #include <vector>
 #include <string>
 #include <math.h>
+#include <strings.h>
 
 #ifdef __MACOSX__
 #include "utils_macosx.h"
@@ -2424,6 +2425,22 @@ static int SDLCALL on_sdl_event_generated(void *userdata, SDL_Event * event)
 	return EVENT_ADD_TO_QUEUE;
 }
 
+static bool sdl_input_debug_enabled(void)
+{
+	static bool initialized = false;
+	static bool enabled = false;
+
+	if (!initialized) {
+		const char *env = getenv("B2_DEBUG_INPUT");
+		if (env && *env) {
+			if (strcmp(env, "0") != 0 && strcasecmp(env, "false") != 0)
+				enabled = true;
+		}
+		initialized = true;
+	}
+	return enabled;
+}
+
 
 // Flag to signal main thread should pump SDL events
 volatile bool sdl_events_need_pump = false;
@@ -2440,6 +2457,18 @@ void SDL_PumpEventsFromMainThread(void)
 	
 	if (!event_mutex)
 		event_mutex = SDL_CreateMutex();
+
+	const bool debug_input = sdl_input_debug_enabled();
+	static int pump_debug_count = 0;
+	if (debug_input) {
+		pump_debug_count++;
+		if (pump_debug_count <= 10 || (pump_debug_count % 200) == 0) {
+			int mx, my;
+			Uint32 buttons = SDL_GetMouseState(&mx, &my);
+			printf("SDL_PumpEventsFromMainThread #%d: buttons=0x%x pos=(%d,%d)\n",
+			       pump_debug_count, buttons, mx, my);
+		}
+	}
 
 	// Pump events in main thread context
 	SDL_PumpEvents();
@@ -2462,6 +2491,8 @@ static void handle_events(void)
 
 	// Signal that we need events pumped, then process any that were pumped by main thread
 	sdl_events_need_pump = true;
+	const bool debug_input = sdl_input_debug_enabled();
+	bool saw_motion_event = false;
 	
 	// First process events from main thread buffer
 	if (event_mutex) {
@@ -2504,6 +2535,12 @@ static void handle_events(void)
 
 			// Mouse moved
 			case SDL_MOUSEMOTION:
+				saw_motion_event = true;
+				if (debug_input) {
+					printf("SDL_MOUSEMOTION: x=%d y=%d xrel=%d yrel=%d grabbed=%d\n",
+					       event.motion.x, event.motion.y,
+					       event.motion.xrel, event.motion.yrel, mouse_grabbed);
+				}
 				if (mouse_grabbed) {
 					drv->mouse_moved(event.motion.xrel, event.motion.yrel);
 				} else {
@@ -2599,6 +2636,17 @@ static void handle_events(void)
 				ADBKeyUp(0x7f);
 				break;
 			}
+		}
+	}
+
+	if (!saw_motion_event && mouse_grabbed && SDL_GetRelativeMouseMode()) {
+		int rx = 0, ry = 0;
+		Uint32 buttons = SDL_GetRelativeMouseState(&rx, &ry);
+		if (rx || ry) {
+			if (debug_input) {
+				printf("SDL_GetRelativeMouseState fallback: buttons=0x%x rel=(%d,%d)\n", buttons, rx, ry);
+			}
+			drv->mouse_moved(rx, ry);
 		}
 	}
 }
