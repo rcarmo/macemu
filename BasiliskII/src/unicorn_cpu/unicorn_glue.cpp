@@ -35,6 +35,7 @@
 
 #include <unicorn/unicorn.h>
 #include <sys/time.h>
+#include <string.h>
 
 #define DEBUG 0
 #include "debug.h"
@@ -261,24 +262,36 @@ static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
                              void *user_data)
 {
     static int error_count = 0;
-    if (++error_count <= 10) {
-        const char *type_str = "UNKNOWN";
-        switch (type) {
-            case UC_MEM_READ_UNMAPPED: type_str = "READ_UNMAPPED"; break;
-            case UC_MEM_WRITE_UNMAPPED: type_str = "WRITE_UNMAPPED"; break;
-            case UC_MEM_FETCH_UNMAPPED: type_str = "FETCH_UNMAPPED"; break;
-            case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
-            case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
-            case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
-            default: break;
-        }
-        uint32_t pc, sp;
-        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
-        uc_reg_read(uc, UC_M68K_REG_A7, &sp);
+    error_count++;
+    
+    const char *type_str = "UNKNOWN";
+    switch (type) {
+        case UC_MEM_READ_UNMAPPED: type_str = "READ_UNMAPPED"; break;
+        case UC_MEM_WRITE_UNMAPPED: type_str = "WRITE_UNMAPPED"; break;
+        case UC_MEM_FETCH_UNMAPPED: type_str = "FETCH_UNMAPPED"; break;
+        case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
+        case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
+        case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
+        default: break;
+    }
+    
+    uint32_t pc, sp;
+    uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+    uc_reg_read(uc, UC_M68K_REG_A7, &sp);
+    
+    if (error_count <= 10) {
         printf("Unicorn: Memory error %s at 0x%08llx (PC=0x%08x SP=0x%08x) #%d\n",
                type_str, (unsigned long long)address, pc, sp, error_count);
         fflush(stdout);
     }
+    
+    // Stop after too many errors to prevent runaway
+    if (error_count >= 100) {
+        printf("Unicorn: Too many memory errors, stopping execution\n");
+        stop_execution = true;
+        uc_emu_stop(uc);
+    }
+    
     return false;
 }
 
@@ -458,7 +471,13 @@ bool Init680x0(void)
         }
         
         // ROM needs write permission for ROM patches and self-modifying code
-        err = uc_mem_map_ptr(uc, rom_base, rom_size_aligned, UC_PROT_ALL, ROMBaseHost);
+        // Map extra space after ROM for scratch memory (64KB after ROM_MAX_SIZE)
+        const size_t ROM_MAX_SIZE = 0x100000;
+        const size_t SCRATCH_MEM_SIZE = 0x10000;
+        size_t rom_total_size = ROM_MAX_SIZE + SCRATCH_MEM_SIZE;
+        size_t rom_total_aligned = (rom_total_size + 0xFFF) & ~0xFFF;
+        
+        err = uc_mem_map_ptr(uc, rom_base, rom_total_aligned, UC_PROT_ALL, ROMBaseHost);
         if (err != UC_ERR_OK) {
             printf("Unicorn: Failed to map ROM: %s\n", uc_strerror(err));
             uc_close(uc);
@@ -466,7 +485,7 @@ bool Init680x0(void)
             return false;
         }
         rom_mapped = true;
-        printf("Unicorn: Mapped ROM 0x%08x-0x%08x (read-write for patches)\n", rom_base, (unsigned)(rom_base + rom_size_aligned));
+        printf("Unicorn: Mapped ROM+scratch 0x%08x-0x%08x\n", rom_base, (unsigned)(rom_base + rom_total_aligned));
     }
     
 #if !REAL_ADDRESSING
@@ -480,8 +499,17 @@ bool Init680x0(void)
     }
 #endif
     
-    // Map EXEC_RETURN page
-    uc_mem_map(uc, EXEC_RETURN_ADDR & ~0xFFF, 0x1000, UC_PROT_READ | UC_PROT_EXEC);
+    // Map dummy I/O space for Mac II hardware (VIA, SCC, ASC, SCSI at 0x50Fxxxxx)
+    // This prevents crashes when ROM code tries to access hardware before patches redirect it
+    static uint8 dummy_io[0x20000];  // 128KB for I/O space
+    memset(dummy_io, 0xFF, sizeof(dummy_io));  // Default to 0xFF (typical for unmapped I/O)
+    err = uc_mem_map_ptr(uc, 0x50F00000, sizeof(dummy_io), UC_PROT_ALL, dummy_io);
+    if (err == UC_ERR_OK) {
+        printf("Unicorn: Mapped dummy I/O space 0x50F00000-0x50F1FFFF\n");
+    }
+    
+    // Map EXEC_RETURN page - needs ALL permissions for stack ops during Execute68k
+    uc_mem_map(uc, EXEC_RETURN_ADDR & ~0xFFF, 0x1000, UC_PROT_ALL);
     
     // Add exception hook - THE KEY TO PERFORMANCE
     uc_hook hh_intr;
