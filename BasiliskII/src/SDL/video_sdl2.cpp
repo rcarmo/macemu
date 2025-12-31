@@ -792,6 +792,11 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		SDL_PumpEvents();
 		
 		SDL_SetWindowGrab(sdl_window, SDL_TRUE);
+#if SDL_VERSION_ATLEAST(2,0,4)
+		if (SDL_CaptureMouse(SDL_TRUE) != 0) {
+			printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
+		}
+#endif
 		SDL_RaiseWindow(sdl_window);
 		
 		int focus_result = SDL_SetWindowInputFocus(sdl_window);
@@ -1324,6 +1329,11 @@ void driver_base::grab_mouse(void)
 {
 	if (!mouse_grabbed) {
 		mouse_grabbed = true;
+#if SDL_VERSION_ATLEAST(2,0,4)
+		if (SDL_CaptureMouse(SDL_TRUE) != 0) {
+			printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
+		}
+#endif
 		update_mouse_grab();
 		set_window_name();
 		disable_mouse_accel();
@@ -1336,6 +1346,11 @@ void driver_base::ungrab_mouse(void)
 {
 	if (mouse_grabbed) {
 		mouse_grabbed = false;
+#if SDL_VERSION_ATLEAST(2,0,4)
+		if (SDL_CaptureMouse(SDL_FALSE) != 0) {
+			printf("SDL_CaptureMouse(SDL_FALSE) failed: %s\n", SDL_GetError());
+		}
+#endif
 		update_mouse_grab();
 		set_window_name();
 		restore_mouse_accel();
