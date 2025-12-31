@@ -496,6 +496,12 @@ static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user
         
         // CRITICAL: Call VideoRefresh unconditionally!
         // Without this, nothing ever appears on screen
+        static int video_refresh_count = 0;
+        video_refresh_count++;
+        if (video_refresh_count <= 5 || video_refresh_count % 60 == 0) {
+            printf("Unicorn: Calling VideoRefresh #%d\n", video_refresh_count);
+            fflush(stdout);
+        }
         VideoRefresh();
         
         // Check if Mac is initialized (warm start flag at 0xCFC = 'WLSC')
