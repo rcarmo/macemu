@@ -1,0 +1,1 @@
+This project is a port of the BasiliskII Mac emulator to the Raspberry Pich we are trying to get to run with opengles2 on KMSDRM SDL and JIT for both ARM 32 or 64 (depending on branch, we are either using a standalone JIT or the QEMU Unicorn library). Remember that we MUST build via GitHub Actions so we can deploy on real hardware.

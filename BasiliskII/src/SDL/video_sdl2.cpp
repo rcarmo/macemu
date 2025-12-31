@@ -661,6 +661,17 @@ static void update_display_window_vosf(driver_base *drv);
 static void update_display_static(driver_base *drv);
 
 static driver_base *drv = NULL;	// Pointer to currently used driver object
+static bool sdl_capture_mouse_supported = true;
+static bool evdev_fallback_forced = false;
+static bool is_console_video_driver(void)
+{
+	const char *driver = SDL_GetCurrentVideoDriver();
+	if (!driver)
+		return false;
+	return strcasecmp(driver, "kmsdrm") == 0 ||
+	       strcasecmp(driver, "fbcon")  == 0 ||
+	       strcasecmp(driver, "directfb") == 0;
+}
 
 #ifdef ENABLE_VOSF
 # include "video_vosf.h"
@@ -779,6 +790,55 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 		set_window_name();
 	}
 	if (flags & SDL_WINDOW_FULLSCREEN) SDL_SetWindowGrab(sdl_window, SDL_TRUE);
+
+	if (is_console_video_driver()) {
+		bool can_force_grab = sdl_capture_mouse_supported;
+#if SDL_VERSION_ATLEAST(2,0,4)
+		if (can_force_grab) {
+			if (SDL_CaptureMouse(SDL_TRUE) != 0) {
+				printf("SDL_CaptureMouse not supported on this SDL build; disabling SDL force grab.\n");
+				sdl_capture_mouse_supported = false;
+				can_force_grab = false;
+			} else {
+				SDL_CaptureMouse(SDL_FALSE);
+			}
+		}
+#endif
+		if (!can_force_grab) {
+			if (!evdev_fallback_forced) {
+				printf("KMSDRM input: using evdev fallback (SDL capture unavailable)\n");
+				evdev_input_enable();
+				evdev_fallback_forced = true;
+			}
+		} else {
+			printf("KMSDRM/console video driver detected, attempting SDL force grab...\n");
+			fflush(stdout);
+			SDL_PumpEvents();
+			SDL_SetWindowGrab(sdl_window, SDL_TRUE);
+			SDL_RaiseWindow(sdl_window);
+			int focus_result = SDL_SetWindowInputFocus(sdl_window);
+			printf("SDL_SetWindowInputFocus returned: %d (0=success)\n", focus_result);
+			if (focus_result != 0) {
+				printf("SDL_SetWindowInputFocus error: %s\n", SDL_GetError());
+			}
+			SDL_ShowWindow(sdl_window);
+			int rel_result = SDL_SetRelativeMouseMode(SDL_TRUE);
+			printf("SDL_SetRelativeMouseMode returned: %d (0=success)\n", rel_result);
+			if (rel_result != 0) {
+				printf("SDL_SetRelativeMouseMode error: %s\n", SDL_GetError());
+				int w, h;
+				SDL_GetWindowSize(sdl_window, &w, &h);
+				SDL_WarpMouseInWindow(sdl_window, w/2, h/2);
+			}
+			printf("Window grab: %d\n", SDL_GetWindowGrab(sdl_window));
+			SDL_PumpEvents();
+			SDL_Window *kb_focus = SDL_GetKeyboardFocus();
+			SDL_Window *mouse_focus = SDL_GetMouseFocus();
+			printf("After setup - Keyboard focus: %p, Mouse focus: %p, Our window: %p\n",
+			       (void*)kb_focus, (void*)mouse_focus, (void*)sdl_window);
+			fflush(stdout);
+		}
+	}
 	
 	// Some SDL events (regarding some native-window events), need processing
 	// as they are generated.  SDL2 has a facility, SDL_AddEventWatch(), which
@@ -1263,35 +1323,52 @@ static void update_mouse_grab()
 // Grab mouse, switch to relative mouse mode
 void driver_base::grab_mouse(void)
 {
-	if (!mouse_grabbed) {
-		mouse_grabbed = true;
-		update_mouse_grab();
-		set_window_name();
-		disable_mouse_accel();
-		ADBSetRelMouseMode(true);
-		
-		// On KMSDRM/console drivers, also enable evdev fallback
-		const char *video_driver = SDL_GetCurrentVideoDriver();
-		if (video_driver && (strcmp(video_driver, "KMSDRM") == 0 || 
-		                     strcmp(video_driver, "kmsdrm") == 0 ||
-		                     strcmp(video_driver, "fbcon") == 0 ||
-		                     strcmp(video_driver, "directfb") == 0)) {
-			evdev_input_enable();
+	if (mouse_grabbed)
+		return;
+
+	const bool console_driver = is_console_video_driver();
+	bool capture_ok = true;
+#if SDL_VERSION_ATLEAST(2,0,4)
+	if (sdl_capture_mouse_supported) {
+		if (SDL_CaptureMouse(SDL_TRUE) != 0) {
+			printf("SDL_CaptureMouse(SDL_TRUE) failed: %s\n", SDL_GetError());
+			sdl_capture_mouse_supported = false;
+			capture_ok = false;
 		}
+	} else {
+		capture_ok = false;
 	}
+#else
+	capture_ok = false;
+#endif
+
+	if (!capture_ok && console_driver) {
+		if (!evdev_fallback_forced) {
+			evdev_input_enable();
+			evdev_fallback_forced = true;
+		}
+		SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+		SDL_SetRelativeMouseMode(SDL_FALSE);
+	}
+
+	mouse_grabbed = true;
+	update_mouse_grab();
+	set_window_name();
+	disable_mouse_accel();
+	ADBSetRelMouseMode(true);
 }
 
 // Ungrab mouse, switch to absolute mouse mode
 void driver_base::ungrab_mouse(void)
 {
-	if (mouse_grabbed) {
-		mouse_grabbed = false;
-		update_mouse_grab();
-		set_window_name();
-		restore_mouse_accel();
-		ADBSetRelMouseMode(false);
-		evdev_input_disable();
-	}
+	if (!mouse_grabbed)
+		return;
+
+	mouse_grabbed = false;
+	update_mouse_grab();
+	set_window_name();
+	restore_mouse_accel();
+	ADBSetRelMouseMode(false);
 }
 
 /*
