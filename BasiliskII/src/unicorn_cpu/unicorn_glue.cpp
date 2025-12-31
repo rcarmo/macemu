@@ -254,39 +254,79 @@ static bool handle_emul_op(uint32_t pc, uint16_t opcode)
 }
 
 /*
- * Memory error hook
+ * Memory error hook - mimics UAE's dummy_bank behavior
+ * Returns true to allow the access to proceed (like UAE's dummy_bank returns 0)
+ * This prevents crashes on unmapped memory access
  */
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
                              uint64_t address, int size, int64_t value,
                              void *user_data)
 {
     static int error_count = 0;
+    static int mapped_pages = 0;
     error_count++;
-    
-    const char *type_str = "UNKNOWN";
-    switch (type) {
-        case UC_MEM_READ_UNMAPPED: type_str = "READ_UNMAPPED"; break;
-        case UC_MEM_WRITE_UNMAPPED: type_str = "WRITE_UNMAPPED"; break;
-        case UC_MEM_FETCH_UNMAPPED: type_str = "FETCH_UNMAPPED"; break;
-        case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
-        case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
-        case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
-        default: break;
-    }
     
     uint32_t pc, sp;
     uc_reg_read(uc, UC_M68K_REG_PC, &pc);
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
     
-    if (error_count <= 10) {
-        printf("Unicorn: Memory error %s at 0x%08llx (PC=0x%08x SP=0x%08x) #%d\n",
-               type_str, (unsigned long long)address, pc, sp, error_count);
-        fflush(stdout);
+    // For unmapped reads/writes, try to map dummy memory dynamically
+    // This is like UAE's dummy_bank - allow access to proceed
+    if (type == UC_MEM_READ_UNMAPPED || type == UC_MEM_WRITE_UNMAPPED) {
+        // Map a 64KB region at the faulting address (aligned to 64KB)
+        // Using 64KB because Mac often accesses contiguous regions
+        uint64_t region_addr = address & ~0xFFFFULL;
+        
+        // Limit total dummy mappings to prevent memory exhaustion
+        if (mapped_pages < 256) {  // Max 16MB of dummy memory
+            uc_err err = uc_mem_map(uc, region_addr, 0x10000, UC_PROT_ALL);
+            if (err == UC_ERR_OK) {
+                mapped_pages++;
+                if (error_count <= 20) {
+                    printf("Unicorn: Mapped dummy region at 0x%08llx for %s (PC=0x%08x) [%d regions]\n",
+                           (unsigned long long)region_addr,
+                           type == UC_MEM_READ_UNMAPPED ? "read" : "write", pc, mapped_pages);
+                }
+                return true;  // Retry the access
+            }
+        }
+        // If mapping failed (e.g., overlaps), just log and continue
+        if (error_count <= 20) {
+            printf("Unicorn: %s at unmapped 0x%08llx (PC=0x%08x SP=0x%08x) - can't map\n",
+                   type == UC_MEM_READ_UNMAPPED ? "Read" : "Write",
+                   (unsigned long long)address, pc, sp);
+        }
+        return false;  // Can't fix this one
+    }
+    
+    // For fetch unmapped - this is more serious, likely a bad PC
+    if (type == UC_MEM_FETCH_UNMAPPED) {
+        if (error_count <= 20) {
+            printf("Unicorn: Fetch from unmapped 0x%08llx (PC=0x%08x SP=0x%08x)\n",
+                   (unsigned long long)address, pc, sp);
+        }
+        // Stop on fetch errors - can't continue
+        stop_execution = true;
+        uc_emu_stop(uc);
+        return false;
+    }
+    
+    // Protection errors - just log
+    if (error_count <= 20) {
+        const char *type_str = "UNKNOWN";
+        switch (type) {
+            case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
+            case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
+            case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
+            default: break;
+        }
+        printf("Unicorn: Memory error %s at 0x%08llx (PC=0x%08x SP=0x%08x)\n",
+               type_str, (unsigned long long)address, pc, sp);
     }
     
     // Stop after too many errors to prevent runaway
-    if (error_count >= 100) {
-        printf("Unicorn: Too many memory errors, stopping execution\n");
+    if (error_count >= 500) {
+        printf("Unicorn: Too many memory errors (%d), stopping execution\n", error_count);
         stop_execution = true;
         uc_emu_stop(uc);
     }
@@ -508,13 +548,14 @@ bool Init680x0(void)
     }
     
     // Map high memory region for system stack and EXEC_RETURN
-    // Quadra 800 ROM sets supervisor SP near 0xfffff000, so we need writable space there
-    // Map 64KB at top of 32-bit address space: 0xFFFF0000-0xFFFFFFFF
-    static uint8 high_mem[0x10000];
+    // Quadra 800 ROM sets supervisor SP to 0xFFFF0000, and stack grows DOWN
+    // So we need memory BELOW that address for pushes (SP-4, SP-8, etc.)
+    // Map 1MB at 0xFFF00000-0xFFFFFFFF to give plenty of stack room
+    static uint8 high_mem[0x100000];  // 1MB
     memset(high_mem, 0, sizeof(high_mem));
-    err = uc_mem_map_ptr(uc, 0xFFFF0000, sizeof(high_mem), UC_PROT_ALL, high_mem);
+    err = uc_mem_map_ptr(uc, 0xFFF00000, sizeof(high_mem), UC_PROT_ALL, high_mem);
     if (err == UC_ERR_OK) {
-        printf("Unicorn: Mapped high memory 0xFFFF0000-0xFFFFFFFF (system stack + EXEC_RETURN)\n");
+        printf("Unicorn: Mapped high memory 0xFFF00000-0xFFFFFFFF (1MB system stack)\n");
     } else {
         printf("Unicorn: Warning: Could not map high memory: %s\n", uc_strerror(err));
     }
