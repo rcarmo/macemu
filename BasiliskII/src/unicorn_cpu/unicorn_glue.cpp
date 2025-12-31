@@ -72,23 +72,23 @@
 
 static uc_engine *uc = NULL;
 
-// Memory pointers - defined in main_unix.cpp, declared in cpu_emulation.h
-// These are initialized before Init680x0 is called
-extern uint32 RAMBaseMac;
-extern uint8 *RAMBaseHost;
-extern uint32 RAMSize;
-extern uint32 ROMBaseMac;
-extern uint8 *ROMBaseHost;
-extern uint32 ROMSize;
+// Memory pointers - these replace the definitions in uae_cpu/basilisk_glue.cpp
+// main_unix.cpp uses these when !EMULATED_68K, but we define them here for unicorn backend
+uint32 RAMBaseMac;
+uint8 *RAMBaseHost;
+uint32 RAMSize;
+uint32 ROMBaseMac;
+uint8 *ROMBaseHost;
+uint32 ROMSize;
 
 #if !REAL_ADDRESSING
-extern uint8 *MacFrameBaseHost;
-extern uint32 MacFrameSize;
-extern int MacFrameLayout;
+uint8 *MacFrameBaseHost;
+uint32 MacFrameSize;
+int MacFrameLayout;
 #endif
 
 #if DIRECT_ADDRESSING
-extern uintptr MEMBaseDiff;
+uintptr MEMBaseDiff;  // Global offset: Mac address + MEMBaseDiff = host address
 #endif
 
 // Interrupt handling
