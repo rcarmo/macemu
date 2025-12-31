@@ -184,6 +184,54 @@ Mac framebuffer (1/2/4/8-bit) → guest_surface (8-bit paletted)
 
 ---
 
+## Blitter Test Suite
+
+A comprehensive Python test suite validates all blitter formulas without requiring hardware:
+
+```bash
+python3 BasiliskII/src/CrossPlatform/test_blitters.py
+```
+
+### Test Results Summary
+
+| Blitter | Status | Notes |
+|---------|--------|-------|
+| `Blit_RGB555_NBO` | ✅ PASS | Byte swap only |
+| `Blit_RGB565_OBO` | ✅ PASS | Fixed in commit 7211573a |
+| `Blit_RGB888_NBO` | ✅ PASS | 32-bit byte swap |
+| `Blit_BGR555_NBO` | ✅ PASS | Marked "untested" in code |
+| `Blit_BGR555_OBO` | ✅ PASS | Marked "untested" in code |
+| `Blit_BGR888_NBO` | ❌ FAIL | Bug in formula (not used on SDL2) |
+| `Blit_BGR888_OBO` | ❌ FAIL | Bug in formula (not used on SDL2) |
+
+### BGR888 Bug Analysis
+
+The `Blit_BGR888_NBO` formula (LE) is broken:
+```c
+dst = ((src) & 0xff00ff) | (((src) & 0xff00) << 16)
+```
+
+For white (src=0xFFFFFF00), this produces 0xFFFF0000 instead of expected 0x00FFFFFF.
+
+**Impact**: Low — SDL2 uses BGRA8888 texture format, which uses `Blit_RGB888_NBO` (passes).
+BGR blitters are for unusual display configurations (BGR pixel order) not common on modern hardware.
+
+---
+
+## CI Build Matrix
+
+The CI workflow builds three variants:
+
+| Variant | JIT | SDL2 | Use Case |
+|---------|-----|------|----------|
+| `basilisk2-arm32-jit` | ✅ Enabled | System | Main release build |
+| `basilisk2-arm32-jit-vendored-sdl` | ✅ Enabled | From source | Matches original build config |
+| `basilisk2-arm32-nojit` | ❌ Disabled | System | Isolate JIT vs video bugs |
+
+The Python blitter tests run on every push as a separate job.
+
+---
+
 ## Tasks That Don't Require Hardware
 
 The following can be done purely through code analysis and CI builds:
@@ -192,9 +240,12 @@ The following can be done purely through code analysis and CI builds:
 
 | Task | Difficulty | Impact | Status |
 |------|------------|--------|--------|
-| Fix remaining OBO blitters (RGB555, RGB888) | Medium | Medium | 🔲 Not started |
+| Fix RGB565 OBO blitter formula | Medium | High | ✅ DONE (commit 7211573a) |
+| Fix `native_byte_order` parameter | Easy | High | ✅ DONE (commit 7211573a) |
+| Create Python blitter validation suite | Medium | High | ✅ DONE |
+| Audit BGR555 blitters | Medium | Low | ✅ TESTED (pass) |
+| Fix BGR888 NBO/OBO blitters | Medium | Low | 🔲 BUGS FOUND (not used on SDL2) |
 | Audit `Blit_Expand_*_To_*` functions for endianness | Medium | High | 🔲 Not started |
-| Add Python validation for all blitter formulas | Easy | High | 🔲 Not started |
 | Static analysis with cppcheck/clang-tidy | Easy | Low | 🔲 Not started |
 | Review pitch calculations in update_display_static | Medium | High | 🔲 Not started |
 
@@ -202,9 +253,11 @@ The following can be done purely through code analysis and CI builds:
 
 | Task | Difficulty | Impact | Status |
 |------|------------|--------|--------|
-| Unit tests for pixel format conversions | Medium | High | 🔲 Not started |
-| CI matrix for ARM32/ARM64 builds | Easy | Medium | 🔲 Not started |
-| Add build with `--disable-jit` for comparison | Easy | Medium | 🔲 Not started |
+| Unit tests for pixel format conversions | Medium | High | ✅ DONE (`test_blitters.py`) |
+| CI matrix for ARM32 build variants | Easy | Medium | ✅ DONE |
+| CI job for Python blitter tests | Easy | Medium | ✅ DONE |
+| Add build with `--disable-jit` for comparison | Easy | Medium | ✅ DONE (matrix variant) |
+| Add build with vendored SDL2 | Medium | Medium | ✅ DONE (matrix variant) |
 | Headless test mode (no display) | Hard | Low | 🔲 Not started |
 
 ### Documentation & Cleanup
@@ -217,10 +270,11 @@ The following can be done purely through code analysis and CI builds:
 
 ### Next Recommended Actions (No Hardware Needed)
 
-1. **Audit other OBO blitters** — The same `native_byte_order` bug likely affects other formats
-2. **Write Python validation** for all `Blit_*` formulas (like we did for RGB565)
-3. **Add CI build variant** with JIT disabled to isolate JIT vs video bugs
+1. ~~**Audit other OBO blitters**~~ ✅ DONE — BGR555 passes, BGR888 has bugs (not used on SDL2)
+2. ~~**Write Python validation** for all `Blit_*` formulas~~ ✅ DONE (`test_blitters.py`)
+3. ~~**Add CI build variant** with JIT disabled~~ ✅ DONE (3-way matrix: JIT/system SDL, JIT/vendored SDL, No-JIT/system SDL)
 4. **Review `update_display_static()`** for low bit depths — different code path than 8+ bits
+5. **Test the RGB565 fix on hardware** — commit 7211573a awaiting validation
 
 ---
 

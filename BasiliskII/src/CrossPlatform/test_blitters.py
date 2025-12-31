@@ -90,6 +90,74 @@ def blit_rgb888_nbo(src):
     return dst & 0xFFFFFFFF
 
 # =============================================================================
+# BGR blitter formulas (untested in video_blit.cpp - marked for audit)
+# On LE host, these are the OBO blitters for BGR display formats
+# =============================================================================
+
+def blit_bgr555_nbo(src):
+    """BGR555 NBO (LE, untested): Mac RGB555 BE → BGR555 native LE
+    From video_blit.cpp #else branch (LE) "Native byte order (untested)":
+      dst = (((src) >> 2) & 0x1f) | (((src) >> 8) & 0xe0) | 
+            (((src) << 8) & 0x0300) | (((src) << 2) & 0x7c00)
+    """
+    dst = (((src) >> 2) & 0x1f) | (((src) >> 8) & 0xe0) | \
+          (((src) << 8) & 0x0300) | (((src) << 2) & 0x7c00)
+    return dst & 0xFFFF
+
+def blit_bgr555_obo(src):
+    """BGR555 OBO (LE, untested): Mac RGB555 BE → BGR555 opposite byte order
+    From video_blit.cpp #else branch (LE) "Opposite byte order (untested)":
+      dst = (((src) << 6) & 0x1f00) | ((src) & 0xe003) | (((src) >> 6) & 0x7c)
+    """
+    dst = (((src) << 6) & 0x1f00) | ((src) & 0xe003) | (((src) >> 6) & 0x7c)
+    return dst & 0xFFFF
+
+def blit_bgr888_nbo(src):
+    """BGR888 NBO (LE, untested): Mac ARGB BE → BGR native LE
+    From video_blit.cpp #else/#define FB_FUNC_NAME Blit_BGR888_NBO:
+      dst = ((src) & 0xff00ff) | (((src) & 0xff00) << 16)
+    Note: This operates on 32-bit src, shifts green channel.
+    """
+    dst = ((src) & 0xff00ff) | (((src) & 0xff00) << 16)
+    return dst & 0xFFFFFFFF
+
+def blit_bgr888_obo(src):
+    """BGR888 OBO (LE, untested): Mac ARGB BE → BGR opposite byte order
+    From video_blit.cpp #else branch "Opposite byte order [LE] (untested)":
+      dst = (((src) >> 16) & 0xff) | ((src) & 0xff0000) | (((src) & 0xff) << 16)
+    """
+    dst = (((src) >> 16) & 0xff) | ((src) & 0xff0000) | (((src) & 0xff) << 16)
+    return dst & 0xFFFFFFFF
+
+# =============================================================================
+# Expected BGR format helpers
+# =============================================================================
+
+def sdl_bgr555(r, g, b):
+    """Expected SDL BGR555 value (native little-endian)
+    B at bits 14:10, G at 9:5, R at 4:0
+    """
+    return ((b & 0x1F) << 10) | ((g & 0x1F) << 5) | (r & 0x1F)
+
+def sdl_bgr555_swapped(r, g, b):
+    """Expected SDL BGR555 with byte swap (for OBO)"""
+    native = sdl_bgr555(r, g, b)
+    return ((native >> 8) & 0xFF) | ((native & 0xFF) << 8)
+
+def sdl_bgr888(r, g, b):
+    """Expected SDL BGR888 value (32-bit, native LE)
+    For BGRA format: B at bits 0-7, G at 8-15, R at 16-23, A at 24-31
+    """
+    return b | (g << 8) | (r << 16)
+
+def sdl_bgr888_swapped(r, g, b):
+    """Expected SDL BGR888 with byte swap (for OBO, 32-bit)"""
+    native = sdl_bgr888(r, g, b)  # 0x00RRGGBB
+    # Swap: byte0<>byte3, byte1<>byte2
+    return (((native) >> 24) & 0xff) | (((native) >> 8) & 0xff00) | \
+           (((native) & 0xff00) << 8) | (((native) & 0xff) << 24)
+
+# =============================================================================
 # Test cases
 # =============================================================================
 
@@ -249,6 +317,167 @@ def test_64bit_formula():
     
     return dst64 == exp64
 
+def test_bgr555_nbo():
+    """Test BGR555 NBO blitter (untested in video_blit.cpp)
+    
+    This blitter converts Mac RGB555 BE to BGR555 native LE format.
+    Mac RGB555: 0RRRRRGGGGGBBBBB (bits 14:10=R, 9:5=G, 4:0=B)
+    SDL BGR555: 0BBBBBGGGGGRRRRR (bits 14:10=B, 9:5=G, 4:0=R)
+    
+    On LE reading BE, we get byte-swapped src which this function handles.
+    """
+    print("\n" + "="*70)
+    print("Testing Blit_BGR555_NBO (Mac RGB555 BE → SDL BGR555 LE) [UNTESTED]")
+    print("="*70)
+    
+    all_pass = True
+    for r, g, b, name in TEST_COLORS:
+        mac_val, byte0, byte1 = mac_rgb555_to_bytes(r, g, b)
+        src = le_read_be16(byte0, byte1)  # Byte-swapped on LE
+        expected = sdl_bgr555(r, g, b)
+        result = blit_bgr555_nbo(src)
+        
+        status = "✓" if result == expected else "✗"
+        if result != expected:
+            all_pass = False
+            print(f"  {name:12} R={r:2} G={g:2} B={b:2}")
+            print(f"               src=0x{src:04X} expected=0x{expected:04X} got=0x{result:04X} {status}")
+        else:
+            # Only print detailed for debugging
+            pass
+    
+    if all_pass:
+        print("  All BGR555 NBO tests PASSED ✓")
+    else:
+        # Print all results for debugging
+        print("\n  Detailed results:")
+        for r, g, b, name in TEST_COLORS:
+            mac_val, byte0, byte1 = mac_rgb555_to_bytes(r, g, b)
+            src = le_read_be16(byte0, byte1)
+            expected = sdl_bgr555(r, g, b)
+            result = blit_bgr555_nbo(src)
+            status = "✓" if result == expected else "✗"
+            print(f"    {name:12} src=0x{src:04X} exp=0x{expected:04X} got=0x{result:04X} {status}")
+    return all_pass
+
+def test_bgr555_obo():
+    """Test BGR555 OBO blitter (untested in video_blit.cpp)
+    
+    Opposite byte order - the output is byte-swapped relative to native LE.
+    """
+    print("\n" + "="*70)
+    print("Testing Blit_BGR555_OBO (Mac RGB555 BE → SDL BGR555 OBO) [UNTESTED]")
+    print("="*70)
+    
+    all_pass = True
+    for r, g, b, name in TEST_COLORS:
+        mac_val, byte0, byte1 = mac_rgb555_to_bytes(r, g, b)
+        src = le_read_be16(byte0, byte1)
+        expected = sdl_bgr555_swapped(r, g, b)
+        result = blit_bgr555_obo(src)
+        
+        status = "✓" if result == expected else "✗"
+        if result != expected:
+            all_pass = False
+    
+    if all_pass:
+        print("  All BGR555 OBO tests PASSED ✓")
+    else:
+        print("\n  Detailed results:")
+        for r, g, b, name in TEST_COLORS:
+            mac_val, byte0, byte1 = mac_rgb555_to_bytes(r, g, b)
+            src = le_read_be16(byte0, byte1)
+            expected = sdl_bgr555_swapped(r, g, b)
+            result = blit_bgr555_obo(src)
+            status = "✓" if result == expected else "✗"
+            print(f"    {name:12} src=0x{src:04X} exp=0x{expected:04X} got=0x{result:04X} {status}")
+    return all_pass
+
+def test_bgr888_nbo():
+    """Test BGR888 NBO blitter (untested in video_blit.cpp)
+    
+    Mac ARGB BE (0x00RRGGBB in memory) → SDL BGR native LE (0x00BBGGRR)
+    On LE reading BE, src = 0xBBGGRR00, then formula swaps channels.
+    """
+    print("\n" + "="*70)
+    print("Testing Blit_BGR888_NBO (Mac ARGB BE → SDL BGR LE) [UNTESTED]")
+    print("="*70)
+    
+    test_colors_8bit = [
+        (255, 255, 255, "White"),
+        (255, 0, 0, "Red"),
+        (0, 255, 0, "Green"),
+        (0, 0, 255, "Blue"),
+        (0, 0, 0, "Black"),
+        (128, 128, 128, "Gray"),
+    ]
+    
+    all_pass = True
+    for r, g, b, name in test_colors_8bit:
+        mac_val, b0, b1, b2, b3 = mac_rgb888_to_bytes(r, g, b)
+        src = le_read_be32(b0, b1, b2, b3)  # Byte-swapped on LE
+        expected = sdl_bgr888(r, g, b)
+        result = blit_bgr888_nbo(src)
+        
+        status = "✓" if result == expected else "✗"
+        if result != expected:
+            all_pass = False
+    
+    if all_pass:
+        print("  All BGR888 NBO tests PASSED ✓")
+    else:
+        print("\n  Detailed results:")
+        for r, g, b, name in test_colors_8bit:
+            mac_val, b0, b1, b2, b3 = mac_rgb888_to_bytes(r, g, b)
+            src = le_read_be32(b0, b1, b2, b3)
+            expected = sdl_bgr888(r, g, b)
+            result = blit_bgr888_nbo(src)
+            status = "✓" if result == expected else "✗"
+            print(f"    {name:12} src=0x{src:08X} exp=0x{expected:08X} got=0x{result:08X} {status}")
+    return all_pass
+
+def test_bgr888_obo():
+    """Test BGR888 OBO blitter (untested in video_blit.cpp)
+    
+    Opposite byte order BGR888.
+    """
+    print("\n" + "="*70)
+    print("Testing Blit_BGR888_OBO (Mac ARGB BE → SDL BGR OBO) [UNTESTED]")
+    print("="*70)
+    
+    test_colors_8bit = [
+        (255, 255, 255, "White"),
+        (255, 0, 0, "Red"),
+        (0, 255, 0, "Green"),
+        (0, 0, 255, "Blue"),
+        (0, 0, 0, "Black"),
+        (128, 128, 128, "Gray"),
+    ]
+    
+    all_pass = True
+    for r, g, b, name in test_colors_8bit:
+        mac_val, b0, b1, b2, b3 = mac_rgb888_to_bytes(r, g, b)
+        src = le_read_be32(b0, b1, b2, b3)
+        expected = sdl_bgr888_swapped(r, g, b)
+        result = blit_bgr888_obo(src)
+        
+        status = "✓" if result == expected else "✗"
+        if result != expected:
+            all_pass = False
+    
+    if all_pass:
+        print("  All BGR888 OBO tests PASSED ✓")
+    else:
+        print("\n  Detailed results:")
+        for r, g, b, name in test_colors_8bit:
+            mac_val, b0, b1, b2, b3 = mac_rgb888_to_bytes(r, g, b)
+            src = le_read_be32(b0, b1, b2, b3)
+            expected = sdl_bgr888_swapped(r, g, b)
+            result = blit_bgr888_obo(src)
+            status = "✓" if result == expected else "✗"
+            print(f"    {name:12} src=0x{src:08X} exp=0x{expected:08X} got=0x{result:08X} {status}")
+    return all_pass
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -257,13 +486,22 @@ def main():
     print("Video Blitter Formula Validation Suite")
     print("=" * 70)
     print("Testing blitter formulas for little-endian ARM reading Mac big-endian data")
+    print("Formulas marked [UNTESTED] are copied verbatim from video_blit.cpp")
     
     results = []
+    
+    # RGB blitters (tested/fixed)
     results.append(("RGB555 NBO (byte swap)", test_rgb555_nbo()))
     results.append(("RGB565 OBO (16-bit)", test_rgb565_obo()))
     results.append(("RGB565 OBO (32-bit)", test_32bit_formula()))
     results.append(("RGB565 OBO (64-bit)", test_64bit_formula()))
     results.append(("RGB888 NBO (32-bit swap)", test_rgb888_nbo()))
+    
+    # BGR blitters (from video_blit.cpp, untested)
+    results.append(("BGR555 NBO [untested]", test_bgr555_nbo()))
+    results.append(("BGR555 OBO [untested]", test_bgr555_obo()))
+    results.append(("BGR888 NBO [untested]", test_bgr888_nbo()))
+    results.append(("BGR888 OBO [untested]", test_bgr888_obo()))
     
     print("\n" + "=" * 70)
     print("SUMMARY")
@@ -272,7 +510,7 @@ def main():
     all_pass = True
     for name, passed in results:
         status = "✓ PASS" if passed else "✗ FAIL"
-        print(f"  {name:30} {status}")
+        print(f"  {name:35} {status}")
         if not passed:
             all_pass = False
     
@@ -282,6 +520,7 @@ def main():
         return 0
     else:
         print("SOME TESTS FAILED ✗")
+        print("\nNote: [untested] failures indicate bugs in video_blit.cpp formulas")
         return 1
 
 if __name__ == "__main__":
