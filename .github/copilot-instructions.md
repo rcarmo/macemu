@@ -11,6 +11,8 @@ This project is a port of the BasiliskII Mac emulator to the Raspberry Pi, targe
 
 All builds **MUST** go through GitHub Actions for ARM cross-compilation and deployment to real Raspberry Pi hardware. Do not assume local builds work on target.
 
+Remember that the target is ARM32 (armhf) even if built on ARM64 (aarch64), so all bit width assumptions must be verified.
+
 ### Build Requirements
 
 - GitHub Actions workflow for ARM64/ARMhf cross-compilation
@@ -29,3 +31,5 @@ The testing hardware is a Raspberry Pi 3B with 1GB RAM, running Raspberry Pi OS 
 
 - **Endianness**: Mac is big-endian; `ReadMacInt*`/`WriteMacInt*` handle byte swapping
 - **Detailed fit/gap analysis**: See `BRANCH_GAPS.md`
+
+DO NOT EDIT THE SheepShaver SOURCE CODE

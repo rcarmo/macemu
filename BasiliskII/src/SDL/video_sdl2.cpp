@@ -1023,6 +1023,7 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 static int g_present_debug_count = 0;
 static bool g_bbox_16bit_debug = false;
 static int g_use_raw_16bit = -1;
+static int g_pixel_debug_count = 0;  // Limit pixel debug output
 
 // Option to use SDL_UpdateTexture instead of SDL_LockTexture
 // SDL_LockTexture with partial rects can have issues on some OpenGL ES/KMSDRM drivers
@@ -1031,6 +1032,7 @@ static int g_use_update_texture = -1;
 void reset_video_debug_flags(void) {
 	g_present_debug_count = 0;
 	g_bbox_16bit_debug = false;
+	g_pixel_debug_count = 0;
 	// Don't reset g_use_raw_16bit - it's read from env once
 }
 
@@ -1234,11 +1236,21 @@ void driver_base::adapt_to_video_mode() {
 	visualFormat.Rmask = f->Rmask;
 	visualFormat.Gmask = f->Gmask;
 	visualFormat.Bmask = f->Bmask;
-	Screen_blitter_init(visualFormat, true, mac_depth_of_video_depth(VIDEO_MODE_DEPTH));
+	
+	// Mac frame buffer is big-endian. On little-endian hosts (ARM), we need
+	// the "opposite byte order" blitter to convert from Mac's BE to host's LE.
+	// On big-endian hosts, Mac and host match, so use "native byte order".
+#ifdef WORDS_BIGENDIAN
+	const bool native_byte_order = true;
+#else
+	const bool native_byte_order = false;  // Mac BE → ARM LE requires OBO blitter
+#endif
+	Screen_blitter_init(visualFormat, native_byte_order, mac_depth_of_video_depth(VIDEO_MODE_DEPTH));
 
 	if (getenv("B2_DEBUG_VIDEO")) {
 		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_DEPTH=%d mac_depth=%d sdl_depth=%d\n",
 		       VIDEO_MODE_DEPTH, mac_depth_of_video_depth(VIDEO_MODE_DEPTH), visualFormat.depth);
+		printf("VIDEO: adapt_to_video_mode: native_byte_order=%d\n", native_byte_order);
 		printf("VIDEO: adapt_to_video_mode: surface format Rmask=0x%08x Gmask=0x%08x Bmask=0x%08x\n",
 		       f->Rmask, f->Gmask, f->Bmask);
 		printf("VIDEO: adapt_to_video_mode: VIDEO_MODE_X=%d VIDEO_MODE_Y=%d VIDEO_MODE_ROW_BYTES=%d\n",
@@ -2871,6 +2883,14 @@ static void update_display_static_bbox(driver_base *drv)
 		if (src_pitch != dst_pitch) {
 			printf("VIDEO: WARNING - pitch mismatch in 16-bit mode!\n");
 		}
+		// Dump first 8 pixels from Mac buffer (big-endian RGB555)
+		if (getenv("B2_DEBUG_VIDEO")) {
+			printf("VIDEO: First 8 Mac pixels (hex): ");
+			for (int i = 0; i < 16; i += 2) {
+				printf("%02x%02x ", the_buffer[i], the_buffer[i+1]);
+			}
+			printf("\n");
+		}
 		g_bbox_16bit_debug = true;
 	}
 
@@ -2919,6 +2939,15 @@ static void update_display_static_bbox(driver_base *drv)
 							memcpy((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
 						} else {
 							Screen_blit((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
+						}
+						// Debug: dump first few pixels before/after blit (B2_DEBUG_PIXELS env var)
+						if (getenv("B2_DEBUG_PIXELS") && g_pixel_debug_count < 5 && x == 0 && y == 0) {
+							const uint16 *src16 = (const uint16 *)(the_buffer + yb + xb);
+							const uint16 *dst16 = (const uint16 *)((uint8 *)drv->s->pixels + dst_yb + xb);
+							printf("VIDEO: 16-bit pixel[%d,%d] src=0x%04x dst=0x%04x (bytes: %02x %02x)\n",
+								x, j, src16[0], dst16[0], 
+								the_buffer[yb + xb], the_buffer[yb + xb + 1]);
+							g_pixel_debug_count++;
 						}
 					}
 					dirty = true;

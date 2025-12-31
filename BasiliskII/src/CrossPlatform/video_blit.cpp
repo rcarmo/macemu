@@ -209,18 +209,35 @@ static void Blit_Copy_Raw(uint8 * dest, const uint8 * source, uint32 length)
 #define FB_FUNC_NAME Blit_RGB565_NBO
 #include "video_blit.h"
 
-// Opposite byte order (untested)
+// Opposite byte order
+// On little-endian host reading big-endian Mac RGB555:
+// src layout: GGGBBBBB_0RRRRRGG (byte-swapped)
+//   src[15:13] = G[2:0], src[12:8] = B[4:0], src[7] = 0
+//   src[6:2] = R[4:0], src[1:0] = G[4:3]
+// dst layout: RRRRR_GGGGGG_BBBBB (SDL RGB565 native)
+//   dst[15:11] = R[4:0], dst[10:5] = G[5:0], dst[4:0] = B[4:0]
+// Green expansion 5→6: G[5:0] = {G[4:0], G[4]} (duplicate MSB)
 
 #define FB_BLIT_1(dst, src) \
-	(dst = (((src) & 0x1f00) | (((src) << 1) & 0xe0fe) | (((src) >> 15) & 1)))
+	(dst = (((src) & 0x007C) << 9)  /* R[4:0] → dst[15:11] */ \
+	     | (((src) & 0x0003) << 9)  /* G[4:3] → dst[10:9] */ \
+	     | (((src) >> 7) & 0x01C0) /* G[2:0] → dst[8:6] */ \
+	     | (((src) & 0x0002) << 4) /* G[4] dup → dst[5] */ \
+	     | (((src) >> 8) & 0x001F)) /* B[4:0] → dst[4:0] */
 
 #define FB_BLIT_2(dst, src) \
-	(dst = (((src) & 0x1f001f00) | (((src) << 1) & 0xe0fee0fe) | (((src) >> 15) & 0x10001)))
+	(dst = (((src) & 0x007C007C) << 9) \
+	     | (((src) & 0x00030003) << 9) \
+	     | (((src) >> 7) & 0x01C001C0) \
+	     | (((src) & 0x00020002) << 4) \
+	     | (((src) >> 8) & 0x001F001F))
 
 #define FB_BLIT_4(dst, src) \
-	(dst =	(((src)        & UVAL64(0x1f001f001f001f00)) | \
-			(((src) <<  1) & UVAL64(0xe0fee0fee0fee0fe)) | \
-			(((src) >> 15) & UVAL64(0x0001000100010001))))
+	(dst = (((src) & UVAL64(0x007C007C007C007C)) << 9) \
+	     | (((src) & UVAL64(0x0003000300030003)) << 9) \
+	     | (((src) >> 7) & UVAL64(0x01C001C001C001C0)) \
+	     | (((src) & UVAL64(0x0002000200020002)) << 4) \
+	     | (((src) >> 8) & UVAL64(0x001F001F001F001F)))
 
 #define FB_DEPTH 16
 #define FB_FUNC_NAME Blit_RGB565_OBO
@@ -612,6 +629,32 @@ bool Screen_blitter_init(VisualFormat const & visual_format, bool native_byte_or
 			fprintf(stderr, "\tR/G/B shift values : %d/%d/%d\n",
 				visualFormat.Rshift, visualFormat.Gshift, visualFormat.Bshift);
 			abort();
+		}
+
+		// Debug: identify which blitter was selected
+		if (getenv("B2_DEBUG_VIDEO")) {
+			const char *blitter_name = "unknown";
+			if (Screen_blit == Blit_Copy_Raw) blitter_name = "Blit_Copy_Raw";
+			else if (Screen_blit == Blit_RGB555_NBO) blitter_name = "Blit_RGB555_NBO";
+			else if (Screen_blit == Blit_RGB565_NBO) blitter_name = "Blit_RGB565_NBO";
+			else if (Screen_blit == Blit_RGB565_OBO) blitter_name = "Blit_RGB565_OBO";
+			else if (Screen_blit == Blit_RGB888_NBO) blitter_name = "Blit_RGB888_NBO";
+			else if (Screen_blit == Blit_Expand_1_To_8) blitter_name = "Blit_Expand_1_To_8";
+			else if (Screen_blit == Blit_Expand_2_To_8) blitter_name = "Blit_Expand_2_To_8";
+			else if (Screen_blit == Blit_Expand_4_To_8) blitter_name = "Blit_Expand_4_To_8";
+			else if (Screen_blit == Blit_Expand_1_To_16) blitter_name = "Blit_Expand_1_To_16";
+			else if (Screen_blit == Blit_Expand_2_To_16) blitter_name = "Blit_Expand_2_To_16";
+			else if (Screen_blit == Blit_Expand_4_To_16) blitter_name = "Blit_Expand_4_To_16";
+			else if (Screen_blit == Blit_Expand_8_To_16) blitter_name = "Blit_Expand_8_To_16";
+			else if (Screen_blit == Blit_Expand_1_To_32) blitter_name = "Blit_Expand_1_To_32";
+			else if (Screen_blit == Blit_Expand_2_To_32) blitter_name = "Blit_Expand_2_To_32";
+			else if (Screen_blit == Blit_Expand_4_To_32) blitter_name = "Blit_Expand_4_To_32";
+			else if (Screen_blit == Blit_Expand_8_To_32) blitter_name = "Blit_Expand_8_To_32";
+			fprintf(stderr, "VIDEO: Screen_blitter_init: mac_depth=%d visual_depth=%d nbo=%d\n",
+				mac_depth, visualFormat.depth, native_byte_order);
+			fprintf(stderr, "VIDEO: Screen_blitter_init: R/G/B masks=0x%06x/0x%06x/0x%06x\n",
+				visualFormat.Rmask, visualFormat.Gmask, visualFormat.Bmask);
+			fprintf(stderr, "VIDEO: Screen_blitter_init: selected blitter=%s\n", blitter_name);
 		}
 	}
 #else
