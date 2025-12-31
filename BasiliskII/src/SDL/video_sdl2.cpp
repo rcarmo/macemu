@@ -1003,6 +1003,10 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
                SDL_GetPixelFormatName(host_surface->format->format));
     }
 
+	// Reset debug flags for new video mode
+	extern void reset_video_debug_flags(void);
+	reset_video_debug_flags();
+
 	if (SDL_RenderSetLogicalSize(sdl_renderer, width, height) != 0) {
 		printf("ERROR: Unable to set SDL rendeer's logical size (to %dx%d): %s\n",
 			   width, height, SDL_GetError());
@@ -1013,6 +1017,17 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 	SDL_RenderSetIntegerScale(sdl_renderer, PrefsFindBool("scale_integer") ? SDL_TRUE : SDL_FALSE);
 
     return guest_surface;
+}
+
+// Debug flags that should be reset on video mode change
+static int g_present_debug_count = 0;
+static bool g_bbox_16bit_debug = false;
+static int g_use_raw_16bit = -1;
+
+void reset_video_debug_flags(void) {
+	g_present_debug_count = 0;
+	g_bbox_16bit_debug = false;
+	// Don't reset g_use_raw_16bit - it's read from env once
 }
 
 static int present_sdl_video()
@@ -1044,8 +1059,7 @@ static int present_sdl_video()
 	LOCK_PALETTE;
 	SDL_LockMutex(sdl_update_video_mutex);
 
-	static int present_debug_count = 0;
-	if (getenv("B2_DEBUG_VIDEO") && present_debug_count == 0) {
+	if (getenv("B2_DEBUG_VIDEO") && g_present_debug_count == 0) {
 		printf("VIDEO: present_sdl_video: update_rect x=%d y=%d w=%d h=%d\n",
 		       sdl_update_video_rect.x, sdl_update_video_rect.y,
 		       sdl_update_video_rect.w, sdl_update_video_rect.h);
@@ -1058,7 +1072,7 @@ static int present_sdl_video()
 		printf("VIDEO: present_sdl_video: host_surface==guest_surface? %s\n",
 		       (host_surface == guest_surface) ? "YES" : "NO");
 	}
-	present_debug_count++;
+	g_present_debug_count++;
 
     // Convert from the guest OS' pixel format, to the host OS' texture, if necessary.
     if (host_surface != guest_surface &&
@@ -1087,7 +1101,7 @@ static int present_sdl_video()
 		return -1;
 	}
 
-	if (getenv("B2_DEBUG_VIDEO") && present_debug_count == 1) {
+	if (getenv("B2_DEBUG_VIDEO") && g_present_debug_count == 1) {
 		printf("VIDEO: present_sdl_video: texture dstPitch=%d, copying width=%d (bytes: %d)\n",
 		       dstPitch, sdl_update_video_rect.w, sdl_update_video_rect.w << 2);
 	}
@@ -2870,6 +2884,19 @@ static void update_display_static_bbox(driver_base *drv)
 	const VIDEO_MODE &mode = drv->mode;
 	bool blit = (int)VIDEO_MODE_DEPTH == VIDEO_DEPTH_16BIT;
 
+	// Debug: detect pitch mismatch for 16-bit mode
+	if (blit && !g_bbox_16bit_debug) {
+		const uint32 src_pitch = VIDEO_MODE_ROW_BYTES;
+		const uint32 dst_pitch = drv->s->pitch;
+		printf("VIDEO: 16-bit bbox update: src_pitch=%d dst_pitch=%d\n", src_pitch, dst_pitch);
+		printf("VIDEO: 16-bit bbox update: the_buffer=%p drv->s->pixels=%p\n", 
+		       (void*)the_buffer, drv->s->pixels);
+		if (src_pitch != dst_pitch) {
+			printf("VIDEO: WARNING - pitch mismatch in 16-bit mode!\n");
+		}
+		g_bbox_16bit_debug = true;
+	}
+
 	// Allocate bounding boxes for SDL_UpdateRects()
 	const uint32 N_PIXELS = 64;
 	const uint32 n_x_boxes = (VIDEO_MODE_X + N_PIXELS - 1) / N_PIXELS;
@@ -2885,6 +2912,14 @@ static void update_display_static_bbox(driver_base *drv)
 	const uint32 bytes_per_row = VIDEO_MODE_ROW_BYTES;
 	const uint32 bytes_per_pixel = bytes_per_row / VIDEO_MODE_X;
 	const uint32 dst_bytes_per_row = drv->s->pitch;
+	
+	// Debug option: use raw memcpy instead of Screen_blit for 16-bit
+	// This helps diagnose if the issue is in the blitter vs pitch calculation
+	if (g_use_raw_16bit < 0) {
+		g_use_raw_16bit = getenv("B2_RAW_16BIT") ? 1 : 0;
+		if (g_use_raw_16bit) printf("VIDEO: Using raw memcpy for 16-bit (B2_RAW_16BIT set)\n");
+	}
+	
 	for (uint32 y = 0; y < VIDEO_MODE_Y; y += N_PIXELS) {
 		uint32 h = N_PIXELS;
 		if (h > VIDEO_MODE_Y - y)
@@ -2901,7 +2936,14 @@ static void update_display_static_bbox(driver_base *drv)
 				const uint32 dst_yb = j * dst_bytes_per_row;
 				if (memcmp(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs) != 0) {
 					memcpy(&the_buffer_copy[yb + xb], &the_buffer[yb + xb], xs);
-					if (blit) Screen_blit((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
+					if (blit) {
+						if (g_use_raw_16bit) {
+							// Raw copy for debugging - will have wrong colors but correct position
+							memcpy((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
+						} else {
+							Screen_blit((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
+						}
+					}
 					dirty = true;
 				}
 			}
