@@ -14,13 +14,16 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * This file implements the BasiliskII CPU interface using the Unicorn Engine
- * (https://www.unicorn-engine.org/), which provides a portable CPU emulation
- * framework based on QEMU's TCG (Tiny Code Generator).
+ * HIGH-PERFORMANCE DESIGN:
+ * ========================
+ * This implementation uses NO per-instruction hooks (which kill JIT performance).
+ * Instead:
+ * - Exception hooks catch EMUL_OP (0x71xx), A-line, F-line traps
+ * - Chunked execution (100K instructions) with periodic timer/interrupt checks
+ * - Unicorn's JIT runs at full speed between exception points
  *
- * Unicorn provides JIT-accelerated emulation on all supported host architectures
- * (x86, x64, ARM, ARM64, MIPS, etc.) making this a portable high-performance
- * solution for 68k emulation.
+ * This achieves performance comparable to native JIT backends while being
+ * fully portable across ARM64, x86_64, and other architectures.
  */
 
 #include "sysdeps.h"
@@ -28,9 +31,10 @@
 #include "main.h"
 #include "emul_op.h"
 #include "prefs.h"
-#include "rom_patches.h"  // For ROMVersion
+#include "rom_patches.h"
 
 #include <unicorn/unicorn.h>
+#include <sys/time.h>
 
 #define DEBUG 0
 #include "debug.h"
@@ -48,8 +52,8 @@
 #define M68K_EXCEPTION_TRAPV           7
 #define M68K_EXCEPTION_PRIVILEGE       8
 #define M68K_EXCEPTION_TRACE           9
-#define M68K_EXCEPTION_LINEA          10  // A-line trap (0xAxxx)
-#define M68K_EXCEPTION_LINEF          11  // F-line trap (0xFxxx) - FPU
+#define M68K_EXCEPTION_LINEA          10
+#define M68K_EXCEPTION_LINEF          11
 #define M68K_EXCEPTION_FORMAT_ERROR   14
 #define M68K_EXCEPTION_UNINITIALIZED  15
 #define M68K_EXCEPTION_SPURIOUS       24
@@ -60,59 +64,66 @@
 #define M68K_EXCEPTION_AUTOVECTOR_5   29
 #define M68K_EXCEPTION_AUTOVECTOR_6   30
 #define M68K_EXCEPTION_AUTOVECTOR_7   31
-#define M68K_EXCEPTION_TRAP_BASE      32  // TRAP #0-15 are vectors 32-47
+#define M68K_EXCEPTION_TRAP_BASE      32
 
 /*
  * Global state
  */
 
-// Unicorn engine instance
 static uc_engine *uc = NULL;
 
-// Note: InterruptFlags is defined in main_unix.cpp, declared in main.h
-
-// RAM and ROM pointers (normally in main_unix.cpp when !EMULATED_68K)
-uint32 RAMBaseMac;          // RAM base (Mac address space)
-uint8 *RAMBaseHost;         // RAM base (host address space)
-uint32 RAMSize;             // Size of RAM
-uint32 ROMBaseMac;          // ROM base (Mac address space)
-uint8 *ROMBaseHost;         // ROM base (host address space)
-uint32 ROMSize;             // Size of ROM
+// Memory pointers (global for cpu_emulation.h)
+uint32 RAMBaseMac;
+uint8 *RAMBaseHost;
+uint32 RAMSize;
+uint32 ROMBaseMac;
+uint8 *ROMBaseHost;
+uint32 ROMSize;
 
 #if !REAL_ADDRESSING
-uint8 *MacFrameBaseHost;    // Frame buffer base (host address space)
-uint32 MacFrameSize;        // Size of frame buffer
-int MacFrameLayout;         // Frame buffer layout
+uint8 *MacFrameBaseHost;
+uint32 MacFrameSize;
+int MacFrameLayout;
 #endif
 
-// Direct addressing offset
 #if DIRECT_ADDRESSING
 uintptr MEMBaseDiff;
 #endif
 
-// Pending interrupt level (0 = none, 1-7 = interrupt level)
+// Interrupt handling
 static volatile int pending_interrupt = 0;
 
-// Quit control (normally from uae_cpu/newcpu.cpp, we define here)
+// Quit control
 int quit_program = 0;
 int exit_val = 0;
 
-// Memory region tracking
+// Memory mapping state
 static bool ram_mapped = false;
 static bool rom_mapped = false;
 static bool frame_mapped = false;
 
-// For nested Execute68k calls
+// Execution state
 static int execute_depth = 0;
-
-// Return address marker for Execute68k
 static const uint32 EXEC_RETURN_ADDR = 0xFFFFFFFC;
-
-// Vector Base Register (68010+) - usually 0 for Mac
 static uint32_t vbr = 0;
+static volatile bool stop_execution = false;
+
+// Statistics
+static uint64_t total_chunks = 0;
+static uint64_t total_exceptions = 0;
+
+// Timing
+static uint64_t last_tick_time = 0;
+static const uint64_t TICK_INTERVAL_US = 16667;  // ~60Hz
+
+static uint64_t get_time_us(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+}
 
 /*
- * Helper: Get current registers into M68kRegisters structure
+ * Register helpers
  */
 static void get_regs(M68kRegisters *r)
 {
@@ -145,9 +156,6 @@ static void get_regs(M68kRegisters *r)
     r->sr = (uint16_t)sr;
 }
 
-/*
- * Helper: Set registers from M68kRegisters structure
- */
 static void set_regs(const M68kRegisters *r)
 {
     uint32_t d[8], a[8];
@@ -177,668 +185,243 @@ static void set_regs(const M68kRegisters *r)
 }
 
 /*
- * Helper: Emulate MOVEM instruction (Unicorn's 68k doesn't support it)
- * Returns true if handled, false if not a MOVEM instruction
+ * Exception stack frame builder (68010+ Format 0)
  */
-static bool emulate_movem(uint32_t pc)
-{
-    uint16_t opcode, mask;
-    
-    // Read opcode
-    if (uc_mem_read(uc, pc, &opcode, 2) != UC_ERR_OK) return false;
-    opcode = (opcode >> 8) | (opcode << 8);  // big-endian swap
-    
-    // Check for MOVEM opcodes:
-    // 0x48xx = MOVEM.W/L regs,<ea> (register to memory)
-    // 0x4Cxx = MOVEM.W/L <ea>,regs (memory to register)
-    if ((opcode & 0xFB80) != 0x4880) return false;
-    
-    // Read register mask
-    if (uc_mem_read(uc, pc + 2, &mask, 2) != UC_ERR_OK) return false;
-    mask = (mask >> 8) | (mask << 8);
-    
-    bool is_long = (opcode & 0x0040) != 0;  // bit 6: 0=word, 1=long
-    bool to_mem = (opcode & 0x0400) == 0;   // bit 10: 0=reg-to-mem, 1=mem-to-reg
-    int mode = (opcode >> 3) & 7;
-    int reg = opcode & 7;
-    int size = is_long ? 4 : 2;
-    
-    uint32_t addr;
-    uint32_t regs[16];  // D0-D7, A0-A7
-    
-    // Read all registers
-    uc_reg_read(uc, UC_M68K_REG_D0, &regs[0]);
-    uc_reg_read(uc, UC_M68K_REG_D1, &regs[1]);
-    uc_reg_read(uc, UC_M68K_REG_D2, &regs[2]);
-    uc_reg_read(uc, UC_M68K_REG_D3, &regs[3]);
-    uc_reg_read(uc, UC_M68K_REG_D4, &regs[4]);
-    uc_reg_read(uc, UC_M68K_REG_D5, &regs[5]);
-    uc_reg_read(uc, UC_M68K_REG_D6, &regs[6]);
-    uc_reg_read(uc, UC_M68K_REG_D7, &regs[7]);
-    uc_reg_read(uc, UC_M68K_REG_A0, &regs[8]);
-    uc_reg_read(uc, UC_M68K_REG_A1, &regs[9]);
-    uc_reg_read(uc, UC_M68K_REG_A2, &regs[10]);
-    uc_reg_read(uc, UC_M68K_REG_A3, &regs[11]);
-    uc_reg_read(uc, UC_M68K_REG_A4, &regs[12]);
-    uc_reg_read(uc, UC_M68K_REG_A5, &regs[13]);
-    uc_reg_read(uc, UC_M68K_REG_A6, &regs[14]);
-    uc_reg_read(uc, UC_M68K_REG_A7, &regs[15]);
-    
-    int inst_len = 4;  // Base: opcode + mask
-    
-    // Get effective address based on mode
-    switch (mode) {
-        case 2:  // (An)
-            addr = regs[8 + reg];
-            break;
-        case 3:  // (An)+
-            addr = regs[8 + reg];
-            break;
-        case 4:  // -(An)
-            addr = regs[8 + reg];
-            break;
-        case 5:  // (d16,An)
-            {
-                int16_t disp;
-                uc_mem_read(uc, pc + 4, &disp, 2);
-                disp = (disp >> 8) | (disp << 8);
-                addr = regs[8 + reg] + disp;
-                inst_len += 2;
-            }
-            break;
-        case 7:  // Absolute or PC-relative
-            if (reg == 0) {  // (xxx).W
-                int16_t abs_addr;
-                uc_mem_read(uc, pc + 4, &abs_addr, 2);
-                abs_addr = (abs_addr >> 8) | (abs_addr << 8);
-                addr = (int32_t)abs_addr;
-                inst_len += 2;
-            } else if (reg == 1) {  // (xxx).L
-                uint32_t abs_addr;
-                uc_mem_read(uc, pc + 4, &abs_addr, 4);
-                abs_addr = __builtin_bswap32(abs_addr);
-                addr = abs_addr;
-                inst_len += 4;
-            } else {
-                return false;  // Unsupported
-            }
-            break;
-        default:
-            return false;  // Unsupported mode
-    }
-    
-    D(bug("Unicorn: MOVEM emulation: %s, mode=%d, reg=%d, addr=0x%08x, mask=0x%04x\n",
-          to_mem ? "mem-to-reg" : "reg-to-mem", mode, reg, addr, mask));
-    
-    if (to_mem && mode == 4) {
-        // -(An) predecrement mode: registers stored in reverse order (A7-A0, D7-D0)
-        // and address decrements before each store
-        for (int i = 15; i >= 0; i--) {
-            if (mask & (1 << (15 - i))) {
-                addr -= size;
-                if (is_long) {
-                    WriteMacInt32(addr, regs[i]);
-                } else {
-                    WriteMacInt16(addr, regs[i] & 0xFFFF);
-                }
-            }
-        }
-        // Update the address register
-        regs[8 + reg] = addr;
-        uc_reg_write(uc, UC_M68K_REG_A0 + reg, &regs[8 + reg]);
-    } else if (to_mem) {
-        // Register to memory (normal order D0-D7, A0-A7)
-        for (int i = 0; i < 16; i++) {
-            if (mask & (1 << i)) {
-                if (is_long) {
-                    WriteMacInt32(addr, regs[i]);
-                } else {
-                    WriteMacInt16(addr, regs[i] & 0xFFFF);
-                }
-                addr += size;
-            }
-        }
-        if (mode == 3) {  // (An)+ postincrement
-            regs[8 + reg] = addr;
-            uc_reg_write(uc, UC_M68K_REG_A0 + reg, &regs[8 + reg]);
-        }
-    } else {
-        // Memory to register (normal order D0-D7, A0-A7)
-        for (int i = 0; i < 16; i++) {
-            if (mask & (1 << i)) {
-                if (is_long) {
-                    regs[i] = ReadMacInt32(addr);
-                } else {
-                    regs[i] = (int16_t)ReadMacInt16(addr);  // Sign extend
-                }
-                addr += size;
-            }
-        }
-        // Write back modified registers
-        if (mask & 0x00FF) {  // D registers
-            if (mask & 0x0001) uc_reg_write(uc, UC_M68K_REG_D0, &regs[0]);
-            if (mask & 0x0002) uc_reg_write(uc, UC_M68K_REG_D1, &regs[1]);
-            if (mask & 0x0004) uc_reg_write(uc, UC_M68K_REG_D2, &regs[2]);
-            if (mask & 0x0008) uc_reg_write(uc, UC_M68K_REG_D3, &regs[3]);
-            if (mask & 0x0010) uc_reg_write(uc, UC_M68K_REG_D4, &regs[4]);
-            if (mask & 0x0020) uc_reg_write(uc, UC_M68K_REG_D5, &regs[5]);
-            if (mask & 0x0040) uc_reg_write(uc, UC_M68K_REG_D6, &regs[6]);
-            if (mask & 0x0080) uc_reg_write(uc, UC_M68K_REG_D7, &regs[7]);
-        }
-        if (mask & 0xFF00) {  // A registers
-            if (mask & 0x0100) uc_reg_write(uc, UC_M68K_REG_A0, &regs[8]);
-            if (mask & 0x0200) uc_reg_write(uc, UC_M68K_REG_A1, &regs[9]);
-            if (mask & 0x0400) uc_reg_write(uc, UC_M68K_REG_A2, &regs[10]);
-            if (mask & 0x0800) uc_reg_write(uc, UC_M68K_REG_A3, &regs[11]);
-            if (mask & 0x1000) uc_reg_write(uc, UC_M68K_REG_A4, &regs[12]);
-            if (mask & 0x2000) uc_reg_write(uc, UC_M68K_REG_A5, &regs[13]);
-            if (mask & 0x4000) uc_reg_write(uc, UC_M68K_REG_A6, &regs[14]);
-            if (mask & 0x8000) uc_reg_write(uc, UC_M68K_REG_A7, &regs[15]);
-        }
-        if (mode == 3) {  // (An)+ postincrement
-            regs[8 + reg] = addr;
-            uc_reg_write(uc, UC_M68K_REG_A0 + reg, &regs[8 + reg]);
-        }
-    }
-    
-    // Advance PC past the instruction
-    uint32_t new_pc = pc + inst_len;
-    uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
-    
-    return true;
-}
-
-/*
- * Helper: Build 68k exception stack frame and jump to handler
- * This emulates what the 68k does when taking an exception
- */
-static void take_exception(int vector, uint32_t fault_pc)
+static void take_exception(int vector, uint32_t fault_pc, int new_ipl = 0)
 {
     uint32_t sr, sp, handler_addr;
     
-    // Read current SR and SP
     uc_reg_read(uc, UC_M68K_REG_SR, &sr);
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
     
-    // Get exception handler address from vector table
     handler_addr = ReadMacInt32(vbr + vector * 4);
     
     D(bug("Unicorn: Exception %d at PC=0x%08x, handler=0x%08x\n", 
           vector, fault_pc, handler_addr));
     
-    // Build stack frame (format 0 - basic 4-word frame)
-    // Push PC
+    // Format 0 stack frame: format/vector, PC, SR
+    sp -= 2;
+    WriteMacInt16(sp, (0 << 12) | (vector * 4));
     sp -= 4;
     WriteMacInt32(sp, fault_pc);
-    
-    // Push SR
     sp -= 2;
     WriteMacInt16(sp, sr);
     
-    // Update SR: set supervisor mode, clear trace
-    sr |= 0x2000;   // Set S bit (supervisor mode)
-    sr &= ~0x8000;  // Clear T bit (trace)
+    // Update SR
+    sr |= 0x2000;   // Supervisor mode
+    sr &= ~0x8000;  // Clear trace
+    if (new_ipl > 0) {
+        sr = (sr & ~0x0700) | ((new_ipl & 7) << 8);
+    }
     
-    // Write back new SR and SP
     uc_reg_write(uc, UC_M68K_REG_SR, &sr);
     uc_reg_write(uc, UC_M68K_REG_A7, &sp);
-    
-    // Jump to handler
     uc_reg_write(uc, UC_M68K_REG_PC, &handler_addr);
 }
 
 /*
- * Memory callbacks for Unicorn
- *
- * Unicorn normally maps host memory directly, but we use callbacks
- * for unmapped regions to handle hardware I/O and special addresses.
+ * EMUL_OP handler - called when we hit 0x71xx opcodes
  */
-
-// Hook for unmapped memory accesses (I/O, etc.)
-static void hook_mem_unmapped(uc_engine *uc, uc_mem_type type,
-                               uint64_t address, int size, int64_t value,
-                               void *user_data)
+static bool handle_emul_op(uint32_t pc, uint16_t opcode)
 {
-    printf("Unicorn: Unmapped memory access at 0x%08llx, type=%d, size=%d\n",
-          (unsigned long long)address, type, size);
-    fflush(stdout);
+    if (opcode != 0x7104) {  // Skip CLKNOMEM spam
+        D(bug("Unicorn: EMUL_OP 0x%04x at PC=0x%08x\n", opcode, pc));
+    }
     
-    // For now, just ignore unmapped accesses
-    // In future, this would handle I/O regions
+    M68kRegisters r;
+    get_regs(&r);
+    EmulOp(opcode, &r);
+    set_regs(&r);
+    
+    uint32_t new_pc = pc + 2;
+    uc_reg_write(uc, UC_M68K_REG_PC, &new_pc);
+    
+    if (quit_program) {
+        stop_execution = true;
+    }
+    
+    return true;
 }
 
-// Hook for invalid memory accesses
+/*
+ * Memory error hook
+ */
 static bool hook_mem_invalid(uc_engine *uc, uc_mem_type type,
                              uint64_t address, int size, int64_t value,
                              void *user_data)
 {
-    const char *type_str = "UNKNOWN";
-    switch (type) {
-        case UC_MEM_READ_UNMAPPED: type_str = "READ_UNMAPPED"; break;
-        case UC_MEM_WRITE_UNMAPPED: type_str = "WRITE_UNMAPPED"; break;
-        case UC_MEM_FETCH_UNMAPPED: type_str = "FETCH_UNMAPPED"; break;
-        case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
-        case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
-        case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
-        default: break;
+    static int error_count = 0;
+    if (++error_count <= 10) {
+        const char *type_str = "UNKNOWN";
+        switch (type) {
+            case UC_MEM_READ_UNMAPPED: type_str = "READ_UNMAPPED"; break;
+            case UC_MEM_WRITE_UNMAPPED: type_str = "WRITE_UNMAPPED"; break;
+            case UC_MEM_FETCH_UNMAPPED: type_str = "FETCH_UNMAPPED"; break;
+            case UC_MEM_READ_PROT: type_str = "READ_PROT"; break;
+            case UC_MEM_WRITE_PROT: type_str = "WRITE_PROT"; break;
+            case UC_MEM_FETCH_PROT: type_str = "FETCH_PROT"; break;
+            default: break;
+        }
+        printf("Unicorn: Memory error %s at 0x%08llx (#%d)\n",
+               type_str, (unsigned long long)address, error_count);
+        fflush(stdout);
     }
-    printf("Unicorn: INVALID MEMORY %s at 0x%08llx, size=%d, value=0x%llx\n",
-           type_str, (unsigned long long)address, size, (unsigned long long)value);
-    fflush(stdout);
-    
-    // Return false to stop emulation on invalid access
     return false;
 }
 
 /*
- * Instruction hook for A-line and F-line trap detection
- *
- * Mac OS uses A-line traps (opcodes 0xAXXX) for system calls.
- * We also need to detect our special EMUL_OP opcodes (0x71XX).
+ * Exception/interrupt hook - THE MAIN HANDLER
+ * This catches EMUL_OPs, A-line traps, etc. without per-instruction overhead
  */
-
-static int hook_call_count = 0;
-static uint64_t last_pc = 0;
-static int same_pc_count = 0;
-static int tick_counter = 0;
-static const int TICK_INTERVAL = 1000;  // Check ticks every N instructions
-
-// External declarations from main_unix.cpp
-extern void cpu_do_check_ticks(void);
-extern void VideoRefresh(void);
-
-// Declared in video.h - pump SDL events from main thread
-extern void SDL_PumpEventsFromMainThread(void);
-
-// Need to mimic one_tick() behavior for Unicorn since the pthread tick thread
-// uses signals that Unicorn doesn't handle
-static int tick_60hz_counter = 0;
-static const int TICK_60HZ_INTERVAL = 16000;  // ~60Hz at 1M instructions/sec
-static uint64_t total_instructions = 0;
-static int status_counter = 0;
-
-static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data)
-{
-    total_instructions++;
-    
-    // Early progress indicator (first 100 instructions in detail, then milestones)
-    if (total_instructions <= 100) {
-        // Print every 10th instruction in the first 100
-        if (total_instructions % 10 == 0) {
-            uint32_t a7;
-            uc_reg_read(uc, UC_M68K_REG_A7, &a7);
-            printf("Unicorn: [%llu] PC=0x%08llx A7=0x%08x\n",
-                   (unsigned long long)total_instructions, (unsigned long long)address, a7);
-            fflush(stdout);
-        }
-    } else if (total_instructions == 1000 || total_instructions == 10000 || 
-               total_instructions == 100000 || total_instructions % 1000000 == 0) {
-        printf("Unicorn: Progress: %llu instructions, PC=0x%08llx\n",
-               (unsigned long long)total_instructions, (unsigned long long)address);
-        fflush(stdout);
-    }
-    
-    // Periodically call tick handler to pump SDL events
-    if (++tick_counter >= TICK_INTERVAL) {
-        tick_counter = 0;
-        cpu_do_check_ticks();
-    }
-    
-    // Generate 60Hz VBL interrupt (needed for Mac OS to progress)
-    // The pthread tick thread uses signals that Unicorn doesn't receive
-    tick_60hz_counter++;
-    if (tick_60hz_counter >= TICK_60HZ_INTERVAL) {
-        tick_60hz_counter = 0;
-        status_counter++;
-        
-        // Pump SDL events
-        SDL_PumpEventsFromMainThread();
-        
-        // CRITICAL: Call VideoRefresh unconditionally!
-        // Without this, nothing ever appears on screen
-        static int video_refresh_count = 0;
-        video_refresh_count++;
-        if (video_refresh_count <= 5 || video_refresh_count % 60 == 0) {
-            printf("Unicorn: Calling VideoRefresh #%d\n", video_refresh_count);
-            fflush(stdout);
-        }
-        VideoRefresh();
-        
-        // Check if Mac is initialized (warm start flag at 0xCFC = 'WLSC')
-        uint32_t warm_start = ReadMacInt32(0xcfc);
-        bool mac_started = (warm_start == 0x574C5343);  // 'WLSC'
-        
-        // Periodic status output
-        if (status_counter % 60 == 0) {  // Every ~1 second
-            uint32_t sr;
-            uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-            printf("Unicorn: %lluM instructions, PC=0x%08llx, SR=0x%04x, IPL=%d, warm=0x%08x, started=%d\n",
-                   (unsigned long long)(total_instructions / 1000000),
-                   (unsigned long long)address, sr, (sr >> 8) & 7, warm_start, mac_started);
-            fflush(stdout);
-        }
-        
-        // Trigger 60Hz interrupt if Mac has started OR ROM is not Classic
-        // Non-Classic ROMs need interrupts during initialization too!
-        // (Same logic as one_tick() in main_unix.cpp)
-        if (ROMVersion != ROM_VERSION_CLASSIC || mac_started) {
-            SetInterruptFlag(INTFLAG_60HZ);
-            pending_interrupt = 1;  // Set directly since TriggerInterrupt uses signals
-        }
-    }
-    
-    // Detect RAM test loop and skip it
-    // The ROM copies a test routine to RAM and executes it, testing every longword
-    // With 136MB RAM and per-instruction hooks, this takes forever
-    // Detect: PC is in RAM (< ROMBaseMac) and we've been there for many instructions
-    static uint64_t ram_exec_count = 0;
-    static bool ram_test_skipped = false;
-    
-    if (!ram_test_skipped && address < ROMBaseMac) {
-        ram_exec_count++;
-        // After 50K instructions in RAM, assume it's the RAM test and skip it
-        if (ram_exec_count == 50000) {
-            printf("Unicorn: Detected RAM test loop at PC=0x%08llx after %llu instructions in RAM\n",
-                   (unsigned long long)address, (unsigned long long)ram_exec_count);
-            printf("Unicorn: Skipping RAM test by pre-clearing RAM and forcing return...\n");
-            fflush(stdout);
-            
-            // Clear all of RAM (the test would have done this anyway)
-            memset(RAMBaseHost, 0, RAMSize);
-            
-            // Read the return address from the stack - this is where the ROM expects to continue
-            uint32_t sp;
-            uc_reg_read(uc, UC_M68K_REG_A7, &sp);
-            uint32_t return_addr = ReadMacInt32(sp);
-            
-            printf("Unicorn: Stack pointer A7=0x%08x, return address=0x%08x\n", sp, return_addr);
-            
-            // If return address looks valid (in ROM), pop it and jump there
-            if (return_addr >= ROMBaseMac && return_addr < ROMBaseMac + ROMSize) {
-                sp += 4;  // Pop return address
-                uc_reg_write(uc, UC_M68K_REG_A7, &sp);
-                uc_reg_write(uc, UC_M68K_REG_PC, &return_addr);
-                printf("Unicorn: Jumped to return address 0x%08x, RAM test skipped!\n", return_addr);
-            } else {
-                printf("Unicorn: Return address 0x%08x not in ROM, continuing test...\n", return_addr);
-            }
-            
-            ram_test_skipped = true;
-            fflush(stdout);
-            return;  // Skip normal processing this iteration
-        }
-    } else if (address >= ROMBaseMac) {
-        // Back in ROM, reset counter
-        if (ram_exec_count > 0 && !ram_test_skipped) {
-            ram_exec_count = 0;
-        }
-    }
-    
-    // Detect stuck loops (high threshold - tight loops are normal)
-    if (address == last_pc) {
-        same_pc_count++;
-        if (same_pc_count == 100000) {  // 100K iterations before stopping
-            uint32_t a7, sr;
-            uc_reg_read(uc, UC_M68K_REG_A7, &a7);
-            uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-            printf("Unicorn: STUCK at PC=0x%08llx (100K iterations), A7=0x%08x, SR=0x%04x\n",
-                   (unsigned long long)address, a7, sr);
-            printf("Unicorn: Stopping emulation due to infinite loop\n");
-            fflush(stdout);
-            uc_emu_stop(uc);
-            return;
-        }
-    } else {
-        same_pc_count = 0;
-        last_pc = address;
-    }
-    
-    // Diagnostic output - only first 10 instructions for startup verification
-    if (hook_call_count < 10) {
-        uint16_t opcode;
-        if (uc_mem_read(uc, address, &opcode, 2) == UC_ERR_OK) {
-            opcode = (opcode >> 8) | (opcode << 8);  // big-endian swap
-            uint32_t a7;
-            uc_reg_read(uc, UC_M68K_REG_A7, &a7);
-            printf("Unicorn: [%d] PC=0x%08llx opcode=0x%04x A7=0x%08x\n", 
-                   hook_call_count, (unsigned long long)address, opcode, a7);
-            fflush(stdout);
-        }
-        hook_call_count++;
-    }
-    
-    // Check for EXEC_RETURN marker
-    if (address == EXEC_RETURN_ADDR) {
-        D(bug("Unicorn: EXEC_RETURN hit, stopping execution\n"));
-        uc_emu_stop(uc);
-        return;
-    }
-    
-    // Check for pending interrupts
-    if (pending_interrupt > 0 && execute_depth == 0) {
-        uint32_t sr;
-        uc_reg_read(uc, UC_M68K_REG_SR, &sr);
-        int current_ipl = (sr >> 8) & 7;
-        
-        if (pending_interrupt > current_ipl || pending_interrupt == 7) {
-            // Take the interrupt
-            int vector = M68K_EXCEPTION_AUTOVECTOR_1 + pending_interrupt - 1;
-            D(bug("Unicorn: Taking interrupt level %d\n", pending_interrupt));
-            
-            // Update interrupt mask in SR
-            sr = (sr & ~0x0700) | ((pending_interrupt & 7) << 8);
-            uc_reg_write(uc, UC_M68K_REG_SR, &sr);
-            
-            take_exception(vector, (uint32_t)address);
-            pending_interrupt = 0;
-            InterruptFlags = 0;
-            return;
-        }
-    }
-    
-    // Read the instruction
-    uint16_t opcode;
-    if (uc_mem_read(uc, address, &opcode, 2) != UC_ERR_OK) {
-        return;
-    }
-    
-    // Convert from big-endian
-    opcode = (opcode >> 8) | (opcode << 8);
-    
-    // Check for EMUL_OP opcodes (0x71XX range - illegal moveq form)
-    if ((opcode & 0xFF00) == 0x7100) {
-        // Log important EMUL_OPs (skip CLKNOMEM spam - 0x7104)
-        if (opcode != 0x7104) {
-            printf("Unicorn: EMUL_OP 0x%04x at PC=0x%08llx\n", opcode, (unsigned long long)address);
-            fflush(stdout);
-        }
-        
-        // Special logging for key boot milestones
-        if (opcode == 0x710a) {  // INSTALL_DRIVERS
-            printf("Unicorn: *** INSTALL_DRIVERS reached - video driver should initialize ***\n");
-            fflush(stdout);
-        }
-        
-        // Get current registers
-        M68kRegisters r;
-        get_regs(&r);
-        
-        // Handle the EMUL_OP
-        EmulOp(opcode, &r);
-        
-        // Write registers back
-        set_regs(&r);
-        
-        // Skip past the EMUL_OP instruction
-        uint32_t pc = (uint32_t)address + 2;
-        uc_reg_write(uc, UC_M68K_REG_PC, &pc);
-        
-        // Check if we should quit
-        if (quit_program) {
-            uc_emu_stop(uc);
-        }
-        return;
-    }
-    
-    // Check for A-line traps (0xAXXX) - Mac OS toolbox calls
-    if ((opcode & 0xF000) == 0xA000) {
-        // Log first few A-line traps for debugging
-        static int aline_count = 0;
-        if (++aline_count <= 10) {
-            printf("Unicorn: A-line trap 0x%04x at PC=0x%08llx (trap #%d)\n", 
-                   opcode, (unsigned long long)address, aline_count);
-            fflush(stdout);
-        }
-        
-        // Take Line-A exception - this will jump to the trap dispatcher in ROM
-        // The Mac OS trap dispatcher reads the trap word from PC-2 to determine
-        // which toolbox/OS routine to call
-        take_exception(M68K_EXCEPTION_LINEA, (uint32_t)address + 2);
-        return;
-    }
-    
-    // Check for F-line traps (0xFXXX) - typically FPU instructions
-    // Unicorn's 68k core should handle native FPU instructions if enabled,
-    // but unimplemented FPU ops will trigger this
-    if ((opcode & 0xF000) == 0xF000) {
-        D(bug("Unicorn: F-line trap 0x%04x at 0x%08llx\n", opcode, (unsigned long long)address));
-        
-        // Take Line-F exception
-        take_exception(M68K_EXCEPTION_LINEF, (uint32_t)address + 2);
-        return;
-    }
-}
-
-/*
- * Hook for CPU interrupts/exceptions from Unicorn
- * 
- * Unicorn triggers this when the emulated CPU takes an exception.
- * For M68K, intno is the exception vector number.
- */
-
 static void hook_intr(uc_engine *uc, uint32_t intno, void *user_data)
 {
-    uint32_t pc, a7, sr;
+    uint32_t pc, sr;
     uc_reg_read(uc, UC_M68K_REG_PC, &pc);
-    uc_reg_read(uc, UC_M68K_REG_A7, &a7);
     uc_reg_read(uc, UC_M68K_REG_SR, &sr);
     
-    printf("Unicorn: EXCEPTION %d at PC=0x%08x A7=0x%08x SR=0x%04x\n", intno, pc, a7, sr);
-    fflush(stdout);
+    total_exceptions++;
     
     switch (intno) {
-        case 2:  // Bus error
-            printf("Unicorn: Bus Error!\n");
+        case M68K_EXCEPTION_ILLEGAL: {
+            uint16_t opcode;
+            if (uc_mem_read(uc, pc, &opcode, 2) != UC_ERR_OK) {
+                printf("Unicorn: Failed to read opcode at PC=0x%08x\n", pc);
+                stop_execution = true;
+                uc_emu_stop(uc);
+                return;
+            }
+            opcode = (opcode >> 8) | (opcode << 8);
+            
+            // EMUL_OP (0x71xx)
+            if ((opcode & 0xFF00) == 0x7100) {
+                handle_emul_op(pc, opcode);
+                return;
+            }
+            
+            printf("Unicorn: Illegal instruction 0x%04x at PC=0x%08x\n", opcode, pc);
+            stop_execution = true;
             uc_emu_stop(uc);
             return;
-            
-        case 3:  // Address error
-            printf("Unicorn: Address Error!\n");
-            uc_emu_stop(uc);
-            return;
-            
+        }
+        
         case M68K_EXCEPTION_LINEA:
-            // A-line trap - already handled in hook_code, but Unicorn may also trigger this
-            printf("Unicorn: A-line exception at PC=0x%08x\n", pc);
-            break;
+            // A-line trap - let ROM dispatcher handle it
+            take_exception(M68K_EXCEPTION_LINEA, pc);
+            return;
             
         case M68K_EXCEPTION_LINEF:
-            // F-line trap (FPU) - may need software FPU emulation
-            printf("Unicorn: F-line exception at PC=0x%08x\n", pc);
-            break;
+            take_exception(M68K_EXCEPTION_LINEF, pc);
+            return;
             
-        case M68K_EXCEPTION_ILLEGAL:
-            // Try to emulate MOVEM (Unicorn doesn't support it)
-            if (emulate_movem(pc)) {
-                printf("Unicorn: Emulated MOVEM at PC=0x%08x\n", pc);
-                return;  // Continue execution
-            }
-            printf("Unicorn: Illegal instruction at PC=0x%08x\n", pc);
+        case M68K_EXCEPTION_BUS_ERROR:
+        case M68K_EXCEPTION_ADDRESS_ERROR:
+            printf("Unicorn: %s at PC=0x%08x\n", 
+                   intno == 2 ? "Bus Error" : "Address Error", pc);
+            stop_execution = true;
             uc_emu_stop(uc);
             return;
             
         case M68K_EXCEPTION_PRIVILEGE:
-            printf("Unicorn: Privilege violation at PC=0x%08x\n", pc);
-            break;
+            printf("Unicorn: Privilege Violation at PC=0x%08x\n", pc);
+            stop_execution = true;
+            uc_emu_stop(uc);
+            return;
             
         default:
             if (intno >= M68K_EXCEPTION_TRAP_BASE && intno < M68K_EXCEPTION_TRAP_BASE + 16) {
-                printf("Unicorn: TRAP #%d at PC=0x%08x\n", intno - M68K_EXCEPTION_TRAP_BASE, pc);
+                take_exception(intno, pc + 2);
+                return;
             }
+            D(bug("Unicorn: Exception %d at PC=0x%08x\n", intno, pc));
             break;
+    }
+}
+
+// External declarations
+extern void cpu_do_check_ticks(void);
+extern void VideoRefresh(void);
+extern void SDL_PumpEventsFromMainThread(void);
+
+/*
+ * Periodic task handler - called between execution chunks
+ */
+static void do_periodic_tasks(void)
+{
+    uint64_t now = get_time_us();
+    
+    if (now - last_tick_time >= TICK_INTERVAL_US) {
+        last_tick_time = now;
+        
+        SDL_PumpEventsFromMainThread();
+        VideoRefresh();
+        cpu_do_check_ticks();
+        
+        uint32_t warm_start = ReadMacInt32(0xcfc);
+        bool mac_started = (warm_start == 0x574C5343);
+        
+        if (ROMVersion != ROM_VERSION_CLASSIC || mac_started) {
+            SetInterruptFlag(INTFLAG_60HZ);
+            pending_interrupt = 1;
+        }
+    }
+}
+
+/*
+ * Deliver pending interrupt
+ */
+static void deliver_interrupt(void)
+{
+    if (pending_interrupt > 0 && execute_depth == 0) {
+        uint32_t sr, pc;
+        uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+        int current_ipl = (sr >> 8) & 7;
+        
+        if (pending_interrupt > current_ipl || pending_interrupt == 7) {
+            int vector = M68K_EXCEPTION_AUTOVECTOR_1 + pending_interrupt - 1;
+            D(bug("Unicorn: Interrupt level %d\n", pending_interrupt));
+            take_exception(vector, pc, pending_interrupt);
+            pending_interrupt = 0;
+            InterruptFlags = 0;
+        }
     }
 }
 
 /*
  * Initialize 680x0 emulation
  */
-
 bool Init680x0(void)
 {
     D(bug("Unicorn: Init680x0\n"));
     
-    // Create Unicorn instance for M68K
     uc_err err = uc_open(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, &uc);
     if (err != UC_ERR_OK) {
         printf("Unicorn: Failed to create engine: %s\n", uc_strerror(err));
         return false;
     }
     
-    // CRITICAL: Set CPU model to M68000 (or M68040 for FPU support)
-    // By default Unicorn uses Coldfire which doesn't support classic 68k instructions
-    // like MOVEM, ADDI, DBF, etc. Setting to M68000 enables proper 68k emulation.
-    // Models: UC_CPU_M68K_M68000=0, M68020, M68030, M68040, M68060
+    // Set CPU model to M68040
 #ifdef UC_CPU_M68K_M68040
     err = uc_ctl_set_cpu_model(uc, UC_CPU_M68K_M68040);
+#else
+    err = uc_ctl_set_cpu_model(uc, 3);  // M68040 = 3
+#endif
     if (err == UC_ERR_OK) {
         printf("Unicorn: CPU model set to M68040\n");
     } else {
         printf("Unicorn: Warning: Could not set CPU model: %s\n", uc_strerror(err));
     }
-#else
-    // Older Unicorn without model constants - try raw value
-    // M68040 = 3 in the enum
-    err = uc_ctl_set_cpu_model(uc, 3);
-    if (err == UC_ERR_OK) {
-        printf("Unicorn: CPU model set to M68040 (raw)\n");
-    } else {
-        printf("Unicorn: Warning: Could not set CPU model: %s (trying M68000)\n", uc_strerror(err));
-        // Try M68000 = 0
-        err = uc_ctl_set_cpu_model(uc, 0);
-        if (err == UC_ERR_OK) {
-            printf("Unicorn: CPU model set to M68000\n");
-        }
-    }
-#endif
     
-    // Configure TCG translation cache size (64MB for better JIT caching)
-    // This helps performance by caching more translated code blocks
-    // Note: uc_ctl_set_tcg_buffer_size is only available in Unicorn 2.0.2+
-#ifdef UC_CTL_TCG_BUFFER_SIZE
-    const size_t tcg_cache_size = 64 * 1024 * 1024;  // 64MB
-    err = uc_ctl_set_tcg_buffer_size(uc, tcg_cache_size);
-    if (err == UC_ERR_OK) {
-        D(bug("Unicorn: TCG cache size set to %zu MB\n", tcg_cache_size / (1024*1024)));
-    } else {
-        D(bug("Unicorn: Warning: Could not set TCG cache size: %s (using default)\n", uc_strerror(err)));
-    }
-#else
-    D(bug("Unicorn: TCG cache size API not available (using default)\n"));
-#endif
-    
-    // Map RAM
-    // Unicorn requires page-aligned addresses and sizes (4KB alignment)
-    printf("Unicorn: RAMSize=0x%08x RAMBaseHost=%p\n", RAMSize, RAMBaseHost);
-    printf("Unicorn: ROMBaseMac=0x%08x ROMSize=0x%08x ROMBaseHost=%p\n", ROMBaseMac, ROMSize, ROMBaseHost);
+    printf("Unicorn: RAM=0x%08x ROM=0x%08x@0x%08x\n", RAMSize, ROMSize, ROMBaseMac);
     
     if (RAMSize == 0 || RAMBaseHost == NULL) {
-        printf("Unicorn: ERROR: RAM not initialized (RAMSize=%u, RAMBaseHost=%p)\n", RAMSize, RAMBaseHost);
-        printf("Unicorn: Init680x0() may have been called before memory setup\n");
+        printf("Unicorn: ERROR: RAM not initialized\n");
         uc_close(uc);
         uc = NULL;
         return false;
     }
     
+    // Map RAM
     size_t ram_size_aligned = (RAMSize + 0xFFF) & ~0xFFF;
     err = uc_mem_map_ptr(uc, 0, ram_size_aligned, UC_PROT_ALL, RAMBaseHost);
     if (err != UC_ERR_OK) {
@@ -848,384 +431,241 @@ bool Init680x0(void)
         return false;
     }
     ram_mapped = true;
-    printf("Unicorn: Mapped RAM at 0x00000000, size 0x%08zx\n", ram_size_aligned);
+    printf("Unicorn: Mapped RAM 0x00000000-0x%08zx\n", ram_size_aligned);
     
     // Map ROM
-    if (ROMSize == 0 || ROMBaseHost == NULL) {
-        printf("Unicorn: Warning: ROM not initialized, skipping ROM mapping\n");
-    } else {
-        // ROM address must not overlap with RAM
+    if (ROMSize > 0 && ROMBaseHost != NULL) {
         size_t rom_size_aligned = (ROMSize + 0xFFF) & ~0xFFF;
-        uint32_t rom_base_aligned = ROMBaseMac & ~0xFFF;
-        
-        printf("Unicorn: ROM base 0x%08x (aligned: 0x%08x), size 0x%08x (aligned: 0x%08zx)\n",
-              ROMBaseMac, rom_base_aligned, ROMSize, rom_size_aligned);
-        
-        // Check for overlap with RAM
-        if (rom_base_aligned < ram_size_aligned) {
-            printf("Unicorn: Warning: ROM (0x%08x) overlaps with RAM (0-0x%08zx)\n",
-                   rom_base_aligned, ram_size_aligned);
-            // ROM immediately follows RAM in host memory, so just adjust the base
-            rom_base_aligned = ram_size_aligned;
-            printf("Unicorn: Adjusted ROM base to 0x%08x\n", rom_base_aligned);
+        uint32_t rom_base = ROMBaseMac & ~0xFFF;
+        if (rom_base < ram_size_aligned) {
+            rom_base = ram_size_aligned;
         }
         
-        err = uc_mem_map_ptr(uc, rom_base_aligned, rom_size_aligned, UC_PROT_READ | UC_PROT_EXEC, ROMBaseHost);
+        err = uc_mem_map_ptr(uc, rom_base, rom_size_aligned, UC_PROT_READ | UC_PROT_EXEC, ROMBaseHost);
         if (err != UC_ERR_OK) {
-            printf("Unicorn: Failed to map ROM at 0x%08x: %s\n", rom_base_aligned, uc_strerror(err));
+            printf("Unicorn: Failed to map ROM: %s\n", uc_strerror(err));
             uc_close(uc);
             uc = NULL;
             return false;
         }
         rom_mapped = true;
-        printf("Unicorn: Mapped ROM at 0x%08x, size 0x%08zx\n", rom_base_aligned, rom_size_aligned);
+        printf("Unicorn: Mapped ROM 0x%08x-0x%08x\n", rom_base, (unsigned)(rom_base + rom_size_aligned));
     }
     
 #if !REAL_ADDRESSING
-    // Map frame buffer if present
     if (MacFrameBaseHost && MacFrameSize > 0) {
         size_t frame_size_aligned = (MacFrameSize + 0xFFF) & ~0xFFF;
         err = uc_mem_map_ptr(uc, MacFrameBaseMac, frame_size_aligned, UC_PROT_ALL, MacFrameBaseHost);
-        if (err != UC_ERR_OK) {
-            printf("Unicorn: Warning: Failed to map frame buffer: %s\n", uc_strerror(err));
-        } else {
+        if (err == UC_ERR_OK) {
             frame_mapped = true;
-            D(bug("Unicorn: Mapped frame buffer at 0x%08x, size 0x%08x\n", 
-                  MacFrameBaseMac, (unsigned)frame_size_aligned));
+            printf("Unicorn: Mapped framebuffer at 0x%08x\n", MacFrameBaseMac);
         }
     }
 #endif
     
-    // Map a page for the EXEC_RETURN marker
-    err = uc_mem_map(uc, EXEC_RETURN_ADDR & ~0xFFF, 0x1000, UC_PROT_READ | UC_PROT_EXEC);
-    if (err != UC_ERR_OK) {
-        D(bug("Unicorn: Warning: Failed to map EXEC_RETURN page: %s\n", uc_strerror(err)));
-    }
+    // Map EXEC_RETURN page
+    uc_mem_map(uc, EXEC_RETURN_ADDR & ~0xFFF, 0x1000, UC_PROT_READ | UC_PROT_EXEC);
     
-    // Add code hook for EMUL_OP detection
-    uc_hook hh_code;
-    err = uc_hook_add(uc, &hh_code, UC_HOOK_CODE, (void *)hook_code, NULL, 1, 0);
-    if (err != UC_ERR_OK) {
-        printf("Unicorn: Failed to add code hook: %s\n", uc_strerror(err));
-    }
-    
-    // Add interrupt hook for A-line traps
+    // Add exception hook - THE KEY TO PERFORMANCE
     uc_hook hh_intr;
     err = uc_hook_add(uc, &hh_intr, UC_HOOK_INTR, (void *)hook_intr, NULL, 1, 0);
     if (err != UC_ERR_OK) {
-        D(bug("Unicorn: Warning: Failed to add interrupt hook: %s\n", uc_strerror(err)));
+        printf("Unicorn: Failed to add interrupt hook: %s\n", uc_strerror(err));
     }
     
-    // Add hook for unmapped memory
+    // Add memory error hook
     uc_hook hh_mem;
-    err = uc_hook_add(uc, &hh_mem, UC_HOOK_MEM_UNMAPPED, (void *)hook_mem_unmapped, NULL, 1, 0);
-    if (err != UC_ERR_OK) {
-        D(bug("Unicorn: Warning: Failed to add memory hook: %s\n", uc_strerror(err)));
-    }
+    uc_hook_add(uc, &hh_mem, 
+                UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | 
+                UC_HOOK_MEM_FETCH_UNMAPPED | UC_HOOK_MEM_READ_PROT |
+                UC_HOOK_MEM_WRITE_PROT | UC_HOOK_MEM_FETCH_PROT,
+                (void *)hook_mem_invalid, NULL, 1, 0);
     
-    // Add hook for invalid memory accesses (protection violations, etc.)
-    uc_hook hh_mem_invalid;
-    err = uc_hook_add(uc, &hh_mem_invalid, 
-                      UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | 
-                      UC_HOOK_MEM_FETCH_UNMAPPED | UC_HOOK_MEM_READ_PROT |
-                      UC_HOOK_MEM_WRITE_PROT | UC_HOOK_MEM_FETCH_PROT,
-                      (void *)hook_mem_invalid, NULL, 1, 0);
-    if (err != UC_ERR_OK) {
-        printf("Unicorn: Warning: Failed to add invalid memory hook: %s\n", uc_strerror(err));
-    }
-    
-    printf("Unicorn: 68k emulation initialized successfully\n");
+    printf("Unicorn: Initialized (high-performance mode - no per-instruction hooks)\n");
     return true;
 }
-
-/*
- * Deinitialize 680x0 emulation
- */
 
 void Exit680x0(void)
 {
     D(bug("Unicorn: Exit680x0\n"));
-    
     if (uc) {
         uc_close(uc);
         uc = NULL;
     }
-    
-    ram_mapped = false;
-    rom_mapped = false;
-    frame_mapped = false;
+    ram_mapped = rom_mapped = frame_mapped = false;
 }
 
 /*
- * Reset and start 680x0 emulation
+ * Main execution loop - chunked for performance
  */
-
 void Start680x0(void)
 {
-    printf("Unicorn: Start680x0\n");
+    printf("Unicorn: Start680x0 (chunked execution)\n");
     
     if (!uc) {
         printf("Unicorn: Engine not initialized!\n");
         return;
     }
     
-    // Mac ROM entry point is NOT at reset vectors (0, 4)
-    // BasiliskII uses fixed values (see uae_cpu/newcpu.cpp m68k_reset):
-    // - SP = 0x2000 (low RAM)
-    // - PC = ROMBaseMac + 0x2a (entry point in ROM)
+    // Set initial state
     uint32_t initial_sp = 0x2000;
     uint32_t initial_pc = ROMBaseMac + 0x2a;
-    
-    printf("Unicorn: Initial SP=0x%08x, PC=0x%08x (ROM+0x2a)\n", initial_sp, initial_pc);
-    
-    // Set initial registers
-    uc_err err;
-    err = uc_reg_write(uc, UC_M68K_REG_A7, &initial_sp);
-    if (err != UC_ERR_OK) {
-        printf("Unicorn: Failed to set A7: %s\n", uc_strerror(err));
-    }
-    err = uc_reg_write(uc, UC_M68K_REG_PC, &initial_pc);
-    if (err != UC_ERR_OK) {
-        printf("Unicorn: Failed to set PC: %s\n", uc_strerror(err));
-    }
-    
-    // Set supervisor mode
-    uint32_t sr = 0x2700;  // Supervisor mode, interrupts disabled
-    err = uc_reg_write(uc, UC_M68K_REG_SR, &sr);
-    if (err != UC_ERR_OK) {
-        printf("Unicorn: Failed to set SR: %s\n", uc_strerror(err));
-    }
-    
-    // Verify registers were set
-    uint32_t verify_a7, verify_pc, verify_sr;
-    uc_reg_read(uc, UC_M68K_REG_A7, &verify_a7);
-    uc_reg_read(uc, UC_M68K_REG_PC, &verify_pc);
-    uc_reg_read(uc, UC_M68K_REG_SR, &verify_sr);
-    printf("Unicorn: Verified - A7=0x%08x, PC=0x%08x, SR=0x%04x\n", verify_a7, verify_pc, verify_sr);
-    
-    // Clear data registers
+    uint32_t sr = 0x2700;
     uint32_t zero = 0;
+    
+    uc_reg_write(uc, UC_M68K_REG_A7, &initial_sp);
+    uc_reg_write(uc, UC_M68K_REG_PC, &initial_pc);
+    uc_reg_write(uc, UC_M68K_REG_SR, &sr);
+    
     for (int i = 0; i < 8; i++) {
         uc_reg_write(uc, UC_M68K_REG_D0 + i, &zero);
     }
-    
-    // Clear address registers (except A7)
     for (int i = 0; i < 7; i++) {
         uc_reg_write(uc, UC_M68K_REG_A0 + i, &zero);
     }
     
+    printf("Unicorn: SP=0x%08x PC=0x%08x\n", initial_sp, initial_pc);
+    
     quit_program = 0;
+    stop_execution = false;
+    last_tick_time = get_time_us();
     
-    // Start emulation
-    printf("Unicorn: Starting emulation at PC=0x%08x\n", initial_pc);
-    fflush(stdout);
+    // Chunked execution - run 100K instructions per chunk
+    // This allows JIT to run efficiently while still checking timers/interrupts
+    const size_t CHUNK_SIZE = 100000;
+    int status_counter = 0;
     
-    err = uc_emu_start(uc, initial_pc, 0, 0, 0);
-    
-    // Always print detailed status when emulation stops
-    uint32_t final_pc, final_sp, final_sr;
-    uc_reg_read(uc, UC_M68K_REG_PC, &final_pc);
-    uc_reg_read(uc, UC_M68K_REG_A7, &final_sp);
-    uc_reg_read(uc, UC_M68K_REG_SR, &final_sr);
-    
-    printf("Unicorn: uc_emu_start returned: %s (%d)\n", uc_strerror(err), err);
-    printf("Unicorn: Final state - PC=0x%08x, A7=0x%08x, SR=0x%04x\n", final_pc, final_sp, final_sr);
-    printf("Unicorn: Total instructions executed: %llu\n", total_instructions);
-    fflush(stdout);
-    
-    if (err != UC_ERR_OK && !quit_program) {
-        printf("Unicorn: Emulation error: %s (PC=0x%08x)\n", uc_strerror(err), final_pc);
+    while (!quit_program && !stop_execution) {
+        uint32_t pc;
+        uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+        
+        deliver_interrupt();
+        
+        uc_err err = uc_emu_start(uc, pc, EXEC_RETURN_ADDR, 0, CHUNK_SIZE);
+        total_chunks++;
+        
+        if (err != UC_ERR_OK) {
+            uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+            if (pc == EXEC_RETURN_ADDR || 
+                (err == UC_ERR_FETCH_UNMAPPED && pc == EXEC_RETURN_ADDR)) {
+                break;
+            }
+            printf("Unicorn: Error: %s at PC=0x%08x\n", uc_strerror(err), pc);
+            break;
+        }
+        
+        do_periodic_tasks();
+        
+        // Status every ~1 second
+        if (++status_counter >= 60) {
+            status_counter = 0;
+            uint32_t sr;
+            uc_reg_read(uc, UC_M68K_REG_PC, &pc);
+            uc_reg_read(uc, UC_M68K_REG_SR, &sr);
+            printf("Unicorn: chunks=%llu PC=0x%08x SR=0x%04x\n",
+                   (unsigned long long)total_chunks, pc, sr);
+            fflush(stdout);
+        }
     }
     
-    printf("Unicorn: Emulation ended\n");
-    fflush(stdout);
+    uint32_t final_pc, final_sr;
+    uc_reg_read(uc, UC_M68K_REG_PC, &final_pc);
+    uc_reg_read(uc, UC_M68K_REG_SR, &final_sr);
+    printf("Unicorn: Done - PC=0x%08x chunks=%llu exceptions=%llu\n",
+           final_pc, (unsigned long long)total_chunks, (unsigned long long)total_exceptions);
 }
-
-/*
- * Execute 68k subroutine
- * The executed routine must reside in emulated memory.
- */
 
 void Execute68k(uint32 addr, M68kRegisters *r)
 {
-    D(bug("Unicorn: Execute68k at 0x%08x\n", addr));
-    
-    if (!uc) {
-        return;
-    }
+    D(bug("Unicorn: Execute68k 0x%08x\n", addr));
+    if (!uc) return;
     
     execute_depth++;
     
-    // Save current PC
     uint32_t old_pc;
     uc_reg_read(uc, UC_M68K_REG_PC, &old_pc);
     
-    // Set registers from M68kRegisters
     set_regs(r);
     
-    // Push return address on stack
     uint32_t sp;
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
     sp -= 4;
     WriteMacInt32(sp, EXEC_RETURN_ADDR);
     uc_reg_write(uc, UC_M68K_REG_A7, &sp);
     
-    // Execute until we hit EXEC_RETURN_ADDR
     int saved_quit = quit_program;
     quit_program = 0;
     
-    uc_err err = uc_emu_start(uc, addr, EXEC_RETURN_ADDR, 0, 0);
-    if (err != UC_ERR_OK && err != UC_ERR_FETCH_UNMAPPED) {
-        D(bug("Unicorn: Execute68k error: %s\n", uc_strerror(err)));
-    }
+    uc_emu_start(uc, addr, EXEC_RETURN_ADDR, 0, 0);
     
     quit_program = saved_quit;
     
-    // Pop return address from stack
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
     sp += 4;
     uc_reg_write(uc, UC_M68K_REG_A7, &sp);
     
-    // Get registers back
     get_regs(r);
-    
-    // Restore PC
     uc_reg_write(uc, UC_M68K_REG_PC, &old_pc);
     
     execute_depth--;
 }
 
-/*
- * Execute MacOS 68k trap from EMUL_OP routine
- */
-
 void Execute68kTrap(uint16 trap, M68kRegisters *r)
 {
     D(bug("Unicorn: Execute68kTrap 0x%04x\n", trap));
+    if (!uc) return;
     
-    if (!uc) {
-        return;
-    }
-    
-    // Push trap word and return address on stack
     uint32_t sp;
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
-    
-    // Push EXEC_RETURN address
     sp -= 4;
     WriteMacInt32(sp, EXEC_RETURN_ADDR);
-    
-    // Push trap word
     sp -= 2;
     WriteMacInt16(sp, trap);
-    
     uc_reg_write(uc, UC_M68K_REG_A7, &sp);
     
-    // Execute starting at stack (the trap word)
-    // The 68k will execute the trap instruction and then return to EXEC_RETURN
     Execute68k(sp, r);
     
-    // Clean up stack
     uc_reg_read(uc, UC_M68K_REG_A7, &sp);
-    sp += 2;  // Pop trap word (EXEC_RETURN already popped by Execute68k)
+    sp += 2;
     uc_reg_write(uc, UC_M68K_REG_A7, &sp);
 }
-
-/*
- * Trigger interrupt level 1
- * 
- * This sets the pending interrupt flag. The interrupt will be taken
- * at the next instruction boundary if the interrupt priority level (IPL)
- * in SR allows it (i.e., pending_interrupt > current IPL).
- */
 
 void TriggerInterrupt(void)
 {
-    InterruptFlags |= 1;
-    pending_interrupt = 1;  // Level 1 interrupt (VIA)
-    
-    D(bug("Unicorn: TriggerInterrupt - pending level 1\n"));
-    
-    // If we're in the main emulation loop (not nested Execute68k),
-    // we could stop emulation to check the interrupt sooner
-    if (uc && execute_depth == 0) {
-        // Optionally stop to process interrupt faster
-        // uc_emu_stop(uc);
-    }
+    pending_interrupt = 1;
 }
-
-/*
- * Trigger NMI (level 7)
- * 
- * NMI (Non-Maskable Interrupt) is level 7 and cannot be masked.
- */
 
 void TriggerNMI(void)
 {
-    InterruptFlags |= 0x80;
-    pending_interrupt = 7;  // Level 7 - NMI
-    
-    D(bug("Unicorn: TriggerNMI - pending level 7\n"));
-    
-    // NMI should be processed ASAP
-    if (uc && execute_depth == 0) {
-        uc_emu_stop(uc);
-    }
+    pending_interrupt = 7;
 }
-
-/*
- * Get interrupt level
- */
 
 int intlev(void)
 {
     return InterruptFlags ? 1 : 0;
 }
 
-/*
- * Dump CPU state (for debugging/crash dumps)
- * Called from main_unix.cpp sigsegv handler
- */
-
-void m68k_dumpstate(uint32 *nextpc)
+void QuitEmulator(void)
 {
-    if (!uc) {
-        printf("Unicorn: CPU not initialized\n");
-        return;
+    quit_program = 1;
+    stop_execution = true;
+}
+
+void Dump68kRegs(void)
+{
+    if (!uc) return;
+    
+    uint32_t d[8], a[8], pc, sr;
+    for (int i = 0; i < 8; i++) {
+        uc_reg_read(uc, UC_M68K_REG_D0 + i, &d[i]);
+        uc_reg_read(uc, UC_M68K_REG_A0 + i, &a[i]);
     }
-    
-    uint32_t regs[16];
-    uint32_t pc, sr;
-    
-    // Read data registers
-    uc_reg_read(uc, UC_M68K_REG_D0, &regs[0]);
-    uc_reg_read(uc, UC_M68K_REG_D1, &regs[1]);
-    uc_reg_read(uc, UC_M68K_REG_D2, &regs[2]);
-    uc_reg_read(uc, UC_M68K_REG_D3, &regs[3]);
-    uc_reg_read(uc, UC_M68K_REG_D4, &regs[4]);
-    uc_reg_read(uc, UC_M68K_REG_D5, &regs[5]);
-    uc_reg_read(uc, UC_M68K_REG_D6, &regs[6]);
-    uc_reg_read(uc, UC_M68K_REG_D7, &regs[7]);
-    
-    // Read address registers
-    uc_reg_read(uc, UC_M68K_REG_A0, &regs[8]);
-    uc_reg_read(uc, UC_M68K_REG_A1, &regs[9]);
-    uc_reg_read(uc, UC_M68K_REG_A2, &regs[10]);
-    uc_reg_read(uc, UC_M68K_REG_A3, &regs[11]);
-    uc_reg_read(uc, UC_M68K_REG_A4, &regs[12]);
-    uc_reg_read(uc, UC_M68K_REG_A5, &regs[13]);
-    uc_reg_read(uc, UC_M68K_REG_A6, &regs[14]);
-    uc_reg_read(uc, UC_M68K_REG_A7, &regs[15]);
-    
     uc_reg_read(uc, UC_M68K_REG_PC, &pc);
     uc_reg_read(uc, UC_M68K_REG_SR, &sr);
     
-    printf("D0: %08x D1: %08x D2: %08x D3: %08x\n", regs[0], regs[1], regs[2], regs[3]);
-    printf("D4: %08x D5: %08x D6: %08x D7: %08x\n", regs[4], regs[5], regs[6], regs[7]);
-    printf("A0: %08x A1: %08x A2: %08x A3: %08x\n", regs[8], regs[9], regs[10], regs[11]);
-    printf("A4: %08x A5: %08x A6: %08x A7: %08x\n", regs[12], regs[13], regs[14], regs[15]);
-    printf("PC: %08x SR: %04x\n", pc, sr);
-    
-    if (nextpc)
-        *nextpc = pc + 2;  // Approximate next PC
+    printf("D0-D3: %08x %08x %08x %08x\n", d[0], d[1], d[2], d[3]);
+    printf("D4-D7: %08x %08x %08x %08x\n", d[4], d[5], d[6], d[7]);
+    printf("A0-A3: %08x %08x %08x %08x\n", a[0], a[1], a[2], a[3]);
+    printf("A4-A7: %08x %08x %08x %08x\n", a[4], a[5], a[6], a[7]);
+    printf("PC=%08x SR=%04x\n", pc, sr);
 }
