@@ -1,4 +1,6 @@
-# macemu - Macintosh Emulators
+# macemu-jit - ARM64 JITs for Macintosh Emulators
+
+![icon](icon-256.png)
 
 ## Raspberry Pi Builds
 
