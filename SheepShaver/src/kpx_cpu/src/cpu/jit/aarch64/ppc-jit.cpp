@@ -166,12 +166,128 @@ static inline uint32_t PPC_XO(uint32_t op)   { return (op >> 1) & 0x3FF; }
 
 /* ---- Emit helpers ---- */
 
+/* ---- Register allocator ----
+ * Maps PPC GPRs to ARM64 callee-saved registers x21–x28 (8 slots).
+ * Eliminates redundant LDR/STR when the same GPR is used across
+ * consecutive instructions within a block.
+ */
+#define RA_NUM_REGS  8
+#define RA_FIRST_REG 21  /* x21 */
+
+static int  ra_ppc_to_host[32];   /* PPC GPR → ARM64 reg, -1 = not cached */
+static int  ra_host_to_ppc[RA_NUM_REGS]; /* ARM64 slot → PPC GPR, -1 = free */
+static bool ra_dirty[RA_NUM_REGS];       /* true = cached value modified, needs writeback */
+static int  ra_lru[RA_NUM_REGS];         /* access counter for LRU eviction */
+static int  ra_clock = 0;                /* monotonic access counter */
+
+static void ra_reset(void) {
+	for (int i = 0; i < 32; i++) ra_ppc_to_host[i] = -1;
+	for (int i = 0; i < RA_NUM_REGS; i++) {
+		ra_host_to_ppc[i] = -1;
+		ra_dirty[i] = false;
+		ra_lru[i] = 0;
+	}
+	ra_clock = 0;
+}
+
+/* Evict one slot: write back if dirty, mark free */
+static void ra_evict(int slot) {
+	int ppc = ra_host_to_ppc[slot];
+	if (ppc >= 0) {
+		if (ra_dirty[slot])
+			a64_str_w_imm(RA_FIRST_REG + slot, RSTATE, PPCR_GPR(ppc));
+		ra_ppc_to_host[ppc] = -1;
+	}
+	ra_host_to_ppc[slot] = -1;
+	ra_dirty[slot] = false;
+}
+
+/* Find LRU slot to evict */
+static int ra_find_lru(void) {
+	int best = 0;
+	for (int i = 1; i < RA_NUM_REGS; i++)
+		if (ra_lru[i] < ra_lru[best]) best = i;
+	return best;
+}
+
+/* Get ARM64 reg for reading PPC GPR n (loads from struct if not cached) */
+static int ra_load(int n) {
+	int host = ra_ppc_to_host[n];
+	if (host >= 0) {
+		ra_lru[host - RA_FIRST_REG] = ++ra_clock;
+		return host;
+	}
+	/* Not cached — load from struct and cache it */
+	int slot = -1;
+	for (int i = 0; i < RA_NUM_REGS; i++) {
+		if (ra_host_to_ppc[i] < 0) { slot = i; break; }
+	}
+	if (slot < 0) {
+		slot = ra_find_lru();
+		ra_evict(slot);
+	}
+	host = RA_FIRST_REG + slot;
+	a64_ldr_w_imm(host, RSTATE, PPCR_GPR(n));
+	ra_ppc_to_host[n] = host;
+	ra_host_to_ppc[slot] = n;
+	ra_dirty[slot] = false;
+	ra_lru[slot] = ++ra_clock;
+	return host;
+}
+
+/* Get ARM64 reg for writing PPC GPR n (marks dirty, allocates if needed) */
+static int ra_store(int n) {
+	int host = ra_ppc_to_host[n];
+	if (host >= 0) {
+		int slot = host - RA_FIRST_REG;
+		ra_dirty[slot] = true;
+		ra_lru[slot] = ++ra_clock;
+		return host;
+	}
+	/* Allocate — same as load but don't bother loading old value */
+	int slot = -1;
+	for (int i = 0; i < RA_NUM_REGS; i++) {
+		if (ra_host_to_ppc[i] < 0) { slot = i; break; }
+	}
+	if (slot < 0) {
+		slot = ra_find_lru();
+		ra_evict(slot);
+	}
+	host = RA_FIRST_REG + slot;
+	ra_ppc_to_host[n] = host;
+	ra_host_to_ppc[slot] = n;
+	ra_dirty[slot] = true;
+	ra_lru[slot] = ++ra_clock;
+	return host;
+}
+
+/* Flush all dirty cached regs back to struct (call at block exit) */
+static void ra_flush_all(void) {
+	for (int i = 0; i < RA_NUM_REGS; i++) {
+		if (ra_host_to_ppc[i] >= 0 && ra_dirty[i])
+			a64_str_w_imm(RA_FIRST_REG + i, RSTATE, PPCR_GPR(ra_host_to_ppc[i]));
+	}
+}
+
 static void emit_load_gpr(int rd, int n) {
-	a64_ldr_w_imm(rd, RSTATE, PPCR_GPR(n));
+	int host = ra_ppc_to_host[n];
+	if (host >= 0) {
+		/* Value already cached in a callee-saved reg — MOV to destination */
+		ra_lru[host - RA_FIRST_REG] = ++ra_clock;
+		if (rd != host)
+			emit32(0x2A0003E0 | (host << 16) | rd); /* MOV Wd, Whost */
+	} else {
+		/* Not cached — load from struct and cache it */
+		int cached = ra_load(n);
+		if (rd != cached)
+			emit32(0x2A0003E0 | (cached << 16) | rd); /* MOV Wd, Wcached */
+	}
 }
 
 static void emit_store_gpr(int rs, int n) {
-	a64_str_w_imm(rs, RSTATE, PPCR_GPR(n));
+	int host = ra_store(n);
+	if (rs != host)
+		emit32(0x2A0003E0 | (rs << 16) | host); /* MOV Whost, Wrs */
 }
 
 /* 64-bit GPR access for G5/PPC64 instructions.
@@ -352,6 +468,8 @@ static inline uint32_t VR_VC(uint32_t op) { return (op >> 6) & 0x1F; }
 
 /* Emit: store next_pc to regs->pc, epilogue, ret */
 static void emit_epilogue_with_pc(uint32_t next_pc) {
+	/* Flush register allocator: write all dirty cached GPRs back to struct */
+	ra_flush_all();
 	emit_load_imm32(RTMP0, (int32_t)next_pc);
 	a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 	/* Restore callee-saved regs and return */
@@ -431,6 +549,8 @@ static void lazy_flush_cr0(void) {
 	if (lazy_cr0_valid)
 		emit_materialize_cr0();
 }
+
+/* Get ARM64 reg for writing PPC GPR n (marks dirty, allocates if needed) */
 
 /* Find the ARM64 code offset for a PPC PC within the current block */
 static uint32_t *find_code_for_pc(uint32_t target_pc) {
@@ -2042,6 +2162,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_LR);
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
+				lazy_flush_cr0();
+				ra_flush_all();
 				a64_ldp_post(27, 28, A64_SP, 16);
 				a64_ldp_post(25, 26, A64_SP, 16);
 				a64_ldp_post(23, 24, A64_SP, 16);
@@ -2076,6 +2198,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 					a64_mov_reg(RTMP1, RTMP2);
 				}
 				a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
+				lazy_flush_cr0();
+				ra_flush_all();
 				a64_ldp_post(27, 28, A64_SP, 16);
 				a64_ldp_post(25, 26, A64_SP, 16);
 				a64_ldp_post(23, 24, A64_SP, 16);
@@ -2095,6 +2219,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
+				lazy_flush_cr0();
+				ra_flush_all();
 				a64_ldp_post(27, 28, A64_SP, 16);
 				a64_ldp_post(25, 26, A64_SP, 16);
 				a64_ldp_post(23, 24, A64_SP, 16);
@@ -2123,6 +2249,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 					a64_mov_reg(RTMP1, RTMP2);
 				}
 				a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
+				lazy_flush_cr0();
+				ra_flush_all();
 				a64_ldp_post(27, 28, A64_SP, 16);
 				a64_ldp_post(25, 26, A64_SP, 16);
 				a64_ldp_post(23, 24, A64_SP, 16);
@@ -3262,6 +3390,7 @@ bool ppc_jit_aarch64_compile(
 	insn_count = 0;
 	lazy_cr0_valid = false;
 	lazy_cr0_reg = -1;
+	ra_reset();
 
 	for (int i = 0; i < 512; i++) {
 		if (cur_pc < (uint32_t)(uintptr_t)ram ||
@@ -3273,6 +3402,8 @@ bool ppc_jit_aarch64_compile(
 		              ((uint32_t)p[2] << 8) | p[3];
 
 		if (op == 0x4E800020) { /* blr — block terminator */
+			lazy_flush_cr0();
+			ra_flush_all();
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_LR);
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 			a64_ldp_post(27, 28, A64_SP, 16);
