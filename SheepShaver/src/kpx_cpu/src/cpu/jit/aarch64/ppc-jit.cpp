@@ -28,45 +28,89 @@ static uint32_t *jit_cache_end  = NULL;
  *
  * CONTRACT (see SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md):
  *   Compiled blocks are stored here by PPC entry PC so they are not
- *   recompiled on every execution.  The cache is direct-mapped:
- *   bucket = pc & JIT_BC_MASK.  An entry is valid when .pc == the
- *   lookup pc and .code != NULL.
+ *   recompiled on every execution.  Hash table with chaining:
+ *   bucket = (pc >> 2) & JIT_BC_MASK.  Entries within a bucket are
+ *   linked via .next.  An entry is valid when .code != NULL.
  *
  *   Flush discipline: the entire cache must be invalidated whenever
  *   Mac OS invalidates any region of PPC code (icbi/isync) or when
  *   the JIT code-cache write-pointer is reset (ppc_jit_aarch64_flush).
  */
-#define JIT_BC_SIZE  4096                  /* must be power of 2 */
-#define JIT_BC_MASK  (JIT_BC_SIZE - 1)
+#define JIT_BC_BUCKETS  8192                /* must be power of 2 */
+#define JIT_BC_MASK     (JIT_BC_BUCKETS - 1)
+#define JIT_BC_POOL     16384               /* max total entries across all chains */
 
 struct jit_bc_entry {
 	uint32_t  pc;      /* PPC address this block was compiled from */
 	uint32_t *code;    /* pointer into jit_cache_base; NULL = empty */
+	int       n_insns; /* number of compiled PPC instructions */
 	bool      complete;/* true iff every instruction in block is native */
+	int       next;    /* index of next entry in chain, -1 = end */
 };
 
-static struct jit_bc_entry jit_bc[JIT_BC_SIZE];
+static struct jit_bc_entry jit_bc_pool[JIT_BC_POOL];
+static int jit_bc_heads[JIT_BC_BUCKETS];  /* index into pool, -1 = empty bucket */
+static int jit_bc_pool_next = 0;          /* next free pool entry */
 
 static void jit_bc_flush(void) {
-	for (int i = 0; i < JIT_BC_SIZE; i++) jit_bc[i].code = NULL;
+	for (int i = 0; i < JIT_BC_BUCKETS; i++) jit_bc_heads[i] = -1;
+	jit_bc_pool_next = 0;
 }
 
 static void jit_bc_invalidate_pc(uint32_t pc) {
-	/* Remove one block from cache so interpreter handles it on next execution. */
-	struct jit_bc_entry *e = &jit_bc[pc & JIT_BC_MASK];
-	if (e->code && e->pc == pc) e->code = NULL;
+	int bucket = (pc >> 2) & JIT_BC_MASK;
+	int prev = -1;
+	int idx = jit_bc_heads[bucket];
+	while (idx >= 0) {
+		if (jit_bc_pool[idx].pc == pc) {
+			/* Unlink from chain */
+			if (prev >= 0)
+				jit_bc_pool[prev].next = jit_bc_pool[idx].next;
+			else
+				jit_bc_heads[bucket] = jit_bc_pool[idx].next;
+			jit_bc_pool[idx].code = NULL;
+			return;
+		}
+		prev = idx;
+		idx = jit_bc_pool[idx].next;
+	}
 }
 
 static const struct jit_bc_entry *jit_bc_lookup(uint32_t pc) {
-	const struct jit_bc_entry *e = &jit_bc[pc & JIT_BC_MASK];
-	return (e->code && e->pc == pc) ? e : NULL;
+	int idx = jit_bc_heads[(pc >> 2) & JIT_BC_MASK];
+	while (idx >= 0) {
+		if (jit_bc_pool[idx].pc == pc && jit_bc_pool[idx].code)
+			return &jit_bc_pool[idx];
+		idx = jit_bc_pool[idx].next;
+	}
+	return NULL;
 }
 
-static void jit_bc_insert(uint32_t pc, uint32_t *code, bool complete) {
-	struct jit_bc_entry *e = &jit_bc[pc & JIT_BC_MASK];
-	e->pc       = pc;
-	e->code     = code;
-	e->complete = complete;
+static void jit_bc_insert(uint32_t pc, uint32_t *code, bool complete, int n_insns = 0) {
+	/* Check if already exists */
+	int bucket = (pc >> 2) & JIT_BC_MASK;
+	int idx = jit_bc_heads[bucket];
+	while (idx >= 0) {
+		if (jit_bc_pool[idx].pc == pc) {
+			jit_bc_pool[idx].code = code;
+			jit_bc_pool[idx].complete = complete;
+			jit_bc_pool[idx].n_insns = n_insns;
+			return;
+		}
+		idx = jit_bc_pool[idx].next;
+	}
+	/* New entry — allocate from pool */
+	if (jit_bc_pool_next >= JIT_BC_POOL) {
+		/* Pool exhausted — flush everything and start fresh */
+		jit_bc_flush();
+	}
+	idx = jit_bc_pool_next++;
+	jit_bc_pool[idx].pc = pc;
+	jit_bc_pool[idx].code = code;
+	jit_bc_pool[idx].complete = complete;
+	jit_bc_pool[idx].n_insns = n_insns;
+	jit_bc_pool[idx].next = jit_bc_heads[bucket];
+	jit_bc_heads[bucket] = idx;
 }
 
 /* ---- Register offsets in powerpc_registers ----
@@ -3054,8 +3098,8 @@ bool ppc_jit_aarch64_init(size_t cache_size_kb)
 	jit_cache_wp = (uint32_t *)jit_cache_base;
 	jit_cache_end = (uint32_t *)(jit_cache_base + jit_cache_size);
 	jit_bc_flush();
-	fprintf(stderr, "PPC-JIT-A64: code cache %zu KB at %p, block cache %d entries\n",
-	        cache_size_kb, jit_cache_base, JIT_BC_SIZE);
+	fprintf(stderr, "PPC-JIT-A64: code cache %zu KB at %p, block cache %d buckets / %d pool\n",
+	        cache_size_kb, jit_cache_base, JIT_BC_BUCKETS, JIT_BC_POOL);
 	return true;
 }
 
@@ -3271,7 +3315,7 @@ bool ppc_jit_aarch64_compile(
 	/* Insert into block address cache so future executions skip recompilation.
 	 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — block lifecycle. */
 	if (n_compiled > 0)
-		jit_bc_insert(pc, code_start, complete);
+		jit_bc_insert(pc, code_start, complete, n_compiled);
 
 	return n_compiled > 0;
 }
