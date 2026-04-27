@@ -320,9 +320,16 @@ static void emit_epilogue_with_pc(uint32_t next_pc) {
 	a64_ret();
 }
 
+/* Emit: if lk=1, save pc+4 to PPCR_LR (bcl / bctrl / blrl semantics) */
+static void emit_save_lr_if_link(uint32_t cur_pc, bool lk) {
+	if (!lk) return;
+	emit_load_imm32(RTMP0, (int32_t)(cur_pc + 4));
+	a64_str_w_imm(RTMP0, RSTATE, PPCR_LR);
+}
+
 /* ---- Instruction offset map for intra-block branches ---- */
-static uint32_t *insn_code_offset[64];  /* ARM64 code ptr at start of each PPC insn */
-static uint32_t  insn_ppc_pc[64];       /* PPC PC of each compiled instruction */
+static uint32_t *insn_code_offset[512];  /* ARM64 code ptr at start of each PPC insn */
+static uint32_t  insn_ppc_pc[512];       /* PPC PC of each compiled instruction */
 static int       insn_count = 0;
 
 /* Find the ARM64 code offset for a PPC PC within the current block */
@@ -1769,7 +1776,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		bool no_cond_test = (bo & 0x10); /* BO[0]=1: skip condition test */
 		bool cond_bit_val = (bo & 0x08); /* BO[1]=1: branch if CR[BI]=1 */
 
-		if (lk) return false; /* bl-type bc not supported yet */
+		/* bcl supported: lk=1 saves pc+4 to LR before branching */
 
 		if (!no_ctr_test && no_cond_test) {
 			/* bdnz or bdz (CTR-only, no condition test) */
@@ -1859,6 +1866,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		if (!no_ctr_test && !no_cond_test) {
 			/* Decrement CTR AND test condition — branch only if BOTH pass */
+			/* bcl not yet implemented for this BO combo — fall to interpreter */
 			if (lk) return false;
 
 			/* Decrement CTR */
@@ -3120,7 +3128,7 @@ bool ppc_jit_aarch64_compile(
 	bool complete = true;
 	insn_count = 0;
 
-	for (int i = 0; i < 64; i++) {
+	for (int i = 0; i < 512; i++) {
 		if (cur_pc < (uint32_t)(uintptr_t)ram ||
 		    cur_pc >= (uint32_t)(uintptr_t)ram + ramsize)
 			break;
@@ -3161,7 +3169,7 @@ bool ppc_jit_aarch64_compile(
 		}
 
 		/* Record instruction offset for intra-block branches */
-		if (insn_count < 64) {
+		if (insn_count < 512) {
 			insn_code_offset[insn_count] = jit_code_ptr;
 			insn_ppc_pc[insn_count] = cur_pc;
 			insn_count++;
