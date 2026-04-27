@@ -19,10 +19,10 @@ delivering measurable MacBench improvement over interpreter baseline (838 CPU / 
 ## Implementation order
 
 ### Phase 1: Hash + chaining block cache
-- [ ] Replace direct-mapped `jit_bc[4096]` with hash table + linked list overflow
-- [ ] Size: 8192 buckets, chain via next pointer in entry struct
-- [ ] Keep invalidate_pc and flush semantics identical
-- [ ] Test: harness 209/209, boot Mac OS 8.1
+- [x] Replace direct-mapped `jit_bc[4096]` with hash table + linked list overflow
+- [x] Size: 8192 buckets, chain via next pointer in entry struct
+- [x] Keep invalidate_pc and flush semantics identical
+- [x] Test: harness 209/209, boot Mac OS 8.1
 
 ### Phase 2: Lazy CR/flags
 - [ ] Add `cr0_valid` flag to compilation state — tracks whether CR0 is current
