@@ -714,7 +714,10 @@ void powerpc_cpu::execute(uint32 entry)
 				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT containment */
 				if (!jit_init_done) { ppc_jit_aarch64_init(4096); jit_init_done = true; }
 				ppc_jit_block jblk;
-				if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.complete) { /* GATE 2: complete-only */
+				/* GATE 2 removed: partial blocks run natively up to truncation point.
+				 * The truncation epilogue writes a valid PPCR_PC; interpreter resumes from there.
+				 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — Gate 2 was overcautious. */
+				if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.n_insns > 0) {
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
 					/* GATE 3: PC range check.
