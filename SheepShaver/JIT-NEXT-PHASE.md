@@ -25,22 +25,22 @@ delivering measurable MacBench improvement over interpreter baseline (838 CPU / 
 - [x] Test: harness 209/209, boot Mac OS 8.1
 
 ### Phase 2: Lazy CR/flags
-- [ ] Add `cr0_valid` flag to compilation state — tracks whether CR0 is current
-- [ ] `emit_update_cr0()` sets `cr0_valid = true`
-- [ ] Instructions that READ CR0 (bc with BI=0..3, mfcr, crand etc.) check `cr0_valid`
+- [x] Add `cr0_valid` flag to compilation state — tracks whether CR0 is current
+- [x] `emit_update_cr0()` sets `cr0_valid = true`
+- [x] Instructions that READ CR0 (bc with BI=0..3, mfcr, crand etc.) check `cr0_valid`
   - if invalid, materialise from last result register before reading
-- [ ] Instructions with Rc=1 set `cr0_valid = false` (mark stale), save result reg identity
-- [ ] Only emit CR0 writeback at block boundaries or when CR0 is read
-- [ ] Test: harness 209/209 (critical — flags are the #1 source of JIT bugs)
+- [x] Instructions with Rc=1 set `cr0_valid = false` (mark stale), save result reg identity
+- [x] Only emit CR0 writeback at block boundaries or when CR0 is read
+- [x] Test: harness 209/209 (critical — flags are the #1 source of JIT bugs)
 
 ### Phase 3: Register allocation within blocks
-- [ ] Allocate ARM64 callee-saved x21–x28 (8 registers) as PPC GPR cache
-- [ ] Track mapping: `gpr_host[32]` = -1 (not cached) or ARM64 reg number
-- [ ] On first use of PPC GPR N: assign next free host reg, emit LDR from struct
-- [ ] On subsequent use: reuse host reg directly (no LDR/STR)
-- [ ] At block exit (epilogue): flush all dirty host regs back to struct via STR
-- [ ] Eviction policy: LRU when all 8 slots full — STR the oldest back to struct
-- [ ] Test: harness 209/209, MacBench CPU should show measurable improvement
+- [x] Allocate ARM64 callee-saved x21–x28 (8 registers) as PPC GPR cache
+- [x] Track mapping: `gpr_host[32]` = -1 (not cached) or ARM64 reg number
+- [x] On first use of PPC GPR N: assign next free host reg, emit LDR from struct
+- [x] On subsequent use: reuse host reg directly (no LDR/STR)
+- [x] At block exit (epilogue): flush all dirty host regs back to struct via STR
+- [x] Eviction policy: LRU when all 8 slots full — STR the oldest back to struct
+- [x] Test: harness 209/209, MacBench CPU should show measurable improvement
 
 ### Phase 4: Region JIT (block chaining)
 - [ ] After executing block A → block B, if B is cached, patch A's epilogue:
