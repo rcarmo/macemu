@@ -272,12 +272,10 @@ static void ra_flush_all(void) {
 static void emit_load_gpr(int rd, int n) {
 	int host = ra_ppc_to_host[n];
 	if (host >= 0) {
-		/* Value already cached in a callee-saved reg — MOV to destination */
 		ra_lru[host - RA_FIRST_REG] = ++ra_clock;
 		if (rd != host)
 			emit32(0x2A0003E0 | (host << 16) | rd); /* MOV Wd, Whost */
 	} else {
-		/* Not cached — load from struct and cache it */
 		int cached = ra_load(n);
 		if (rd != cached)
 			emit32(0x2A0003E0 | (cached << 16) | rd); /* MOV Wd, Wcached */

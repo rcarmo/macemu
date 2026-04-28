@@ -700,7 +700,7 @@ void powerpc_cpu::execute(uint32 entry)
 			 *   Expiry: remove when JIT is contract-clean and Speedometer is green.
 			 *   Proof: boot-to-desktop + opcode harness both green without this gate.
 			 *
-			 * GATE 2 (jblk.complete): CONTAINMENT — only execute fully compiled blocks.
+			 * GATE 2 (jblk.n_insns > 0): CONTAINMENT — only execute fully compiled blocks.
 			 *   Status: overcautious; partial blocks are safe (truncation epilogue writes
 			 *   valid PPCR_PC and interpreter can resume from there). Candidate for removal.
 			 *   Expiry: remove when parity harness confirms partial-block execution is correct.
