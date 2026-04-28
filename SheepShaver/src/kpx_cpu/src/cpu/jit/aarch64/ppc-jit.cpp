@@ -270,22 +270,13 @@ static void ra_flush_all(void) {
 }
 
 static void emit_load_gpr(int rd, int n) {
-	int host = ra_ppc_to_host[n];
-	if (host >= 0) {
-		ra_lru[host - RA_FIRST_REG] = ++ra_clock;
-		if (rd != host)
-			emit32(0x2A0003E0 | (host << 16) | rd); /* MOV Wd, Whost */
-	} else {
-		int cached = ra_load(n);
-		if (rd != cached)
-			emit32(0x2A0003E0 | (cached << 16) | rd); /* MOV Wd, Wcached */
-	}
+	/* DISABLED: boot hang regression. Direct struct access. */
+	a64_ldr_w_imm(rd, RSTATE, PPCR_GPR(n));
 }
 
 static void emit_store_gpr(int rs, int n) {
-	int host = ra_store(n);
-	if (rs != host)
-		emit32(0x2A0003E0 | (rs << 16) | host); /* MOV Whost, Wrs */
+	/* DISABLED: boot hang regression. Direct struct access. */
+	a64_str_w_imm(rs, RSTATE, PPCR_GPR(n));
 }
 
 /* 64-bit GPR access for G5/PPC64 instructions.
@@ -536,10 +527,8 @@ static void emit_materialize_cr0(void) {
 
 /* Mark CR0 as pending — the result in 'reg' will be used to compute CR0 later */
 static void lazy_update_cr0(int result_reg) {
-	/* Just do a CMP to set NZCV and remember the register */
-	emit32(0x7100001F | (result_reg << 5)); /* CMP Wn, #0 */
-	lazy_cr0_valid = true;
-	lazy_cr0_reg = result_reg;
+	/* DISABLED: boot hang regression. Materialize immediately. */
+	emit_update_cr0(result_reg);
 }
 
 /* Ensure CR0 is materialized — call before branches testing CR0, mfcr, block exits */
