@@ -52,28 +52,30 @@ COPY BasiliskII /build/BasiliskII
 WORKDIR /build/BasiliskII/src/Unix
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 ENV CPPFLAGS="-I/usr/local/include -I/usr/local/include/SDL2"
-ENV LDFLAGS="-L/usr/local/lib -flto=auto"
-ENV CFLAGS="-flto=auto"
-ENV CXXFLAGS="-flto=auto"
+ENV LDFLAGS="-L/usr/local/lib"
+ENV CFLAGS=""
+ENV CXXFLAGS=""
 RUN NO_CONFIGURE=1 ./autogen.sh \
         && ARCH="$(dpkg --print-architecture)" \
         && if [ "$ARCH" = "arm64" ]; then \
-                 export CFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto"; \
-                 export CXXFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto"; \
+                 export CFLAGS="-march=armv8-a -mtune=cortex-a72"; \
+                 export CXXFLAGS="-march=armv8-a -mtune=cortex-a72"; \
              elif [ "$ARCH" = "armhf" ]; then \
-                 export CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto"; \
-                 export CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto"; \
+                 export CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53"; \
+                 export CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53"; \
              fi \
-    && ./configure \
+    && ac_cv_have_asm_extended_signals=yes ./configure \
         --prefix=/usr \
         --enable-sdl-audio \
         --enable-sdl-video \
-        --disable-vosf \
+        --enable-vosf \
+        --enable-addressing=direct \
         --without-mon \
         --without-esd \
         --without-gtk \
         --with-vncserver \
-        --disable-jit-compiler \
+        --enable-jit-compiler \
+        --enable-aarch64-jit-experimental \
         --disable-nls \
     && make -j$(nproc)
 

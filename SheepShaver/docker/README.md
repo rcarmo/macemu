@@ -101,5 +101,5 @@ docker buildx build --platform linux/arm/v7 -f SheepShaver/docker/Dockerfile.arm
 ## Notes
 
 - The release image is an SDL/KMS runtime package, not a desktop/X11 build.
-- The AArch64 PPC JIT remains source/development-gated; this packaged runtime is conservative and builds with the classic JIT disabled.
+- JIT is enabled in packaged builds where a backend is available; ARM64 builds use the AArch64 PPC JIT backend by default. Set `SS_USE_JIT=0` to force interpreter mode for diagnostics.
 - Use VNC (`vncserver true`, `vncport 5999`) for remote control when running headless.

@@ -57,20 +57,22 @@ COPY BasiliskII /build/BasiliskII
 WORKDIR /build/BasiliskII/src/Unix
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 ENV CPPFLAGS="-I/usr/local/include -I/usr/local/include/SDL2"
-ENV LDFLAGS="-L/usr/local/lib -flto=auto"
-ENV CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto"
-ENV CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto"
+ENV LDFLAGS="-L/usr/local/lib"
+ENV CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53"
+ENV CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53"
 RUN NO_CONFIGURE=1 ./autogen.sh \
-    && ./configure \
+    && ac_cv_have_asm_extended_signals=yes ./configure \
         --prefix=/usr \
         --enable-sdl-audio \
         --enable-sdl-video \
-        --disable-vosf \
+        --enable-vosf \
+        --enable-addressing=direct \
         --without-mon \
         --without-esd \
         --without-gtk \
         --with-vncserver \
-        --disable-jit-compiler \
+        --enable-jit-compiler \
+        --enable-arm-jit-experimental \
         --disable-nls \
     && make -j$(nproc)
 

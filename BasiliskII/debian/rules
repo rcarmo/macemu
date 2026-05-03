@@ -28,17 +28,20 @@ override_dh_auto_configure:
 	$(MAKE) -C $(SDL_BUILD_DIR) install
 	# Configure BasiliskII
 	cd src/Unix && NO_CONFIGURE=1 ./autogen.sh
-	cd src/Unix && PKG_CONFIG_PATH=$(SDL_INSTALL_DIR)/lib/pkgconfig ./configure \
+	cd src/Unix && PKG_CONFIG_PATH=$(SDL_INSTALL_DIR)/lib/pkgconfig ac_cv_have_asm_extended_signals=yes ./configure \
 		--prefix=/usr \
 		--enable-sdl-audio \
 		--enable-sdl-framework \
 		--enable-sdl-video \
-		--disable-vosf \
+		--enable-vosf \
+		--enable-addressing=direct \
 		--without-mon \
 		--without-esd \
 		--without-gtk \
 		--with-vncserver \
-		--disable-jit-compiler \
+		--enable-jit-compiler \
+		--enable-arm-jit-experimental \
+		--enable-aarch64-jit-experimental \
 		--disable-nls
 
 override_dh_auto_build:

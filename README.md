@@ -4,7 +4,7 @@
 
 ## Raspberry Pi Builds
 
-This fork provides experimental pre-built packages and Docker images optimized for Raspberry Pi, using SDL2 with framebuffer/KMS display (no X11 or desktop environment required).
+This fork provides experimental pre-built packages and Docker images optimized for Raspberry Pi, using SDL2 with framebuffer/KMS display (no X11 or desktop environment required). Raspberry Pi packages are built with the available JIT backends enabled.
 
 ### Pre-built .deb Packages
 
@@ -37,9 +37,11 @@ cd ..
 # Build BasiliskII
 cd macemu/BasiliskII/src/Unix
 NO_CONFIGURE=1 ./autogen.sh
-./configure --enable-sdl-audio --enable-sdl-framework --enable-sdl-video \
-            --disable-vosf --without-mon --without-esd --without-gtk \
-            --disable-jit-compiler --disable-nls
+ac_cv_have_asm_extended_signals=yes ./configure \
+            --enable-sdl-audio --enable-sdl-framework --enable-sdl-video \
+            --enable-vosf --enable-addressing=direct \
+            --without-mon --without-esd --without-gtk \
+            --enable-jit-compiler --enable-aarch64-jit-experimental --disable-nls
 CPATH=$CPATH:/usr/local/include/SDL2 make -j4
 sudo make install
 ```
@@ -231,7 +233,7 @@ The AArch64 JIT backend is under active development.
 - ⚠️ Native ARM64 codegen (optlev=2) has remaining SR flag leakage in DBRA blocks
 
 **SheepShaver (PPC):**
-- ✅ **Mac OS boots to "Welcome to Mac OS" with JIT** (`SS_USE_JIT=1`)
+- ✅ **Mac OS boots to "Welcome to Mac OS" with JIT** (JIT is default; use `SS_USE_JIT=0` to force interpreter mode)
 - ✅ **Mac OS boots to desktop** in interpreter mode (VNC on port 5999)
 - ✅ **209/209** opcode test vectors pass (score=100)
 - ✅ **1800/1825 ROM blocks pass** (98.6%) — headless ROM harness, 10K-block scan
@@ -275,9 +277,9 @@ $ make
 ```bash
 cd macemu/SheepShaver/src/Unix
 ./autogen.sh
-./configure --enable-sdl-video --enable-sdl-audio
+./configure --enable-sdl-video --enable-sdl-audio --enable-jit
 make -j12
-# For JIT: rebuild ppc-cpu.cpp with -DUSE_AARCH64_JIT and link ppc-jit-aarch64.o
+# AArch64 builds wire in the PPC JIT automatically when --enable-jit is used.
 # Requires: sudo sysctl -w vm.mmap_min_addr=0
 ```
 

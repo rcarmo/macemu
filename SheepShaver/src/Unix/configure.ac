@@ -1587,118 +1587,130 @@ if [[ "x$EMULATED_PPC" = "xyes" ]]; then
 
   dnl Enable JIT compiler, if possible
   if [[ "x$WANT_JIT" = "xyes" ]]; then
-    ac_cv_use_dyngen_precompiled=no
-    AC_CACHE_CHECK([whether dyngen can be used],
-      ac_cv_use_dyngen, [
-      case $host_cpu:$ac_cv_object_format in
-      powerpc:elf)
-        ac_cv_use_dyngen=yes
-        ;;
-      x86_64:elf)
-        ac_cv_use_dyngen=yes
-        ;;
-      i?86:elf)
-        ac_cv_use_dyngen=yes
-        ;;
-      mips:elf)
-        ac_cv_use_dyngen=yes
-        ;;
-      powerpc:mach)
-        ac_cv_use_dyngen=yes
-        ;;
-      x86_64:mach)
-        ac_cv_use_dyngen=yes
-        ;;
-      i?86:mach)
-        ac_cv_use_dyngen=yes
-        ;;
-      *:*)
-        ac_cv_use_dyngen=no
-        ;;
-      esac
-      dnl Check for a suitable synthetic opcodes compiler (icc is faking itself as gcc 3.2.2)
-      if [[ -z "$DYNGEN_CC" ]]; then
-        if [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_GCC40" = "xno" -a "x$HAVE_ICC" = "xno" ]]; then
-          DYNGEN_CC=$CXX
-        elif command -v g++ >/dev/null; then
-          vers=`g++ -dumpversion`
-          version() { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
-          if [[ $(version $vers) -ge $(version "2.7.0") ]] && [[ $(version $vers) -lt $(version "4.0.0") ]]; then
-            DYNGEN_CC="$gxx"
+    if [[ "x$host_cpu" = "xaarch64" ]]; then
+      dnl This fork provides a direct AArch64 PPC JIT backend. It does not use
+      dnl the classic dyngen path, so wire the backend source and compile-time
+      dnl guard directly into normal SheepShaver builds.
+      ac_cv_use_dyngen=no
+      AC_TRANSLATE_DEFINE(ENABLE_DYNGEN, no, [Define to enable dyngen engine])
+      CPPFLAGS="$CPPFLAGS -DUSE_AARCH64_JIT -I../kpx_cpu/src/cpu/jit/aarch64"
+      CPUSRCS="../kpx_cpu/src/cpu/jit/aarch64/ppc-jit.cpp $CPUSRCS"
+    else
+      ac_cv_use_dyngen_precompiled=no
+      AC_CACHE_CHECK([whether dyngen can be used],
+        ac_cv_use_dyngen, [
+        case $host_cpu:$ac_cv_object_format in
+        powerpc:elf)
+          ac_cv_use_dyngen=yes
+          ;;
+        x86_64:elf)
+          ac_cv_use_dyngen=yes
+          ;;
+        i?86:elf)
+          ac_cv_use_dyngen=yes
+          ;;
+        mips:elf)
+          ac_cv_use_dyngen=yes
+          ;;
+        powerpc:mach)
+          ac_cv_use_dyngen=yes
+          ;;
+        x86_64:mach)
+          ac_cv_use_dyngen=yes
+          ;;
+        i?86:mach)
+          ac_cv_use_dyngen=yes
+          ;;
+        *:*)
+          ac_cv_use_dyngen=no
+          ;;
+        esac
+        dnl Check for a suitable synthetic opcodes compiler (icc is faking itself as gcc 3.2.2)
+        if [[ -z "$DYNGEN_CC" ]]; then
+          if [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_GCC40" = "xno" -a "x$HAVE_ICC" = "xno" ]]; then
+            DYNGEN_CC=$CXX
+          elif command -v g++ >/dev/null; then
+            vers=`g++ -dumpversion`
+            version() { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
+            if [[ $(version $vers) -ge $(version "2.7.0") ]] && [[ $(version $vers) -lt $(version "4.0.0") ]]; then
+              DYNGEN_CC="$gxx"
+            fi
           fi
         fi
-      fi
-      if [[ -z "$DYNGEN_CC" -o "x$DYNGEN_CC" = "xprecompiled" ]]; then
-        case $host_cpu in
-          i?86)
-            ac_cv_use_dyngen_precompiled=yes
-            ;;
-          x86_64)
-            ac_cv_use_dyngen_precompiled=yes
-            ;;
-          *)
-            ac_cv_use_dyngen=no
-            ;;
-        esac
-      fi
-      if [[ "x$ac_cv_use_dyngen_precompiled" = "xyes" ]]; then DYNGEN_CC=precompiled; fi
-    ])
-    if [[ "x$ac_cv_use_dyngen" = "xyes" ]]; then
-      case $host_cpu in
-      i?86)
-        DYNGEN_OP_FLAGS="-fomit-frame-pointer"
-        ;;
-      mips)
-        DYNGEN_OP_FLAGS="-fno-delayed-branch -mno-abicalls"
-        ;;
-      powerpc)
-        if [[ "x$ac_cv_object_format" = "xmach" ]]; then
-          DYNGEN_OP_FLAGS="-mdynamic-no-pic"
+        if [[ -z "$DYNGEN_CC" -o "x$DYNGEN_CC" = "xprecompiled" ]]; then
+          case $host_cpu in
+            i?86)
+              ac_cv_use_dyngen_precompiled=yes
+              ;;
+            x86_64)
+              ac_cv_use_dyngen_precompiled=yes
+              ;;
+            *)
+              ac_cv_use_dyngen=no
+              ;;
+          esac
         fi
-        ;;
-      esac
-      have_dyngen_gcc3=no
-      if [[ "$DYNGEN_CC" != "precompiled" ]]; then
-        case "x`$DYNGEN_CC -dumpversion`" in
-        x[12].*) ;;
-        x*) have_dyngen_gcc3=yes ;;
+        if [[ "x$ac_cv_use_dyngen_precompiled" = "xyes" ]]; then DYNGEN_CC=precompiled; fi
+      ])
+      if [[ "x$ac_cv_use_dyngen" = "xyes" ]]; then
+        case $host_cpu in
+        i?86)
+          DYNGEN_OP_FLAGS="-fomit-frame-pointer"
+          ;;
+        mips)
+          DYNGEN_OP_FLAGS="-fno-delayed-branch -mno-abicalls"
+          ;;
+        powerpc)
+          if [[ "x$ac_cv_object_format" = "xmach" ]]; then
+            DYNGEN_OP_FLAGS="-mdynamic-no-pic"
+          fi
+          ;;
         esac
+        have_dyngen_gcc3=no
+        if [[ "$DYNGEN_CC" != "precompiled" ]]; then
+          case "x`$DYNGEN_CC -dumpversion`" in
+          x[12].*) ;;
+          x*) have_dyngen_gcc3=yes ;;
+          esac
+        else
+          case "x`$CXX -dumpversion`" in
+          x[12].*) ;;
+          x*) have_dyngen_gcc3=yes ;;
+          esac
+        fi
+        if [[ "x$have_dyngen_gcc3" = "xyes" ]]; then
+          DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -fno-align-functions -fno-stack-protector"
+        else
+          DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -malign-functions=0"
+        fi
+        DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -finline-functions -finline-limit=10000 -fno-exceptions -g0"
+        if [[ "x$have_dyngen_gcc3" = "xyes" ]]; then
+          DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -fno-reorder-blocks -fno-optimize-sibling-calls -fno-reorder-blocks-and-partition"
+        fi
+        if [[ "x$DYNGEN_CC" != "x$CXX" ]]; then
+          DYNGEN_CFLAGS="-O2 $CFLAGS"
+          DYNGEN_CXXFLAGS="-O2 $CXXFLAGS"
+        else
+          DYNGEN_CFLAGS="\$(CFLAGS)"
+          DYNGEN_CXXFLAGS="\$(CXXFLAGS)"
+        fi
       else
-        case "x`$CXX -dumpversion`" in
-        x[12].*) ;;
-        x*) have_dyngen_gcc3=yes ;;
-        esac
+        WANT_JIT=no
       fi
-      if [[ "x$have_dyngen_gcc3" = "xyes" ]]; then
-        DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -fno-align-functions -fno-stack-protector"
-      else
-        DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -malign-functions=0"
+      AC_TRANSLATE_DEFINE(ENABLE_DYNGEN, $ac_cv_use_dyngen, [Define to enable dyngen engine])
+      if [[ "x$WANT_JIT" = "xyes" ]]; then
+        DYNGENSRCS="\
+          ../kpx_cpu/src/cpu/jit/dyngen.c \
+          ../kpx_cpu/src/cpu/jit/cxxdemangle.cpp"
+        CPUSRCS="\
+          ../kpx_cpu/src/cpu/jit/jit-cache.cpp \
+          ../kpx_cpu/src/cpu/jit/basic-dyngen.cpp \
+          ../kpx_cpu/src/cpu/ppc/ppc-dyngen.cpp \
+          ../kpx_cpu/src/cpu/ppc/ppc-jit.cpp $CPUSRCS"
       fi
-      DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -finline-functions -finline-limit=10000 -fno-exceptions -g0"
-      if [[ "x$have_dyngen_gcc3" = "xyes" ]]; then
-        DYNGEN_OP_FLAGS="$DYNGEN_OP_FLAGS -fno-reorder-blocks -fno-optimize-sibling-calls -fno-reorder-blocks-and-partition"
-      fi
-      if [[ "x$DYNGEN_CC" != "x$CXX" ]]; then
-        DYNGEN_CFLAGS="-O2 $CFLAGS"
-        DYNGEN_CXXFLAGS="-O2 $CXXFLAGS"
-      else
-        DYNGEN_CFLAGS="\$(CFLAGS)"
-        DYNGEN_CXXFLAGS="\$(CXXFLAGS)"
-      fi
-    else
-      WANT_JIT=no
     fi
-    AC_TRANSLATE_DEFINE(ENABLE_DYNGEN, $ac_cv_use_dyngen, [Define to enable dyngen engine])
-    if [[ "x$WANT_JIT" = "xyes" ]]; then
-      DYNGENSRCS="\
-        ../kpx_cpu/src/cpu/jit/dyngen.c \
-        ../kpx_cpu/src/cpu/jit/cxxdemangle.cpp"
-      CPUSRCS="\
-        ../kpx_cpu/src/cpu/jit/jit-cache.cpp \
-        ../kpx_cpu/src/cpu/jit/basic-dyngen.cpp \
-        ../kpx_cpu/src/cpu/ppc/ppc-dyngen.cpp \
-        ../kpx_cpu/src/cpu/ppc/ppc-jit.cpp $CPUSRCS"
-    fi
+  else
+    AC_TRANSLATE_DEFINE(ENABLE_DYNGEN, no, [Define to enable dyngen engine])
   fi
   CPUSRCS="$CPUSRCS ../kpx_cpu/sheepshaver_glue.cpp ../kpx_cpu/ppc-dis.c"
 else

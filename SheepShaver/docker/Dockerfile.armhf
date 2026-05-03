@@ -50,9 +50,9 @@ COPY SheepShaver /build/SheepShaver
 WORKDIR /build/SheepShaver/src/Unix
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 ENV CPPFLAGS="-I/usr/local/include -I/usr/local/include/SDL2"
-ENV LDFLAGS="-L/usr/local/lib -flto=auto"
-ENV CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto"
-ENV CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto"
+ENV LDFLAGS="-L/usr/local/lib"
+ENV CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53"
+ENV CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53"
 RUN NO_CONFIGURE=1 ./autogen.sh \
     && ./configure \
         --prefix=/usr \
@@ -65,7 +65,7 @@ RUN NO_CONFIGURE=1 ./autogen.sh \
         --without-mon \
         --without-esd \
         --without-gtk \
-        --disable-jit \
+        --enable-jit \
     && make -j$(nproc)
 
 # Runtime image.

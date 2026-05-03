@@ -49,14 +49,14 @@ COPY SheepShaver /build/SheepShaver
 WORKDIR /build/SheepShaver/src/Unix
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 ENV CPPFLAGS="-I/usr/local/include -I/usr/local/include/SDL2"
-ENV LDFLAGS="-L/usr/local/lib -flto=auto"
-ENV CFLAGS="-flto=auto"
-ENV CXXFLAGS="-flto=auto"
+ENV LDFLAGS="-L/usr/local/lib"
+ENV CFLAGS=""
+ENV CXXFLAGS=""
 RUN NO_CONFIGURE=1 ./autogen.sh \
     && ARCH="$(dpkg --print-architecture)" \
     && if [ "$ARCH" = "arm64" ]; then \
-         export CFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto"; \
-         export CXXFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto"; \
+         export CFLAGS="-march=armv8-a -mtune=cortex-a72"; \
+         export CXXFLAGS="-march=armv8-a -mtune=cortex-a72"; \
        fi \
     && ./configure \
         --prefix=/usr \
@@ -69,7 +69,7 @@ RUN NO_CONFIGURE=1 ./autogen.sh \
         --without-mon \
         --without-esd \
         --without-gtk \
-        --disable-jit \
+        --enable-jit \
     && make -j$(nproc)
 
 # Runtime image.

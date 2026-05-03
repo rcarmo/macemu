@@ -74,19 +74,22 @@ jobs:
           echo "=== Building BasiliskII ==="
           cd BasiliskII/src/Unix
           NO_CONFIGURE=1 ./autogen.sh
-          CFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto" \
-          CXXFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto" \
-          LDFLAGS="-flto=auto" \
+          CFLAGS="-march=armv8-a -mtune=cortex-a72" \
+          CXXFLAGS="-march=armv8-a -mtune=cortex-a72" \
+          LDFLAGS="" \
+          ac_cv_have_asm_extended_signals=yes \
           ./configure \
             --prefix=/usr \
             --enable-sdl-audio \
             --enable-sdl-video \
-            --disable-vosf \
+            --enable-vosf \
+            --enable-addressing=direct \
             --without-mon \
             --without-esd \
             --without-gtk \
             --with-vncserver \
-            --disable-jit-compiler \
+            --enable-jit-compiler \
+            --enable-aarch64-jit-experimental \
             --disable-nls
           CPATH=$CPATH:/usr/local/include/SDL2 make -j$(nproc)
 
@@ -163,6 +166,7 @@ jobs:
            .
            Features include:
             - Emulates Mac Classic or Mac II series machines
+            - JIT compiler enabled for Raspberry Pi builds
             - Color video display via SDL2 (framebuffer/KMS)
             - CD quality sound output via SDL2/ALSA
             - Floppy disk driver (1.44MB disks)
@@ -345,20 +349,23 @@ jobs:
           NO_CONFIGURE=1 ./autogen.sh
           export PKG_CONFIG_PATH=/usr/local/armhf/lib/pkgconfig
           export CPPFLAGS="-I/usr/local/armhf/include -I/usr/local/armhf/include/SDL2"
-          export LDFLAGS="-L/usr/local/armhf/lib -Wl,-rpath,/usr/local/armhf/lib -flto=auto"
-          CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto" \
-          CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto" \
+          export LDFLAGS="-L/usr/local/armhf/lib -Wl,-rpath,/usr/local/armhf/lib"
+          CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53" \
+          CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53" \
+          ac_cv_have_asm_extended_signals=yes \
           ./configure \
             --host=arm-linux-gnueabihf \
             --prefix=/usr \
             --enable-sdl-audio \
             --enable-sdl-video \
-            --disable-vosf \
+            --enable-vosf \
+            --enable-addressing=direct \
             --without-mon \
             --without-esd \
             --without-gtk \
             --with-vncserver \
-            --disable-jit-compiler \
+            --enable-jit-compiler \
+            --enable-arm-jit-experimental \
             --disable-nls
           make -j$(nproc)
 
@@ -435,6 +442,7 @@ jobs:
            .
            Features include:
             - Emulates Mac Classic or Mac II series machines
+            - JIT compiler enabled for Raspberry Pi builds
             - Color video display via SDL2 (framebuffer/KMS)
             - CD quality sound output via SDL2/ALSA
             - Floppy disk driver (1.44MB disks)
@@ -560,9 +568,9 @@ jobs:
           echo "=== Building SheepShaver ==="
           cd SheepShaver/src/Unix
           NO_CONFIGURE=1 ./autogen.sh
-          CFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto" \
-          CXXFLAGS="-march=armv8-a -mtune=cortex-a72 -flto=auto" \
-          LDFLAGS="-flto=auto" \
+          CFLAGS="-march=armv8-a -mtune=cortex-a72" \
+          CXXFLAGS="-march=armv8-a -mtune=cortex-a72" \
+          LDFLAGS="" \
           ./configure \
             --prefix=/usr \
             --enable-sdl-audio \
@@ -574,7 +582,7 @@ jobs:
             --without-mon \
             --without-esd \
             --without-gtk \
-            --disable-jit
+            --enable-jit
           CPATH=$CPATH:/usr/local/include/SDL2 make -j$(nproc)
 
       - name: Create Debian package
@@ -640,6 +648,7 @@ jobs:
            .
            Features include:
             - Emulates Old World Power Macintosh systems
+            - JIT compiler enabled where supported on Raspberry Pi builds
             - Color video display via SDL2 (framebuffer/KMS)
             - Sound output via SDL2/ALSA
             - HFS partitions and hardfiles support
@@ -754,9 +763,9 @@ jobs:
           NO_CONFIGURE=1 ./autogen.sh
           export PKG_CONFIG_PATH=/usr/local/armhf/lib/pkgconfig
           export CPPFLAGS="-I/usr/local/armhf/include -I/usr/local/armhf/include/SDL2"
-          export LDFLAGS="-L/usr/local/armhf/lib -Wl,-rpath,/usr/local/armhf/lib -flto=auto"
-          CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto" \
-          CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53 -flto=auto" \
+          export LDFLAGS="-L/usr/local/armhf/lib -Wl,-rpath,/usr/local/armhf/lib"
+          CFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53" \
+          CXXFLAGS="-march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a53" \
           ./configure \
             --host=arm-linux-gnueabihf \
             --prefix=/usr \
@@ -769,7 +778,7 @@ jobs:
             --without-mon \
             --without-esd \
             --without-gtk \
-            --disable-jit
+            --enable-jit
           make -j$(nproc)
 
       - name: Create Debian package
@@ -835,6 +844,7 @@ jobs:
            .
            Features include:
             - Emulates Old World Power Macintosh systems
+            - JIT compiler enabled where supported on Raspberry Pi builds
             - Color video display via SDL2 (framebuffer/KMS)
             - Sound output via SDL2/ALSA
             - HFS partitions and hardfiles support

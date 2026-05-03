@@ -62,7 +62,7 @@ Any transition where current compiled code can no longer assume it exclusively o
 - interpreter fallback (compile_one returns false → `emit_epilogue_with_pc`)
 - block terminator (blr, b, bclr, bcctr, bc* with Rc)
 - EMUL_OP trap (opcode 6 class) — always an incomplete block → interpreter handles
-- JIT disabled by SS_USE_JIT gate → interpreter handles entire block
+- JIT disabled explicitly with `SS_USE_JIT=0` → interpreter handles entire block
 
 ---
 
@@ -171,7 +171,7 @@ computation (a few ARM64 instructions).
 In `ppc-cpu.cpp` (`pdi_execute` label):
 
 ```
-1. Check SS_USE_JIT gate — if disabled, goto skip_jit
+1. Check `SS_USE_JIT=0` diagnostic override — if set, goto skip_jit
 2. Call ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk)
 3. If compilation failed or !jblk.complete: goto skip_jit (interpreter handles it)
 4. Call fn(regs_ptr()) — executes the compiled block
@@ -199,19 +199,19 @@ The two paths are observationally equivalent for any block that reaches this fal
 
 ## Gates — ownership and intent
 
-### Gate 1: `SS_USE_JIT` environment variable
+### Gate 1: `SS_USE_JIT=0` environment variable
 
 **Location**: `ppc-cpu.cpp` line ~698
 
-**Classification**: CONTAINMENT — temporary, not a permanent architectural feature.
+**Classification**: DIAGNOSTIC OVERRIDE — JIT is enabled by default when compiled in.
 
-**What it protects**: Ability to run SheepShaver with interpreter-only execution for debugging and comparison.
+**What it protects**: Ability to force interpreter-only execution for debugging and comparison.
 
 **Invariant guarded**: Interpreter/JIT build parity (Invariant 5 from JIT-APPROACH-RESET).
 
-**Expiry condition**: When the JIT is contract-clean and boot-stable, this gate should be removed and JIT should be the default. Until then, it remains as a controlled activation mechanism.
+**Expiry condition**: Keep as a runtime escape hatch while the JIT remains experimental.
 
-**Replacement**: The JIT should be unconditionally enabled with a proven runtime contract. `SS_USE_JIT` becomes obsolete at that point.
+**Replacement**: None needed for production packaging; default execution uses the JIT and `SS_USE_JIT=0` is opt-out.
 
 **Proof workload**: boot-to-desktop + Speedometer benchmark green.
 
@@ -290,9 +290,9 @@ PC in the cache. If found, execute the cached code directly. If not found, compi
 **Flush discipline**: The cache must be fully flushed on any Mac OS icbi/isync event that
 covers the block's address range. `ppc_jit_aarch64_flush()` already handles global flush.
 
-**Gate blocking this**: Until the block cache is implemented, the JIT provides correctness
-but not performance. The `SS_USE_JIT` gate prevents it from degrading performance in
-production use.
+**Remaining trade-off**: Until the block cache is implemented, the JIT provides correctness
+but less performance than it will with PC → compiled-code reuse. `SS_USE_JIT=0` remains
+available as an interpreter-only diagnostic override.
 
 ---
 

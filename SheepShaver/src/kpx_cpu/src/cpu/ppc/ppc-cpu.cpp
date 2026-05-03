@@ -696,9 +696,8 @@ void powerpc_cpu::execute(uint32 entry)
 			 *
 			 * Gates in this block — see SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md:
 			 *
-			 * GATE 1 (SS_USE_JIT): CONTAINMENT — JIT disabled by default.
-			 *   Expiry: remove when JIT is contract-clean and Speedometer is green.
-			 *   Proof: boot-to-desktop + opcode harness both green without this gate.
+			 * GATE 1 (SS_USE_JIT=0): OVERRIDE — JIT enabled by default; set SS_USE_JIT=0
+			 *   to force interpreter execution for diagnostics or regressions.
 			 *
 			 * GATE 2 (jblk.complete): CONTAINMENT — only execute fully compiled blocks.
 			 *   Status: overcautious; partial blocks are safe (truncation epilogue writes
@@ -710,8 +709,9 @@ void powerpc_cpu::execute(uint32 entry)
 			 */
 			{
 				static bool jit_init_done = false;
-				static bool jit_enabled = getenv("SS_USE_JIT") && *getenv("SS_USE_JIT");
-				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT containment */
+				static const char *jit_env = getenv("SS_USE_JIT");
+				static bool jit_enabled = !(jit_env && jit_env[0] == '0' && jit_env[1] == '\0');
+				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT=0 diagnostic override */
 				if (!jit_init_done) { ppc_jit_aarch64_init(4096); jit_init_done = true; }
 				ppc_jit_block jblk;
 				/* GATE 2 removed: partial blocks run natively up to truncation point.
