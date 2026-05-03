@@ -12,8 +12,13 @@ Download from [GitHub Releases](https://github.com/rcarmo/macemu/releases) or bu
 
 #### Install from release:
 ```bash
+# 68K Macs
 wget https://github.com/rcarmo/macemu/releases/latest/download/basiliskii-sdl_<version>_arm64.deb
 sudo dpkg -i basiliskii-sdl_<version>_arm64.deb
+
+# PowerPC Macs
+wget https://github.com/rcarmo/macemu/releases/latest/download/sheepshaver-sdl_<version>_arm64.deb
+sudo dpkg -i sheepshaver-sdl_<version>_arm64.deb
 ```
 
 #### Build from source on Raspberry Pi:
@@ -39,11 +44,11 @@ CPATH=$CPATH:/usr/local/include/SDL2 make -j4
 sudo make install
 ```
 
-### Docker Container
+### Docker Containers
 
-A Docker image is available for running BasiliskII in a privileged container with direct hardware access.
+Docker images are available for running BasiliskII and SheepShaver in privileged containers with direct hardware access.
 
-#### Quick start:
+#### BasiliskII quick start:
 ```bash
 cd BasiliskII/docker
 mkdir -p data
@@ -55,24 +60,37 @@ cp data/basiliskii_prefs.example data/basiliskii_prefs
 docker compose up -d
 ```
 
-#### Pull pre-built image:
+#### SheepShaver quick start:
 ```bash
-docker pull ghcr.io/rcarmo/basiliskii-sdl:latest
+cd SheepShaver/docker
+mkdir -p data
+cp /path/to/powermac.rom data/rom
+cp /path/to/disk.img data/hd.img
+cp data/sheepshaver_prefs.example data/sheepshaver_prefs
+# Edit data/sheepshaver_prefs as needed
+
+docker compose up -d
 ```
 
-The container requires privileged mode for access to:
+#### Pull pre-built images:
+```bash
+docker pull ghcr.io/rcarmo/basiliskii-sdl:latest
+docker pull ghcr.io/rcarmo/sheepshaver-sdl:latest
+```
+
+The containers require privileged mode for access to:
 - `/dev/fb0` - Framebuffer
 - `/dev/dri` - KMS/DRM video
 - `/dev/input` - Keyboard/mouse
 - `/dev/snd` - Audio
 
-See [BasiliskII/docker/README.md](BasiliskII/docker/README.md) for detailed configuration options.
+See [BasiliskII/docker/README.md](BasiliskII/docker/README.md) and [SheepShaver/docker/README.md](SheepShaver/docker/README.md) for detailed configuration options.
 
 ### GitHub Actions CI
 
 This repository includes automated builds:
-- **`.github/workflows/build-deb-rpi.yml`** - Builds `.deb` packages for ARM64 and ARMhf
-- **`.github/workflows/docker-rpi.yml`** - Builds and pushes Docker images to GHCR
+- **`.github/workflows/build-deb-rpi.yml`** - Builds `basiliskii-sdl` and `sheepshaver-sdl` `.deb` packages for ARM64 and ARMhf
+- **`.github/workflows/docker-rpi.yml`** - Builds and pushes BasiliskII and SheepShaver SDL images to GHCR
 
 Packages are automatically uploaded to GitHub Releases when a version tag is pushed.
 

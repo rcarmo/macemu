@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2-dev \
     libudev-dev \
     libdbus-1-dev \
+    libdrm-dev \
+    libgbm-dev \
     libsamplerate0-dev \
     libmpfr-dev \
     libgmp-dev \
@@ -37,6 +39,7 @@ RUN wget -q https://www.libsdl.org/release/SDL2-${SDL_VERSION}.tar.gz \
         --disable-pulseaudio \
         --disable-esd \
         --disable-video-wayland \
+        --enable-video-kmsdrm \
         --enable-libudev \
         --enable-input-events \
     && make -j$(nproc) \
@@ -83,6 +86,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsamplerate0 \
     libudev1 \
     libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
     libmpfr6 \
     libgmp10 \
     libvncserver1 \

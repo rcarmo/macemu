@@ -9,6 +9,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/basiliskii-sdl
+  SHEEPSHAVER_IMAGE_NAME: ${{ github.repository_owner }}/sheepshaver-sdl
 
 jobs:
   build-arm64-native:
@@ -120,7 +121,7 @@ jobs:
   cleanup:
     name: Cleanup old workflow runs
     runs-on: ubuntu-latest
-    needs: [create-manifest]
+    needs: [create-manifest, create-sheepshaver-manifest]
     permissions:
       contents: write
       actions: write
@@ -165,3 +166,109 @@ jobs:
             }
 
             core.info('Cleanup completed');
+
+  build-sheepshaver-arm64-native:
+    runs-on: ubuntu-24.04-arm
+    name: SheepShaver ARM64 (native build on ARM runner)
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push SheepShaver ARM64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: SheepShaver/docker/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:linux-arm64
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:latest-linux-arm64
+          cache-from: type=gha,scope=sheepshaver-arm64
+          cache-to: type=gha,mode=max,scope=sheepshaver-arm64
+
+  build-sheepshaver-armhf-qemu:
+    runs-on: ubuntu-latest
+    name: SheepShaver ARMhf (QEMU emulation on x86_64 runner)
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push SheepShaver ARMhf
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: SheepShaver/docker/Dockerfile.armhf
+          platforms: linux/arm/v7
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:linux-arm-v7
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:latest-linux-arm-v7
+          cache-from: type=gha,scope=sheepshaver-armhf
+          cache-to: type=gha,mode=max,scope=sheepshaver-armhf
+
+  create-sheepshaver-manifest:
+    needs: [build-sheepshaver-arm64-native, build-sheepshaver-armhf-qemu]
+    runs-on: ubuntu-latest
+    name: Create SheepShaver multi-arch manifest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push SheepShaver manifest
+        run: |
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:latest \
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:linux-arm64 \
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:linux-arm-v7
+
+      - name: Create SheepShaver version manifest
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:${VERSION} \
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:linux-arm64 \
+            ${{ env.REGISTRY }}/${{ env.SHEEPSHAVER_IMAGE_NAME }}:linux-arm-v7

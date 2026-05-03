@@ -28,7 +28,7 @@
 #include "macos_util.h"
 #include "block-alloc.hpp"
 #include "sigsegv.h"
-#ifdef __aarch64__
+#if defined(__aarch64__) && defined(USE_AARCH64_JIT)
 #include "cpu/jit/aarch64/ppc-jit.h"
 #endif
 #include "cpu/ppc/ppc-cpu.hpp"
@@ -1000,7 +1000,7 @@ bool ss_run_opcode_test(void)
 
 	/* Execute */
 	/* Execute — either via JIT or interpreter */
-#ifdef __aarch64__
+#if defined(__aarch64__) && defined(USE_AARCH64_JIT)
 	{
 		const char *use_jit = getenv("SS_TEST_JIT");
 		if (use_jit && *use_jit && strcmp(use_jit, "0") != 0) {

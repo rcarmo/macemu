@@ -308,6 +308,20 @@ if [[ "x$HAVE_PTHREADS" = "xyes" ]]; then
   AC_DEFINE(HAVE_PTHREADS, 1, [Define if pthreads are available.])
 fi
 
+# Optional VNC server support used by the Raspberry Pi SDL/KMS packages.
+# Keep this best-effort: the emulator still builds and runs without VNC when
+# libvncserver headers/libraries are unavailable.
+AC_CHECK_HEADER([rfb/rfb.h], [
+  AC_CHECK_LIB([vncserver], [rfbGetScreen], [
+    AC_DEFINE([HAVE_LIBVNCSERVER], [1], [Define if libvncserver is available.])
+    LIBS="$LIBS -lvncserver"
+  ], [
+    AC_MSG_WARN([Could not find libvncserver, disabling VNC server support.])
+  ])
+], [
+  AC_MSG_WARN([Could not find libvncserver headers, disabling VNC server support.])
+])
+
 dnl We use FBDev DGA if possible.
 if [[ "x$WANT_FBDEV_DGA" = "xyes" ]]; then
   AC_CHECK_HEADER(linux/fb.h, [
@@ -774,7 +788,7 @@ if [[ "x$WANT_SDL" = "xyes" ]]; then
 fi
 if [[ "x$WANT_SDL_VIDEO" = "xyes" ]]; then
   AC_DEFINE(USE_SDL_VIDEO, 1, [Define to enable SDL video graphics support.])
-  VIDEOSRCS="../SDL/video_sdl.cpp ../SDL/video_sdl2.cpp ../SDL/video_sdl3.cpp"
+  VIDEOSRCS="../SDL/video_sdl.cpp ../SDL/video_sdl2.cpp ../SDL/video_sdl3.cpp ../SDL/evdev_input.cpp ../SDL/vnc_server.cpp"
   KEYCODES="../SDL/keycodes"
   if [[ "x$ac_cv_framework_Carbon" = "xyes" ]]; then
     AC_MSG_CHECKING([whether __LP64__ is defined])

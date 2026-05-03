@@ -1,0 +1,18 @@
+# Minimal SheepShaver prefs for Raspberry Pi SDL/KMS container use.
+# Copy to sheepshaver_prefs and adjust ROM/disk paths.
+
+rom /data/rom
+disk /data/hd.img
+ramsize 134217728
+screen win/800/600
+displaycolordepth 8
+frameskip 0
+seriala /dev/null
+serialb /dev/null
+nosound false
+nocdrom true
+nogui true
+ignoreillegal true
+vncserver true
+vncport 5999
+cpuclock 500

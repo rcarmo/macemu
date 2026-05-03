@@ -7,6 +7,8 @@ Build-Depends: debhelper-compat (= 13),
                automake,
                build-essential,
                libasound2-dev,
+               libdrm-dev,
+               libgbm-dev,
                libsamplerate0-dev,
                libvncserver-dev,
                libpng-dev
@@ -18,7 +20,7 @@ Vcs-Git: https://github.com/rcarmo/macemu.git
 Package: basiliskii-sdl
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: libvncserver1, libpng16-16
+Recommends: libdrm2, libgbm1, libvncserver1, libpng16-16
 Conflicts: basiliskii
 Provides: basiliskii
 Replaces: basiliskii

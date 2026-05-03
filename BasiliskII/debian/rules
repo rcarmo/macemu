@@ -22,7 +22,8 @@ override_dh_auto_configure:
 		--disable-video-x11 \
 		--disable-pulseaudio \
 		--disable-esd \
-		--disable-video-wayland
+		--disable-video-wayland \
+		--enable-video-kmsdrm
 	$(MAKE) -C $(SDL_BUILD_DIR) -j$$(nproc)
 	$(MAKE) -C $(SDL_BUILD_DIR) install
 	# Configure BasiliskII

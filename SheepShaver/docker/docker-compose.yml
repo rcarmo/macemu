@@ -1,0 +1,63 @@
+# SheepShaver SDL Docker Compose for Raspberry Pi
+# Run with: docker compose up -d
+#
+# Prerequisites:
+# 1. Place your OldWorld Power Mac ROM file in ./data/rom
+# 2. Place disk images in ./data/
+# 3. Copy data/sheepshaver_prefs.example to data/sheepshaver_prefs and edit it
+
+services:
+  sheepshaver:
+    build:
+      context: ../..
+      dockerfile: SheepShaver/docker/Dockerfile
+    image: sheepshaver-sdl:latest
+    container_name: sheepshaver
+
+    # Required for direct KMS/fbdev/input/audio device access.
+    privileged: true
+
+    # Alternative to privileged (more secure, but may need host-specific tuning):
+    # cap_add:
+    #   - SYS_RAWIO
+    #   - SYS_ADMIN
+    # security_opt:
+    #   - apparmor:unconfined
+    # group_add:
+    #   - video
+    #   - audio
+    #   - input
+
+    devices:
+      - /dev/fb0:/dev/fb0
+      - /dev/dri:/dev/dri
+      - /dev/input:/dev/input
+      - /dev/snd:/dev/snd
+
+    volumes:
+      - ./data:/data
+      - /etc/asound.conf:/etc/asound.conf:ro
+      - /dev/shm:/dev/shm
+
+    environment:
+      - SDL_VIDEODRIVER=kmsdrm
+      # Alternative fallback:
+      # - SDL_VIDEODRIVER=fbdev
+      - SDL_AUDIODRIVER=alsa
+      - SDL_MOUSE_RELATIVE_SPEED_SCALE=1.0
+      # Optional: specify audio device
+      # - AUDIODEV=hw:0,0
+
+    network_mode: host
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  builder:
+    build:
+      context: ../..
+      dockerfile: SheepShaver/docker/Dockerfile
+    image: sheepshaver-sdl:latest
+    profiles:
+      - build
+    command: ["--help"]
