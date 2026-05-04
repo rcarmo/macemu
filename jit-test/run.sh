@@ -70,6 +70,11 @@ if [ ! -f config.h ] || [ ! -f Makefile ]; then
     fi
 fi
 
+# The generated Unix Makefile does not always track header-only MIDFUNC/JIT
+# macro changes through to all dependent objects. Force-rebuild the key ARM64
+# JIT glue objects so harness runs do not silently use stale code or fail on
+# missing symbols after header-only changes.
+rm -f obj/compemu_support.o obj/compemu_fpp.o
 if ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
     tail -20 "$RUN_DIR/build.log" >&2 || true
     emit_failure_metrics 0 "build failed"
@@ -2021,6 +2026,26 @@ fi
 mapfile -t ACTIVE_TEST_ORDER < <(grep -E '^[[:space:]]*[^#[:space:]][a-z0-9_]*[[:space:]]*$' "$ACTIVE_RISKY_FILE" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
 if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
     emit_failure_metrics 1 "no active risky vectors listed in $ACTIVE_RISKY_FILE" 1
+fi
+
+# Optional exact-name subset for focused debug loops while still using the
+# normal harness machinery and metrics contract.
+if [ -n "${B2_TEST_NAMES:-}" ]; then
+    declare -A _wanted_tests=()
+    while IFS= read -r _name; do
+        [ -n "$_name" ] && _wanted_tests["$_name"]=1
+    done < <(printf '%s\n' "$B2_TEST_NAMES" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sed '/^$/d')
+
+    declare -a _filtered_active=()
+    for name in "${ACTIVE_TEST_ORDER[@]}"; do
+        if [ -n "${_wanted_tests[$name]+x}" ]; then
+            _filtered_active+=("$name")
+        fi
+    done
+    ACTIVE_TEST_ORDER=("${_filtered_active[@]}")
+    if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
+        emit_failure_metrics 1 "B2_TEST_NAMES selected no active risky vectors" 1
+    fi
 fi
 
 # Validate active list: known test names, risky-only, and no duplicates.

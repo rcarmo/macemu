@@ -326,7 +326,11 @@ typedef struct {
 #define FR   uae_u32
 #define FRW  uae_u32
 
-#define MIDFUNC(nargs,func,args) void func args
+/* Some ARM64 MIDFUNC helpers are referenced from other translation units
+   (notably compemu_fpp.cpp) but otherwise look TU-local to the optimizer.
+   Mark them used so -O3 keeps emitting the out-of-line symbols needed by
+   clean harness rebuilds. */
+#define MIDFUNC(nargs,func,args) __attribute__((used)) void func args
 #define MENDFUNC(nargs,func,args)
 #define COMPCALL(func) func
 
@@ -422,6 +426,10 @@ typedef struct blockinfo_t {
 
   dependency  dep[2];  /* Holds things we depend on */
   dependency* deplist; /* List of things that depend on this */
+  /* Phase-1 profiling substrate for future trace/region work.
+     Counts are per compiled incarnation and reset on recompile. */
+  uae_u32 edge_exec_count[2];
+  uae_u32 edge_target_pc[2];
 } blockinfo;
 
 #define BI_INVALID 0

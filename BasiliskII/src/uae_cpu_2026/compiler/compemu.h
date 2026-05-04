@@ -604,6 +604,10 @@ typedef struct blockinfo_t {
 
     dependency  dep[2];  /* Holds things we depend on */
     dependency* deplist; /* List of things that depend on this */
+    /* Phase-1 profiling substrate for future trace/region work.
+       Counts are per compiled incarnation and reset on recompile. */
+    uae_u32 edge_exec_count[2];
+    uae_u32 edge_target_pc[2];
     smallstate  env;
 
 #ifdef JIT_DEBUG

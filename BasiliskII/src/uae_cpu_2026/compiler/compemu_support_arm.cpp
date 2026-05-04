@@ -1112,6 +1112,111 @@ static inline uae_u32 jit_hostpc_to_macpc(uintptr hostpc)
     return get_virtual_address((uae_u8*)hostpc);
 }
 
+static inline bool jit_trace_edges_env(void)
+{
+    static int cached = -1;
+    if (cached < 0)
+        cached = (getenv("B2_JIT_TRACE_EDGES") && *getenv("B2_JIT_TRACE_EDGES") && strcmp(getenv("B2_JIT_TRACE_EDGES"), "0") != 0) ? 1 : 0;
+    return cached != 0;
+}
+
+static inline unsigned long jit_trace_edges_limit(void)
+{
+    static unsigned long value = 0;
+    static bool init = false;
+    if (!init) {
+        const char *env = getenv("B2_JIT_TRACE_EDGES_LIMIT");
+        value = env && *env ? strtoul(env, NULL, 0) : 400;
+        init = true;
+    }
+    return value;
+}
+
+static unsigned long jit_trace_edges_count = 0;
+
+static inline uae_u32 jit_stable_edge_min_exec_env(void)
+{
+    static uae_u32 value = 0;
+    static bool init = false;
+    if (!init) {
+        const char *env = getenv("B2_JIT_STABLE_EDGE_MIN_EXEC");
+        value = env && *env ? (uae_u32)strtoul(env, NULL, 0) : 32;
+        init = true;
+    }
+    return value;
+}
+
+static inline uae_u32 jit_stable_edge_min_pct_env(void)
+{
+    static uae_u32 value = 0;
+    static bool init = false;
+    if (!init) {
+        const char *env = getenv("B2_JIT_STABLE_EDGE_MIN_PCT");
+        value = env && *env ? (uae_u32)strtoul(env, NULL, 0) : 80;
+        if (value > 100)
+            value = 100;
+        init = true;
+    }
+    return value;
+}
+
+static inline int jit_dominant_edge_index(const blockinfo *bi)
+{
+    if (!bi)
+        return -1;
+    if (bi->edge_exec_count[0] > bi->edge_exec_count[1])
+        return 0;
+    if (bi->edge_exec_count[1] > bi->edge_exec_count[0])
+        return 1;
+    return -1;
+}
+
+static inline bool jit_dominant_edge_stable(const blockinfo *bi)
+{
+    if (!bi)
+        return false;
+    const uae_u32 total = bi->edge_exec_count[0] + bi->edge_exec_count[1];
+    const int dominant = jit_dominant_edge_index(bi);
+    if (dominant < 0 || total == 0)
+        return false;
+    const uae_u32 dom_count = bi->edge_exec_count[dominant];
+    if (dom_count < jit_stable_edge_min_exec_env())
+        return false;
+    return dom_count * 100 >= total * jit_stable_edge_min_pct_env();
+}
+
+static void jit_trace_edge_snapshot(const char *tag, const blockinfo *bi)
+{
+    if (!jit_trace_edges_env() || jit_trace_edges_count >= jit_trace_edges_limit() || !bi || !bi->pc_p)
+        return;
+    const uae_u32 src_pc = jit_hostpc_to_macpc((uintptr)bi->pc_p);
+    const uae_u32 e0pc = bi->edge_target_pc[0];
+    const uae_u32 e1pc = bi->edge_target_pc[1];
+    const uae_u32 e0cnt = bi->edge_exec_count[0];
+    const uae_u32 e1cnt = bi->edge_exec_count[1];
+    if (!e0pc && !e1pc && !e0cnt && !e1cnt)
+        return;
+    const uae_u32 total = e0cnt + e1cnt;
+    const int dominant = jit_dominant_edge_index(bi);
+    const int stable = jit_dominant_edge_stable(bi) ? 1 : 0;
+    fprintf(stderr,
+        "JITEDGE %lu tag=%s src=%08x opt=%u status=%u flags=%02x total=%u "
+        "e0pc=%08x e0cnt=%u e1pc=%08x e1cnt=%u dom=%d stable=%d\n",
+        ++jit_trace_edges_count,
+        tag,
+        (unsigned)src_pc,
+        (unsigned)bi->optlevel,
+        (unsigned)bi->status,
+        (unsigned)bi->needed_flags,
+        (unsigned)total,
+        (unsigned)e0pc,
+        (unsigned)e0cnt,
+        (unsigned)e1pc,
+        (unsigned)e1cnt,
+        dominant,
+        stable);
+}
+
 static inline uintptr jit_canonicalize_target_pc(uintptr pc)
 {
     uintptr base = (uintptr)RAMBaseHost;
@@ -2235,6 +2340,7 @@ void invalidate_block(blockinfo* bi)
 {
     int i;
 
+    jit_trace_edge_snapshot("INVALIDATE", bi);
     bi->optlevel = 0;
     bi->count = optcount[0] - 1;
     bi->handler = NULL;
@@ -2265,12 +2371,15 @@ static inline void create_jmpdep(blockinfo* bi, int i, uae_u32* jmpaddr, uintptr
         bi->dep[i].next->prev_p = &(bi->dep[i].next);
     bi->dep[i].prev_p = &(tbi->deplist);
     tbi->deplist = &(bi->dep[i]);
+    bi->edge_target_pc[i] = jit_hostpc_to_macpc((uintptr)tbi->pc_p);
+    jit_trace_edge_snapshot(i == 0 ? "EDGE0" : "EDGE1", bi);
 }
 
 static inline void block_need_recompile(blockinfo* bi)
 {
     uae_u32 cl = cacheline(bi->pc_p);
 
+    jit_trace_edge_snapshot("RECOMP", bi);
     set_dhtu(bi, bi->direct_pen);
     bi->direct_handler = bi->direct_pen;
 
@@ -5020,6 +5129,8 @@ static void prepare_block(blockinfo* bi)
     for (i = 0; i < 2; i++) {
         bi->dep[i].prev_p = NULL;
         bi->dep[i].next = NULL;
+        bi->edge_exec_count[i] = 0;
+        bi->edge_target_pc[i] = 0;
     }
     bi->status = BI_INVALID;
     bi->needed_flags = FLAG_ALL;
@@ -5555,11 +5666,15 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
             }
         }
 
+        jit_trace_edge_snapshot("REBUILD", bi);
+        jit_trace_edge_snapshot("REBUILD", bi);
         remove_deps(bi); /* We are about to create new code */
         bi->optlevel = optlev;
         bi->pc_p = (uae_u8*)pc_hist[0].location;
         free_checksum_info_chain(bi->csi);
         bi->csi = NULL;
+        bi->edge_exec_count[0] = bi->edge_exec_count[1] = 0;
+        bi->edge_target_pc[0] = bi->edge_target_pc[1] = 0;
 
         liveflags[blocklen] = successor_flags; /* Use successor info if available, else FLAG_ALL */
         i = blocklen;
@@ -6299,6 +6414,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 
                 /* Use endblock_pc_isconst for ALL blocks (including DBF)
                    to enable countdown + direct chaining. */
+                compemu_raw_inc_m((uintptr)&bi->edge_exec_count[0]);
                 tba = compemu_raw_endblock_pc_isconst(scaled_cycles(totcycles), ct1);
                 write_jmp_target(tba, get_handler(ct1));
                 create_jmpdep(bi, 0, tba, ct1);
@@ -6318,6 +6434,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     }
                 }
 
+                compemu_raw_inc_m((uintptr)&bi->edge_exec_count[1]);
                 tba = compemu_raw_endblock_pc_isconst(scaled_cycles(totcycles), ct2);
                 write_jmp_target(tba, get_handler(ct2));
                 create_jmpdep(bi, 1, tba, ct2);
@@ -6361,6 +6478,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #if defined(USE_DATA_BUFFER)
                     data_check_end(4, 64);
 #endif
+                    compemu_raw_inc_m((uintptr)&bi->edge_exec_count[0]);
                     tba = compemu_raw_endblock_pc_isconst(scaled_cycles(totcycles), cv);
                     write_jmp_target(tba, get_handler(cv));
                     create_jmpdep(bi, 0, tba, cv);
@@ -6377,6 +6495,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #if defined(USE_DATA_BUFFER)
                     data_check_end(4, 64);
 #endif
+                    compemu_raw_inc_m((uintptr)&bi->edge_exec_count[0]);
                     tba = compemu_raw_endblock_pc_isconst(scaled_cycles(totcycles), cv);
                     write_jmp_target(tba, get_handler(cv));
                     create_jmpdep(bi, 0, tba, cv);
@@ -6468,6 +6587,7 @@ endblock_done:
             }
         }
 #endif
+        jit_trace_edge_snapshot("BUILD", bi);
         if (redo_current_block)
             block_need_recompile(bi);
 

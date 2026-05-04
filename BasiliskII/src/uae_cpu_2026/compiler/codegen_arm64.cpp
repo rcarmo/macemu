@@ -379,6 +379,17 @@ LOWFUNC(WRITE,RMW,1,compemu_raw_dec_m,(MEMRW d))
 }
 LENDFUNC(WRITE,RMW,1,compemu_raw_dec_m,(MEMRW ds))
 
+LOWFUNC(WRITE,RMW,1,compemu_raw_inc_m,(MEMRW d))
+{
+	/* Profiling helper: keep this flag-neutral so it can be inserted on
+	   already-decided control-flow paths without changing condition codes. */
+	LOAD_U64(REG_WORK1, d);
+	LDR_wXi(REG_WORK2, REG_WORK1, 0);
+	ADD_wwi(REG_WORK2, REG_WORK2, 1);
+	STR_wXi(REG_WORK2, REG_WORK1, 0);
+}
+LENDFUNC(WRITE,RMW,1,compemu_raw_inc_m,(MEMRW d))
+
 STATIC_INLINE void compemu_raw_call(uintptr t)
 {
 	LOAD_U64(REG_WORK1, t);
