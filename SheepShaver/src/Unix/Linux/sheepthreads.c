@@ -27,12 +27,17 @@
  *     (i.e. to use the semaphore as a signal)
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sched.h>
 #include <pthread.h>
 
 
@@ -124,9 +129,14 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	int pid;
 
 	nt = (struct new_thread *)malloc(sizeof(struct new_thread));
+	stack = malloc(STACK_SIZE);
+	if (nt == NULL || stack == NULL) {
+		free(stack);
+		free(nt);
+		return ENOMEM;
+	}
 	nt->fn = start_routine;
 	nt->arg = arg;
-	stack = malloc(STACK_SIZE);
 
 	pid = __clone(start_thread, (char *)stack + STACK_SIZE - 16, CLONE_VM | CLONE_FS | CLONE_FILES, nt);
 	if (pid == -1) {
@@ -146,13 +156,16 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 int pthread_join(pthread_t thread, void **ret)
 {
+	int status;
+
 	do {
-		if (waitpid(thread, NULL, __WCLONE) >= 0);
-			break;
+		if (waitpid(thread, &status, __WCLONE) >= 0) {
+			if (ret)
+				*ret = NULL;
+			return 0;
+		}
 	} while (errno == EINTR);
-	if (ret)
-		*ret = NULL;
-	return 0;
+	return errno;
 }
 
 
