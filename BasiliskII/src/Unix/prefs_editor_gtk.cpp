@@ -1678,6 +1678,7 @@ static GList *add_ether_names(void)
 #endif
 					char *str = new char[64];
 					strncpy(str, ifr->ifr_name, 63);
+					str[63] = '\0';
 					glist = g_list_append(glist, str);
 				}
 			}

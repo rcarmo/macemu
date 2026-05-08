@@ -105,13 +105,11 @@ void LoadXPRAM(const char *vmdir)
 #endif
 	} else {
 		// Construct XPRAM path
-		xpram_path[0] = 0;
-		char *home = getenv("HOME");
-		if (home != NULL && strlen(home) < 1000) {
-			strncpy(xpram_path, home, 1000);
-			strcat(xpram_path, "/");
-		}
-		strcat(xpram_path, XPRAM_FILE_NAME);
+		const char *home = getenv("HOME");
+		if (home != NULL && home[0] != '\0')
+			snprintf(xpram_path, sizeof(xpram_path), "%s/%s", home, XPRAM_FILE_NAME);
+		else
+			snprintf(xpram_path, sizeof(xpram_path), "%s", XPRAM_FILE_NAME);
 	}
 
 	// Load XPRAM from settings file
@@ -144,13 +142,11 @@ void SaveXPRAM(void)
 void ZapPRAM(void)
 {
 	// Construct PRAM path
-	xpram_path[0] = 0;
-	char *home = getenv("HOME");
-	if (home != NULL && strlen(home) < 1000) {
-		strncpy(xpram_path, home, 1000);
-		strcat(xpram_path, "/");
-	}
-	strcat(xpram_path, XPRAM_FILE_NAME);
+	const char *home = getenv("HOME");
+	if (home != NULL && home[0] != '\0')
+		snprintf(xpram_path, sizeof(xpram_path), "%s/%s", home, XPRAM_FILE_NAME);
+	else
+		snprintf(xpram_path, sizeof(xpram_path), "%s", XPRAM_FILE_NAME);
 
 	// Delete file
 	unlink(xpram_path);
