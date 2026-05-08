@@ -584,7 +584,7 @@ static void get_system_info(void)
 		while ((cpu_entry = readdir(cpus_dir)) != NULL) {
 			if (strstr(cpu_entry->d_name, "PowerPC,") == cpu_entry->d_name) {
 				char timebase_freq_node[256];
-				sprintf(timebase_freq_node, "/proc/device-tree/cpus/%s/timebase-frequency", cpu_entry->d_name);
+				snprintf(timebase_freq_node, sizeof(timebase_freq_node), "/proc/device-tree/cpus/%s/timebase-frequency", cpu_entry->d_name);
 				proc_file = fopen(timebase_freq_node, "r");
 				if (proc_file) {
 					union { uint8 b[4]; uint32 l; } value;

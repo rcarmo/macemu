@@ -1225,7 +1225,7 @@ static void keycode_init(void)
 		FILE *f = fopen(kc_path ? kc_path : KEYCODE_FILE_NAME, "r");
 		if (f == NULL) {
 			char str[256];
-			sprintf(str, GetString(STR_KEYCODE_FILE_WARN), kc_path ? kc_path : KEYCODE_FILE_NAME, strerror(errno));
+			snprintf(str, sizeof(str), GetString(STR_KEYCODE_FILE_WARN), kc_path ? kc_path : KEYCODE_FILE_NAME, strerror(errno));
 			WarningAlert(str);
 			return;
 		}
@@ -1274,7 +1274,7 @@ static void keycode_init(void)
 		// Vendor not found? Then display warning
 		if (!vendor_found) {
 			char str[256];
-			sprintf(str, GetString(STR_KEYCODE_VENDOR_WARN), vendor, kc_path ? kc_path : KEYCODE_FILE_NAME);
+			snprintf(str, sizeof(str), GetString(STR_KEYCODE_VENDOR_WARN), vendor, kc_path ? kc_path : KEYCODE_FILE_NAME);
 			WarningAlert(str);
 			return;
 		}

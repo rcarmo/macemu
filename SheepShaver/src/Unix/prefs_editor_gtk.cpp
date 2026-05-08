@@ -1493,7 +1493,7 @@ static GList *add_serial_names(void)
 #else
 			if (false) {
 #endif
-				char *str = new char[64];
+				char *str = new char[strlen(de->d_name) + 6];
 				sprintf(str, "/dev/%s", de->d_name);
 				glist = g_list_append(glist, str);
 			}
@@ -1856,7 +1856,7 @@ int main(int argc, char *argv[])
 	// Transfer control to the executable
 	if (start) {
 		char gui_connection_path[64];
-		sprintf(gui_connection_path, "/org/SheepShaver/GUI/%d", getpid());
+		snprintf(gui_connection_path, sizeof(gui_connection_path), "/org/SheepShaver/GUI/%d", getpid());
 
 		// Catch exits from the child process
 		struct sigaction sigchld_sa, old_sigchld_sa;
@@ -1872,19 +1872,19 @@ int main(int argc, char *argv[])
 
 		// Search and run the SheepShaver executable
 		char *p;
-		strcpy(g_app_path, argv[0]);
+		snprintf(g_app_path, sizeof(g_app_path), "%s", argv[0]);
 		if ((p = strstr(g_app_path, "SheepShaverGUI.app/Contents/MacOS")) != NULL) {
-		    strcpy(p, "SheepShaver.app/Contents/MacOS/SheepShaver");
+			snprintf(p, sizeof(g_app_path) - (p - g_app_path), "%s", "SheepShaver.app/Contents/MacOS/SheepShaver");
 			if (access(g_app_path, X_OK) < 0) {
 				char str[256];
 				sprintf(str, GetString(STR_NO_B2_EXE_FOUND), g_app_path, strerror(errno));
 				WarningAlert(str);
-				strcpy(g_app_path, "/Applications/SheepShaver.app/Contents/MacOS/SheepShaver");
+				snprintf(g_app_path, sizeof(g_app_path), "%s", "/Applications/SheepShaver.app/Contents/MacOS/SheepShaver");
 			}
 		} else {
 			p = strrchr(g_app_path, '/');
 			p = p ? p + 1 : g_app_path;
-			strcpy(p, "SheepShaver");
+			snprintf(p, sizeof(g_app_path) - (p - g_app_path), "%s", "SheepShaver");
 		}
 
 		int pid = fork();
