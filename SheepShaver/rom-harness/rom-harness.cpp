@@ -1159,9 +1159,21 @@ int main(int argc, char **argv) {
 	uint32_t rom_base_mac = (uint32_t)(uintptr_t)rom_host;
 	
 	/* Read ROM into memory */
-	ssize_t rd = read(fd, rom_host, rom_size);
+	size_t rd = 0;
+	while (rd < (size_t)rom_size) {
+		ssize_t n = read(fd, rom_host + rd, (size_t)rom_size - rd);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			perror("read");
+			break;
+		}
+		if (n == 0)
+			break;
+		rd += (size_t)n;
+	}
 	close(fd);
-	if (rd != rom_size) {
+	if (rd != (size_t)rom_size) {
 		fprintf(stderr, "Short read: %ld of %ld\n", (long)rd, (long)rom_size);
 		munmap(mem, total_size);
 		return 1;

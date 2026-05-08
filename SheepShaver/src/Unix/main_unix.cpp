@@ -616,7 +616,8 @@ static void get_system_info(void)
 
 static bool load_mac_rom(void)
 {
-	uint32 rom_size, actual;
+	off_t rom_size;
+	size_t actual;
 	uint8 *rom_tmp;
 	const char *rom_path = PrefsFindString("rom");
 	int rom_fd = open(rom_path && *rom_path ? rom_path : ROM_FILE_NAME, O_RDONLY);
@@ -629,20 +630,32 @@ static bool load_mac_rom(void)
 	}
 	printf("%s", GetString(STR_READING_ROM_FILE));
 	rom_size = lseek(rom_fd, 0, SEEK_END);
+	if (rom_size < 0)
+		rom_size = 0;
 	lseek(rom_fd, 0, SEEK_SET);
 	rom_tmp = new uint8[ROM_SIZE];
-	actual = read(rom_fd, (void *)rom_tmp, ROM_SIZE);
+	actual = 0;
+	while (actual < ROM_SIZE) {
+		ssize_t n = read(rom_fd, rom_tmp + actual, ROM_SIZE - actual);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			break;
+		}
+		if (n == 0)
+			break;
+		actual += n;
+	}
 	close(rom_fd);
 	
 	// Decode Mac ROM
-	if (!DecodeROM(rom_tmp, actual)) {
-		if (rom_size != 4*1024*1024) {
+	if (!DecodeROM(rom_tmp, (uint32)actual)) {
+		if (rom_size != 4*1024*1024)
 			ErrorAlert(GetString(STR_ROM_SIZE_ERR));
-			return false;
-		} else {
+		else
 			ErrorAlert(GetString(STR_ROM_FILE_READ_ERR));
-			return false;
-		}
+		delete[] rom_tmp;
+		return false;
 	}
 	delete[] rom_tmp;
 	return true;
