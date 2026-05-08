@@ -450,13 +450,13 @@ static void get_system_info(void)
 			else if (powerpc_node) {
 				uint32 value;
 				char head[256];
-				if (sscanf(line, "%[ |]\"cpu-version\" = <%x>", head, &value) == 2)
+				if (sscanf(line, "%255[ |]\"cpu-version\" = <%x>", head, &value) == 2)
 					PVR = value;
-				else if (sscanf(line, "%[ |]\"clock-frequency\" = <%x>", head, &value) == 2)
+				else if (sscanf(line, "%255[ |]\"clock-frequency\" = <%x>", head, &value) == 2)
 					CPUClockSpeed = value;
-				else if (sscanf(line, "%[ |]\"bus-frequency\" = <%x>", head, &value) == 2)
+				else if (sscanf(line, "%255[ |]\"bus-frequency\" = <%x>", head, &value) == 2)
 					BusClockSpeed = value;
-				else if (sscanf(line, "%[ |]\"timebase-frequency\" = <%x>", head, &value) == 2)
+				else if (sscanf(line, "%255[ |]\"timebase-frequency\" = <%x>", head, &value) == 2)
 					TimebaseSpeed = value;
 				else if (strchr(line, '}'))
 					powerpc_node = false;
@@ -540,7 +540,7 @@ static void get_system_info(void)
 			int i;
 			float f;
 			char value[256];
-			if (sscanf(line, "cpu : %[^,]", value) == 1) {
+			if (sscanf(line, "cpu : %255[^,]", value) == 1) {
 				// Search by name
 				const char *cpu_name = NULL;
 				for (int i = 0; cpu_specs[i].pvr_mask != 0; i++) {
