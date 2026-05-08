@@ -152,38 +152,47 @@ bool DecodeROM(uint8 *data, uint32 size)
 		memcpy(ROMBaseHost, data, ROM_SIZE);
 		return true;
 	}
-	else if (strncmp((char *)data, "<CHRP-BOOT>", 11) == 0) {
-		// CHRP compressed ROM image
-		uint32 image_offset, image_size;
+	else if (size >= 11 && strncmp((char *)data, "<CHRP-BOOT>", 11) == 0) {
+		// CHRP compressed ROM image. Work on a NUL-terminated copy so string
+		// searches cannot run past short or malformed ROM files.
+		char *rom_text = new char[size + 1];
+		memcpy(rom_text, data, size);
+		rom_text[size] = '\0';
+
+		uint32 image_offset = 0, image_size = 0;
 		bool decode_info_ok = false;
 		
-		char *s = strstr((char *)data, "constant lzss-offset");
+		char *s = strstr(rom_text, "constant lzss-offset");
 		if (s != NULL) {
 			// Probably a plain LZSS compressed ROM image
-			if (sscanf(s - 7, "%06x", &image_offset) == 1) {
-				s = strstr((char *)data, "constant lzss-size");
-				if (s != NULL && (sscanf(s - 7, "%06x", &image_size) == 1))
+			if (s >= rom_text + 7 && sscanf(s - 7, "%06x", &image_offset) == 1) {
+				s = strstr(rom_text, "constant lzss-size");
+				if (s != NULL && s >= rom_text + 7 && (sscanf(s - 7, "%06x", &image_size) == 1))
 					decode_info_ok = true;
 			}
 		}
 		else {
 			// Probably a MacOS 9.2.x ROM image
-			s = strstr((char *)data, "constant parcels-offset");
+			s = strstr(rom_text, "constant parcels-offset");
 			if (s != NULL) {
-				if (sscanf(s - 7, "%06x", &image_offset) == 1) {
-					s = strstr((char *)data, "constant parcels-size");
-					if (s != NULL && (sscanf(s - 7, "%06x", &image_size) == 1))
+				if (s >= rom_text + 7 && sscanf(s - 7, "%06x", &image_offset) == 1) {
+					s = strstr(rom_text, "constant parcels-size");
+					if (s != NULL && s >= rom_text + 7 && (sscanf(s - 7, "%06x", &image_size) == 1))
 						decode_info_ok = true;
 				}
 			}
 		}
+		delete[] rom_text;
 		
-		// No valid information to decode the ROM found?
-		if (!decode_info_ok)
+		// No valid information to decode the ROM found, or the embedded image
+		// points outside the bytes that were actually read?
+		if (!decode_info_ok || image_offset > size || image_size > size - image_offset || image_size < 4)
 			return false;
 		
 		// Check signature, this could be a parcels-based ROM image
-		uint32 rom_signature = ntohl(*(uint32 *)(data + image_offset));
+		uint32 rom_signature;
+		memcpy(&rom_signature, data + image_offset, sizeof(rom_signature));
+		rom_signature = ntohl(rom_signature);
 		if (rom_signature == FOURCC('p','r','c','l')) {
 			D(bug("Offset of parcels data: %08x\n", image_offset));
 			D(bug("Size of parcels data: %08x\n", image_size));
