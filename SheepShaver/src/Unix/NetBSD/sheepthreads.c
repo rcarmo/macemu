@@ -124,7 +124,10 @@ struct new_thread {
 static int start_thread(void *arg)
 {
 	struct new_thread *nt = (struct new_thread *)arg;
-	nt->fn(nt->arg);
+	void *(*fn)(void *) = nt->fn;
+	void *fn_arg = nt->arg;
+	free(nt);
+	fn(fn_arg);
 	return 0;
 }
 
@@ -132,11 +135,14 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 {
 	struct new_thread *nt;
 	void *stack;
+	pthread_t new_thread;
 	int pid;
 
 	nt = (struct new_thread *)malloc(sizeof(struct new_thread));
 	stack = malloc(STACK_SIZE);
-	if (nt == NULL || stack == NULL) {
+	new_thread = malloc(sizeof(*new_thread));
+	if (nt == NULL || stack == NULL || new_thread == NULL) {
+		free(new_thread);
 		free(stack);
 		free(nt);
 		return ENOMEM;
@@ -146,14 +152,13 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 	pid = __clone(start_thread, (char *)stack + STACK_SIZE - 16, CLONE_VM | CLONE_FS | CLONE_FILES, nt);
 	if (pid == -1) {
+		free(new_thread);
 		free(stack);
 		free(nt);
 		return errno;
 	} else {
-		*thread = malloc(sizeof(**thread));
-		if (*thread == NULL)
-			return ENOMEM;
-		(*thread)->tid = pid;
+		new_thread->tid = pid;
+		*thread = new_thread;
 		return 0;
 	}
 }
@@ -169,6 +174,7 @@ int pthread_join(pthread_t thread, void **ret)
 
 	do {
 		if (waitpid(thread->tid, &status, __WCLONE) >= 0) {
+			free(thread);
 			if (ret)
 				*ret = NULL;
 			return 0;

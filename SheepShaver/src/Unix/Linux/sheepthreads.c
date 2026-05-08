@@ -118,7 +118,10 @@ struct new_thread {
 static int start_thread(void *arg)
 {
 	struct new_thread *nt = (struct new_thread *)arg;
-	nt->fn(nt->arg);
+	void *(*fn)(void *) = nt->fn;
+	void *fn_arg = nt->arg;
+	free(nt);
+	fn(fn_arg);
 	return 0;
 }
 
