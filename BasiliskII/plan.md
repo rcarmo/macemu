@@ -163,16 +163,23 @@ Build the profiling and bookkeeping needed for a trace/region tier without weake
 
 ### Current status
 
-**Started.**
+**In progress.**
 
-Initial substrate landed in the ARM64 BasiliskII block layer:
+The ARM64 BasiliskII block layer now has a real Phase-1 profiling substrate:
 
 - per-block `edge_exec_count[2]`
 - per-block `edge_target_pc[2]`
-- counter increments on constant-successor/direct-chain endblock paths
+- stable-edge thresholds (`B2_JIT_STABLE_EDGE_MIN_EXEC`, `B2_JIT_STABLE_EDGE_MIN_PCT`)
+- dominant/stable edge classification
 - env-gated hot-edge snapshots via `B2_JIT_TRACE_EDGES=1`
 
-That is intentionally modest: it gives us real runtime edge data without changing invalidation semantics or promoting trace formation prematurely.
+The validation loop also got stronger:
+
+- the opcode harness now forces rebuild of key JIT glue objects so clean runs do not silently use stale code
+- `B2_TEST_NAMES=...` allows focused opcode-subset loops while preserving the normal metrics contract
+- Xvfb startup in `jit-test/run.sh` now ensures display `:99` actually exists instead of assuming any Xvfb process is sufficient
+
+This is still intentionally conservative: it gives us real runtime edge data and a reliable harness loop without changing invalidation semantics or enabling broad trace formation yet.
 
 ### Acceptance
 
@@ -198,6 +205,23 @@ Turn current ad hoc direct chaining into an explicit policy layer that can later
   - no helper boundary ambiguity
   - no unresolved exception ownership seam
 - add downgrade path when an edge becomes unstable
+
+### Current status
+
+**Started, still experimental.**
+
+An opt-in ARM64 direct-chain experiment is now wired to the Phase-1 edge summaries:
+
+- `B2_JIT_ENABLE_STABLE_DIRECT_EDGES=1`
+- stable-edge summaries are carried across recompiles
+- constant-successor chain patching can prefer the target block's real direct handler for source edges that were previously observed to be stable
+- dependency patching preserves source-edge direct preference when the target block is rebuilt or invalidated
+
+This is deliberately narrow:
+
+- default behavior stays contract-first / validated-first
+- only explicit, stable, profiled edges are eligible
+- broad promotion policy is still deferred until ROM/runtime evidence improves
 
 ### Acceptance
 

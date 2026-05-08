@@ -558,6 +558,7 @@ typedef struct dep_t {
   struct blockinfo_t* source;
   struct dep_t**      prev_p;
   struct dep_t*       next;
+  uae_u8              prefer_direct;
 } dependency;
 
 typedef struct checksum_info_t {
@@ -608,6 +609,10 @@ typedef struct blockinfo_t {
        Counts are per compiled incarnation and reset on recompile. */
     uae_u32 edge_exec_count[2];
     uae_u32 edge_target_pc[2];
+    /* Stable-edge summary carried across recompiles so the next compiled
+       incarnation can make an explicit chain policy decision. */
+    uae_u32 stable_edge_pc[2];
+    uae_u8 stable_edge_mask;
     smallstate  env;
 
 #ifdef JIT_DEBUG
