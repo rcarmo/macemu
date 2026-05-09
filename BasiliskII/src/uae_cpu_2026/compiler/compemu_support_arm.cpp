@@ -6252,22 +6252,25 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                             side_exit_pc = taken_pc_p;
                             side_cond = arm_branch_cc;
                         }
-                        if (side_cond >= 0) {
+                        if (side_cond >= 0 && side_cond < NATIVE_CC_AL) {
                             bigstate saved_live = live;
                             flush(1);
                             make_flags_live();
-                            /* Emit guard: if (side_cond) goto side_exit */
-                            uae_u8* patch_guard = (uae_u8*)get_target();
-                            CC_B_i(side_cond, 0); /* patched below */
+                            /* Emit side exit for the non-traced branch path.
+                               The traced path must skip over the side-exit code;
+                               otherwise both outcomes fall through into the
+                               side exit and the branch is effectively forced. */
+                            const int skip_cond = side_cond ^ 1;
+                            uae_u8* patch_skip = (uae_u8*)get_target();
+                            CC_B_i(skip_cond, 0); /* patched below: skip side exit */
                             /* Side exit: load PC and endblock */
-                            uae_u8* guard_target = (uae_u8*)get_target();
                             LOAD_U64(REG_PC_TMP, side_exit_pc); /* load into x1 for endblock */
                             compemu_raw_endblock_pc_inreg(REG_PC_TMP,
                                 scaled_cycles((i + 1) * 4 * CYCLE_UNIT));
-                            /* Patch guard branch */
-                            int goff = (int)(guard_target - patch_guard) / 4;
-                            *(uae_u32*)patch_guard = 0x54000000u
-                                | ((goff & 0x7ffff) << 5) | (side_cond & 0xf);
+                            /* Patch skip branch to the traced-path continuation */
+                            int goff = (int)((uae_u8*)get_target() - patch_skip) / 4;
+                            *(uae_u32*)patch_skip = 0x54000000u
+                                | ((goff & 0x7ffff) << 5) | (skip_cond & 0xf);
                             /* Restore register allocator for traced path */
                             live = saved_live;
                         }
