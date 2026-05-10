@@ -1232,9 +1232,17 @@ static SDL_Cursor *MagCursor(bool hot) {
 	int w, h;
 	SDL_GetWindowSize(sdl_window, &w, &h);
 	float mag = std::min((float)w / drv->VIDEO_MODE_X, (float)h / drv->VIDEO_MODE_Y);
-	int size = ceilf(16 * mag), n = ((size + 7) >> 3) * size;
+	int size = (int)ceilf(16 * mag);
+	if (size < 1)
+		size = 1;
+	int n = ((size + 7) >> 3) * size;
 	Uint8 *data = (Uint8 *)SDL_calloc(n, 2);
 	Uint8 *mask = (Uint8 *)SDL_calloc(n, 2);
+	if (data == NULL || mask == NULL) {
+		SDL_free(data);
+		SDL_free(mask);
+		return NULL;
+	}
 	MagBits(data, &MacCursor[4], size);
 	MagBits(mask, &MacCursor[36], size);
 	SDL_Cursor *cursor = SDL_CreateCursor(data, mask, size, size, hot ? MacCursor[2] * mag : 0, hot ? MacCursor[3] * mag : 0);
