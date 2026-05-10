@@ -28,7 +28,11 @@
 
 
 // XPRAM file name and path
+#if POWERPC_ROM
+const char XPRAM_FILE_NAME[] = ".sheepshaver_nvram";
+#else
 const char XPRAM_FILE_NAME[] = ".basilisk_ii_xpram";
+#endif
 
 static const char *getPath() {
 	const char *path = PrefsFindString("xpram");
@@ -50,7 +54,7 @@ void LoadXPRAM(const char *dir)
 {
 	FILE *f = fopen(getPath(), "rb");
 	if (f != NULL) {
-		fread(XPRAM, 256, 1, f);
+		fread(XPRAM, XPRAM_SIZE, 1, f);
 		fclose(f);
 	}
 }
@@ -64,7 +68,7 @@ void SaveXPRAM(void)
 {
 	FILE *f = fopen(getPath(), "wb");
 	if (f != NULL) {
-		fwrite(XPRAM, 256, 1, f);
+		fwrite(XPRAM, XPRAM_SIZE, 1, f);
 		fclose(f);
 	}
 }
