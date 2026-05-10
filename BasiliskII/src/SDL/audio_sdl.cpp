@@ -182,6 +182,16 @@ static bool open_sdl_audio(void)
 	while (ring_size < desired) ring_size <<= 1;
 	ring_mask = ring_size - 1;
 	ring_buffer = (uint8 *)calloc(ring_size, 1);
+	if (ring_buffer == NULL) {
+		fprintf(stderr, "WARNING: Cannot allocate %u-byte audio ring buffer\n", ring_size);
+#if defined(BINCUE)
+		CloseAudio_bincue();
+#endif
+		SDL_CloseAudio();
+		ring_size = 0;
+		ring_mask = 0;
+		return false;
+	}
 	ring_write_pos = 0;
 	ring_read_pos = 0;
 
