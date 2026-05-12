@@ -679,6 +679,8 @@ void driver_base::set_video_mode(int flags)
 void driver_base::init()
 {
 	set_video_mode(display_type == DISPLAY_SCREEN ? SDL_FULLSCREEN : 0);
+	if (!s)
+		return;
 	int aligned_height = (VIDEO_MODE_Y + 15) & ~15;
 
 #ifdef ENABLE_VOSF
@@ -688,9 +690,18 @@ void driver_base::init()
 	the_buffer = (uint8 *)vm_acquire_framebuffer(the_buffer_size);
 	the_buffer_copy = (uint8 *)malloc(the_buffer_size);
 	D(bug("the_buffer = %p, the_buffer_copy = %p, the_host_buffer = %p\n", the_buffer, the_buffer_copy, the_host_buffer));
+	if (the_buffer == NULL || the_buffer == VM_MAP_FAILED || the_buffer_copy == NULL) {
+		fprintf(stderr, "WARNING: VOSF framebuffer allocation failed, disabling VOSF\n");
+		if (the_buffer != NULL && the_buffer != VM_MAP_FAILED)
+			vm_release_framebuffer(the_buffer, the_buffer_size);
+		the_buffer = NULL;
+		free(the_buffer_copy);
+		the_buffer_copy = NULL;
+		use_vosf = false;
+	}
 
 	// Check whether we can initialize the VOSF subsystem and it's profitable
-	if (!video_vosf_init(monitor)) {
+	if (use_vosf && !video_vosf_init(monitor)) {
 		WarningAlert(GetString(STR_VOSF_INIT_ERR));
 		use_vosf = false;
 	}
@@ -701,7 +712,10 @@ void driver_base::init()
 	}
 	if (!use_vosf) {
 		free(the_buffer_copy);
-		vm_release(the_buffer, the_buffer_size);
+		the_buffer_copy = NULL;
+		if (the_buffer != NULL && the_buffer != VM_MAP_FAILED)
+			vm_release_framebuffer(the_buffer, the_buffer_size);
+		the_buffer = NULL;
 		the_host_buffer = NULL;
 	}
 #endif
@@ -710,6 +724,15 @@ void driver_base::init()
 		the_buffer_size = (aligned_height + 2) * s->pitch;
 		the_buffer_copy = (uint8 *)calloc(1, the_buffer_size);
 		the_buffer = (uint8 *)vm_acquire_framebuffer(the_buffer_size);
+		if (the_buffer == NULL || the_buffer == VM_MAP_FAILED || the_buffer_copy == NULL) {
+			fprintf(stderr, "ERROR: framebuffer allocation failed\n");
+			free(the_buffer_copy);
+			the_buffer_copy = NULL;
+			if (the_buffer != NULL && the_buffer != VM_MAP_FAILED)
+				vm_release_framebuffer(the_buffer, the_buffer_size);
+			the_buffer = NULL;
+			return;
+		}
 		D(bug("the_buffer = %p, the_buffer_copy = %p\n", the_buffer, the_buffer_copy));
 	}
 
@@ -770,7 +793,7 @@ driver_base::~driver_base()
 		SDL_FreeSurface(s);
 
 	// the_buffer shall always be mapped through vm_acquire_framebuffer()
-	if (the_buffer != VM_MAP_FAILED) {
+	if (the_buffer != NULL && the_buffer != VM_MAP_FAILED) {
 		D(bug(" releasing the_buffer at %p (%d bytes)\n", the_buffer, the_buffer_size));
 		vm_release_framebuffer(the_buffer, the_buffer_size);
 		the_buffer = NULL;
