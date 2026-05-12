@@ -42,6 +42,7 @@
 #include <errno.h>
 
 #include <list>
+#include <vector>
 
 #ifdef OSX_CORE_AUDIO
 #include "../MacOSX/MacOSX_sound_if.h"
@@ -622,10 +623,12 @@ void close_bincue(void *fh)
 size_t read_bincue(void *fh, void *b, loff_t offset, size_t len)
 {
 	CueSheet *cs = (CueSheet *) fh;
+	if (cs == NULL || cs->raw_sector_size <= 0 || cs->cooked_sector_size <= 0)
+		return -1;
 	
 	size_t bytes_read = 0;						// bytes read so far
 	unsigned char *buf = (unsigned char *) b;	// target buffer
-	unsigned char secbuf[cs->raw_sector_size];		// temporary buffer
+	std::vector<unsigned char> secbuf(cs->raw_sector_size);
 
 	off_t sec = ((offset/cs->cooked_sector_size) * cs->raw_sector_size);
 	off_t secoff = offset % cs->cooked_sector_size;
@@ -635,7 +638,7 @@ size_t read_bincue(void *fh, void *b, loff_t offset, size_t len)
 	// reading since we can request a read that starts in the middle
 	// of a sector
 
-	if (cs == NULL || lseek(cs->binfh, sec, SEEK_SET) < 0) {
+	if (lseek(cs->binfh, sec, SEEK_SET) < 0) {
 		return -1;
 	}
 	while (len) {
@@ -648,7 +651,7 @@ size_t read_bincue(void *fh, void *b, loff_t offset, size_t len)
 
 		// read the next raw sector
 
-		if (read(cs->binfh, secbuf, cs->raw_sector_size) != cs->raw_sector_size) {
+		if (read(cs->binfh, secbuf.data(), cs->raw_sector_size) != cs->raw_sector_size) {
 			return bytes_read;
 		}
 
@@ -1125,7 +1128,7 @@ bool HaveAudioToMix_bincue() {
 
 void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 {
-	if (!dest_stream_len) return;
+	if (dest_stream_len <= 0) return;
 
 	if (currently_playing && currently_playing->stream) {
 		LOCK_PLAYER;
@@ -1142,9 +1145,11 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 		int dest_format_bytes = o.format == AUDIO_U8 ? 1 : 2;
 #endif
 		int dest_channels_sample = o.freq * o.channels * dest_format_bytes;
-		int src_stream_len = (int)((uint64) dest_stream_len * source_channels_sample / dest_channels_sample);
+		int src_stream_len = dest_channels_sample > 0
+			? (int)((uint64) dest_stream_len * source_channels_sample / dest_channels_sample)
+			: 0;
 
-		if (player->audiostatus == CDROM_AUDIO_PLAY) {
+		if (src_stream_len > 0 && player->audiostatus == CDROM_AUDIO_PLAY) {
 			//D(bug("MixAudio cd playing, player=0x%p\n", player));
 			uint8 *buf = fill_buffer(src_stream_len, player);
 #if SDL_VERSION_ATLEAST(3, 0, 0)
@@ -1153,12 +1158,13 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 			int avail = SDL_GetAudioStreamAvailable(player->stream);
 			if (avail >= dest_stream_len) {
 				//D(bug("have bytes avail %d stream len %d\n", avail, dest_stream_len));
-				uint8 converted[dest_stream_len];
-				SDL_GetAudioStreamData(player->stream, converted, dest_stream_len);
-				float volume = (float)player->volume_mono/128;
-				// Apply 60% volume while scanning (ff/reverse)
-				if (player->scanning) volume *= 0.6;
-				SDL_MixAudio(stream, converted, (SDL_AudioFormat) o.format, dest_stream_len, volume);
+				std::vector<uint8> converted(dest_stream_len);
+				if (SDL_GetAudioStreamData(player->stream, converted.data(), dest_stream_len) == dest_stream_len) {
+					float volume = (float)player->volume_mono/128;
+					// Apply 60% volume while scanning (ff/reverse)
+					if (player->scanning) volume *= 0.6;
+					SDL_MixAudio(stream, converted.data(), (SDL_AudioFormat) o.format, dest_stream_len, volume);
+				}
 			}
 #else
 			if (buf)
@@ -1166,12 +1172,12 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 			int avail = SDL_AudioStreamAvailable(player->stream);
 			if (avail >= dest_stream_len) {
 				//D(bug("have bytes avail %d stream len %d\n", avail, dest_stream_len));
-				uint8 converted[dest_stream_len];
-				SDL_AudioStreamGet(player->stream, converted, dest_stream_len);
+				std::vector<uint8> converted(dest_stream_len);
+				SDL_AudioStreamGet(player->stream, converted.data(), dest_stream_len);
 				int volume = player->volume_mono;
 				// Apply 60% volume while scanning (ff/reverse)
 				if (player->scanning) volume = volume * 3 / 5;
-				SDL_MixAudio(stream, converted, dest_stream_len, volume);
+				SDL_MixAudio(stream, converted.data(), dest_stream_len, volume);
 			}
 #endif
 		}
