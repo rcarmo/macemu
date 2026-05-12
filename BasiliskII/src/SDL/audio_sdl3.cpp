@@ -30,7 +30,9 @@
 #include "audio.h"
 #include "audio_defs.h"
 
+#include <climits>
 #include <queue>
+#include <vector>
 
 #define DEBUG 0
 #include "debug.h"
@@ -70,7 +72,7 @@ SDL_AudioSpec audio_spec;
 // Prototypes
 static void SDLCALL stream_func(void *arg, SDL_AudioStream *stream, int additional_amount, int total_amount);
 static float get_audio_volume();
-static void start_threads();
+static bool start_threads();
 static void stop_threads();
 
 static SDL_Thread * interrupt_thread = NULL;
@@ -135,16 +137,34 @@ static bool open_sdl_audio(void)
 
 	printf("Using SDL/%s audio output\n", SDL_GetCurrentAudioDriver());
 	audio_frames_per_block = 4096 >> PrefsFindInt32("sound_buffer");
-	start_threads();
+	if (!start_threads()) {
+#if defined(BINCUE)
+		CloseAudio_bincue();
+#endif
+		SDL_DestroyAudioStream(stream);
+		main_open_sdl_stream = NULL;
+		return false;
+	}
 	SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
 	return true;
 }
 
-static void start_threads() {
+static bool start_threads() {
 	interrupt_stream = SDL_CreateAudioStream(&audio_spec, &audio_spec);
+	if (interrupt_stream == NULL) {
+		fprintf(stderr, "WARNING: Cannot create SDL interrupt audio stream: %s\n", SDL_GetError());
+		return false;
+	}
 	assert(interrupt_thread == NULL);
 	interrupt_thread_quit = false;
 	interrupt_thread = SDL_CreateThread(interrupt_thread_func, "audio_sdl3_interrupt_thread", NULL);
+	if (interrupt_thread == NULL) {
+		fprintf(stderr, "WARNING: Cannot create SDL interrupt audio thread: %s\n", SDL_GetError());
+		SDL_DestroyAudioStream(interrupt_stream);
+		interrupt_stream = NULL;
+		return false;
+	}
+	return true;
 }
 
 static void stop_threads() {
@@ -157,7 +177,10 @@ static void stop_threads() {
 	if (interrupt_thread != NULL)
 		SDL_WaitThread(interrupt_thread, NULL);
 	interrupt_thread = NULL;
-	SDL_DestroyAudioStream(interrupt_stream);
+	if (interrupt_stream != NULL) {
+		SDL_DestroyAudioStream(interrupt_stream);
+		interrupt_stream = NULL;
+	}
 }
 
 static bool close_sdl_audio() {
@@ -202,6 +225,10 @@ void AudioInit(void)
 
 	// Init semaphore
 	audio_irq_done_sem = SDL_CreateSemaphore(0);
+	if (audio_irq_done_sem == NULL) {
+		fprintf(stderr, "WARNING: Cannot create SDL audio semaphore: %s\n", SDL_GetError());
+		return;
+	}
 #ifdef BINCUE
 	InitBinCue();
 #endif
@@ -233,8 +260,10 @@ void AudioExit(void)
 	ExitBinCue();
 #endif
 	// Delete semaphore
-	if (audio_irq_done_sem)
+	if (audio_irq_done_sem) {
 		SDL_DestroySemaphore(audio_irq_done_sem);
+		audio_irq_done_sem = NULL;
+	}
 }
 
 
@@ -329,11 +358,17 @@ static int interrupt_thread_func(void *data)
 
 				uint16 source_channels = ReadMacInt16(apple_stream_info + scd_numChannels);
 
-				int work_size = ReadMacInt32(apple_stream_info + scd_sampleCount) * (source_sample_size >> 3) * source_channels;
-				if (work_size == 0)
+				uint32 source_sample_count = ReadMacInt32(apple_stream_info + scd_sampleCount);
+				uint32 bytes_per_frame = (source_sample_size >> 3) * source_channels;
+				if (source_sample_count == 0 || bytes_per_frame == 0)
 					break; // no more audio available right now
+				if (source_sample_count > INT_MAX / bytes_per_frame) {
+					SDL_ClearAudioStream(interrupt_stream);
+					break;
+				}
+				int work_size = (int)(source_sample_count * bytes_per_frame);
 
-				uint8 buf[work_size];
+				std::vector<uint8> buf(work_size);
 
 				uint32 source_sample_rate = ReadMacInt32(apple_stream_info + scd_sampleRate);
 
@@ -343,12 +378,12 @@ static int interrupt_thread_func(void *data)
 				SDL_SetAudioStreamFormat(interrupt_stream, &current_scd_spec, NULL);
 
 				if (known_audio_format && !main_mute && !speaker_mute) {
-					Mac2Host_memcpy(buf, ReadMacInt32(apple_stream_info + scd_buffer), work_size);
+					Mac2Host_memcpy(buf.data(), ReadMacInt32(apple_stream_info + scd_buffer), work_size);
 				} else {
-					memset(buf, SDL_GetSilenceValueForFormat(source_format), work_size);
+					memset(buf.data(), SDL_GetSilenceValueForFormat(source_format), work_size);
 				}
 
-				SDL_PutAudioStreamData(interrupt_stream, buf, work_size);
+				SDL_PutAudioStreamData(interrupt_stream, buf.data(), work_size);
 			}
 			else {
 				SDL_ClearAudioStream(interrupt_stream);
@@ -369,7 +404,7 @@ static void SDLCALL stream_func(void *, SDL_AudioStream *stream, int stream_len,
 {
 	int target_queue_size;
 	int margin;
-	if (stream_len == 0) {
+	if (stream_len <= 0) {
 		// This indicates that SDL3 really has all the data it wants right now.
 		// This is our backpressure state, where we avoid pushing even more
 		// which prevents non-real-time audio situations (like playing media with audio)
@@ -402,18 +437,20 @@ static void SDLCALL stream_func(void *, SDL_AudioStream *stream, int stream_len,
 				stream_len, total_amount, margin, target_queue_size, bytes_available);
 #endif
 
-	uint8 src[stream_len], dst[stream_len];
-	int i = SDL_GetAudioStreamData(interrupt_stream, src, stream_len);
+	std::vector<uint8> src(stream_len), dst(stream_len);
+	int i = SDL_GetAudioStreamData(interrupt_stream, src.data(), stream_len);
+	if (i < 0)
+		i = 0;
 	if (i < stream_len)
-		memset(src + i, silence_byte, stream_len - i);
-	memset(dst, silence_byte, stream_len);
+		memset(src.data() + i, silence_byte, stream_len - i);
+	memset(dst.data(), silence_byte, stream_len);
 	//SDL_AudioSpec audio_spec;
 	//int r = SDL_GetAudioStreamFormat(stream, NULL, &audio_spec);// little endianが帰ってくる
-	SDL_MixAudio(dst, src, audio_spec.format, stream_len, get_audio_volume());
+	SDL_MixAudio(dst.data(), src.data(), audio_spec.format, stream_len, get_audio_volume());
 #if defined(BINCUE)
-	MixAudio_bincue(dst, stream_len);
+	MixAudio_bincue(dst.data(), stream_len);
 #endif
-	SDL_PutAudioStreamData(stream, dst, stream_len);
+	SDL_PutAudioStreamData(stream, dst.data(), stream_len);
 }
 
 
