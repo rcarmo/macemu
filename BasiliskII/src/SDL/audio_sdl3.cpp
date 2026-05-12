@@ -586,7 +586,11 @@ static int play_startup(void *arg) {
 }
 
 void PlayStartupSound() {
+	if (startup_thread != NULL)
+		return;
 	startup_thread = SDL_CreateThread(play_startup, "play_startup", NULL);
+	if (startup_thread == NULL)
+		fprintf(stderr, "WARNING: Cannot create startup sound thread: %s\n", SDL_GetError());
 }
 
 #endif	// SDL_VERSION_ATLEAST
