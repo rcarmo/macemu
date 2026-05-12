@@ -174,15 +174,20 @@ static SDL_Mutex *player_lock;
 #else
 static SDL_mutex *player_lock;
 #endif
-#define LOCK_PLAYER		SDL_LockMutex(player_lock)
-#define UNLOCK_PLAYER	SDL_UnlockMutex(player_lock)
+#define LOCK_PLAYER		do { if (player_lock) SDL_LockMutex(player_lock); } while (0)
+#define UNLOCK_PLAYER	do { if (player_lock) SDL_UnlockMutex(player_lock); } while (0)
 
 void InitBinCue() {
 	player_lock = SDL_CreateMutex();
+	if (!player_lock)
+		D(bug("Failed to create CD audio mutex\n"));
 }
 
 void ExitBinCue() {
-	SDL_DestroyMutex(player_lock);
+	if (player_lock) {
+		SDL_DestroyMutex(player_lock);
+		player_lock = NULL;
+	}
 }
 
 CDPlayer* CSToPlayer(CueSheet* cs)
@@ -786,6 +791,8 @@ bool CDPause_bincue(void *fh)
 	return false;
 }
 
+static bool PreparePlayOrScanAudio(CDPlayer *player);
+
 bool CDStop_bincue(void *fh)
 {
 	CueSheet *cs = (CueSheet *) fh;
@@ -818,14 +825,12 @@ bool CDResume_bincue(void *fh)
 		player->scanning = false;
 
 		// doesn't matter if it was paused, just ensure this one plays now
-		player->audiostatus = CDROM_AUDIO_PLAY;
-		currently_playing = player;
-		return true;
+		return PreparePlayOrScanAudio(player);
 	}
 	return false;
 }
 
-bool static PreparePlayOrScanAudio(CDPlayer *player) {
+static bool PreparePlayOrScanAudio(CDPlayer *player) {
 	if (player->audio_enabled) {
 		player->audiostatus = CDROM_AUDIO_PLAY;
 #ifdef OSX_CORE_AUDIO
@@ -1122,7 +1127,7 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 {
 	if (!dest_stream_len) return;
 
-	if (currently_playing) {
+	if (currently_playing && currently_playing->stream) {
 		LOCK_PLAYER;
 
 		CDPlayer *player = currently_playing;
@@ -1209,6 +1214,9 @@ static void ClosePlayerStream(CDPlayer * player)
 	if (player->stream) // if audiostream has been opened, free it as well
 		SDL_DestroyAudioStream(player->stream);
 	player->stream = NULL;
+#ifndef OSX_CORE_AUDIO
+	player->audio_enabled = false;
+#endif
 }
 
 void OpenAudio_bincue(int freq, int format, int channels, uint8 silence, int volume)
