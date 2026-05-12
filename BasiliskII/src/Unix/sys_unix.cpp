@@ -531,6 +531,10 @@ static mac_file_handle *open_filehandle(const char *name)
 		mac_file_handle *fh = new mac_file_handle;
 		memset(fh, 0, sizeof(mac_file_handle));
 		fh->name = strdup(name);
+		if (fh->name == NULL) {
+			delete fh;
+			return NULL;
+		}
 		fh->fd = -1;
 		fh->generic_disk = NULL;
 #if defined __MACOSX__

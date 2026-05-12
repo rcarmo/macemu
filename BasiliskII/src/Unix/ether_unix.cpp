@@ -880,8 +880,8 @@ static int16 ether_do_write(uint32 arg)
 #ifdef HAVE_SLIRP
 	if (net_if_type == NET_IF_SLIRP) {
 		const int slirp_input_fd = slirp_input_fds[1];
-		write(slirp_input_fd, &len, sizeof(len));
-		write(slirp_input_fd, packet, len);
+		if (write(slirp_input_fd, &len, sizeof(len)) == (ssize_t)sizeof(len))
+			(void)write(slirp_input_fd, packet, len);
 		return noErr;
 	} else
 #endif
@@ -981,12 +981,12 @@ void *slirp_receive_func(void *arg)
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
 		if (select(slirp_input_fd + 1, &rfds, NULL, NULL, &tv) > 0) {
-			int len;
-			read(slirp_input_fd, &len, sizeof(len));
+			int len = 0;
 			uint8 packet[1516];
-			assert(len <= sizeof(packet));
-			read(slirp_input_fd, packet, len);
-			slirp_input(packet, len);
+			if (read(slirp_input_fd, &len, sizeof(len)) == (ssize_t)sizeof(len) &&
+			    len > 0 && len <= (int)sizeof(packet) &&
+			    read(slirp_input_fd, packet, len) == len)
+				slirp_input(packet, len);
 		}
 
 		// ... in the output queue
