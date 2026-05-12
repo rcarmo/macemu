@@ -1064,9 +1064,18 @@ void driver_base::init()
 	the_buffer = (uint8 *)vm_acquire_framebuffer(the_buffer_size);
 	the_buffer_copy = (uint8 *)malloc(the_buffer_size);
 	D(bug("the_buffer = %p, the_buffer_copy = %p, the_host_buffer = %p\n", the_buffer, the_buffer_copy, the_host_buffer));
+	if (the_buffer == NULL || the_buffer == VM_MAP_FAILED || the_buffer_copy == NULL) {
+		fprintf(stderr, "WARNING: VOSF framebuffer allocation failed, disabling VOSF\n");
+		if (the_buffer != NULL && the_buffer != VM_MAP_FAILED)
+			vm_release_framebuffer(the_buffer, the_buffer_size);
+		the_buffer = NULL;
+		free(the_buffer_copy);
+		the_buffer_copy = NULL;
+		use_vosf = false;
+	}
 
 	// Check whether we can initialize the VOSF subsystem and it's profitable
-	if (!video_vosf_init(monitor)) {
+	if (use_vosf && !video_vosf_init(monitor)) {
 		WarningAlert(GetString(STR_VOSF_INIT_ERR));
 		use_vosf = false;
 	}
@@ -1077,7 +1086,10 @@ void driver_base::init()
 	}
     if (!use_vosf) {
 		free(the_buffer_copy);
-		vm_release(the_buffer, the_buffer_size);
+		the_buffer_copy = NULL;
+		if (the_buffer != NULL && the_buffer != VM_MAP_FAILED)
+			vm_release_framebuffer(the_buffer, the_buffer_size);
+		the_buffer = NULL;
 		the_host_buffer = NULL;
 	}
 #endif
@@ -1086,11 +1098,22 @@ void driver_base::init()
 		the_buffer_size = (aligned_height + 2) * pitch;
 		the_buffer_copy = (uint8 *)calloc(1, the_buffer_size);
 		the_buffer = (uint8 *)vm_acquire_framebuffer(the_buffer_size);
+		if (the_buffer == NULL || the_buffer == VM_MAP_FAILED || the_buffer_copy == NULL) {
+			fprintf(stderr, "ERROR: framebuffer allocation failed\n");
+			free(the_buffer_copy);
+			the_buffer_copy = NULL;
+			if (the_buffer != NULL && the_buffer != VM_MAP_FAILED)
+				vm_release_framebuffer(the_buffer, the_buffer_size);
+			the_buffer = NULL;
+			return;
+		}
 		memset(the_buffer, 0, the_buffer_size);
 		D(bug("the_buffer = %p, the_buffer_copy = %p\n", the_buffer, the_buffer_copy));
 	}
 
 	set_video_mode(display_type == DISPLAY_SCREEN ? SDL_WINDOW_FULLSCREEN : 0, pitch);
+	if (!s)
+		return;
 
 	// Set frame buffer base
 	set_mac_frame_buffer(monitor, VIDEO_MODE_DEPTH, true);
@@ -1099,8 +1122,10 @@ void driver_base::init()
 	
 	// set default B/W palette
 	sdl_palette = SDL_CreatePalette(256);
-	sdl_palette->colors[1] = (SDL_Color){ .r = 0, .g = 0, .b = 0, .a = 255 };
-	SDL_SetSurfacePalette(s, sdl_palette);
+	if (sdl_palette) {
+		sdl_palette->colors[1] = (SDL_Color){ .r = 0, .g = 0, .b = 0, .a = 255 };
+		SDL_SetSurfacePalette(s, sdl_palette);
+	}
 
 	if (PrefsFindBool("init_grab") && !PrefsFindBool("hardcursor")) grab_mouse();
 }
@@ -1164,7 +1189,7 @@ driver_base::~driver_base()
 									// instances of SDL_Surface and SDL_Texture.
 
 	// the_buffer shall always be mapped through vm_acquire_framebuffer()
-	if (the_buffer != VM_MAP_FAILED) {
+	if (the_buffer != NULL && the_buffer != VM_MAP_FAILED) {
 		D(bug(" releasing the_buffer at %p (%d bytes)\n", the_buffer, the_buffer_size));
 		vm_release_framebuffer(the_buffer, the_buffer_size);
 		the_buffer = NULL;
