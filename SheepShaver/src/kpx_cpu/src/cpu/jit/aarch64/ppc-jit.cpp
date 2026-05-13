@@ -1999,6 +1999,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		if (!no_ctr_test && no_cond_test) {
 			/* bdnz or bdz (CTR-only, no condition test) */
+			emit_save_lr_if_link(pc, lk);
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);
 			emit32(0x51000400 | (RTMP0 << 5) | RTMP0); /* SUB Wd, Wn, #1 */
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_CTR);
@@ -2042,6 +2043,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		if (no_ctr_test && !no_cond_test) {
 			/* Pure conditional branch: test CR[BI] only, no CTR */
 			uint32_t bit_pos = 31 - bi;
+			emit_save_lr_if_link(pc, lk);
 			lazy_flush_cr0();
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);
 			if (bit_pos) {
@@ -2086,6 +2088,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		if (no_ctr_test && no_cond_test) {
 			/* Unconditional: BO=1x1xx → always branch */
+			emit_save_lr_if_link(pc, lk);
 			lazy_flush_cr0();
 			emit_epilogue_with_pc(target_pc);
 			return true;
