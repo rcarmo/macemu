@@ -43,12 +43,13 @@ delivering measurable MacBench improvement over interpreter baseline (838 CPU / 
 - [x] Test: harness 209/209, MacBench CPU should show measurable improvement
 
 ### Phase 4: Region JIT (block chaining)
-- [ ] After executing block A → block B, if B is cached, patch A's epilogue:
-  - Replace A's `STR PC; LDP; RET` with `B imm` to B's code (skip dispatch)
-- [ ] Chain must preserve register allocation: A's dirty regs flushed before chain
-- [ ] Guard at chain entry: verify B's start PC matches expected (catch invalidation)
-- [ ] On cache flush: break all chains (rewrite patched epilogues back to RET)
+- [x] Fast JIT dispatch inner loop: after each block, check JIT cache directly without interpreter block cache round-trip (`a8afdf92`)
+- [x] Compile-time block chaining: each compiled block records a `chain_code` entry point (after prologue); `emit_epilogue_with_pc` emits `B chain_code` instead of 6×LDP+RET when the target is already in JIT cache (`4bcd9336`)
+- [x] Chain invalidation: JIT cache flush atomically removes all `chain_code` pointers; stale chains cannot be re-emitted
+- [ ] Runtime patching: backfill chain epilogues when a previously-standard-epilogue block's target gets compiled (needed for forward-branch heavy code)
 - [ ] Test: harness 209/209, boot Mac OS 8.1, MacBench CPU > 1000
+
+Note: the tight `addi+bdnz` benchmark uses intra-block CBNZ (pre-existing, from `find_code_for_pc`) for the inner loop. Compile-time inter-block chaining fires for forward branches where the target was compiled in an earlier block. Runtime patching is needed to capture backward-branch loops across block boundaries.
 
 ## Success criteria
 

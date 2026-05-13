@@ -3,20 +3,24 @@
 ## SheepShaver PPC JIT (2026-05-13)
 
 **Build:** ✅
-**Interpreter:** ✅ Boots Mac OS to desktop (VNC port 5999, ~167 MIPS)
+**Interpreter:** ✅ Boots Mac OS to desktop (VNC port 5999, ~324 MIPS on Orange Pi 6 Plus)
 **JIT boot:** ✅ Boots to "Welcome to Mac OS" splash screen with JIT active
 **JIT harness:** ✅ 209/209 opcode vectors pass (score=100)
 **ROM harness:** ✅ 1800/1825 ROM blocks pass (98.6%) on 10K-block scan
+**Tight-loop benchmark:** ✅ ~737 MIPS (addi+bdnz 100M, intra-block CBNZ, Orange Pi 6 Plus)
 
 ### JIT Boot Status
 
 With JIT active, SheepShaver boots Mac OS to the Welcome splash screen.
-Phases 1–3 of the JIT optimisation plan are complete:
+Phases 1–3 of the JIT optimisation plan are complete, Phase 4 (block chaining) in progress:
 1. **Phase 1:** Hash + chaining block cache (8192 buckets) — eliminates recompilation overhead
 2. **Phase 2:** Lazy CR0 flags — deferred materialisation until first read
 3. **Phase 3:** Register allocation (x21–x28, 8-GPR cache) — reduces LDR/STR traffic
+4. **Phase 4a:** Fast JIT dispatch inner loop — skips interpreter block cache on JIT hits
+4. **Phase 4b:** Compile-time block chaining — `chain_code` entry points; forward targets already in cache get `B chain_code` instead of 6×LDP+RET
 
 MacBench results (after Phase 3): CPU 835, FPU 1027.
+Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ test).
 
 ### ROM Harness
 
