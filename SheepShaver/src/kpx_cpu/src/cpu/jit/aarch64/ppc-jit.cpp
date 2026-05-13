@@ -41,11 +41,12 @@ static uint32_t *jit_cache_end  = NULL;
 #define JIT_BC_POOL     16384               /* max total entries across all chains */
 
 struct jit_bc_entry {
-	uint32_t  pc;      /* PPC address this block was compiled from */
-	uint32_t *code;    /* pointer into jit_cache_base; NULL = empty */
-	int       n_insns; /* number of compiled PPC instructions */
-	bool      complete;/* true iff every instruction in block is native */
-	int       next;    /* index of next entry in chain, -1 = end */
+	uint32_t  pc;         /* PPC address this block was compiled from */
+	uint32_t *code;       /* normal ABI entry point (with prologue) */
+	uint32_t *chain_code; /* chain entry point (after prologue, for direct chaining) */
+	int       n_insns;    /* number of compiled PPC instructions */
+	bool      complete;   /* true iff every instruction in block is native */
+	int       next;       /* index of next entry in chain, -1 = end */
 };
 
 static struct jit_bc_entry jit_bc_pool[JIT_BC_POOL];
@@ -86,15 +87,16 @@ static const struct jit_bc_entry *jit_bc_lookup(uint32_t pc) {
 	return NULL;
 }
 
-static void jit_bc_insert(uint32_t pc, uint32_t *code, bool complete, int n_insns = 0) {
+static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, bool complete, int n_insns = 0) {
 	/* Check if already exists */
 	int bucket = (pc >> 2) & JIT_BC_MASK;
 	int idx = jit_bc_heads[bucket];
 	while (idx >= 0) {
 		if (jit_bc_pool[idx].pc == pc) {
-			jit_bc_pool[idx].code = code;
-			jit_bc_pool[idx].complete = complete;
-			jit_bc_pool[idx].n_insns = n_insns;
+			jit_bc_pool[idx].code       = code;
+			jit_bc_pool[idx].chain_code = chain_code;
+			jit_bc_pool[idx].complete   = complete;
+			jit_bc_pool[idx].n_insns    = n_insns;
 			return;
 		}
 		idx = jit_bc_pool[idx].next;
@@ -105,12 +107,13 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, bool complete, int n_insn
 		jit_bc_flush();
 	}
 	idx = jit_bc_pool_next++;
-	jit_bc_pool[idx].pc = pc;
-	jit_bc_pool[idx].code = code;
-	jit_bc_pool[idx].complete = complete;
-	jit_bc_pool[idx].n_insns = n_insns;
-	jit_bc_pool[idx].next = jit_bc_heads[bucket];
-	jit_bc_heads[bucket] = idx;
+	jit_bc_pool[idx].pc         = pc;
+	jit_bc_pool[idx].code       = code;
+	jit_bc_pool[idx].chain_code = chain_code;
+	jit_bc_pool[idx].complete   = complete;
+	jit_bc_pool[idx].n_insns    = n_insns;
+	jit_bc_pool[idx].next       = jit_bc_heads[bucket];
+	jit_bc_heads[bucket]        = idx;
 }
 
 /* ---- Register offsets in powerpc_registers ----
@@ -461,7 +464,20 @@ static void emit_epilogue_with_pc(uint32_t next_pc) {
 	ra_flush_all();
 	emit_load_imm32(RTMP0, (int32_t)next_pc);
 	a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
-	/* Restore callee-saved regs and return */
+	/* Compile-time chaining: if the target PC is already in the JIT block
+	 * cache and has a chain entry, branch directly to it instead of
+	 * restoring callee-saved registers and returning to the dispatch loop.
+	 * The callee-saved registers (x19–x28) remain valid on the stack from
+	 * the current block's prologue — the chained block re-uses that frame. */
+	const struct jit_bc_entry *chain_target = jit_bc_lookup(next_pc);
+	if (chain_target && chain_target->chain_code) {
+		int32_t off = (int32_t)((uint8_t *)chain_target->chain_code - (uint8_t *)jit_code_ptr);
+		if (off >= -(1 << 25) && off < (1 << 25)) {
+			emit32(0x14000000 | ((off >> 2) & 0x3FFFFFF)); /* B <offset> */
+			return; /* no LDP+RET: caller re-uses current stack frame */
+		}
+	}
+	/* Standard epilogue: restore callee-saved regs and return to dispatch */
 	a64_ldp_post(27, 28, A64_SP, 16);
 	a64_ldp_post(25, 26, A64_SP, 16);
 	a64_ldp_post(23, 24, A64_SP, 16);
@@ -3343,7 +3359,8 @@ bool ppc_jit_aarch64_compile(
 	 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — block lifecycle. */
 	const struct jit_bc_entry *cached = jit_bc_lookup(pc);
 	if (cached) {
-		out->code         = cached->code;
+		out->code       = cached->code;
+		out->chain_code = cached->chain_code;
 		out->code_size    = 0; /* not tracked for cached entries */
 		out->ppc_start_pc = pc;
 		out->ppc_end_pc   = pc; /* not tracked for cached entries */
@@ -3372,6 +3389,11 @@ bool ppc_jit_aarch64_compile(
 	a64_stp_pre(25, 26, A64_SP, -16);      /* save x25, x26 */
 	a64_stp_pre(27, 28, A64_SP, -16);      /* save x27, x28 */
 	a64_mov_reg(RSTATE, A64_X0);
+
+	/* Chain entry: code position after prologue.
+	 * Other blocks chain here via B <chain_code> — RSTATE (x20) must
+	 * already be valid and callee-saved regs remain on the outer frame. */
+	uint32_t *chain_entry_start = jit_code_ptr;
 
 	jit_blocks_attempted++;
 	uint32_t cur_pc = pc;
@@ -3528,9 +3550,13 @@ bool ppc_jit_aarch64_compile(
 	if (complete && n_compiled > 0) jit_blocks_complete++;
 
 	/* Insert into block address cache so future executions skip recompilation.
+	 * chain_entry_start is the code position immediately after the prologue;
+	 * other blocks can branch directly there to skip the callee-save overhead.
 	 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — block lifecycle. */
 	if (n_compiled > 0)
-		jit_bc_insert(pc, code_start, complete, n_compiled);
+		jit_bc_insert(pc, code_start, chain_entry_start, complete, n_compiled);
+
+	out->chain_code = chain_entry_start;
 
 	return n_compiled > 0;
 }

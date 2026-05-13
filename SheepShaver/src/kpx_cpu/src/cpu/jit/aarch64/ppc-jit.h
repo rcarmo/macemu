@@ -13,7 +13,8 @@
 struct powerpc_registers;
 
 struct ppc_jit_block {
-	uint32_t *code;
+	uint32_t *code;       /* normal ABI entry point (with prologue) */
+	uint32_t *chain_code; /* chain entry point (after prologue) */
 	size_t    code_size;
 	uint32_t  ppc_start_pc;
 	uint32_t  ppc_end_pc;
