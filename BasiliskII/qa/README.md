@@ -46,12 +46,26 @@ qa/
   matrix.md                         human-readable QA matrix
   reports/run-report-template.md    per-run report template
   scripts/run-matrix.sh             prefs + smoke runner scaffold
-  scripts/vnc-gherkin-runner.js     VNC/Gherkin runner placeholder
-  features/*.feature                desktop/network/audio scenarios
+  scripts/vnc-gherkin-runner.js     compatibility wrapper for VNC tests
+  tests/vnc/                        dedicated VNC/Gherkin test tooling
+  tests/vnc/stories/*.feature       user-story oriented desktop scenarios
+  features/*.feature                high-level desktop/network/audio scenarios
   artifacts/                        ignored/generated run outputs
 ```
 
 Generated artifacts are written under `qa/artifacts/` by default and should not be committed except for curated reports/screenshots explicitly needed for review.
+
+## VNC user-story tests
+
+The dedicated VNC test tooling lives under `qa/tests/vnc/`:
+
+```bash
+BasiliskII/qa/tests/vnc/run.js \
+  --features BasiliskII/qa/tests/vnc/stories \
+  --artifacts BasiliskII/qa/artifacts/reports/vnc-noop
+```
+
+The current driver is `noop`: it validates Gherkin stories and writes action/result artifacts without sending real VNC events. A real VNC backend should implement the driver contract in `qa/tests/vnc/lib/vnc-driver.js`.
 
 ## Safety rules
 
