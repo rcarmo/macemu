@@ -29,4 +29,9 @@ qa/tests/vnc/run.js \
   --emulator sheepshaver \
   --features qa/tests/vnc/stories \
   --artifacts /tmp/sheepshaver-vnc-noop
+
+# Generate a PDF report from a run directory
+qa/tests/vnc/tools/generate-pdf-report.mjs \
+  --run /tmp/sheepshaver-vnc-noop \
+  --output /tmp/sheepshaver-vnc-noop.pdf
 ```

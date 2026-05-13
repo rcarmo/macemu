@@ -158,7 +158,7 @@ async function executeStep(step) {
     await driver.assertDisplayResponds();
   } else if (/^the runner records emulator profile$/.test(text)) {
     await driver.recordManualAssertion(`profile=${profile.data.emulator}`);
-  } else if (/^(the QA case|the emulator is launched|the Finder desktop|the Mac OS desktop|the emulator desktop|a simple app window|the display state)/.test(text)) {
+  } else if (/^(the QA case|the emulator is launched|the Finder desktop|the Mac OS desktop|the emulator desktop|a simple app window|the display state|a VNC run directory|the run directory|the PDF report generator|an HTML report|a PDF report|the report)/.test(text)) {
     return { status: 'SKIP', note: 'precondition/manual assertion' };
   } else if (/^the runner opens guest item /.test(text)) {
     await driver.click(`guest-item:${quoted(text)}`);

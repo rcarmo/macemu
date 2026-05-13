@@ -20,6 +20,7 @@ qa/tests/vnc/
   stories/*.feature      shared user-story oriented desktop scenarios
   stories/user-stories.md narrative user stories and acceptance criteria
   tools/screenshot-read.js deterministic PNG/OCR/OpenCV screenshot assertions
+  tools/generate-pdf-report.mjs Playwright HTML-to-PDF report generator
   templates/             committed image templates for OpenCV matching
 ```
 
@@ -62,6 +63,24 @@ The runner calls a driver with these operations:
 The noop implementation records intended actions in `vnc-actions.jsonl` and writes a
 placeholder screenshot manifest. A future real driver can use a VNC library, `vncdotool`,
 or a small Python/Node bridge.
+
+## PDF reports
+
+The VNC runner writes `vnc-run.json`, `vnc-actions.jsonl`, screenshots/placeholders,
+and a simple Markdown report. Generate a polished HTML/PDF report from that run
+directory with:
+
+```bash
+qa/tests/vnc/tools/generate-pdf-report.mjs \
+  --run BasiliskII/qa/artifacts/reports/vnc-noop \
+  --output BasiliskII/qa/artifacts/reports/vnc-noop.pdf \
+  --title "BasiliskII VNC QA Report"
+```
+
+The generator follows the same pattern used in `rcarmo/vibes` and
+`rcarmo/go-rdp-android`: collect structured test artifacts, build a compact HTML
+summary with evidence tables and screenshots, render to PDF with Playwright
+Chromium, and keep the HTML report as a fallback/debug artifact.
 
 ## Model-free screenshot reading
 
