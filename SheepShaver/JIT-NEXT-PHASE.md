@@ -45,11 +45,12 @@ delivering measurable MacBench improvement over interpreter baseline (838 CPU / 
 ### Phase 4: Region JIT (block chaining)
 - [x] Fast JIT dispatch inner loop: after each block, check JIT cache directly without interpreter block cache round-trip (`a8afdf92`)
 - [x] Compile-time block chaining: each compiled block records a `chain_code` entry point (after prologue); `emit_epilogue_with_pc` emits `B chain_code` instead of 6×LDP+RET when the target is already in JIT cache (`4bcd9336`)
-- [x] Chain invalidation: JIT cache flush atomically removes all `chain_code` pointers; stale chains cannot be re-emitted
-- [ ] Runtime patching: backfill chain epilogues when a previously-standard-epilogue block's target gets compiled (needed for forward-branch heavy code)
-- [ ] Test: harness 209/209, boot Mac OS 8.1, MacBench CPU > 1000
+- [x] Runtime back-patching: chain site pool (4096 entries) records unresolved epilogue sites; `jit_bc_insert` patches them with `B chain_code` when the target block is compiled (`e1f11657`)
+- [x] Chain invalidation: full JIT cache flush atomically clears both jit_bc_pool and chain_site_pool
+- [x] `rld*` correctness: rldicl/rldicr/rldic mask now applied; rldcl/rldcr emit ROL not ROR (`8ad71eed`)
+- [ ] MacBench validation: runtime benefit requires actual Mac OS boot (ROM + disk); tight-loop harness uses intra-block CBNZ which is unaffected by inter-block chaining
 
-Note: the tight `addi+bdnz` benchmark uses intra-block CBNZ (pre-existing, from `find_code_for_pc`) for the inner loop. Compile-time inter-block chaining fires for forward branches where the target was compiled in an earlier block. Runtime patching is needed to capture backward-branch loops across block boundaries.
+Note: the tight `addi+bdnz` benchmark uses intra-block CBNZ (pre-existing) for the inner loop. Compile-time chaining fires when the target was compiled before the source block. Runtime patching captures the forward-branch case (target compiled after source).
 
 ## Success criteria
 

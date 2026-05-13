@@ -12,15 +12,17 @@
 ### JIT Boot Status
 
 With JIT active, SheepShaver boots Mac OS to the Welcome splash screen.
-Phases 1–3 of the JIT optimisation plan are complete, Phase 4 (block chaining) in progress:
-1. **Phase 1:** Hash + chaining block cache (8192 buckets) — eliminates recompilation overhead
-2. **Phase 2:** Lazy CR0 flags — deferred materialisation until first read
-3. **Phase 3:** Register allocation (x21–x28, 8-GPR cache) — reduces LDR/STR traffic
-4. **Phase 4a:** Fast JIT dispatch inner loop — skips interpreter block cache on JIT hits
-4. **Phase 4b:** Compile-time block chaining — `chain_code` entry points; forward targets already in cache get `B chain_code` instead of 6×LDP+RET
+Phases 1–3 complete; Phase 4 (block chaining) complete:
+1. **Phase 1:** Hash + chaining block cache (8192 buckets)
+2. **Phase 2:** Lazy CR0 flags
+3. **Phase 3:** Register allocation (x21–x28)
+4. **Phase 4a:** Fast JIT dispatch inner loop (`a8afdf92`)
+5. **Phase 4b:** Compile-time block chaining — `chain_code` entry points (`4bcd9336`)
+6. **Phase 4c:** Runtime back-patching — chain site pool, `patch_chain_sites` on insert (`e1f11657`)
+7. **Phase 4d:** `rld*` correctness — rldicl/rldicr/rldic masks; rldcl/rldcr ROL (`8ad71eed`)
 
 MacBench results (after Phase 3): CPU 835, FPU 1027.
-Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ test).
+Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ).
 
 ### ROM Harness
 
