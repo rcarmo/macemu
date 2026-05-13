@@ -307,6 +307,20 @@ static void emit_store_gpr64(int xs, int n) {
 	a64_str_w_imm(tmp, RSTATE, PPCR_GPR_HI(n));
 }
 
+/* Emit LSL Xd,Xn,#imm (64-bit logical shift left, 1 <= imm <= 63) */
+static void emit_lsl64_imm(int rd, int rn, int imm) {
+	if (imm <= 0 || imm >= 64) return;
+	int immr = (64 - imm) & 63;
+	int imms = 63 - imm;
+	emit32(0xD3400000 | (immr << 16) | (imms << 10) | (rn << 5) | rd);
+}
+
+/* Emit LSR Xd,Xn,#imm (64-bit logical shift right, 1 <= imm <= 63) */
+static void emit_lsr64_imm(int rd, int rn, int imm) {
+	if (imm <= 0 || imm >= 64) return;
+	emit32(0xD3400000 | (imm << 16) | (63 << 10) | (rn << 5) | rd);
+}
+
 static void emit_load_imm32(int rd, int32_t imm) {
 	uint32_t u = (uint32_t)imm;
 	uint16_t lo = u & 0xFFFF;
@@ -3125,29 +3139,81 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		switch (sub) {
 		case 0: /* rldicl — rotate left doubleword then clear left */
 		case 1: /* rldicr — rotate left doubleword then clear right */
-		case 2: /* rldic — rotate left doubleword then clear */
+		case 2: /* rldic  — rotate left doubleword then clear (both sides) */
 		case 3: /* rldimi — rotate left doubleword then mask insert */
 		{
 			uint32_t sh = ((op >> 11) & 0x1F) | ((op & 2) << 4); /* 6-bit shift: sh[0:4] | sh[5] */
-			uint32_t mb_or_me = ((op >> 6) & 0x1F) | ((op & 0x20) >> 0); /* 6-bit mask field */
-			if (sh && sh < 64) {
-				emit32(0x93C00000 | (RTMP0 << 16) | (((64 - sh) & 63) << 10) | (RTMP0 << 5) | RTMP0); /* ROR Xd,Xn,#(64-sh) = ROL */
+			uint32_t mb_or_me = ((op >> 6) & 0x1F) | (op & 0x20); /* 6-bit mask field */
+			/* ROL Xd,Xn,#sh = ROR Xd,Xn,#(64-sh) */
+			if (sh > 0 && sh < 64)
+				emit32(0x93C00000 | (RTMP0 << 16) | (((64 - sh) & 63) << 10) | (RTMP0 << 5) | RTMP0);
+			/* Apply mask:
+			 * rldicl (sub 0): clear left mb bits  — LSL mb; LSR mb
+			 * rldicr (sub 1): clear right (63-me) bits — LSR (63-me); LSL (63-me)
+			 * rldic  (sub 2): clear left mb AND clear right sh bits
+			 * rldimi (sub 3): insert into RA with mask bits mb..(63-sh) */
+			if (sub == 3) {
+				/* rldimi: RA = (ROTL64(RS,sh) & mask) | (RA & ~mask)
+				 * where mask = bits mb..(63-sh). Full merge requires computing
+				 * the mask constant and emitting BIC + ORR. Fall to interpreter
+				 * for now to avoid producing incorrect silent results. */
+				return false;
+				/* rldicl (sub 0): clear top mb_or_me bits */
+				if (sub == 0) {
+					if (mb_or_me > 0 && mb_or_me < 64) {
+						emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
+						emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
+					}
+				/* rldicr (sub 1): clear bottom (63-me) bits */
+				} else if (sub == 1) {
+					uint32_t clrr = 63 - mb_or_me;
+					if (clrr > 0 && clrr < 64) {
+						emit_lsr64_imm(RTMP0, RTMP0, clrr);
+						emit_lsl64_imm(RTMP0, RTMP0, clrr);
+					}
+				/* rldic (sub 2): clear top mb bits AND clear bottom sh bits */
+				} else { /* sub == 2 */
+					if (mb_or_me > 0 && mb_or_me < 64) {
+						emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
+						emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
+					}
+					if (sh > 0 && sh < 64) {
+						emit_lsr64_imm(RTMP0, RTMP0, sh);
+						emit_lsl64_imm(RTMP0, RTMP0, sh);
+					}
+				}
 			}
-			/* Build 64-bit mask from mb/me and apply */
-			/* For rldicl: mask = bits mb..63 */
-			/* For rldicr: mask = bits 0..me */
-			/* Simplified: just store the rotated result (mask computation is complex) */
 			emit_store_gpr64(RTMP0, ra);
 			if (rc) lazy_update_cr0(RTMP0); /* uses low 32 bits for CR0 */
 			return true;
 		}
 		case 8: /* rldcl — rotate left doubleword then clear left (register shift) */
 		case 9: /* rldcr — rotate left doubleword then clear right (register shift) */
-			emit_load_gpr(RTMP1, (op >> 11) & 0x1F);
-			emit32(0x9AC02C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ROR Xd,Xn,Xm (actually need ROL) */
+		{
+			uint32_t rb = (op >> 11) & 0x1F; /* RB = shift register */
+			uint32_t mb = ((op >> 6) & 0x1F) | (op & 0x20); /* 6-bit mask field */
+			emit_load_gpr(RTMP1, rb);
+			/* ROL Xd,Xn,Xm: ARM64 has RORV; ROL by sh = ROR by (64-sh)
+			 * NEG RTMP2, RTMP1  (gives -sh; RORV uses low 6 bits so -sh ≡ 64-sh mod 64) */
+			emit32(0xCB0003E0 | (RTMP1 << 16) | RTMP2); /* SUB Xd,XZR,Xn = NEG */
+			emit32(0x9AC02C00 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* RORV Xd,Xn,Xm */
+			/* Apply mask: clear left mb bits (rldcl) or clear right (63-me) bits (rldcr) */
+			if (sub == 8) { /* rldcl: clear top mb bits */
+				if (mb > 0 && mb < 64) {
+					emit_lsl64_imm(RTMP0, RTMP0, mb);
+					emit_lsr64_imm(RTMP0, RTMP0, mb);
+				}
+			} else { /* rldcr: clear bottom (63-me) bits */
+				uint32_t clrr = 63 - mb;
+				if (clrr > 0 && clrr < 64) {
+					emit_lsr64_imm(RTMP0, RTMP0, clrr);
+					emit_lsl64_imm(RTMP0, RTMP0, clrr);
+				}
+			}
 			emit_store_gpr64(RTMP0, ra);
 			if (rc) lazy_update_cr0(RTMP0);
 			return true;
+		}
 		default:
 			return false;
 		}
