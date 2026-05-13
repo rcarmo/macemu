@@ -439,7 +439,7 @@ void powerpc_cpu::execute_multiply(uint32 opcode)
 
 	// Set CR0 (LT, GT, EQ, SO) if instruction has Rc set
 	if (Rc::test(opcode))
-		record_cr0((uint32)d);
+		record_cr0((int32)d);
 
 	// Commit result to output operand
 	operand_RD::set(this, opcode, (uint32)d);
@@ -465,9 +465,9 @@ void powerpc_cpu::record_fpscr(int exceptions)
 
 	// Always update VX
 	if (fpscr() & (FPSCR_VXSNAN_field::mask() | FPSCR_VXISI_field::mask() |
-				   FPSCR_VXISI_field::mask() | FPSCR_VXIDI_field::mask() |
-				   FPSCR_VXZDZ_field::mask() | FPSCR_VXIMZ_field::mask() |
-				   FPSCR_VXVC_field::mask() | FPSCR_VXSOFT_field::mask() |
+				   FPSCR_VXIDI_field::mask() | FPSCR_VXZDZ_field::mask() |
+				   FPSCR_VXIMZ_field::mask() | FPSCR_VXVC_field::mask() |
+				   FPSCR_VXSOFT_field::mask() |
 				   FPSCR_VXSQRT_field::mask() | FPSCR_VXCVI_field::mask()))
 		fpscr() |= FPSCR_VX_field::mask();
 
