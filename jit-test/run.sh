@@ -187,10 +187,21 @@ EOF
     return 0
 }
 
-# Start Xvfb if needed
-if ! pgrep -x Xvfb >/dev/null 2>&1; then
-    Xvfb :99 -screen 0 640x480x24 &>/dev/null &
-    sleep 1
+# Start Xvfb on the specific display we use if needed.
+# Another Xvfb on a different display (e.g. :165) must not suppress startup
+# of the harness display :99.
+if ! DISPLAY=:99 xdpyinfo >/dev/null 2>&1; then
+    rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
+    Xvfb :99 -screen 0 640x480x24 >/dev/null 2>&1 &
+    for _ in $(seq 1 20); do
+        if DISPLAY=:99 xdpyinfo >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.2
+    done
+fi
+if ! DISPLAY=:99 xdpyinfo >/dev/null 2>&1; then
+    emit_failure_metrics 0 "failed to start Xvfb on :99"
 fi
 
 # ---- Define test cases -------------------------------------------------------
