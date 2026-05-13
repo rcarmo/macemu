@@ -3194,6 +3194,11 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		uint32_t rs = PPC_RS(op);
 		ra = PPC_RA(op);
 		uint32_t sub = (op >> 1) & 0xF; /* bits 27-30 determine sub-instruction */
+		/* For immediate variants (sub 0-7) the sub-opcode occupies bits 27-29 (3 bits)
+		 * while bit 30 is SH[5].  Without normalisation, rldicl/rldicr/rldic/rldimi
+		 * with sh>=32 (SH[5]=1) would have sub=1/3/5/7 instead of 0/2/4/6, causing
+		 * the wrong handler to execute.  Strip the SH[5] bit by halving sub. */
+		if (sub < 8) sub >>= 1;
 		bool rc = op & 1;
 		/* Load 64-bit source */
 		emit_load_gpr64(RTMP0, rs);
@@ -3219,29 +3224,29 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 				 * the mask constant and emitting BIC + ORR. Fall to interpreter
 				 * for now to avoid producing incorrect silent results. */
 				return false;
-				/* rldicl (sub 0): clear top mb_or_me bits */
-				if (sub == 0) {
-					if (mb_or_me > 0 && mb_or_me < 64) {
-						emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
-						emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
-					}
-				/* rldicr (sub 1): clear bottom (63-me) bits */
-				} else if (sub == 1) {
-					uint32_t clrr = 63 - mb_or_me;
-					if (clrr > 0 && clrr < 64) {
-						emit_lsr64_imm(RTMP0, RTMP0, clrr);
-						emit_lsl64_imm(RTMP0, RTMP0, clrr);
-					}
-				/* rldic (sub 2): clear top mb bits AND clear bottom sh bits */
-				} else { /* sub == 2 */
-					if (mb_or_me > 0 && mb_or_me < 64) {
-						emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
-						emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
-					}
-					if (sh > 0 && sh < 64) {
-						emit_lsr64_imm(RTMP0, RTMP0, sh);
-						emit_lsl64_imm(RTMP0, RTMP0, sh);
-					}
+			}
+			/* rldicl (sub 0): clear top mb_or_me bits */
+			if (sub == 0) {
+				if (mb_or_me > 0 && mb_or_me < 64) {
+					emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
+					emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
+				}
+			/* rldicr (sub 1): clear bottom (63-me) bits */
+			} else if (sub == 1) {
+				uint32_t clrr = 63 - mb_or_me;
+				if (clrr > 0 && clrr < 64) {
+					emit_lsr64_imm(RTMP0, RTMP0, clrr);
+					emit_lsl64_imm(RTMP0, RTMP0, clrr);
+				}
+			/* rldic (sub 2): clear top mb bits AND clear bottom sh bits */
+			} else { /* sub == 2 */
+				if (mb_or_me > 0 && mb_or_me < 64) {
+					emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
+					emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
+				}
+				if (sh > 0 && sh < 64) {
+					emit_lsr64_imm(RTMP0, RTMP0, sh);
+					emit_lsl64_imm(RTMP0, RTMP0, sh);
 				}
 			}
 			emit_store_gpr64(RTMP0, ra);
