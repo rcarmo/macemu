@@ -720,6 +720,7 @@ void powerpc_cpu::execute(uint32 entry)
 				if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.complete) {
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
+				  pdi_jit_post:
 					/* GATE 3: PC range check.
 					 * If the JIT produced an out-of-range PC, the block branched to
 					 * hardware-mapped Mac OS space (e.g. NuBus/MMIO) that SheepShaver
@@ -742,6 +743,15 @@ void powerpc_cpu::execute(uint32 entry)
 					}
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;
+					}
+					/* Fast dispatch: if next PC is already in JIT cache, stay in the
+					 * JIT loop without touching the interpreter block cache.
+					 * This eliminates my_block_cache.find() + pdi_execute overhead for
+					 * hot block-to-block transitions where both blocks are JIT-compiled. */
+					if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.complete) {
+						fn = (ppc_jit_entry_fn)(void*)jblk.code;
+						fn((void*)regs_ptr());
+						goto pdi_jit_post;
 					}
 					bi = my_block_cache.find(pc());
 					if (bi) goto pdi_execute;
