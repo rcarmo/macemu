@@ -26,13 +26,13 @@ From `/workspace/projects/macemu`:
 
 ```bash
 # Validate all VNC desktop stories with the noop driver
-BasiliskII/qa/tests/vnc/run.js \
-  --features BasiliskII/qa/tests/vnc/stories \
-  --artifacts BasiliskII/qa/artifacts/reports/vnc-noop
+qa/tests/vnc/run.js \
+  --features qa/tests/vnc/stories \
+  --artifacts qa/artifacts/reports/vnc-noop
 
 # Validate a specific story
-BasiliskII/qa/tests/vnc/run.js \
-  --feature BasiliskII/qa/tests/vnc/stories/desktop-reachability.feature \
+qa/tests/vnc/run.js \
+  --feature qa/tests/vnc/stories/desktop-reachability.feature \
   --artifacts /tmp/basilisk-vnc-story
 ```
 
