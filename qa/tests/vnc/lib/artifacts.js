@@ -31,6 +31,8 @@ function writeReport(file, result) {
   lines.push('');
   lines.push(`- Started: ${result.startedAt}`);
   lines.push(`- Finished: ${result.finishedAt}`);
+  lines.push(`- Emulator: ${result.emulatorDisplayName || result.emulator || 'unknown'}`);
+  if (result.profile) lines.push(`- Profile: ${result.profile}`);
   lines.push(`- Driver: ${result.driver}`);
   lines.push(`- Target: ${result.vnc.host}:${result.vnc.port}`);
   lines.push('');

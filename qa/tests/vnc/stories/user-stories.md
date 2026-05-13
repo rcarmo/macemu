@@ -1,10 +1,10 @@
-# BasiliskII VNC desktop QA user stories
+# macemu VNC desktop QA user stories
 
 ## Story 1 — reach the Finder desktop
 
-As a JIT developer, I want BasiliskII to boot a known Mac OS disk image to the
-Finder desktop over VNC so that I can verify system-level behaviour beyond ROM
-smoke tests.
+As a JIT developer, I want BasiliskII or SheepShaver to boot a known Mac OS disk
+image to the classic Mac desktop over VNC so that I can verify system-level
+behaviour beyond ROM/CPU smoke tests.
 
 Acceptance criteria:
 
@@ -59,12 +59,26 @@ emulated Ethernet/TCP/IP interface before attempting connectivity.
 
 Acceptance criteria:
 
-- QA case uses `ether slirp` and no privileged host network changes.
+- QA case uses a safe user-mode network backend where available (for BasiliskII this starts with `ether slirp`) and no privileged host network changes.
 - Desktop boots with VNC enabled.
 - Network/TCP/IP control panel is opened or missing guest assets are documented.
 - A screenshot and logs are saved.
 
-## Story 6 — collect failure diagnostics
+## Story 6 — deterministic screenshot assertions
+
+As a CI maintainer, I want desktop tests to inspect screenshots with deterministic
+PNG metrics, OCR, and OpenCV template matching instead of model vision so that
+BasiliskII and SheepShaver QA can run unattended.
+
+Acceptance criteria:
+
+- Basic assertions can validate dimensions and non-blank screenshots.
+- OCR assertions use installed Tesseract data and record extracted text.
+- Template assertions use OpenCV scores and committed template images.
+- No assertion requires an AI/model vision backend.
+- Missing screenshots/templates are reported as automation gaps, not emulator bugs.
+
+## Story 7 — collect failure diagnostics
 
 As a maintainer, I want every VNC desktop test failure to collect screenshots,
 logs, prefs, and a structured JSON result so that emulator bugs can be separated

@@ -1,12 +1,13 @@
 Feature: Inspect network configuration over VNC
   User story: As a network QA operator, I want to open the relevant Mac OS
-  networking control panel with `ether slirp` enabled so that I can confirm
-  whether the guest sees an emulated Ethernet/TCP/IP interface before attempting
-  connectivity.
+  networking control panel with the emulator's safe user-mode network profile
+  enabled so that I can confirm whether the guest sees an emulated
+  Ethernet/TCP/IP interface before attempting connectivity.
 
   Background:
-    Given the QA case "optlev2-network-slirp" has generated prefs
-    And the Finder desktop is visible over VNC
+    Given the emulator profile has generated network QA prefs
+    And the emulator desktop is visible over VNC
+    And the runner records emulator profile
 
   Scenario: Open network configuration UI
     When the runner clicks target "apple-menu"

@@ -7,7 +7,7 @@ Feature: Type text into the guest UI over VNC
 
   Scenario: Type a short ASCII smoke string
     When the runner focuses target "typing-target"
-    And the runner types text "BasiliskII QA smoke"
+    And the runner types text "macemu QA smoke"
     Then a screenshot named "typing-smoke" is captured
     And the runner records manual assertion "typed text is visible or target is missing"
     And the emulator should still be running

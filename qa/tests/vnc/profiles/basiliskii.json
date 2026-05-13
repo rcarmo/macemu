@@ -1,0 +1,14 @@
+{
+  "emulator": "basiliskii",
+  "displayName": "BasiliskII",
+  "defaultCase": "optlev2-desktop-vnc",
+  "defaultVncPort": 5900,
+  "desktopName": "Finder desktop",
+  "bootStates": ["boot-progress", "finder-desktop"],
+  "simpleAppTarget": "control-panels-or-simple-app",
+  "networkPanelTarget": "TCP/IP-or-Network-control-panel",
+  "notes": [
+    "68K/Quadra test profile.",
+    "Default disk/ROM are managed by BasiliskII/qa/scripts/run-matrix.sh."
+  ]
+}

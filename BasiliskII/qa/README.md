@@ -47,9 +47,9 @@ qa/
   reports/run-report-template.md    per-run report template
   scripts/run-matrix.sh             prefs + smoke runner scaffold
   scripts/vnc-gherkin-runner.js     compatibility wrapper for VNC tests
-  tests/vnc/                        dedicated VNC/Gherkin test tooling
-  tests/vnc/stories/*.feature       user-story oriented desktop scenarios
-  features/*.feature                high-level desktop/network/audio scenarios
+  ../../qa/tests/vnc/               shared VNC/Gherkin test tooling for BasiliskII + SheepShaver
+  ../../qa/tests/vnc/stories/*.feature shared user-story oriented desktop scenarios
+  features/*.feature                BasiliskII high-level desktop/network/audio scenarios
   artifacts/                        ignored/generated run outputs
 ```
 
@@ -57,11 +57,12 @@ Generated artifacts are written under `qa/artifacts/` by default and should not 
 
 ## VNC user-story tests
 
-The dedicated VNC test tooling lives under `qa/tests/vnc/`:
+The shared VNC test tooling lives under the repository-level `qa/tests/vnc/` so the same stories can run against BasiliskII and SheepShaver profiles:
 
 ```bash
-BasiliskII/qa/tests/vnc/run.js \
-  --features BasiliskII/qa/tests/vnc/stories \
+qa/tests/vnc/run.js \
+  --emulator basiliskii \
+  --features qa/tests/vnc/stories \
   --artifacts BasiliskII/qa/artifacts/reports/vnc-noop
 ```
 

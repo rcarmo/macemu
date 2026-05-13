@@ -1,11 +1,12 @@
-Feature: Finder desktop reachability over VNC
-  User story: As a JIT developer, I want BasiliskII to boot a known Mac OS disk
-  image to the Finder desktop over VNC so that I can verify system-level
-  behaviour beyond ROM smoke tests.
+Feature: Classic Mac desktop reachability over VNC
+  User story: As a JIT developer, I want BasiliskII or SheepShaver to boot a
+  known Mac OS disk image to the classic Mac desktop over VNC so that I can
+  verify system-level behaviour beyond ROM/CPU smoke tests.
 
   Background:
-    Given the QA case "optlev2-desktop-vnc" has generated prefs
+    Given the emulator profile has generated desktop QA prefs
     And the emulator is launched with VNC enabled
+    And the runner records emulator profile
 
   Scenario: VNC connects and the desktop becomes visible
     When the VNC runner connects to the emulator display
