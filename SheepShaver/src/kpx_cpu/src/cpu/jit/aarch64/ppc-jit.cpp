@@ -40,6 +40,23 @@ static uint32_t *jit_cache_end  = NULL;
 #define JIT_BC_MASK     (JIT_BC_BUCKETS - 1)
 #define JIT_BC_POOL     16384               /* max total entries across all chains */
 
+/* ---- Chain patch-site pool -----------------------------------------------
+ * When emit_epilogue_with_pc() cannot chain at compile time (target not yet
+ * in JIT cache), it records the location of the first LDP instruction in the
+ * standard epilogue.  When the target block is later inserted, all matching
+ * sites are back-patched: the LDP is overwritten with a direct B <chain_code>.
+ * The remaining LDP+RET instructions become unreachable dead code.
+ * On full cache flush, all sites are discarded (blocks are recompiled). */
+#define JIT_CHAIN_SITE_POOL 4096
+struct jit_chain_site {
+	uint32_t  target_pc; /* PPC PC this site wants to chain to */
+	uint32_t *patch_loc; /* ARM64 addr of first LDP in std epilogue; NULL=consumed */
+	int       next;      /* next site in same bucket, -1=end */
+};
+static struct jit_chain_site chain_site_pool[JIT_CHAIN_SITE_POOL];
+static int chain_site_heads[JIT_BC_BUCKETS]; /* reuse same bucket count */
+static int chain_site_pool_next = 0;
+
 struct jit_bc_entry {
 	uint32_t  pc;         /* PPC address this block was compiled from */
 	uint32_t *code;       /* normal ABI entry point (with prologue) */
@@ -56,6 +73,43 @@ static int jit_bc_pool_next = 0;          /* next free pool entry */
 static void jit_bc_flush(void) {
 	for (int i = 0; i < JIT_BC_BUCKETS; i++) jit_bc_heads[i] = -1;
 	jit_bc_pool_next = 0;
+	/* Also clear chain patch sites — all recorded epilogues are now invalid */
+	for (int i = 0; i < JIT_BC_BUCKETS; i++) chain_site_heads[i] = -1;
+	chain_site_pool_next = 0;
+}
+
+/* Record a chain patch site: when the target block at next_pc is compiled,
+ * patch_loc (pointing to the first LDP of the standard epilogue) will be
+ * overwritten with B <chain_code_of_next_pc>. */
+static void record_chain_site(uint32_t next_pc, uint32_t *patch_loc) {
+	if (chain_site_pool_next >= JIT_CHAIN_SITE_POOL) return; /* pool full, skip */
+	int bucket = (next_pc >> 2) & JIT_BC_MASK;
+	int idx = chain_site_pool_next++;
+	chain_site_pool[idx].target_pc = next_pc;
+	chain_site_pool[idx].patch_loc = patch_loc;
+	chain_site_pool[idx].next      = chain_site_heads[bucket];
+	chain_site_heads[bucket]       = idx;
+}
+
+/* When a new block is inserted at pc with chain_code, back-patch all
+ * standard epilogues that were waiting to chain to this PC. */
+static void patch_chain_sites(uint32_t pc, uint32_t *chain_code) {
+	if (!chain_code) return;
+	int bucket = (pc >> 2) & JIT_BC_MASK;
+	int idx = chain_site_heads[bucket];
+	while (idx >= 0) {
+		struct jit_chain_site *site = &chain_site_pool[idx];
+		if (site->target_pc == pc && site->patch_loc) {
+			int32_t off = (int32_t)((uint8_t *)chain_code - (uint8_t *)site->patch_loc);
+			if (off >= -(1 << 25) && off < (1 << 25)) {
+				*site->patch_loc = 0x14000000 | ((off >> 2) & 0x3FFFFFF); /* B offset */
+				/* Flush ARM64 I-cache for the patched word */
+				jit_cache_flush(site->patch_loc, sizeof(uint32_t));
+			}
+			site->patch_loc = NULL; /* mark consumed */
+		}
+		idx = site->next;
+	}
 }
 
 static void jit_bc_invalidate_pc(uint32_t pc) {
@@ -114,6 +168,9 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 	jit_bc_pool[idx].n_insns    = n_insns;
 	jit_bc_pool[idx].next       = jit_bc_heads[bucket];
 	jit_bc_heads[bucket]        = idx;
+	/* Back-patch any standard epilogues in older blocks that were waiting
+	 * to chain to this PC but couldn't at their compile time. */
+	patch_chain_sites(pc, chain_code);
 }
 
 /* ---- Register offsets in powerpc_registers ----
@@ -491,6 +548,10 @@ static void emit_epilogue_with_pc(uint32_t next_pc) {
 			return; /* no LDP+RET: caller re-uses current stack frame */
 		}
 	}
+	/* Runtime back-patching: record this epilogue location so that when
+	 * next_pc is compiled later, the first LDP can be patched to B chain_code.
+	 * patch_loc = address of the first LDP instruction we are about to emit. */
+	record_chain_site(next_pc, jit_code_ptr);
 	/* Standard epilogue: restore callee-saved regs and return to dispatch */
 	a64_ldp_post(27, 28, A64_SP, 16);
 	a64_ldp_post(25, 26, A64_SP, 16);
