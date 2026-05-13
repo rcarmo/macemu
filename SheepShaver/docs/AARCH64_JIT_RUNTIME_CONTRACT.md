@@ -119,14 +119,17 @@ instruction. Only the block entry PC is valid mid-block.
 
 ### 3. Flag model
 
-**No lazy flags.** This JIT always materializes CR and XER immediately.
+**Lazy CR0** (Phase 4c): CR0 materialisation is deferred until the first consumer.
+**XER and FPSCR** are always materialised immediately.
 
-- Every instruction with RC bit set calls `emit_update_cr0()` which writes PPCR_CR.
+- `cr0_valid` tracks whether CR0 has been written to PPCR_CR since the last Rc=1 instruction.
+- Instructions with RC=1 call `emit_update_cr0()` only if a CR0 consumer follows in the block;
+  otherwise CR0 is written at block exit via `lazy_flush_cr0()`.
 - Every carry-setting instruction calls `emit_write_xer_ca_from_carry()` which writes PPCR_XER_CA.
 - FPSCR rounding mode is synced to ARM64 FPCR on `mtfsfi`/`mtfsf`/`mtfsb0`/`mtfsb1`.
 
 **Contract**: At every block boundary, CR, XER.CA, XER.SO, and FPSCR are architectural.
-No downstream code needs to account for lazy flag state.
+`lazy_flush_cr0()` is called by every epilogue path; no downstream code observes stale CR0.
 
 **Rule**: Any new opcode handler that modifies CR, XER, or FPSCR must materialize those values
 before the emit function returns. There is no deferred materialization mechanism.
@@ -270,29 +273,17 @@ barrier-and-helper framework.
 
 ---
 
-## Critical architectural gap: no block cache
+## Block cache
 
-**Status**: KNOWN CONTRACT VIOLATION — incomplete JIT architecture.
+**Status**: ✅ IMPLEMENTED (Phase 4b, 2026-04).
 
-The current JIT has no lookup table from PPC address to compiled code. Every call to
-`ppc_jit_aarch64_compile()` recompiles the block from scratch. The cache write pointer
-advances linearly; compiled blocks accumulate but are never reused.
+The JIT uses a hash + chaining block cache: 8192 buckets with 16384 pool entries.
+Lookup by `uint32_t ppc_pc` before compilation; on hit, execute cached code directly.
+Invalidation: per-PC via `jit_bc_invalidate_pc()`; global flush via `jit_bc_flush()`
+called on any icbi/isync event or cache overflow.
 
-**Consequences**:
-1. Hot loops are recompiled on every iteration — no performance amortization
-2. The 4MB code cache fills up over time, after which all compilation fails
-3. The JIT cannot be said to "cache" compiled code in any architectural sense
-
-**Required fix**: A block address cache (PC → compiled_code_ptr) must be added.
-The cache should map `uint32_t ppc_pc → uint32_t *code_ptr`. Before compiling, look up the
-PC in the cache. If found, execute the cached code directly. If not found, compile and insert.
-
-**Flush discipline**: The cache must be fully flushed on any Mac OS icbi/isync event that
-covers the block's address range. `ppc_jit_aarch64_flush()` already handles global flush.
-
-**Remaining trade-off**: Until the block cache is implemented, the JIT provides correctness
-but less performance than it will with PC → compiled-code reuse. `SS_USE_JIT=0` remains
-available as an interpreter-only diagnostic override.
+Previous concern (now resolved): compiled blocks accumulated without reuse; the 4MB
+code cache would fill and all subsequent blocks fell back to the interpreter.
 
 ---
 
@@ -377,10 +368,10 @@ barrier. Not implemented in the current JIT.
 | # | Invariant | SheepShaver PPC JIT status |
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
-| 2 | Lazy flags valid only while ownership is unambiguous | ✅ No lazy flags. CR/XER/FPSCR always materialized per-instruction. |
+| 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 (Phase 4c): deferred until first consumer; `lazy_flush_cr0()` called at every epilogue. XER/FPSCR always immediate. |
 | 3 | Helper calls are semantic barriers | ✅ No helpers in compiled code. All unhandled ops → interpreter (full block barrier). |
-| 4 | Block chaining must not bypass validation | ✅ No block chaining. Every block exits through epilogue, dispatcher finds next block. |
-| 5 | Interpreter and JIT builds agree on shared semantics | ⚠️ Partially verified via SS_TEST_JIT harness. Full parity audit pending. |
+| 4 | Block chaining must not bypass validation | ✅ No block chaining yet. Every block exits through epilogue; dispatcher finds next block. |
+| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 209/209 opcode harness green. `bcl` LR update fixed (2026-05). Full parity for all simple BO patterns. |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 
@@ -388,11 +379,10 @@ barrier. Not implemented in the current JIT.
 
 ## Known weak seams
 
-### Weak seam 1: No block address cache
+### Weak seam 1: ~~No block address cache~~ ✅ RESOLVED (Phase 4b)
 
-Compiled code is never reused. The JIT recompiles every block on every execution.
-This is a fundamental architectural gap. The block cache must be added before the JIT
-can deliver meaningful performance benefit.
+Hash + chaining block cache (8192 buckets) implemented. Compiled blocks are reused on
+subsequent visits. See `jit_bc_pool` / `jit_bc_heads` in `ppc-jit.cpp`.
 
 ### Weak seam 2: `blk.complete` gate is overcautious
 
@@ -415,6 +405,13 @@ the distinction between "not yet implemented" and "permanently excluded" is not 
 FPSCR rounding mode is synced on `mtfsfi`/`mtfsf`/`mtfsb0`/`mtfsb1`. It is not verified
 that all ARM64 FP instructions correctly observe the rounding mode. This should be audited
 systematically against the FPSCR-to-FPCR mapping.
+
+### Weak seam 6: `bcl` with combined CTR+condition (`lk=1`) falls to interpreter
+
+The `bc` handler correctly falls back to the interpreter for `lk=1` on the combined
+CTR+condition path (`if (lk) return false`). The three simpler paths now correctly call
+`emit_save_lr_if_link(pc, lk)` before branching (fixed 2026-05). The combined path remains
+an interpreter delegation until a JIT helper for that BO combination is added.
 
 ---
 

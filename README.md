@@ -226,11 +226,12 @@ The AArch64 JIT backend is under active development.
 
 **BasiliskII (68K):**
 - ✅ Boots to Mac OS Finder desktop at JIT optlev=1 (interpreter dispatch)
+- ✅ Boots to Mac OS Finder desktop at JIT optlev=2 (native ARM64 codegen)
 - ✅ Speedometer 4.02 Graphics benchmark runs (score: 210.368 vs Mac Classic = 1.0)
 - ✅ VNC server with correct coordinate mapping
 - ✅ Managed IRQ delivery for stable interrupt handling
-- ✅ 96-vector opcode equivalence test suite with DBRA loop fix
-- ⚠️ Native ARM64 codegen (optlev=2) has remaining SR flag leakage in DBRA blocks
+- ✅ 301-vector opcode equivalence test suite, score=100
+- ✅ Mid-block branch side-exit fix (`daea9c94`) — both branch outcomes previously took side-exit path
 
 **SheepShaver (PPC):**
 - ✅ **Mac OS boots to "Welcome to Mac OS" with JIT** (JIT is default; use `SS_USE_JIT=0` to force interpreter mode)
@@ -241,7 +242,10 @@ The AArch64 JIT backend is under active development.
 - ✅ **382 MIPS** on tight loops (2.2x over interpreter's 167 MIPS)
 - ✅ Full FPU: double+single arithmetic, fused multiply-add, FPSCR rounding mode sync
 - ✅ VNC keyboard + mouse input for remote control
-- ✅ ROM harness found and fixed **13 JIT bugs** including XER struct layout mismatch
+- ✅ JIT phases 1–3 complete: hash+chaining block cache, lazy CR0 flags, register allocation (x21–x28)
+- ✅ ROM harness found and fixed **14 JIT bugs** including `bcl` LR update, XER struct layout mismatch
+- ✅ Signal handler crash dumps fixed (stack overflow + missing arg + register shift)
+- ✅ Unix layer hardened: slirp pipe framing, XPRAM I/O, `strdup` null check, 17 bounds fixes
 - See [JIT-STATUS.md](JIT-STATUS.md) and [SheepShaver/AARCH64_JIT_PLAN.md](SheepShaver/AARCH64_JIT_PLAN.md) for details
 
 **Bugs fixed in BasiliskII JIT (this fork):**
@@ -255,6 +259,8 @@ The AArch64 JIT backend is under active development.
 8. DBRA multi-iteration loop termination (block tracer following backward branches)
 9. DBRA/DBcc CCR leakage through block chaining
 10. `flags_to_stack` carry inversion when flags already valid
+11. Mid-block branch side-exit: both branch outcomes executed side-exit path, corrupting guest PC
+12. Stable ROM JIT edge profiling: ROM blocks bypassed the recompile/profiling countdown
 
 #### MinGW32/MSYS2
 preparation:

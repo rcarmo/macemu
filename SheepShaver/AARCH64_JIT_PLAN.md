@@ -131,51 +131,53 @@ CR/LR/CTR/XER/PC at known offsets from x20
 
 ## Completed Phases
 
+## Completed Phases
+
 ### Phase 1: Interpreter baseline ✅
-- Interpreter already achieves 167 MIPS with Duff's device + block cache
-- Computed-goto optimization deferred (diminishing returns)
-- Test harness (`jit-test/`) with **113** PPC opcode vectors including 43 fuzzing edge cases (score=100)
+- Interpreter achieves 167 MIPS with Duff's device + block cache
+- Test harness with **209** PPC opcode vectors (score=100)
 
 ### Phase 2: JIT scaffolding ✅
 - Direct codegen compiler: `ppc-jit.cpp`
 - ARM64 instruction encoding: `ppc-codegen-aarch64.h`
 - Code cache: 4MB RWX mmap with icache flush
 - Integration into `ppc-cpu.cpp` execute loop
-- First native execution verified
 
 ### Phase 3: Integer opcode handlers ✅
 - All integer ALU, logical, shift/rotate, compare, branch
 - Load/store word/byte/halfword with byte-swap
-- SPR access, CR move
-- Intra-block loop chaining for bdnz
-- Record forms (CR0) for ALU ops
+- SPR access, CR move; intra-block bdnz loop chaining; record forms (CR0)
 
 ### Phase 4: FPU ✅
-- Double-precision arithmetic: fadd/fsub/fmul/fdiv
-- Fused multiply-add: fmadd/fmsub/fnmadd/fnmsub
-- FP move/negate/abs
-- FP compare → CR field
-- Single-precision with round-to-single via FCVT
-- FP load/store with endian byte-swap
+- Double-precision: fadd/fsub/fmul/fdiv + fused multiply-add
+- FP move/negate/abs; FP compare → CR field
+- Single-precision round-to-single via FCVT; FP load/store with byte-swap
+
+### Phase 4b: Hash + chaining block cache ✅
+- 8192 buckets, 16384 pool entries
+- PC → compiled code lookup; invalidate-by-PC; full flush on icbi
+
+### Phase 4c: Lazy CR0 flags ✅
+- Deferred CR0 materialisation until first read
+- `cr0_valid` / `cr0_result_reg` compilation state; writeback at block boundary
+- MacBench CPU: 835, FPU: 1027
+
+### Phase 4d: Register allocation ✅
+- x21–x28 (8 slots) as PPC GPR hot cache within blocks
+- LRU eviction; dirty flush at block exit
 
 ## Remaining Work
 
-### Phase 5: Optimization
-- [ ] Block caching (avoid recompilation of same PC)
-- [ ] Register pinning (keep hot GPRs in ARM64 callee-saved regs)
-- [ ] Block-to-block chaining (avoid returning to dispatch loop)
-- [ ] Raise 64-instruction block limit
+### Phase 5: Region JIT
+- [ ] Block-to-block chaining (avoid returning to dispatch loop between blocks)
 - [ ] Profile-guided hot-block prioritization
+- [ ] Raise 512-instruction block limit if needed
 
 ### Not yet implemented (rare opcodes)
 - ~~CR logical ops~~ ✅ Implemented: crand, cror, crxor, crnor, crandc, creqv, crorc, crnand
 - ~~mcrf~~ ✅ Implemented
-- Complex `bc` variants (decrement CTR + test condition combo)
-- `frsp` (FP round to single)
-- `fctiw`/`fctiwz` (FP to integer conversion)
-- `mffs`/`mtfsf`/`mtfsfi`/`mtfsb0`/`mtfsb1` (FPSCR access)
-- `dcbz`/`dcbf`/`dcbi`/`dcbst`/`icbi` (cache management)
-- `sync`/`eieio` (memory barriers)
+- ~~`bcl` LR update~~ ✅ Fixed: `emit_save_lr_if_link` now called in all simple BO-field cases
+- Complex `bc` variants (decrement CTR + test condition combo with `lk=1`)
 - `sc` (system call)
 - `tw`/`twi` (trap)
 

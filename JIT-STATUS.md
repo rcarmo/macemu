@@ -1,20 +1,22 @@
 # MacEmu AArch64 JIT — Status
 
-## SheepShaver PPC JIT (2026-04-21)
+## SheepShaver PPC JIT (2026-05-13)
 
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS to desktop (VNC port 5999, ~167 MIPS)
-**JIT boot:** ✅ Boots to "Welcome to Mac OS" splash screen with `SS_USE_JIT=1`
+**JIT boot:** ✅ Boots to "Welcome to Mac OS" splash screen with JIT active
 **JIT harness:** ✅ 209/209 opcode vectors pass (score=100)
 **ROM harness:** ✅ 1800/1825 ROM blocks pass (98.6%) on 10K-block scan
 
 ### JIT Boot Status
 
-With `SS_USE_JIT=1`, SheepShaver boots Mac OS to the Welcome splash screen.
-The boot is slower than pure interpreter mode because:
-1. No block cache — each PC re-compiles (O(n) compile overhead per block execution)
-2. ~71% block completion rate — rest fall back to interpreter
-3. Cache fills up (4MB), then ALL new blocks fall back to interpreter
+With JIT active, SheepShaver boots Mac OS to the Welcome splash screen.
+Phases 1–3 of the JIT optimisation plan are complete:
+1. **Phase 1:** Hash + chaining block cache (8192 buckets) — eliminates recompilation overhead
+2. **Phase 2:** Lazy CR0 flags — deferred materialisation until first read
+3. **Phase 3:** Register allocation (x21–x28, 8-GPR cache) — reduces LDR/STR traffic
+
+MacBench results (after Phase 3): CPU 835, FPU 1027.
 
 ### ROM Harness
 
@@ -28,6 +30,26 @@ hardware, no SheepShaver runtime dependencies.
 
 Remaining 25 failures: CR field interactions in multi-instruction blocks
 and complex branch BO patterns (CTR+condition combo).
+
+### Recent bug fixes (2026-05)
+
+- **`bcl` LR update silent no-op** (`16802900`): `emit_save_lr_if_link()` was defined but never
+  called — all three simple BO-field cases in the `bc` handler ignored `lk=1`. Critical case:
+  `bcl 20,31,+4` (PPC idiom for materialising PC into LR) never updated LR.
+- **Signal handler register dump** (`69821bf6`): `printf("%s\n")` with missing `crash_reason`
+  argument (UB); `crash_reason` mis-placed as first `%08lx` value, shifting all 32 register
+  values one slot; 608-byte dump formatted into a 256-byte stack buffer.
+- **Slirp pipe framing** (`4d388ce4`): unchecked `write(len)` return on send path could desync
+  the frame stream; unchecked `read(len)` with uninitialised `len` on receive path could
+  assert-abort or call `slirp_input` with garbage data.
+- **XPRAM I/O** (`4d388ce4`): `read()`/`write()` return values unchecked in Linux path;
+  short reads silently left XPRAM partially initialised, short writes silently truncated NVRAM.
+- **`strdup` null check** (`4d388ce4`): `open_filehandle()` did not check `strdup()` result;
+  OOM would leave `fh->name = NULL` and crash on subsequent `strcmp`/`free`.
+- **SheepShaver hardening** (17 commits, `2f7e038b`–`cbad1b93`): bounds checks on ROM reads,
+  CPU/metadata parsing, Unix UI paths, preference strings, sheepthreads join/fd cleanup;
+  SDL framebuffer allocation, CD audio buffers, SDL3 audio startup, CUE parsing, NVRAM,
+  cursor scaling.
 
 ### VNC Input
 
@@ -93,15 +115,26 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
-**JIT optlev=0:** ✅ Full boot, 9.5B instructions, zero SEGVs
-**JIT optlev=2:** ⚠️ SEGVs during early init from block handoff bug
-**JIT harness:** 26/28 vectors pass (2 SR-only flag mismatches)
+**JIT optlev=0:** ✅ Full boot, zero SEGVs
+**JIT optlev=2:** ✅ Full boot, zero SEGVs (mid-block branch side-exit fix applied)
+**JIT harness:** ✅ 301/301 vectors pass (score=100)
 
 See `BasiliskII/src/uae_cpu_2021/compiler/` for the 68K → AArch64 JIT.
 
 ### Test Harness (68K)
 
-**378 total vectors, 227 risky active, score=100**
+**301 total vectors, all risky, score=100**
+
+### Recent bug fixes (2026-05)
+
+- **Mid-block branch side-exit** (`daea9c94`): the side-exit code was placed immediately after
+  the conditional branch with no skip over it for the traced-path fallthrough — both branch
+  outcomes executed the side-exit path, corrupting guest PC state. Fix: invert the guard
+  condition to skip over the side-exit for the traced path.
+- **Stable ROM JIT edge profiling** (`6856d894`): fresh ROM blocks now use a bounded
+  first-generation countdown so edge summaries can be committed on subsequent rebuilds.
+  Previously all ROM blocks compiled at max opt-level with `bi->count = -2` skipped the
+  recompile/profiling path entirely.
 
 | Category | Opcodes Tested |
 |----------|---------------|
