@@ -21,6 +21,7 @@ Phases 1–3 complete; Phase 4 (block chaining) complete:
 6. **Phase 4c:** Runtime back-patching — chain site pool, `patch_chain_sites` on insert (`e1f11657`)
 7. **Phase 4d:** `rld*` correctness — rldicl/rldicr/rldic masks; rldcl/rldcr ROL; sub-opcode SH[5] decode (`8ad71eed`, `77004daa`)
 8. **Phase 4e:** Rc=1 CR0 audit — rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw. all fixed (`10e8f719`)
+9. **Phase 4f:** `rld*` sub-decode fix, dead mask code fix, `rldimi` implemented (`77004daa`, `de8b850a`)
 
 MacBench results (after Phase 3): CPU 835, FPU 1027.
 Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ).
