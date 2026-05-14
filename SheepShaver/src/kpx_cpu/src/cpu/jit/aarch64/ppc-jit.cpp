@@ -54,7 +54,7 @@ struct jit_chain_site {
 	int       next;      /* next site in same bucket, -1=end */
 };
 static struct jit_chain_site chain_site_pool[JIT_CHAIN_SITE_POOL];
-static int chain_site_heads[JIT_BC_BUCKETS]; /* reuse same bucket count */
+static int chain_site_heads[JIT_BC_BUCKETS]; /* -1=empty; initialised by jit_bc_flush() before first use */
 static int chain_site_pool_next = 0;
 
 struct jit_bc_entry {
@@ -67,7 +67,7 @@ struct jit_bc_entry {
 };
 
 static struct jit_bc_entry jit_bc_pool[JIT_BC_POOL];
-static int jit_bc_heads[JIT_BC_BUCKETS];  /* index into pool, -1 = empty bucket */
+static int jit_bc_heads[JIT_BC_BUCKETS];  /* -1=empty; initialised by jit_bc_flush() before first use */
 static int jit_bc_pool_next = 0;          /* next free pool entry */
 
 static void jit_bc_flush(void) {
@@ -343,24 +343,25 @@ static void emit_store_gpr(int rs, int n) {
    Uses gpr[n] (low 32) + gpr_hi[n] (high 32) as a split 64-bit register.
    On little-endian ARM64: load low word, load high word, combine. */
 static void emit_load_gpr64(int xd, int n) {
-	/* LDR Wd, [RSTATE, #gpr_lo] — low 32 bits */
+	/* LDR Wd, [RSTATE, #gpr_lo] — low 32 bits, zero-extends to Xd */
 	a64_ldr_w_imm(xd, RSTATE, PPCR_GPR(n));
-	/* LDR Wtmp, [RSTATE, #gpr_hi] — high 32 bits */
+	/* LDR Wtmp, [RSTATE, #gpr_hi] — high 32 bits, zero-extends to Xtmp */
 	int tmp = (xd == RTMP0) ? RTMP1 : RTMP0;
 	a64_ldr_w_imm(tmp, RSTATE, PPCR_GPR_HI(n));
-	/* Combine: Xd = (hi << 32) | lo */
-	/* ORR Xd, Xd, Xtmp LSL #32 */
-	emit32(0xAA000000 | (tmp << 16) | (0x20 << 10) | (xd << 5) | xd); /* ORR Xd,Xd,Xm LSL#32 — wrong encoding */
-	/* Actually: BFI Xd, Xtmp, #32, #32 */
-	emit32(0xB3600000 | (tmp << 16) | (xd << 5) | xd); /* BFI Xd, Xn, #32, #32: immr=32, imms=31 */
+	/* Combine into 64-bit Xd: Xd = (hi << 32) | lo
+	 * ORR Xd, Xd, Xtmp, LSL #32: imm6=32 at bits 15-10 of the ORR shifted-reg form */
+	emit32(0xAA000000 | (tmp << 16) | (0x20 << 10) | (xd << 5) | xd);
+	/* NOTE: the ORR above is the correct and complete 64-bit combine.
+	 * No BFI needed here. */
 }
 
 static void emit_store_gpr64(int xs, int n) {
 	/* Store low 32: STR Ws, [RSTATE, #gpr_lo] */
 	a64_str_w_imm(xs, RSTATE, PPCR_GPR(n));
-	/* Store high 32: LSR Xtmp, Xs, #32; STR Wtmp, [RSTATE, #gpr_hi] */
+	/* Store high 32: LSR Xtmp, Xs, #32; STR Wtmp, [RSTATE, #gpr_hi]
+	 * LSR Xd,Xn,#32 = UBFM Xd,Xn,#immr=32,#imms=63 = 0xD360FC00|(Xn<<5)|Xd */
 	int tmp = (xs == RTMP0) ? RTMP1 : RTMP0;
-	emit32(0xD340FC00 | (xs << 5) | tmp | (32 << 10)); /* LSR Xtmp, Xs, #32 */
+	emit32(0xD360FC00 | (xs << 5) | tmp); /* LSR Xtmp, Xs, #32 */
 	a64_str_w_imm(tmp, RSTATE, PPCR_GPR_HI(n));
 }
 
