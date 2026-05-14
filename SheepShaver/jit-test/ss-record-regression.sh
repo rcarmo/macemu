@@ -1,0 +1,145 @@
+#!/bin/bash
+# SheepShaver PPC JIT — record-form Rc=1 + rld* regression test
+#
+# Verifies that:
+# 1. Rc=1 record forms update CR0 correctly in both interpreter and JIT
+#    (regression for: rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw.)
+# 2. rld* (opcode 30) mask opcodes produce correct results in JIT
+#    (regression for: rldicl mask, rldimi mask-insert)
+#
+# Exit code 0 = all pass; 1 = any failure
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN="${1:-$SCRIPT_DIR/../src/Unix/SheepShaver}"
+
+if [ ! -x "$BIN" ]; then
+    echo "METRIC build_ok=0 pass=0 fail=0 total=0 score=0"
+    echo "Usage: $0 [path-to-SheepShaver]" >&2
+    exit 1
+fi
+
+PASS=0; FAIL=0
+
+# Default register init (r0=0, r1=stack, r3..r31=0)
+DEFAULT_INIT="00000000 10ffc000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+
+run_test() {
+    local name="$1"; local hex="$2"; local init="${3:-$DEFAULT_INIT}"
+    local expected_gpr5="${4:-}"; local expected_cr="${5:-}"
+    # Run interpreter (SS_TEST_JIT=0) and JIT (SS_TEST_JIT=1), compare outputs
+    local out_interp out_jit
+    out_interp=$(SS_TEST_HEX="$hex" SS_TEST_DUMP=1 SS_TEST_JIT=0 SS_TEST_INIT="$init" \
+                 "$BIN" 2>&1 | grep '^REGDUMP:' || true)
+    out_jit=$(SS_TEST_HEX="$hex" SS_TEST_DUMP=1 SS_TEST_JIT=1 SS_TEST_INIT="$init" \
+              "$BIN" 2>&1 | grep '^REGDUMP:' || true)
+    if [ -z "$out_interp" ] || [ -z "$out_jit" ]; then
+        echo "METRIC $name=FAIL (no regdump)"
+        FAIL=$((FAIL+1)); return
+    fi
+    if [ "$out_interp" != "$out_jit" ]; then
+        echo "METRIC $name=FAIL (jit!=interp)"
+        echo "  interp: $out_interp" >&2
+        echo "  jit:    $out_jit" >&2
+        FAIL=$((FAIL+1)); return
+    fi
+    # Optionally verify expected values
+    if [ -n "$expected_cr" ]; then
+        local actual_cr; actual_cr=$(echo "$out_jit" | grep -oE 'CR=[0-9a-f]+' | cut -d= -f2)
+        if [ "$actual_cr" != "$expected_cr" ]; then
+            echo "METRIC $name=FAIL (CR=$actual_cr want $expected_cr)"
+            FAIL=$((FAIL+1)); return
+        fi
+    fi
+    echo "METRIC $name=PASS"
+    PASS=$((PASS+1))
+}
+
+# JIT-only expected-value test (interpreter does not support 64-bit ops)
+run_jit_expected() {
+    local name="$1"; local hex="$2"; local init="$3"; local reg="$4"; local want="$5"
+    local out_jit
+    out_jit=$(SS_TEST_HEX="$hex" SS_TEST_DUMP=1 SS_TEST_JIT=1 SS_TEST_INIT="$init" \
+              "$BIN" 2>&1 | grep '^REGDUMP:' || true)
+    if [ -z "$out_jit" ]; then
+        echo "METRIC $name=FAIL (no regdump)"; FAIL=$((FAIL+1)); return
+    fi
+    local actual; actual=$(echo "$out_jit" | grep -oE "${reg}=[0-9a-f]+" | cut -d= -f2)
+    if [ "$actual" = "$want" ]; then
+        echo "METRIC $name=PASS"
+        PASS=$((PASS+1))
+    else
+        echo "METRIC $name=FAIL ($reg=$actual want $want)"
+        echo "  jit: $out_jit" >&2
+        FAIL=$((FAIL+1))
+    fi
+}
+
+echo "# --- Record-form Rc=1 CR0 update tests (JIT vs interpreter) ---"
+
+# rlwinm. r4,r3,4,6,27 on r3=0xFF → r4=0xFF0 (positive) → CR0=GT=0x40000000
+INIT_FF="00000000 10ffc000 00000000 000000FF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "rlwinm_dot" "386000FF 546421B7" "$INIT_FF" "" "40000000"
+
+# rlwimi. r5,r3,0,16,31 on r3=0xFF00, r5=0x00FF → r5=0xFF00 (pos) → CR0=GT
+run_test "rlwimi_dot" "3860FF00 38A000FF 5065043F" "$DEFAULT_INIT" "" "40000000"
+
+# cntlzw. r5,r3 on r3=0x100 → r5=23 (positive) → CR0=GT
+INIT_CLZ="00000000 10ffc000 00000000 00000100 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "cntlzw_dot" "7C650035" "$INIT_CLZ" "" "40000000"
+
+# extsh. r5,r3 on r3=0x8000 → r5=-32768 (negative) → CR0=LT
+INIT_8000="00000000 10ffc000 00000000 00008000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "extsh_dot" "7C650735" "$INIT_8000" "" "80000000"
+
+# extsb. r5,r3 on r3=0x80 → r5=-128 (negative) → CR0=LT
+INIT_80="00000000 10ffc000 00000000 00000080 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "extsb_dot" "7C650775" "$INIT_80" "" "80000000"
+
+# mullw. r5,r3,r4 on r3=7, r4=6 → r5=42 (positive) → CR0=GT
+INIT_7_6="00000000 10ffc000 00000000 00000007 00000006 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "mullw_dot" "7CA321D7" "$INIT_7_6" "" "40000000"
+
+# mulhw. r5,r3,r4 on r3=r4=0x10000000 → r5=0x01000000 (positive) → CR0=GT
+INIT_HI="00000000 10ffc000 00000000 10000000 10000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "mulhw_dot" "7CA32097" "$INIT_HI" "" "40000000"
+
+# mulhwu. r5,r3,r4 on r3=r4=0x10000000 → r5=0x01000000 (positive) → CR0=GT
+# (using same values as mulhw. to get a clearly positive high-word result)
+run_test "mulhwu_dot" "7CA32017" "$INIT_HI" "" "40000000"
+
+# divw. r5,r3,r4 on r3=100, r4=7 → r5=14 (positive) → CR0=GT
+INIT_100_7="00000000 10ffc000 00000000 00000064 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_test "divw_dot" "7CA323D7" "$INIT_100_7" "" "40000000"
+
+echo ""
+echo "# --- rld* 64-bit mask tests (JIT expected-value, interpreter not supported) ---"
+
+# rldicl r3,r3,sh=1,mb=32 on r3=0xC0000000
+# ROL1(0xC0000000) = 0x00000001_80000000; clear top 32 bits → GPR3=0x80000000
+INIT_C0="00000000 10ffc000 00000000 C0000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_jit_expected "rldicl_mask_sh1_mb32" "78630820" "$INIT_C0" "GPR3" "80000000"
+
+# rldicl r3,r3,sh=33,mb=32 on r3=0x80000001
+# ROL33(0x80000001)=0x00000002_00000001; clear top 32 → GPR3=0x00000001
+INIT_80000001="00000000 10ffc000 00000000 80000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_jit_expected "rldicl_mask_sh33_mb32" "78630822" "$INIT_80000001" "GPR3" "00000001"
+
+# rldimi r4,r3,sh=0,mb=32 on r3=0xDEADBEEF, r4=0x12345678
+# mask=bits 0..31; result=(DEADBEEF & mask) | (12345678 & ~mask) = DEADBEEF
+INIT_RLDIMI="00000000 10ffc000 00000000 DEADBEEF 12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_jit_expected "rldimi_sh0_mb32" "7864002C" "$INIT_RLDIMI" "GPR4" "deadbeef"
+
+# rldimi r4,r3,sh=1,mb=48 on r3=0x4000, r4=0xFFFF0000
+# ROL1(0x4000)=0x8000; mask=bits1..15=0xFFFE; result=0x8000|(FFFF0000&~FFFE)=FFFF8000
+INIT_RLDIMI2="00000000 10ffc000 00000000 00004000 FFFF0000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+run_jit_expected "rldimi_sh1_mb48" "78640C2C" "$INIT_RLDIMI2" "GPR4" "ffff8000"
+
+echo ""
+TOTAL=$((PASS + FAIL))
+SCORE=$(( TOTAL > 0 ? PASS * 100 / TOTAL : 0 ))
+echo "METRIC pass=$PASS"
+echo "METRIC fail=$FAIL"
+echo "METRIC total=$TOTAL"
+echo "METRIC score=$SCORE"
+[ $FAIL -eq 0 ] && exit 0 || exit 1
