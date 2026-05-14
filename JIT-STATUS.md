@@ -8,6 +8,7 @@
 **JIT harness:** ✅ 209/209 opcode vectors pass (score=100)
 **ROM harness:** ✅ 1800/1825 ROM blocks pass (98.6%) on 10K-block scan
 **Tight-loop benchmark:** ✅ ~737 MIPS (addi+bdnz 100M, intra-block CBNZ, Orange Pi 6 Plus)
+**Regression harness:** ✅ 13/13 Rc=1 + rld* regression vectors pass (`ss-record-regression.sh`)
 
 ### JIT Boot Status
 

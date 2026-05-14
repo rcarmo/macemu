@@ -43,6 +43,15 @@ XER struct layout mismatch (XER is `{uint8 so,ov,ca,byte_count}`, not a
 packed uint32), CSET encoding error, 7 missing carry-flag writes, andi. CR0
 omission, bc not-taken epilogue, BO field decode, and FPSCR rounding mode NOPs.
 
+Subsequent audits (May 2026) found and fixed further JIT bugs:
+- `rld*` sub-opcode SH[5] mis-decode for sh≥32 (rldicl/rldicr/rldic/rldimi mapped to wrong variant)
+- `rld*` mask code was dead (inside wrong `if` branch; sub 0/1/2 received no mask)
+- `rldcl`/`rldcr` emitted ROR instead of ROL
+- `rldimi` not implemented (fell to interpreter)
+- `bcl` LR never updated (`emit_save_lr_if_link` was defined but never called)
+- 9 Rc=1 CR0 updates missing: rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw.
+- `ppc-execute.cpp`: duplicate VXISI mask in `record_fpscr`; incorrect `(uint32)d` cast in multiply
+
 ## Architecture
 
 ### Interpreter path (always available)
@@ -177,15 +186,21 @@ CR/LR/CTR/XER/PC at known offsets from x20
 - ~~CR logical ops~~ ✅ Implemented: crand, cror, crxor, crnor, crandc, creqv, crorc, crnand
 - ~~mcrf~~ ✅ Implemented
 - ~~`bcl` LR update~~ ✅ Fixed: `emit_save_lr_if_link` now called in all simple BO-field cases
-- Complex `bc` variants (decrement CTR + test condition combo with `lk=1`)
+- ~~`rldimi`~~ ✅ Implemented: BIC+ORR mask-insert with compile-time mask (`de8b850a`)
+- ~~Rc=1 CR0 for rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw.~~ ✅ Fixed (`10e8f719`)
+- ~~`rld*` sub-opcode decode (SH[5] mis-decode for sh≥32)~~ ✅ Fixed (`77004daa`)
+- Complex `bc` variants (decrement CTR + test condition combo with `lk=1`) — still falls to interpreter
 - `sc` (system call)
 - `tw`/`twi` (trap)
 
 ## Test Harness
 
 ```bash
-# Run opcode equivalence tests (interpreter determinism)
+# Run opcode equivalence tests (interpreter determinism) — 209/209 pass
 ./jit-test/run.sh
+
+# Run Rc=1 record-form + rld* regression tests (JIT vs interpreter)
+./jit-test/ss-record-regression.sh src/Unix/SheepShaver
 
 # Run with JIT native execution
 SS_TEST_HEX="38600064 388000c8 7CA32214" SS_TEST_DUMP=1 SS_TEST_JIT=1 ./SheepShaver
