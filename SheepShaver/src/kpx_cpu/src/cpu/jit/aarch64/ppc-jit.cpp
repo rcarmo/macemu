@@ -2560,9 +2560,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 516: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E204400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrab SSHL.16B (arith) */
 		case 580: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E60B800|(1<<5)|1); emit32(0x4E604400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrah */
 		case 644: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA0B800|(1<<5)|1); emit32(0x4EA04400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsraw */
-		case 4: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlb USHL.16B (rotate=shift by variable) */
-		case 68: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E605C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlh */
-		case 132: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA05C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlw */
+		case 4: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlb USHL.16B (rotate=shift by variable amount) */
+		case 68: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E605400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlh USHL.8H */
+		case 132: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA05400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlw USHL.4S */
 		case 524: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E010400|((idx*2+1)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltb DUP.16B */
 		case 588: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E020400|((idx*4+2)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vsplth DUP.8H */
 		case 652: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E040400|((idx*8+4)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltw DUP.4S */
@@ -2626,9 +2626,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 878: emit_load_vr(0,vb); emit32(0x0E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupkhsh SXTL.4S */
 		case 942: emit_load_vr(0,vb); emit32(0x4E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsb SXTL2.8H */
 		case 1006: emit_load_vr(0,vb); emit32(0x4E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsh SXTL2.4S */
-		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E080400|((16-sh)<<16)|(1<<5)|0); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
-		case 1036: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsl SHL (whole vector) */
-		case 1100: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E205C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsr (whole vector right) */
+		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E010000|(sh<<11)); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
+		case 1036: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsl SSHL.16B (shift left by register) */
+		case 1100: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E20B800|(1<<5)|1); emit32(0x6E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsr NEG+USHL.16B (negate shift, then shift left = right shift) */
 		case 1604: return true; /* mtvscr NOP */
 		case 1540: emit_load_imm32(RTMP0,0); emit32(0x4E010C00|(RTMP0<<5)|0); emit_store_vr(0,vd); return true; /* mfvscr - return 0 */
 case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
