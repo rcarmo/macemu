@@ -1244,7 +1244,7 @@ static inline bool jit_dominant_edge_stable(const blockinfo *bi)
     const uae_u32 dom_count = bi->edge_exec_count[dominant];
     if (dom_count < jit_stable_edge_min_exec_env())
         return false;
-    return dom_count * 100 >= total * jit_stable_edge_min_pct_env();
+    return (uae_u64)dom_count * 100 >= (uae_u64)total * jit_stable_edge_min_pct_env();
 }
 
 static inline int jit_dependency_edge_slot(const dependency *d)
