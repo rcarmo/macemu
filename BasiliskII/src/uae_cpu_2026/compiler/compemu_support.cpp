@@ -944,7 +944,7 @@ static inline unsigned int cft_map (unsigned int f)
 
 uae_u8* start_pc_p;
 uae_u32 start_pc;
-uae_u32 current_block_pc_p;
+uintptr current_block_pc_p; /* host pointer to current block's start — matches taken_pc_p type */
 static uintptr current_block_start_target;
 uae_u32 needed_flags;
 static uintptr next_pc_p;
@@ -2335,7 +2335,7 @@ static inline void disassociate(int r)
 	evict(r);
 }
 
-/* XXFIXME: val may be 64bit address for PC_P */
+/* Note: val field is uintptr on ARM64 (compemu_arm.h overrides compemu.h via include ordering) */
 static inline void set_const(int r, uae_u32 val)
 {
 	disassociate(r);

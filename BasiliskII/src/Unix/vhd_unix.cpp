@@ -52,7 +52,8 @@ static disk_generic::status vhd_unix_open(const char *name, int *size,
 	} 
 	else {
 		char buf[9];
-		read(fid, buf, sizeof(buf)-1);
+		memset(buf, 0, sizeof(buf));
+		(void)read(fid, buf, sizeof(buf)-1); /* magic check: partial read = not VHD */
 		buf[8] = 0;
 		close(fid);
 		if (strcmp("conectix", buf) != 0) {
