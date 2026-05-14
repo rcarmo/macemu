@@ -874,16 +874,19 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit32(0x5AC01000 | (RTMP0 << 5) | RTMP0); /* CLZ Wd, Wn */
 			emit_store_gpr(RTMP0, ra);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 922: /* extsh */
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit32(0x13003C00 | (RTMP0 << 5) | RTMP0); /* SXTH Wd, Wn */
 			emit_store_gpr(RTMP0, ra);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 954: /* extsb */
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit32(0x13001C00 | (RTMP0 << 5) | RTMP0); /* SXTB Wd, Wn */
 			emit_store_gpr(RTMP0, ra);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 715: /* mullw (with OE bit) */
 		case 235: /* mullw */
@@ -891,12 +894,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x1B007C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* MUL Wd,Wn,Wm */
 			emit_store_gpr(RTMP0, rd);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 491: /* divw */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x1AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SDIV Wd,Wn,Wm */
 			emit_store_gpr(RTMP0, rd);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 19: /* mfcr rD */
 			lazy_flush_cr0();
@@ -1289,6 +1294,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x9B207C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SMULL */
 			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* ASR Xd, Xn, #32 */
 			emit_store_gpr(RTMP0, rd);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 11: /* mulhwu rD,rA,rB (high word of unsigned multiply) */
 			emit_load_gpr(RTMP0, ra);
@@ -1296,6 +1302,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x9BA07C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UMULL */
 			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* LSR Xd, Xn, #32 */
 			emit_store_gpr(RTMP0, rd);
+			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 87: /* lbzx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
@@ -1927,6 +1934,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND */
 		}
 		emit_store_gpr(RTMP0, ra);
+		if (op & 1) lazy_update_cr0(RTMP0); /* rlwinm. updates CR0 */
 		return true;
 	}
 
@@ -1959,6 +1967,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit32(0x0A000000 | (RTMP1 << 16) | (RTMP2 << 5) | RTMP2); /* rA & ~mask */
 		emit32(0x2A000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* OR */
 		emit_store_gpr(RTMP0, ra);
+		if (op & 1) lazy_update_cr0(RTMP0); /* rlwimi. updates CR0 */
 		return true;
 	}
 
