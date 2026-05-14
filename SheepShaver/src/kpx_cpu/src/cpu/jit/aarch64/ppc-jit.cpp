@@ -1302,9 +1302,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 75: /* mulhw rD,rA,rB (high word of signed multiply) */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
-			/* SMULL Xd, Wn, Wm then ASR Xd, Xd, #32 */
+			/* SMULL Xd, Wn, Wm then LSR Xd, Xd, #32 (sign already encoded in 64-bit product) */
 			emit32(0x9B207C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SMULL */
-			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* ASR Xd, Xn, #32 */
+			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* LSR Xd, Xn, #32 */
 			emit_store_gpr(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
@@ -1779,7 +1779,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt,[Xn] */
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1); /* REV Xt */
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt */
 			emit_store_gpr64(RTMP1, rd);
 			return true;
 
@@ -1789,7 +1789,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
 			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1);
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit_store_gpr64(RTMP1, rd);
 			return true;
 
@@ -1797,7 +1797,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 			emit_load_gpr64(RTMP1, PPC_RS(op));
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1);
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
 			return true;
 
@@ -1807,7 +1807,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
 			emit_load_gpr64(RTMP1, PPC_RS(op));
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1);
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
 			return true;
 
@@ -1815,7 +1815,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1);
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit_store_gpr64(RTMP1, rd);
 			return true;
 
@@ -1823,7 +1823,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 			emit_load_gpr64(RTMP1, PPC_RS(op));
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1);
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
 			/* CR0 = EQ (reserve succeeded) */
 			lazy_flush_cr0();
@@ -3342,12 +3342,12 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV Wt, Wt (byte-swap) */
 			emit_store_gpr(RTMP1, rd);
 			/* Sign extend to hi: ASR Wt, Wt, #31 */
-			emit32(0x13007C00 | (RTMP1 << 5) | RTMP2); /* ASR Wd, Wn, #31 */
+			emit32(0x131F7C00 | (RTMP1 << 5) | RTMP2); /* ASR Wd, Wn, #31 */
 			a64_str_w_imm(RTMP2, RSTATE, PPCR_GPR_HI(rd));
 		} else {
 			/* ld — load doubleword */
 			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt, [Xn] */
-			emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap 64-bit) */
+			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap 64-bit) */
 			emit_store_gpr64(RTMP1, rd);
 			if (sub == 1 && ra != 0) { /* ldu: update rA */
 				emit_load_ea_base(ra);
@@ -3367,7 +3367,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_ea_base(ra);
 		if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 		emit_load_gpr64(RTMP1, rs);
-		emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap) */
+		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap) */
 		emit32(0xF9000000 | (RTMP0 << 5) | RTMP1); /* STR Xt, [Xn] */
 		if (sub == 1 && ra != 0) { /* stdu: update rA */
 			emit_load_ea_base(ra);
@@ -3386,12 +3386,12 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		if (dq) { emit_load_imm32(RTMP1, dq); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 		/* Load first doubleword → GPR[rd] */
 		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt, [Xn] */
-		emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1); /* REV */
+		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV */
 		emit_store_gpr64(RTMP1, rd);
 		/* Load second doubleword → GPR[rd+1] */
 		emit32(0x91002000 | (RTMP0 << 5) | RTMP0); /* ADD Xn, Xn, #8 */
 		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-		emit32(0xDAC00800 | (RTMP1 << 5) | RTMP1);
+		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 		emit_store_gpr64(RTMP1, rd + 1);
 		return true;
 	}
