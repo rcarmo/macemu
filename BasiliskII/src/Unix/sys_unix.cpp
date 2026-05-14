@@ -669,7 +669,8 @@ void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 			size = lseek(fd, 0, SEEK_END);
 			uint8 data[256];
 			lseek(fd, 0, SEEK_SET);
-			read(fd, data, 256);
+			if (read(fd, data, 256) < 0)
+				memset(data, 0, sizeof(data)); /* short/failed read — use zeroes */
 			FileDiskLayout(size, data, fh->start_byte, fh->file_size);
 		} else {
 			struct stat st;

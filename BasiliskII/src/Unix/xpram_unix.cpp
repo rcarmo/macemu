@@ -117,7 +117,8 @@ void LoadXPRAM(const char *vmdir)
 	// Load XPRAM from settings file
 	int fd;
 	if ((fd = open(xpram_path, O_RDONLY)) >= 0) {
-		read(fd, XPRAM, XPRAM_SIZE);
+		if (read(fd, XPRAM, XPRAM_SIZE) != XPRAM_SIZE)
+			fprintf(stderr, "WARNING: Short read from %s\n", xpram_path);
 		close(fd);
 	}
 }
@@ -131,7 +132,8 @@ void SaveXPRAM(void)
 {
 	int fd;
 	if ((fd = open(xpram_path, O_WRONLY | O_CREAT, 0666)) >= 0) {
-		write(fd, XPRAM, XPRAM_SIZE);
+		if (write(fd, XPRAM, XPRAM_SIZE) != XPRAM_SIZE)
+			fprintf(stderr, "WARNING: Short write to %s\n", xpram_path);
 		close(fd);
 	}
 }
