@@ -2121,8 +2121,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				uint32_t *target_code = find_code_for_pc(target_pc);
 				if (target_code) {
 					int32_t offset = (int32_t)((uint8_t *)target_code - (uint8_t *)jit_code_ptr);
-					emit32(0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBNZ */
-					return true;
+					if (offset >= -(1 << 20) && offset < (1 << 20)) { /* 19-bit signed ±1MB */
+						emit32(0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBNZ */
+						return true;
+					}
 				}
 				/* Not taken: CBZ skips to after epilogue */
 				uint32_t *skip_loc = jit_code_ptr;
@@ -2138,8 +2140,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				uint32_t *target_code = find_code_for_pc(target_pc);
 				if (target_code) {
 					int32_t offset = (int32_t)((uint8_t *)target_code - (uint8_t *)jit_code_ptr);
-					emit32(0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBZ */
-					return true;
+					if (offset >= -(1 << 20) && offset < (1 << 20)) { /* 19-bit signed ±1MB */
+						emit32(0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBZ */
+						return true;
+					}
 				}
 				/* Not taken: CBNZ skips to after epilogue */
 				uint32_t *skip_loc = jit_code_ptr;
@@ -2168,11 +2172,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			uint32_t *target_code = find_code_for_pc(target_pc);
 			if (target_code) {
 				int32_t offset = (int32_t)((uint8_t *)target_code - (uint8_t *)jit_code_ptr);
-				if (branch_if_set)
-					emit32(0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBNZ */
-				else
-					emit32(0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBZ */
-				return true;
+				if (offset >= -(1 << 20) && offset < (1 << 20)) { /* 19-bit signed ±1MB */
+					if (branch_if_set)
+						emit32(0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBNZ */
+					else
+						emit32(0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBZ */
+					return true;
+				}
 			}
 			if (branch_if_set) {
 				uint32_t *skip_loc = jit_code_ptr;
