@@ -378,6 +378,17 @@ static void emit_lsr64_imm(int rd, int rn, int imm) {
 	emit32(0xD3400000 | (imm << 16) | (63 << 10) | (rn << 5) | rd);
 }
 
+/* Load a 64-bit immediate into a 64-bit register (MOVZ + up to 3 MOVK) */
+static void emit_load_imm64(int rd, uint64_t imm) {
+	uint16_t p[4];
+	for (int i = 0; i < 4; i++) p[i] = (imm >> (i * 16)) & 0xFFFF;
+	int first = 0;
+	for (int i = 0; i < 4; i++) { if (p[i]) { first = i; break; } }
+	a64_movz(rd, p[first], first);
+	for (int i = 0; i < 4; i++)
+		if (i != first && p[i]) a64_movk(rd, p[i], i);
+}
+
 static void emit_load_imm32(int rd, int32_t imm) {
 	uint32_t u = (uint32_t)imm;
 	uint16_t lo = u & 0xFFFF;
@@ -3229,10 +3240,31 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 			 * rldimi (sub 3): insert into RA with mask bits mb..(63-sh) */
 			if (sub == 3) {
 				/* rldimi: RA = (ROTL64(RS,sh) & mask) | (RA & ~mask)
-				 * where mask = bits mb..(63-sh). Full merge requires computing
-				 * the mask constant and emitting BIC + ORR. Fall to interpreter
-				 * for now to avoid producing incorrect silent results. */
-				return false;
+				 * mask = ARM bits sh..(63-mb): computed at JIT compile time.
+				 * Uses MOVZ/MOVK to load 64-bit mask, then AND + BIC + ORR. */
+				int start_bit = (int)sh;
+				int stop_bit  = 63 - (int)mb_or_me;
+				uint64_t mask;
+				if (start_bit <= stop_bit) {
+					int nbits = stop_bit - start_bit + 1;
+					mask = (nbits >= 64) ? ~UINT64_C(0)
+					      : ((UINT64_C(1) << nbits) - 1) << start_bit;
+				} else {
+					/* Wrapping: bits 0..stop_bit and start_bit..63 */
+					mask = ((UINT64_C(1) << (stop_bit + 1)) - 1) |
+					       ~((UINT64_C(1) << start_bit) - 1);
+				}
+				emit_load_imm64(RTMP1, mask);
+				/* RTMP0 = rotated & mask */
+				emit32(0x8A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND Xd,Xn,Xm */
+				/* Load RA using direct LDR to avoid emit_load_gpr64 clobbering RTMP0.
+				 * GPR_HI is 0 for 32-bit Mac OS registers, so zero-extending the
+				 * 32-bit GPR gives the full 64-bit RA value. */
+				a64_ldr_w_imm(RTMP2, RSTATE, PPCR_GPR(ra)); /* RTMP2 = RA (zero-extended) */
+				/* RTMP2 = RA & ~mask */
+				emit32(0x8A200000 | (RTMP1 << 16) | (RTMP2 << 5) | RTMP2); /* BIC Xd,Xn,Xm */
+				/* RTMP0 = merged result */
+				emit32(0xAA000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* ORR Xd,Xn,Xm */
 			}
 			/* rldicl (sub 0): clear top mb_or_me bits */
 			if (sub == 0) {
@@ -3248,7 +3280,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 					emit_lsl64_imm(RTMP0, RTMP0, clrr);
 				}
 			/* rldic (sub 2): clear top mb bits AND clear bottom sh bits */
-			} else { /* sub == 2 */
+			} else if (sub == 2) {
 				if (mb_or_me > 0 && mb_or_me < 64) {
 					emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
 					emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
@@ -3258,6 +3290,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 					emit_lsl64_imm(RTMP0, RTMP0, sh);
 				}
 			}
+			/* sub 3 (rldimi): mask-insert already done above, RTMP0 holds final result */
 			emit_store_gpr64(RTMP0, ra);
 			if (rc) lazy_update_cr0(RTMP0); /* uses low 32 bits for CR0 */
 			return true;
