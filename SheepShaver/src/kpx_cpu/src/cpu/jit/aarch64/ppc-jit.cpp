@@ -342,17 +342,21 @@ static void emit_store_gpr(int rs, int n) {
 /* 64-bit GPR access for G5/PPC64 instructions.
    Uses gpr[n] (low 32) + gpr_hi[n] (high 32) as a split 64-bit register.
    On little-endian ARM64: load low word, load high word, combine. */
-static void emit_load_gpr64(int xd, int n) {
+static void emit_load_gpr64_tmp(int xd, int n, int tmp) {
 	/* LDR Wd, [RSTATE, #gpr_lo] — low 32 bits, zero-extends to Xd */
 	a64_ldr_w_imm(xd, RSTATE, PPCR_GPR(n));
 	/* LDR Wtmp, [RSTATE, #gpr_hi] — high 32 bits, zero-extends to Xtmp */
-	int tmp = (xd == RTMP0) ? RTMP1 : RTMP0;
 	a64_ldr_w_imm(tmp, RSTATE, PPCR_GPR_HI(n));
 	/* Combine into 64-bit Xd: Xd = (hi << 32) | lo
 	 * ORR Xd, Xd, Xtmp, LSL #32: imm6=32 at bits 15-10 of the ORR shifted-reg form */
 	emit32(0xAA000000 | (tmp << 16) | (0x20 << 10) | (xd << 5) | xd);
 	/* NOTE: the ORR above is the correct and complete 64-bit combine.
 	 * No BFI needed here. */
+}
+
+static void emit_load_gpr64(int xd, int n) {
+	int tmp = (xd == RTMP0) ? RTMP1 : RTMP0;
+	emit_load_gpr64_tmp(xd, n, tmp);
 }
 
 static void emit_store_gpr64(int xs, int n) {
@@ -424,9 +428,6 @@ static void emit_update_cr0(int result_reg) {
 	emit32(0x7100001F | (result_reg << 5)); /* CMP Wn, #0 */
 	/* CR0 = 0 by default */
 	a64_movz(RTMP2, 0, 0);
-	/* If result < 0 (signed): CR0 = 8 (LT) */
-	emit32(0x5A800040 | (RTMP2 << 5) | RTMP2); /* CSINV Wd, Wn, Wn, PL — wrong, use CSET */
-	/* Actually use CSEL: */
 	/* MOV W(RTMP0), #8; MOV W(RTMP1), #4; MOV W(RTMP2), #2 */
 	/* CSEL based on condition */
 	/* Simplest: use three conditional moves */
@@ -1736,7 +1737,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		case 233: /* mulld rD,rA,rB */
 			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64(RTMP1, rb);
+			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9B007C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* MUL Xd,Xn,Xm */
 			emit_store_gpr64(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1744,7 +1745,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		case 9: /* mulhdu rD,rA,rB */
 			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64(RTMP1, rb);
+			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9BC07C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UMULH Xd,Xn,Xm */
 			emit_store_gpr64(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1752,7 +1753,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		case 73: /* mulhd rD,rA,rB */
 			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64(RTMP1, rb);
+			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9B407C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SMULH Xd,Xn,Xm */
 			emit_store_gpr64(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1760,7 +1761,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		case 457: /* divdu rD,rA,rB */
 			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64(RTMP1, rb);
+			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9AC00800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UDIV Xd,Xn,Xm */
 			emit_store_gpr64(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1768,7 +1769,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		case 489: /* divd rD,rA,rB */
 			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64(RTMP1, rb);
+			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SDIV Xd,Xn,Xm */
 			emit_store_gpr64(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1796,9 +1797,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 149: /* stdx rS,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
+			emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* save EA before 64-bit load clobbers RTMP0 */
 			emit_load_gpr64(RTMP1, PPC_RS(op));
 			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
 			return true;
 
 		case 181: /* stdux rS,rA,rB */
@@ -1806,9 +1808,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
+			emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* save EA before 64-bit load clobbers RTMP0 */
 			emit_load_gpr64(RTMP1, PPC_RS(op));
 			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
 			return true;
 
 		case 84: /* ldarx rD,rA,rB — simplified as load */
@@ -1822,9 +1825,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 214: /* stdcx. rS,rA,rB — simplified: always succeed */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
+			emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* save EA before 64-bit load clobbers RTMP0 */
 			emit_load_gpr64(RTMP1, PPC_RS(op));
 			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
 			/* CR0 = EQ (reserve succeeded) */
 			lazy_flush_cr0();
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);
@@ -1866,7 +1870,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_gpr(RTMP1, rd);                  /* value to store */
 		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV (byte-swap) */
-		emit_load_gpr(RTMP0, ra);                   /* base address */
+		emit_load_ea_base(ra);                     /* base address (rA==0 means absolute) */
 		if (simm) {
 			emit_load_imm32(RTMP2, (int32_t)simm);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
@@ -1886,7 +1890,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	case 38: /* stb rS,d(rA) */
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_gpr(RTMP1, rd);
-		emit_load_gpr(RTMP0, ra);
+		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
 		emit32(0x39000000 | (RTMP0 << 5) | RTMP1); /* STRB Wt, [Xn] */
 		return true;
@@ -1904,7 +1908,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_gpr(RTMP1, rd);
 		emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 */
-		emit_load_gpr(RTMP0, ra);
+		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
 		emit32(0x79000000 | (RTMP0 << 5) | RTMP1); /* STRH Wt, [Xn] */
 		return true;
@@ -2883,7 +2887,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit32(0x1E260000 | (0 << 5) | RTMP1);
 		/* Byte-swap and store */
 		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
-		emit_load_gpr(RTMP0, ra);
+		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
 		emit32(0xB9000000 | (RTMP0 << 5) | RTMP1); /* STR Wt, [Xn] */
 		return true;
@@ -2895,7 +2899,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit32(0x9E660000 | (0 << 5) | RTMP1);
 		/* Byte-swap 64-bit */
 		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xd, Xn */
-		emit_load_gpr(RTMP0, ra);
+		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
 		/* STR Xt, [Xn] (64-bit store) */
 		emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
@@ -3264,10 +3268,10 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 				emit_load_imm64(RTMP1, mask);
 				/* RTMP0 = rotated & mask */
 				emit32(0x8A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND Xd,Xn,Xm */
-				/* Load RA using direct LDR to avoid emit_load_gpr64 clobbering RTMP0.
-				 * GPR_HI is 0 for 32-bit Mac OS registers, so zero-extending the
-				 * 32-bit GPR gives the full 64-bit RA value. */
-				a64_ldr_w_imm(RTMP2, RSTATE, PPCR_GPR(ra)); /* RTMP2 = RA (zero-extended) */
+				/* Load full 64-bit RA without clobbering RTMP0: RTMP1 can be reused,
+				 * and the mask is reloaded before BIC. */
+				emit_load_gpr64_tmp(RTMP2, ra, RTMP1);
+				emit_load_imm64(RTMP1, mask);
 				/* RTMP2 = RA & ~mask */
 				emit32(0x8A200000 | (RTMP1 << 16) | (RTMP2 << 5) | RTMP2); /* BIC Xd,Xn,Xm */
 				/* RTMP0 = merged result */
@@ -3372,9 +3376,11 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		uint32_t sub = op & 3;
 		emit_load_ea_base(ra);
 		if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
+		/* Preserve EA: emit_load_gpr64(RTMP1, rs) uses RTMP0 as scratch for the high word. */
+		emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* MOV RTMP2, RTMP0 */
 		emit_load_gpr64(RTMP1, rs);
 		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap) */
-		emit32(0xF9000000 | (RTMP0 << 5) | RTMP1); /* STR Xt, [Xn] */
+		emit32(0xF9000000 | (RTMP2 << 5) | RTMP1); /* STR Xt, [Xn] */
 		if (sub == 1 && ra != 0) { /* stdu: update rA */
 			emit_load_ea_base(ra);
 			if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
@@ -3392,11 +3398,13 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		if (dq) { emit_load_imm32(RTMP1, dq); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 		/* Load first doubleword → GPR[rd] */
 		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt, [Xn] */
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV */
+		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV64 */
+		/* Save EA to RTMP2 before emit_store_gpr64 clobbers RTMP0 via LSR */
+		emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* MOV RTMP2, RTMP0 */
 		emit_store_gpr64(RTMP1, rd);
-		/* Load second doubleword → GPR[rd+1] */
-		emit32(0x91002000 | (RTMP0 << 5) | RTMP0); /* ADD Xn, Xn, #8 */
-		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
+		/* Load second doubleword → GPR[rd+1]: use saved EA in RTMP2 */
+		emit32(0x91002000 | (RTMP2 << 5) | RTMP2); /* ADD RTMP2, RTMP2, #8 */
+		emit32(0xF9400000 | (RTMP2 << 5) | RTMP1);
 		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 		emit_store_gpr64(RTMP1, rd + 1);
 		return true;

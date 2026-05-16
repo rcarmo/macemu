@@ -1,6 +1,6 @@
 # MacEmu AArch64 JIT — Status
 
-## SheepShaver PPC JIT (2026-05-13)
+## SheepShaver PPC JIT (2026-05-16)
 
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS to desktop (VNC port 5999, ~324 MIPS on Orange Pi 6 Plus)
@@ -42,6 +42,18 @@ and complex branch BO patterns (CTR+condition combo).
 
 ### Recent bug fixes (2026-05)
 
+- **AArch64 64-bit temp-register clobbers** (2026-05-16): `emit_load_gpr64()` used the opposite
+  low temp as its implicit high-word scratch, so loading a second 64-bit operand into `RTMP1`
+  clobbered the first operand in `RTMP0`. Added explicit-scratch 64-bit loads and fixed `mulld`,
+  `mulhdu`, `mulhd`, `divdu`, and `divd`. The same scratch rule also clobbered effective
+  addresses for `stdx`/`stdux`/`stdcx.`, DS-form `std`/`stdu`, and `lq`; those paths now save
+  EA in `RTMP2` before helper calls that overwrite `RTMP0`.
+- **D-form store absolute addressing** (2026-05-16): `stw`, `stb`, `sth`, `stfs`, and `stfd`
+  loaded `rA` directly, treating `rA==0` as GPR0 instead of PPC absolute-addressing base zero.
+  These paths now use `emit_load_ea_base()` like the load handlers.
+- **`rldimi` high-word preservation** (2026-05-16): the native insert path loaded only the low
+  32 bits of `rA` to avoid clobbering the rotated source. It now reloads the full split 64-bit
+  `rA` with an explicit scratch and reloads the mask before `BIC`.
 - **`bcl` LR update silent no-op** (`16802900`): `emit_save_lr_if_link()` was defined but never
   called — all three simple BO-field cases in the `bc` handler ignored `lk=1`. Critical case:
   `bcl 20,31,+4` (PPC idiom for materialising PC into LR) never updated LR.
