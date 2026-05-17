@@ -1675,14 +1675,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			}
 			return true;
 		}
-		case 533: /* lswx: emit PC update, return to interpreter for runtime NB */
-			lazy_flush_cr0();
-			emit_epilogue_with_pc(pc);
-			return true; /* block ends here, interpreter handles the actual lswx */
-		case 661: /* stswx: same approach */
-			lazy_flush_cr0();
-			emit_epilogue_with_pc(pc);
-			return true;
+		case 533: /* lswx: runtime NB — fall back so interpreter executes this insn */
+		case 661: /* stswx: runtime NB — fall back so interpreter executes this insn */
+			return false;
 
 
 
@@ -1841,10 +1836,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_CR);
 			return true;
 
-		case 4: /* tw — trap word: block terminator */
-			lazy_flush_cr0();
-			emit_epilogue_with_pc(pc);
-			return true;
+		case 4: /* tw — trap word: fall back so interpreter can evaluate trap */
+			return false;
 
 									default:
 			jit_xo_miss[(op >> 1) & 0x3FF]++;
@@ -2482,10 +2475,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 	}
 
-	case 17: /* sc — system call (block terminator, sets PC and returns) */
-		lazy_flush_cr0();
-		emit_epilogue_with_pc(pc);
-		return true;
+	case 17: /* sc — system call: fall back so interpreter raises it */
+		return false;
 
 	case 18: /* b/bl (unconditional branch) */
 	{

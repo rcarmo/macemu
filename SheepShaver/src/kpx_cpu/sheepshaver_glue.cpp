@@ -1039,7 +1039,7 @@ regdump:
 
 	delete cpu;
 	ppc_cpu = NULL;
-	free(test_ram);
+	munmap(test_ram, test_ram_size);
 	return true;
 }
 void init_emul_ppc(void)

@@ -42,6 +42,14 @@ and complex branch BO patterns (CTR+condition combo).
 
 ### Recent bug fixes (2026-05)
 
+- **Fallback-only JIT terminators** (2026-05-17): `lswx`/`stswx`, `tw`, and `sc` emitted
+  an epilogue at their own PC but still returned `true` from `compile_one()`, allowing the
+  containing block to be marked complete and cached as a self-returning native block. These
+  now return `false` so compilation truncates cleanly and the interpreter executes the
+  fallback-only instruction.
+- **SS_TEST cleanup crash** (2026-05-17): opcode-test RAM is allocated with `mmap()` but was
+  released with `free()`, causing the recurring harness `Segmentation fault` noise after
+  successful `REGDUMP`s. The test path now uses `munmap()`.
 - **`bclr`/`bclrl` BO semantics** (2026-05-17): `bclrl` wrote LR before reading the branch
   target, so it branched to `pc+4` instead of the old LR. Conditional `bclr` also ignored
   CTR-decrement/test BO forms such as `bdnzlr`. The handler now computes full BO decision
