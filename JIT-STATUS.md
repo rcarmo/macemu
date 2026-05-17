@@ -42,6 +42,17 @@ and complex branch BO patterns (CTR+condition combo).
 
 ### Recent bug fixes (2026-05)
 
+- **`bclr`/`bclrl` BO semantics** (2026-05-17): `bclrl` wrote LR before reading the branch
+  target, so it branched to `pc+4` instead of the old LR. Conditional `bclr` also ignored
+  CTR-decrement/test BO forms such as `bdnzlr`. The handler now computes full BO decision
+  state (CTR and CR condition), preserves old LR as the taken target, and applies LK after
+  target capture.
+- **AltiVec unknown-op fallback masking** (2026-05-17): the secondary VAO switch defaulted to
+  `return true`, silently treating unknown/unimplemented AltiVec encodings as compiled NOPs.
+  It now returns `false` so the block stops/falls back instead of hiding missing semantics.
+- **JIT chain-site refresh** (2026-05-17): refreshed block-cache entries now call
+  `patch_chain_sites()` so epilogues recorded while a target was unavailable can be satisfied
+  even when an existing cache entry is updated.
 - **AArch64 64-bit temp-register clobbers** (2026-05-16): `emit_load_gpr64()` used the opposite
   low temp as its implicit high-word scratch, so loading a second 64-bit operand into `RTMP1`
   clobbered the first operand in `RTMP0`. Added explicit-scratch 64-bit loads and fixed `mulld`,

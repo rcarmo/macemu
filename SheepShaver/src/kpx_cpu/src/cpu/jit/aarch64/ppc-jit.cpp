@@ -151,6 +151,9 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 			jit_bc_pool[idx].chain_code = chain_code;
 			jit_bc_pool[idx].complete   = complete;
 			jit_bc_pool[idx].n_insns    = n_insns;
+			/* Existing entries can be refreshed after invalidation/recompile; satisfy
+			 * any epilogues that were recorded while the target was unavailable. */
+			patch_chain_sites(pc, chain_code);
 			return;
 		}
 		idx = jit_bc_pool[idx].next;
@@ -196,6 +199,7 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 #define RTMP0    0
 #define RTMP1    1
 #define RTMP2    2
+#define RTMP3    3
 
 /* FPR offsets: FPR[n] at offset 128 + n*8 (each is a 64-bit double) */
 #define PPCR_FPR(n) ((uint32_t)(256 + (n) * 8))
@@ -2270,57 +2274,63 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			uint32_t bo = (op >> 21) & 0x1F;
 			uint32_t bi = (op >> 16) & 0x1F;
 			bool lk = op & 1;
-			if ((bo & 0x14) == 0x14) { /* BO=1x1xx: always branch */
-				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
-				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_LR);
-				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
-				lazy_flush_cr0();
-				ra_flush_all();
-				a64_ldp_post(27, 28, A64_SP, 16);
-				a64_ldp_post(25, 26, A64_SP, 16);
-				a64_ldp_post(23, 24, A64_SP, 16);
-				a64_ldp_post(21, 22, A64_SP, 16);
-				a64_ldp_post(19, RSTATE, A64_SP, 16);
-				a64_ldp_post(A64_FP, A64_LR, A64_SP, 16);
-				a64_ret();
-				return true;
+			bool no_ctr_test = (bo & 0x04);   /* BO[2]=1: skip CTR decrement+test */
+			bool ctr_eq_zero = (bo & 0x02);   /* BO[3]=1: branch if CTR==0 */
+			bool no_cond_test = (bo & 0x10);  /* BO[0]=1: skip condition test */
+			bool cond_bit_val = (bo & 0x08);  /* BO[1]=1: branch if CR[BI]=1 */
+
+			/* bclrl/bdnzlr branches to the old LR, then optional LK writes LR=pc+4. */
+			a64_ldr_w_imm(RTMP2, RSTATE, PPCR_LR); /* taken target = old LR */
+			if (lk) { emit_load_imm32(RTMP1, (int32_t)(pc + 4)); a64_str_w_imm(RTMP1, RSTATE, PPCR_LR); }
+
+			/* RTMP0 = branch decision (1=taken, 0=fall through). */
+			a64_movz(RTMP0, 1, 0);
+
+			if (!no_ctr_test) {
+				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);
+				emit32(0x51000400 | (RTMP0 << 5) | RTMP0); /* SUB Wd, Wn, #1 */
+				a64_str_w_imm(RTMP0, RSTATE, PPCR_CTR);
+				emit32(0x7100001F | (RTMP0 << 5)); /* CMP Wn, #0 */
+				if (ctr_eq_zero)
+					emit32(0x1A9F17E0 | RTMP0); /* CSET RTMP0, EQ */
+				else
+					emit32(0x1A9F07E0 | RTMP0); /* CSET RTMP0, NE */
 			}
-			/* Conditional bclr: test CR[BI], branch to LR if condition matches BO[3] */
-			{
+
+			if (!no_cond_test) {
 				uint32_t bit_pos = 31 - bi;
 				lazy_flush_cr0();
-				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);
+				a64_ldr_w_imm(RTMP1, RSTATE, PPCR_CR);
 				if (bit_pos) {
-					emit_load_imm32(RTMP1, bit_pos);
-					emit32(0x1AC02400 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSR */
+					emit_load_imm32(RTMP3, bit_pos);
+					emit32(0x1AC02400 | (RTMP3 << 16) | (RTMP1 << 5) | RTMP1); /* LSR */
 				}
-				emit32(0x12000000 | (RTMP0 << 5) | RTMP0); /* AND #1 */
-				/* BO[3] (bit 24 of op): 1=branch if CR[BI]=1, 0=branch if CR[BI]=0 */
-				bool branch_if_true = (bo >> 3) & 1;
-				if (lk) { emit_load_imm32(RTMP1, (int32_t)(pc + 4)); a64_str_w_imm(RTMP1, RSTATE, PPCR_LR); }
-				a64_ldr_w_imm(RTMP1, RSTATE, PPCR_LR);
-				/* If condition not met: set PC=pc+4 (fall through) */
-				emit_load_imm32(RTMP2, (int32_t)(pc + 4));
-				if (branch_if_true) {
-					/* CSEL: if RTMP0!=0 (bit set), use LR; else use pc+4 */
-					emit32(0x35000000 | (2 << 5) | RTMP0); /* CBNZ → skip */
-					a64_mov_reg(RTMP1, RTMP2); /* not taken: PC=pc+4 */
-				} else {
-					emit32(0x34000000 | (2 << 5) | RTMP0); /* CBZ → skip */
-					a64_mov_reg(RTMP1, RTMP2);
+				emit32(0x12000000 | (RTMP1 << 5) | RTMP1); /* AND #1 */
+				if (!cond_bit_val) {
+					emit_load_imm32(RTMP3, 1);
+					emit32(0x4A000000 | (RTMP3 << 16) | (RTMP1 << 5) | RTMP1); /* EOR #1 */
 				}
-				a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
-				lazy_flush_cr0();
-				ra_flush_all();
-				a64_ldp_post(27, 28, A64_SP, 16);
-				a64_ldp_post(25, 26, A64_SP, 16);
-				a64_ldp_post(23, 24, A64_SP, 16);
-				a64_ldp_post(21, 22, A64_SP, 16);
-				a64_ldp_post(19, RSTATE, A64_SP, 16);
-				a64_ldp_post(A64_FP, A64_LR, A64_SP, 16);
-				a64_ret();
-				return true;
+				if (!no_ctr_test)
+					emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND ctr_ok & cond_ok */
+				else
+					a64_mov_reg(RTMP0, RTMP1);
 			}
+
+			emit_load_imm32(RTMP1, (int32_t)(pc + 4)); /* not-taken target */
+			emit32(0x7100001F | (RTMP0 << 5)); /* CMP branch decision, #0 */
+			/* RTMP1 = decision ? old_LR : pc+4 */
+			emit32(0x1A800000 | (RTMP1 << 16) | (0x1 << 12) | (RTMP2 << 5) | RTMP1); /* CSEL NE */
+			a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
+			lazy_flush_cr0();
+			ra_flush_all();
+			a64_ldp_post(27, 28, A64_SP, 16);
+			a64_ldp_post(25, 26, A64_SP, 16);
+			a64_ldp_post(23, 24, A64_SP, 16);
+			a64_ldp_post(21, 22, A64_SP, 16);
+			a64_ldp_post(19, RSTATE, A64_SP, 16);
+			a64_ldp_post(A64_FP, A64_LR, A64_SP, 16);
+			a64_ret();
+			return true;
 		}
 		case 528: /* bcctr — branch conditional to CTR */
 		{
@@ -2695,7 +2705,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		case 38: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E609C00|(1<<16)|(0<<5)|0); emit32(0x6E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumshs */
 		case 40: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E209C00|(1<<16)|(0<<5)|0); emit32(0x6E208400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumubm */
 		case 41: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumuhm */
-		default: return true;
+		default: return false;
 		}
 	}
 
