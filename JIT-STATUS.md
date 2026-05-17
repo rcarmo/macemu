@@ -1,6 +1,6 @@
 # MacEmu AArch64 JIT — Status
 
-## SheepShaver PPC JIT (2026-05-16)
+## SheepShaver PPC JIT (2026-05-17)
 
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS to desktop (VNC port 5999, ~324 MIPS on Orange Pi 6 Plus)
@@ -13,10 +13,10 @@
 ### JIT Boot Status
 
 With JIT active, SheepShaver boots Mac OS to the Welcome splash screen.
-Phases 1–3 complete; Phase 4 (block chaining) complete:
+Block cache and chaining are active; lazy CR0 and register-allocation scaffolding remain in-tree but are currently disabled after boot-regression risk:
 1. **Phase 1:** Hash + chaining block cache (8192 buckets)
-2. **Phase 2:** Lazy CR0 flags
-3. **Phase 3:** Register allocation (x21–x28)
+2. **Phase 2:** Lazy CR0 flags scaffolded, currently disabled (`lazy_update_cr0()` materializes immediately)
+3. **Phase 3:** Register allocation scaffolded, currently disabled (active path uses direct struct LDR/STR)
 4. **Phase 4a:** Fast JIT dispatch inner loop (`a8afdf92`)
 5. **Phase 4b:** Compile-time block chaining — `chain_code` entry points (`4bcd9336`)
 6. **Phase 4c:** Runtime back-patching — chain site pool, `patch_chain_sites` on insert (`e1f11657`)
@@ -24,7 +24,7 @@ Phases 1–3 complete; Phase 4 (block chaining) complete:
 8. **Phase 4e:** Rc=1 CR0 audit — rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw. all fixed (`10e8f719`)
 9. **Phase 4f:** `rld*` sub-decode fix, dead mask code fix, `rldimi` implemented (`77004daa`, `de8b850a`)
 
-MacBench results (after Phase 3): CPU 835, FPU 1027.
+Historical MacBench results from the optimization tranche: CPU 835, FPU 1027.
 Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ).
 
 ### ROM Harness
@@ -104,7 +104,7 @@ VNC keyboard and mouse work for remote control:
 - Mouse: direct ADB injection from VNC server thread (bypasses SDL for reliability)
 - Port 5999 (configurable via `vncport` pref)
 
-### Opcode Census — 285 Unique PPC Opcodes Inlined as ARM64
+### Opcode Census — 285+ Unique PPC Opcodes Inlined as ARM64
 
 | Category | Count | Status |
 |----------|-------|--------|

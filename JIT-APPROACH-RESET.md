@@ -753,7 +753,8 @@ To make this approach durable, the repository should gain these documents:
 - `BasiliskII/docs/AARCH64_JIT_RUNTIME_CONTRACT.md` — low-level contract and invariants
 - `BasiliskII/docs/AARCH64_JIT_BARRIER_CLASSES.md` — exact barrier taxonomy
 - `BasiliskII/docs/AARCH64_JIT_GOLDEN_WORKLOADS.md` — required validation set
-- `SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md` — PPC-side equivalent once Basilisk rules are stabilized
+- `SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md` — PPC-side runtime/fallback contract (active; keep aligned with `ppc-jit.cpp` and `ppc-cpu.cpp`)
+- `SheepShaver/docs/AARCH64_JIT_GOLDEN_WORKLOADS.md` — PPC-side validation workload set
 
 ---
 

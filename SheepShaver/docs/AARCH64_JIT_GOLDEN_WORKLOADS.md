@@ -60,7 +60,7 @@ make run-jit-tmux TMUX_SESSION=ss-boot-jit PREFS_DIR=/tmp/ss-boot-jit VNC_PORT=5
 
 **Pass condition**: Mac OS desktop visible via VNC. No SIGSEGV. Crash log clean.
 
-**Status**: ⚠️ Works with current containment gates. Needs block cache before stable.
+**Status**: ⚠️ JIT reaches the Mac OS Welcome splash with current containment gates. Interpreter desktop remains the stable full-boot lane; continue using this workload for JIT boot-progress validation.
 
 ---
 
@@ -117,11 +117,11 @@ make run-tmux PREFS_DIR=/tmp/ss-bench
 
 **JIT maturity ladder** (per JIT-APPROACH-RESET):
 - Interpreter score: baseline
-- JIT with containment gates: comparable to interpreter (correctness, not speed)
-- JIT with block cache: expected 2–5× interpreter speed on arithmetic categories
-- JIT without frontier gates: target for future optimization phases
+- JIT with containment gates: comparable to interpreter for full-system workloads (correctness first)
+- JIT with block cache/chaining: expected speedup on hot native PPC loops; tight-loop microbench is ~737 MIPS
+- Revalidated lazy CR0/register allocation: target for future optimization phases
 
-**Status**: ⚠️ Blocked by block cache gap. Scores not meaningful until Weak seam 1 is fixed.
+**Status**: ⚠️ Block cache/chaining is implemented, but full benchmark validation still requires a stable JIT boot to desktop and repeatable MacBench run.
 
 ---
 
@@ -151,10 +151,10 @@ A change is mature when all workloads below it are green:
 
 ```
 L0  Interpreter-only boot                  (Workload 2 green)
-L1  JIT dispatch enabled, gates present    (Workload 3 green)
-L2  Block cache added                      (Workloads 3 + 6 green)
-L3  blk.complete gate removed              (All workloads green, parity verified)
-L4  SS_USE_JIT gate removed (JIT default)  (L3 + Workload 1 green across full harness)
+L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
+L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
+L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof)
+L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
 Do not report performance numbers until the workload's maturity level is declared.
@@ -165,6 +165,6 @@ Do not report performance numbers until the workload's maturity level is declare
 
 | Workload | Blocker |
 |----------|---------|
-| 3 (JIT boot) | Block cache (Weak seam 1) |
-| 6 (Speedometer) | Block cache + blk.complete gate |
+| 3 (JIT boot) | Remaining full-desktop JIT boot stability beyond Welcome splash |
+| 6 (Speedometer) | Stable JIT boot-to-desktop plus repeatable benchmark run |
 | 7 (PoP) | PatchNativeResourceManager crash in ROM path |

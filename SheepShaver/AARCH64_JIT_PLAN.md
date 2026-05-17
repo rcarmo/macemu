@@ -5,18 +5,17 @@
 Bring SheepShaver's PPC emulation to full native performance on AArch64,
 starting with an optimized interpreter and progressing to a direct-codegen JIT.
 
-## Current Status (April 2026)
+## Current Status (May 2026)
 
-**Mac OS boots to "Welcome to Mac OS" splash screen with JIT active (`SS_USE_JIT=1`).**
+**Mac OS boots to "Welcome to Mac OS" splash screen with JIT active (`SS_USE_JIT=1`). The interpreter boots to desktop and remains the exact fallback path for incomplete/barrier blocks.**
 
 | Metric | Value |
 |--------|-------|
 | Opcode test harness | **209/209** pass (score=100) |
 | ROM harness (10K blocks) | **1800/1825** pass (98.6%) on PowerMac 9500 OldWorld ROM |
-| Unique opcodes inlined | **285** PPC opcodes as native ARM64 |
-| JIT code paths | **321** `return true` / **11** `return false` (97% compile success) |
-| Block completion rate | **70.7%** of ROM blocks fully native |
-| JIT benchmark (addi+bdnz 100M) | **382 MIPS** (2.2x over interpreter) |
+| Unique opcodes inlined | **285+** PPC opcodes as native ARM64 |
+| Block completion policy | Only `jblk.complete` blocks execute natively; fallback-only/incomplete blocks are interpreted |
+| JIT benchmark (addi+bdnz 100M) | **~737 MIPS** (intra-block CBNZ tight loop, Orange Pi 6 Plus) |
 | Interpreter benchmark | 167 MIPS |
 | FPU | ✅ double + single + fused multiply-add + FPSCR rounding modes |
 | AltiVec (NEON) | ✅ 140 opcodes via AArch64 NEON intrinsics |
@@ -51,6 +50,10 @@ Subsequent audits (May 2026) found and fixed further JIT bugs:
 - `bcl` LR never updated (`emit_save_lr_if_link` was defined but never called)
 - 9 Rc=1 CR0 updates missing: rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw.
 - `ppc-execute.cpp`: duplicate VXISI mask in `record_fpscr`; incorrect `(uint32)d` cast in multiply
+- AArch64 PPC64 temp-register/EA clobbers in `mulld`/`mulhdu`/`mulhd`/`divdu`/`divd`, `stdx`/`stdux`/`stdcx.`, `std`/`stdu`, and `lq`
+- `bclrl` old-LR target ordering and full `bclr` BO CTR/condition semantics (`bdnzlr`-style forms)
+- Fallback-only/barrier opcodes (`sc`, `tw`, `twi`/`tdi`, `lswx`/`stswx`, unknown SPR) now delegate to the interpreter instead of compiling as NOP/self-return blocks
+- Opcode-test cleanup fixed: `mmap()`-allocated test RAM is released with `munmap()`
 
 ## Architecture
 
@@ -80,7 +83,7 @@ PPC instruction → ppc-cpu.cpp execute loop
 ```
 src/kpx_cpu/src/cpu/jit/aarch64/
   ppc-jit.h          — JIT public interface
-  ppc-jit.cpp        — PPC → ARM64 compiler (~85 opcode handlers)
+  ppc-jit.cpp        — PPC → ARM64 compiler (scalar, FPU, PPC64, and AltiVec/NEON handlers)
   ppc-jit-glue.hpp   — integration with ppc-cpu.cpp execute loop
   ppc-codegen-aarch64.h      — ARM64 instruction encoding helpers
   jit-target-cache.hpp       — AArch64 icache flush + RWX mapping
@@ -93,8 +96,8 @@ x20 = pointer to powerpc_registers struct (callee-saved)
 x0-x3 = scratch / temporaries
 d0-d2 = FP scratch (for FPU ops)
 GPR[n] accessed via LDR/STR Wt, [x20, #n*4]
-FPR[n] accessed via LDR/STR Dt, [x20, #128+n*8]
-CR/LR/CTR/XER/PC at known offsets from x20
+FPR[n] accessed via LDR/STR Dt, [x20, #256+n*8]
+CR/FPSCR/LR/CTR/PC and byte-addressed XER fields at known offsets from x20
 ```
 
 ## Opcode Coverage
@@ -140,8 +143,6 @@ CR/LR/CTR/XER/PC at known offsets from x20
 
 ## Completed Phases
 
-## Completed Phases
-
 ### Phase 1: Interpreter baseline ✅
 - Interpreter achieves 167 MIPS with Duff's device + block cache
 - Test harness with **209** PPC opcode vectors (score=100)
@@ -166,19 +167,22 @@ CR/LR/CTR/XER/PC at known offsets from x20
 - 8192 buckets, 16384 pool entries
 - PC → compiled code lookup; invalidate-by-PC; full flush on icbi
 
-### Phase 4c: Lazy CR0 flags ✅
-- Deferred CR0 materialisation until first read
-- `cr0_valid` / `cr0_result_reg` compilation state; writeback at block boundary
-- MacBench CPU: 835, FPU: 1027
+### Phase 4c: Lazy CR0 flags ⚠️ scaffolded, currently disabled
+- Lazy CR0 scaffolding exists, but `lazy_update_cr0()` now materializes immediately after a boot regression
+- Current correctness contract: CR0 is architectural before each handler returns and at all block boundaries
+- Historical MacBench after the optimization tranche: CPU 835, FPU 1027
 
-### Phase 4d: Register allocation ✅
-- x21–x28 (8 slots) as PPC GPR hot cache within blocks
-- LRU eviction; dirty flush at block exit
+### Phase 4d: Register allocation ⚠️ scaffolded, currently disabled
+- x21–x28 register-cache scaffolding remains in the source
+- Active `emit_load_gpr()` / `emit_store_gpr()` use direct struct access after a boot regression
+- LRU/dirty-flush code is retained for future revalidation
 
 ## Remaining Work
 
-### Phase 5: Region JIT
-- [ ] Block-to-block chaining (avoid returning to dispatch loop between blocks)
+### Phase 5: Region JIT / optimization hardening
+- [x] Block-to-block chaining (compile-time `chain_code` plus runtime back-patching)
+- [ ] Revalidate and re-enable lazy CR0 only with targeted boot/parity proof
+- [ ] Revalidate and re-enable register allocation only with targeted boot/parity proof
 - [ ] Profile-guided hot-block prioritization
 - [ ] Raise 512-instruction block limit if needed
 
@@ -190,8 +194,9 @@ CR/LR/CTR/XER/PC at known offsets from x20
 - ~~Rc=1 CR0 for rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw.~~ ✅ Fixed (`10e8f719`)
 - ~~`rld*` sub-opcode decode (SH[5] mis-decode for sh≥32)~~ ✅ Fixed (`77004daa`)
 - Complex `bc` variants (decrement CTR + test condition combo with `lk=1`) — still falls to interpreter
-- `sc` (system call)
-- `tw`/`twi` (trap)
+- `sc` (system call) — interpreter fallback by design
+- `tw`/`twi`/`tdi` (trap) — interpreter fallback by design
+- Unknown `mfspr`/`mtspr` — interpreter fallback by design
 
 ## Test Harness
 
@@ -227,97 +232,44 @@ make -j12
 - Test-driven: opcode harness validates each handler
 - Interpreter always available as fallback for uncompiled blocks
 
-## NOP Stubs — Justification
+## Interpreter Delegation and NOP/Hint Justification
 
-Some opcodes are implemented as NOPs (no operation). Each has a specific
-justification for why this is correct or acceptable in the emulation context.
+The JIT must not compile uncertain semantics as harmless NOPs. Current policy:
 
-### Cache management (8 instructions) — no emulated cache hierarchy
+- Architecturally invisible hints may compile as NOPs.
+- Barrier-worthy, privileged, trap, runtime-helper, or unknown CPU-specific operations return `false` from `compile_one()` so the interpreter owns exact semantics.
+- Incomplete compile probes are not executed because `ppc-cpu.cpp` still requires `jblk.complete`.
 
-| Instruction | Real hardware | Why NOP is correct |
-|---|---|---|
-| `DCBF` | Flush data cache line | Host ARM64 manages its own cache; no PPC cache to flush |
-| `DCBST` | Store data cache line | Writes go directly to host memory |
-| `DCBT`/`DCBTST` | Prefetch hint | Performance hint only — no semantic effect |
-| `DCBA` | Allocate cache line | No PPC cache to allocate |
-| `DCBI` | Invalidate data cache | Supervisor-only, no user-mode effect |
-| `ICBI` | Invalidate instruction cache | JIT handles its own cache flush after compilation |
-| `ISYNC` | Instruction sync | JIT emits ISB after code generation |
+### Safe NOP / hint classes
 
-These are architecturally defined as hints or cache-coherency ops. A correct
-PPC program cannot observe different behavior whether they execute or not.
-
-### Memory barriers (2) — single-threaded emulator
-
-| Instruction | Why NOP |
+| Instruction class | Why native NOP is acceptable |
 |---|---|
-| `SYNC` | Single-threaded emulator is sequentially consistent by default |
-| `EIEIO` | No out-of-order I/O in emulation |
+| `DCBF`, `DCBST`, `DCBT`, `DCBTST`, `DCBA`, `DCBI`, `ICBI` | No emulated PPC cache hierarchy; generated ARM64 code performs its own host icache flushes. |
+| `SYNC`, `EIEIO` | Single-threaded emulator path is sequentially consistent for guest-visible state. |
+| `DSS`, `DST`, `DSTST` | Data-stream/prefetch hints only. |
+| `ECIWX`, `ECOWX` | External-control I/O is not used by the supported Power Mac workloads. |
 
-### FPSCR bit manipulation (3) — ARM64 default matches PPC default
+### Exact interpreter fallback classes
 
-| Instruction | Why NOP |
+| Instruction class | Current handling |
 |---|---|
-| `MTFSFI` | FP rounding/exception mode bits |
-| `MTFSB0` | Clear FPSCR bit |
-| `MTFSB1` | Set FPSCR bit |
+| `SC` | `compile_one()` returns `false`; interpreter raises/handles the system-call path. |
+| `TW`, `TWI`, `TDI` | `compile_one()` returns `false`; interpreter evaluates trap conditions. |
+| `LSWX`, `STSWX` | `compile_one()` returns `false`; runtime byte count comes from XER and remains interpreter-owned. |
+| Unknown `MFSPR`/`MTSPR` | `compile_one()` returns `false`; interpreter owns privileged/CPU-specific semantics. |
+| Unknown/secondary AltiVec forms | `compile_one()` returns `false`; no silent compiled NOP masking. |
+| EMUL_OP / helper-style runtime operations | No inline codegen; interpreter provides the semantic barrier. |
 
-ARM64 FPCR defaults to round-to-nearest, matching PPC's default mode.
-Full FPSCR emulation (per-instruction rounding mode switching) is Phase 5 work.
+### Implemented non-NOP classes
 
-### Traps (2) — rarely fire during normal operation
-
-| Instruction | Why NOP |
+| Instruction class | Status |
 |---|---|
-| `TWI` | Conditional trap — trap conditions almost never fire in Mac OS |
-| `TDI` | 64-bit trap — not applicable on 32-bit PPC emulation |
-
-If a trap condition does fire, the block will fall through to the interpreter
-which handles traps correctly.
-
-### Prefetch/stream hints (3) — no AltiVec execution
-
-| Instruction | Why NOP |
-|---|---|
-| `DSS` | Data stream stop — no AltiVec streams to manage |
-| `DST` | Data stream touch — prefetch hint for non-existent vector unit |
-| `DSTST` | Data stream touch for store |
-
-### System/hardware (3) — not applicable in emulation
-
-| Instruction | Implementation | Why |
-|---|---|---|
-| `MFMSR` | Returns 0 | Emulator runs in user mode; MSR value is meaningless |
-| `ECIWX` | NOP | Custom hardware I/O — not used on standard Power Macs |
-| `ECOWX` | NOP | Same |
-
-### String load/store (4) — extremely rare, interpreter fallback
-
-| Instruction | Why NOP |
-|---|---|
-| `LSWI`/`STSWI` | ✅ Implemented (no longer NOP stubs) — string load/store with correct byte count and register wrapping |
-| `LSWX`/`STSWX` | Interpreter fallback — register count from XER not yet supported in JIT |
-
-These are the only NOPs that could theoretically affect correctness. In practice,
-no Mac OS 7.5–9 code uses string load/store instructions.
-
-### AltiVec (142) — no vector execution unit
-
-All 142 AltiVec instructions are NOP-stubbed via `case 4:`. SheepShaver's
-PPC interpreter doesn't have AltiVec support either. Mac OS 7.5–9 doesn't
-use AltiVec for system functions. AltiVec implementation is Phase 6 future work.
+| FPSCR bit manipulation (`MTFSFI`, `MTFSB0`, `MTFSB1`, `MTFSF`) | Implemented with FPSCR updates and ARM64 FPCR rounding sync. |
+| Immediate string ops (`LSWI`, `STSWI`) | Implemented with byte count and register wrapping. |
+| AltiVec/VMX | Broad NEON-backed implementation; unknown forms fall back rather than silently no-op. |
 
 ### Summary
 
-| Category | Count | Risk |
-|---|---|---|
-| Cache hints | 8 | Zero — architecturally invisible |
-| Memory barriers | 2 | Zero — single-threaded |
-| FPSCR bits | 3 | Low — only affects non-default rounding modes |
-| Traps | 2 | Zero — interpreter fallback |
-| Prefetch hints | 3 | Zero — no vector unit |
-| System/hardware | 3 | Zero — not applicable |
-| String ops | 4 | Very low — interpreter fallback if encountered |
-| AltiVec | 142 | Zero for Mac OS 7.5–9 |
-
-**None of these NOPs affect Mac OS 7.5–9 boot or normal operation.**
+The remaining native NOPs are limited to hints/cache/stream/external-control operations that
+are not guest-observable in the supported emulator configuration. Anything that can alter
+architectural control flow, raise exceptions, or depend on privileged state should fall back.

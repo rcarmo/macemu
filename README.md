@@ -238,12 +238,13 @@ The AArch64 JIT backend is under active development.
 - ✅ **Mac OS boots to desktop** in interpreter mode (VNC on port 5999)
 - ✅ **209/209** opcode test vectors pass (score=100)
 - ✅ **1800/1825 ROM blocks pass** (98.6%) — headless ROM harness, 10K-block scan
-- ✅ **285 PPC opcodes** inlined as native ARM64 (integer, FPU, AltiVec/NEON, CR, branches)
-- ✅ **382 MIPS** on tight loops (2.2x over interpreter's 167 MIPS)
+- ✅ **285+ PPC opcodes** inlined as native ARM64 (integer, FPU, AltiVec/NEON, CR, branches)
+- ✅ **~737 MIPS** on the tight `addi+bdnz` loop (intra-block CBNZ, Orange Pi 6 Plus)
 - ✅ Full FPU: double+single arithmetic, fused multiply-add, FPSCR rounding mode sync
 - ✅ VNC keyboard + mouse input for remote control
-- ✅ JIT phases 1–3 complete: hash+chaining block cache, lazy CR0 flags, register allocation (x21–x28)
-- ✅ ROM harness found and fixed **14 JIT bugs** including `bcl` LR update, XER struct layout mismatch
+- ✅ Active JIT phases: hash+chaining block cache, fast dispatch, compile-time chaining, runtime back-patching, PPC64/rld correctness
+- ⚠️ Lazy CR0 and register-allocation scaffolding are present but currently disabled pending proof-driven revalidation
+- ✅ ROM/opcode audits have fixed critical JIT bugs including `bcl`/`bclrl`, fallback-only terminators, privileged/trap fallback masking, XER struct layout, and AArch64 temp clobbers
 - ✅ Signal handler crash dumps fixed (stack overflow + missing arg + register shift)
 - ✅ Unix layer hardened: slirp pipe framing, XPRAM I/O, `strdup` null check, 17 bounds fixes
 - See [JIT-STATUS.md](JIT-STATUS.md) and [SheepShaver/AARCH64_JIT_PLAN.md](SheepShaver/AARCH64_JIT_PLAN.md) for details

@@ -44,10 +44,11 @@ State that the interpreter and the rest of the emulator are allowed to observe d
 ### Virtual state
 
 State temporarily held only in ARM64 registers and not yet written back to the struct.
-This JIT has **very limited virtual state** — all emitted code reads and writes directly to the
-struct via `[RSTATE, #offset]` loads and stores. In practice, values are virtual only for the
-duration of the few ARM64 instructions that compute a single PPC instruction's result before
-the final store.
+This JIT has **very limited virtual state** — all active emitted code reads and writes directly
+to the struct via `[RSTATE, #offset]` loads and stores. Register-allocation scaffolding exists
+but is disabled after a boot regression. In practice, values are virtual only for the duration
+of the few ARM64 instructions that compute a single PPC instruction's result before the final
+store.
 
 ### Materialized state
 
@@ -96,7 +97,7 @@ RET
 ```
 
 Callee-saved host registers x19–x28 are always preserved across the block boundary.
-Scratch registers x0–x2 (RTMP0/1/2) are caller-saved and have no meaning at block entry or exit.
+Scratch registers x0–x3 (RTMP0/1/2/3) are caller-saved and have no meaning at block entry or exit.
 
 ### 2. PC model
 
@@ -119,20 +120,21 @@ instruction. Only the block entry PC is valid mid-block.
 
 ### 3. Flag model
 
-**Lazy CR0** (Phase 4c): CR0 materialisation is deferred until the first consumer.
+**Current CR0 implementation**: CR0 is materialised immediately. The earlier lazy-CR0
+scaffolding remains in the file, but `lazy_update_cr0()` is deliberately disabled after a boot
+regression and calls `emit_update_cr0()` directly.
+
 **XER and FPSCR** are always materialised immediately.
 
-- `cr0_valid` tracks whether CR0 has been written to PPCR_CR since the last Rc=1 instruction.
-- Instructions with RC=1 call `emit_update_cr0()` only if a CR0 consumer follows in the block;
-  otherwise CR0 is written at block exit via `lazy_flush_cr0()`.
+- Instructions with RC=1 call `emit_update_cr0()` and update PPCR_CR directly.
 - Every carry-setting instruction calls `emit_write_xer_ca_from_carry()` which writes PPCR_XER_CA.
 - FPSCR rounding mode is synced to ARM64 FPCR on `mtfsfi`/`mtfsf`/`mtfsb0`/`mtfsb1`.
 
 **Contract**: At every block boundary, CR, XER.CA, XER.SO, and FPSCR are architectural.
-`lazy_flush_cr0()` is called by every epilogue path; no downstream code observes stale CR0.
+`lazy_flush_cr0()` is still called by epilogue paths as a harmless compatibility hook.
 
 **Rule**: Any new opcode handler that modifies CR, XER, or FPSCR must materialize those values
-before the emit function returns. There is no deferred materialization mechanism.
+before the emit function returns. There is no active deferred materialization mechanism.
 
 ### 4. GPR model
 
@@ -176,11 +178,11 @@ In `ppc-cpu.cpp` (`pdi_execute` label):
 ```
 1. Check `SS_USE_JIT=0` diagnostic override — if set, goto skip_jit
 2. Call ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk)
-3. If compilation failed or !jblk.complete: goto skip_jit (interpreter handles it)
-4. Call fn(regs_ptr()) — executes the compiled block
-5. Validate PC: if jit_pc outside RAM/ROM range, continue (interpreter recovers)
+3. If compilation failed or `!jblk.complete`: goto `skip_jit` (interpreter handles it)
+4. Call `fn(regs_ptr())` — executes the compiled block
+5. Validate PC: if `jit_pc` is outside RAM/ROM range, log, invalidate the block, and fall back
 6. Check spcflags (interrupts, cache invalidation)
-7. Look up next block in kpx_cpu block cache, loop
+7. Fast-dispatch to the next JIT block if already complete and cached; otherwise continue via the interpreter block cache
 ```
 
 **Contract on step 4**: On return from fn(), PPCR_PC is the next PC to execute.
@@ -226,17 +228,20 @@ The two paths are observationally equivalent for any block that reaches this fal
 
 **Classification**: CONTAINMENT — prevents executing partial blocks natively.
 
-**What it protects**: Correctness of interpreter fallback. A block that was partially compiled has a midpoint PC written to PPCR_PC at the truncation site. The interpreter must execute from that PC. If we allowed partial blocks to run, the truncation epilogue would set PPCR_PC to the first unhandled instruction, then the interpreter would continue from there — this is actually correct behavior. The gate is therefore **conservative**.
+**What it protects**: Correctness of interpreter fallback and fallback-only instructions.
+A failed compilation is a compile-time probe only; generated code from that probe is not executed.
+The interpreter starts from the original block PC and owns the uncompiled instruction semantics.
+This is required for barrier-worthy/fallback-only instructions such as `sc`, `tw`, `twi`/`tdi`,
+`lswx`/`stswx`, and unknown SPR access.
 
-**Invariant guarded**: Fault recovery restartability.
+**Invariant guarded**: Exact fallback semantics for privileged, trap, runtime-helper, and
+unimplemented instructions.
 
-**Status for relaxation**: This gate can be removed when we are confident that:
-1. The truncation epilogue always writes a valid PPCR_PC
-2. The interpreter can safely resume from that PC
+**Status for relaxation**: Keep this gate active. Partial-block native execution would need a
+separate proof that every `return false` point represents a resumable PC and not a semantic
+barrier that must be interpreted from the original block entry.
 
-That is already true. The gate is overcautious. **This gate is a candidate for removal.**
-
-**Proof workload**: interpreter-only boot and JIT boot must be bit-identical in register state at REGDUMP.
+**Proof workload**: opcode harness, targeted fallback probes, and boot-to-desktop workloads.
 
 ---
 
@@ -252,8 +257,10 @@ DIAGNOSTIC for opcodes that should be implemented but aren't.
 **Rule**: Every `return false` path in `compile_one` should have a comment classifying it as:
 - `/* UNIMPLEMENTED: [opcode name] — not yet native, interpreter handles */`
 - `/* EXCLUDED: [reason] — permanent interpreter delegation */`
+- `/* FALLBACK: [reason] — exact interpreter/privileged/trap semantics required */`
 
-Currently most are undocumented. This must be fixed as part of the approach-reset audit.
+The current audit has added classification for the highest-risk fallback-only paths; keep doing
+this whenever a fallback site is touched.
 
 ---
 
@@ -368,9 +375,9 @@ barrier. Not implemented in the current JIT.
 | # | Invariant | SheepShaver PPC JIT status |
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
-| 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 (Phase 4c): deferred until first consumer; `lazy_flush_cr0()` called at every epilogue. XER/FPSCR always immediate. |
-| 3 | Helper calls are semantic barriers | ✅ No helpers in compiled code. All unhandled ops → interpreter (full block barrier). |
-| 4 | Block chaining must not bypass validation | ✅ No block chaining yet. Every block exits through epilogue; dispatcher finds next block. |
+| 2 | Lazy flags valid only while ownership is unambiguous | ✅ CR0 is currently immediate (lazy scaffolding disabled); `lazy_flush_cr0()` remains a compatibility hook. XER/FPSCR always immediate. |
+| 3 | Helper calls are semantic barriers | ✅ No helpers in compiled code. All unhandled/barrier ops → interpreter (full block barrier). |
+| 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code` and cache invalidation clears patch sites. |
 | 5 | Interpreter and JIT builds agree on shared semantics | ✅ 209/209 opcode harness green. `bcl` LR update fixed (2026-05). Full parity for all simple BO patterns. |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
@@ -384,21 +391,22 @@ barrier. Not implemented in the current JIT.
 Hash + chaining block cache (8192 buckets) implemented. Compiled blocks are reused on
 subsequent visits. See `jit_bc_pool` / `jit_bc_heads` in `ppc-jit.cpp`.
 
-### Weak seam 2: `blk.complete` gate is overcautious
+### Weak seam 2: Partial-block execution remains disabled
 
-Partial blocks are safe to execute — the truncation epilogue writes a valid PPCR_PC and
-the interpreter can resume from there. The gate prevents this, causing unnecessary interpreter
-fallback for blocks that partially compile. This reduces JIT coverage.
+`jblk.complete` is still required before native execution. This is intentionally conservative:
+some `return false` paths are semantic barriers, not merely unimplemented inline code. Enabling
+partial-block execution would require auditing every fallback site and proving resumability.
 
 ### Weak seam 3: PC validation guard after JIT call may mask compiler bugs
 
 The PC range check after `fn(regs_ptr())` silently skips blocks that set an out-of-range PC.
 This can mask JIT compiler bugs. It should log the occurrence rather than silently continuing.
 
-### Weak seam 4: Gate comment drift
+### Weak seam 4: Fallback classification coverage
 
-Several `return false` paths in `compile_one` lack classification comments. As a result,
-the distinction between "not yet implemented" and "permanently excluded" is not visible in code.
+Several lower-risk `return false` paths in `compile_one` still lack explicit classification
+comments. As a result, the distinction between "not yet implemented", "permanently excluded",
+and "must fall back for exact interpreter semantics" is not always visible in code.
 
 ### Weak seam 5: FPSCR sync coverage
 

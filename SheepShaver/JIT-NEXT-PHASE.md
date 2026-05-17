@@ -2,19 +2,21 @@
 
 ## Goal
 
-Move from basic-block JIT to a region JIT with register allocation and lazy flags,
-delivering measurable MacBench improvement over interpreter baseline (838 CPU / 1027 FPU).
+Move from the current safe basic-block/chain JIT toward revalidated region-level optimizations.
+Register allocation and lazy CR0 both have scaffolding in-tree, but are currently disabled after
+boot-regression risk; the next phase is proof-driven re-enablement, not blind optimization.
 
 ## Baseline (current)
 
 - MacBench CPU: **835** (JIT ≈ interpreter — no improvement)
 - MacBench FPU: **1027** (already > G3/300 baseline)
 - Harness: 209/209 pass, score=100
-- Block cache: 4096 direct-mapped
+- Block cache: 8192-bucket hash table with 16384-entry pool
 - Block size: 512 instructions max
-- Register allocation: none (every insn does LDR/STR to struct)
-- Flags: always materialized (emit_update_cr0 on every Rc=1 instruction)
-- Block chaining: none (dispatch loop between every block)
+- Register allocation: scaffolded but disabled; active path uses direct struct LDR/STR
+- Flags: CR0 is currently materialized immediately; lazy CR0 scaffold is disabled
+- Block chaining: compile-time `chain_code` plus runtime back-patching is implemented
+- Fallback policy: only `jblk.complete` blocks execute natively; incomplete/barrier blocks are interpreted
 
 ## Implementation order
 
@@ -25,22 +27,14 @@ delivering measurable MacBench improvement over interpreter baseline (838 CPU / 
 - [x] Test: harness 209/209, boot Mac OS 8.1
 
 ### Phase 2: Lazy CR/flags
-- [x] Add `cr0_valid` flag to compilation state — tracks whether CR0 is current
-- [x] `emit_update_cr0()` sets `cr0_valid = true`
-- [x] Instructions that READ CR0 (bc with BI=0..3, mfcr, crand etc.) check `cr0_valid`
-  - if invalid, materialise from last result register before reading
-- [x] Instructions with Rc=1 set `cr0_valid = false` (mark stale), save result reg identity
-- [x] Only emit CR0 writeback at block boundaries or when CR0 is read
-- [x] Test: harness 209/209 (critical — flags are the #1 source of JIT bugs)
+- [x] Add lazy CR0 scaffolding and consumers
+- [x] Test: harness 209/209
+- [ ] Revalidate before enabling: current active path materializes CR0 immediately (`lazy_update_cr0()` calls `emit_update_cr0()`) after a boot-regression risk
 
 ### Phase 3: Register allocation within blocks
-- [x] Allocate ARM64 callee-saved x21–x28 (8 registers) as PPC GPR cache
-- [x] Track mapping: `gpr_host[32]` = -1 (not cached) or ARM64 reg number
-- [x] On first use of PPC GPR N: assign next free host reg, emit LDR from struct
-- [x] On subsequent use: reuse host reg directly (no LDR/STR)
-- [x] At block exit (epilogue): flush all dirty host regs back to struct via STR
-- [x] Eviction policy: LRU when all 8 slots full — STR the oldest back to struct
-- [x] Test: harness 209/209, MacBench CPU should show measurable improvement
+- [x] Add x21–x28 PPC GPR cache scaffolding, LRU eviction, and dirty flush logic
+- [x] Test: harness 209/209 during original tranche
+- [ ] Revalidate before enabling: current active `emit_load_gpr()`/`emit_store_gpr()` path uses direct struct access after a boot-regression risk
 
 ### Phase 4: Region JIT (block chaining)
 - [x] Fast JIT dispatch inner loop: after each block, check JIT cache directly without interpreter block cache round-trip (`a8afdf92`)
@@ -49,6 +43,7 @@ delivering measurable MacBench improvement over interpreter baseline (838 CPU / 
 - [x] Chain invalidation: full JIT cache flush atomically clears both jit_bc_pool and chain_site_pool
 - [x] `rld*` correctness: rldicl/rldicr/rldic mask now applied; rldcl/rldcr emit ROL not ROR (`8ad71eed`)
 - [ ] MacBench validation: runtime benefit requires actual Mac OS boot (ROM + disk); tight-loop harness uses intra-block CBNZ which is unaffected by inter-block chaining
+- [x] Fallback safety audit: fallback-only instructions (`sc`, `tw`, `twi`/`tdi`, `lswx`/`stswx`, unknown SPR) now return `false` and are interpreted
 
 Note: the tight `addi+bdnz` benchmark uses intra-block CBNZ (pre-existing) for the inner loop. Compile-time chaining fires when the target was compiled before the source block. Runtime patching captures the forward-branch case (target compiled after source).
 
@@ -56,9 +51,10 @@ Note: the tight `addi+bdnz` benchmark uses intra-block CBNZ (pre-existing) for t
 
 | Metric | Before | Target |
 |--------|--------|--------|
-| MacBench CPU | 835 | > 1200 |
-| MacBench FPU | 1027 | > 1100 |
+| MacBench CPU | 835 historical | > 1200 after revalidated optimizations |
+| MacBench FPU | 1027 historical | > 1100 after revalidated optimizations |
 | Harness | 209/209 | 209/209 |
+| Regression harness | 13/13 | 13/13 |
 | Boot Mac OS 8.1 | ✅ | ✅ |
 
 ## Files to modify

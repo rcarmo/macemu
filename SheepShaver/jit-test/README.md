@@ -2,7 +2,7 @@
 
 ## Status
 
-**113 deterministic test vectors** (70 functional + 43 fuzzing), all passing against the PPC interpreter.
+**209 deterministic test vectors** (functional plus fuzz/regression-style cases), all passing (`METRIC pass=209 fail=0 score=100`).
 
 ## How it works
 
@@ -11,7 +11,10 @@
 3. Optionally set `SS_TEST_INIT` to seed GPR0-31 + optional CR before execution
 4. Optionally set `SS_TEST_JIT=1` to compile and execute via the AArch64 JIT
 
-The harness runs each vector twice and diffs the output for determinism.
+The harness runs each vector twice and diffs the output for determinism. `SS_TEST_JIT=1`
+forces the AArch64 JIT path for single-vector fallback/native checks; unsupported or
+barrier-worthy instructions should report `SS_TEST_JIT: fallback to interpreter` rather than
+silently compiling as NOP.
 
 ## Running
 
