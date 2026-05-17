@@ -165,7 +165,20 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 **JIT optlev=2:** ✅ Full boot, zero SEGVs (mid-block branch side-exit fix applied)
 **JIT harness:** ✅ 301/301 vectors pass (score=100)
 
-See `BasiliskII/src/uae_cpu_2021/compiler/` for the 68K → AArch64 JIT.
+See `BasiliskII/src/uae_cpu_2026/compiler/` for the 68K → AArch64 JIT.
+
+### BasiliskII QA status
+
+BasiliskII now has a repository-visible end-to-end QA scaffold in `BasiliskII/qa/` plus shared emulator-neutral VNC story tooling in `qa/tests/vnc/`. The intended post-JIT validation path is:
+
+1. `jit-test/run.sh` opcode/vector preflight (`301/301`, score 100).
+2. `jit-test/rom-harness.sh` / `BasiliskII/qa/scripts/run-matrix.sh` ROM smoke.
+3. VNC/Xvfb desktop reachability with a known-good System 7 disk.
+4. Deterministic screenshot assertions in CI: PNG metrics, non-blank checks, hashes, optional Tesseract OCR, optional OpenCV templates.
+5. Hardware coverage evidence for safe user-mode networking (`ether slirp` first), dummy/real audio, disk persistence, PRAM/time, display modes, and optional CD/extfs/clipboard assets.
+6. Markdown and PDF reports generated from run artifacts.
+
+The shared VNC runner currently defaults to the `noop` driver so both BasiliskII and SheepShaver profiles can validate user stories and reporting in CI without requiring a live desktop. A real VNC capture/input backend is the next automation gap.
 
 ### Test Harness (68K)
 

@@ -75,6 +75,25 @@ Initial network testing should not require host privilege changes:
 2. `SDL_AUDIODRIVER=dummy` with `nosound false` is the headless automation baseline.
 3. Real audio is manual/host-dependent. Record SDL driver, ALSA/Pulse/PipeWire devices, permissions, and whether the boot chime/system beep/app sound is heard.
 
+## VNC automation/reporting commands
+
+Shared story validation without a live display:
+
+```bash
+cd /workspace/projects/macemu
+qa/tests/vnc/run.js \
+  --emulator basiliskii \
+  --features qa/tests/vnc/stories \
+  --artifacts BasiliskII/qa/artifacts/reports/vnc-noop
+
+qa/tests/vnc/tools/generate-pdf-report.mjs \
+  --run BasiliskII/qa/artifacts/reports/vnc-noop \
+  --output BasiliskII/qa/artifacts/reports/vnc-noop.pdf \
+  --title "BasiliskII VNC QA Report"
+```
+
+Once a real VNC backend lands, use the same stories and add screenshot assertions against real PNG captures. Commit only stable UI templates under `qa/tests/vnc/templates/`.
+
 ## Reporting requirements
 
 Each run should produce:

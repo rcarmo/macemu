@@ -35,3 +35,17 @@ qa/tests/vnc/tools/generate-pdf-report.mjs \
   --run /tmp/sheepshaver-vnc-noop \
   --output /tmp/sheepshaver-vnc-noop.pdf
 ```
+
+## Layered strategy
+
+Use the shared tooling as the desktop/human-workflow layer in a broader QA ladder:
+
+1. Emulator-specific CPU/JIT preflight harnesses.
+2. Headless ROM smoke tests.
+3. VNC/Xvfb desktop reachability.
+4. Deterministic screenshot assertions (PNG metrics, hashes, non-blank checks, optional OCR/OpenCV).
+5. Shared user-story flows for desktop reachability, app launch, typing, networking panels, soak, diagnostics, and report generation.
+6. Emulator-specific hardware/device coverage recorded in matrix wrappers.
+7. Markdown/PDF evidence reports from structured artifacts.
+
+Generated artifacts should stay in ignored report directories such as `BasiliskII/qa/artifacts/`, `qa/artifacts/`, or `/tmp/...`. Commit only curated templates, profiles, stories, and documentation.

@@ -78,6 +78,9 @@
 - Prefs file:
 - Screenshots:
 - Pcaps:
+- Markdown report:
+- PDF report:
+- Screenshot assertion output:
 
 ## Failure analysis
 
@@ -85,7 +88,9 @@
 - First bad marker:
 - Suspected area:
 - Existing env gates tried:
-- Missing assets/permissions:
+- Missing guest assets:
+- Missing host permissions:
+- Automation gap vs emulator bug:
 
 ## Follow-ups
 

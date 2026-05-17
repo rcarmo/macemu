@@ -247,7 +247,20 @@ The AArch64 JIT backend is under active development.
 - ✅ ROM/opcode audits have fixed critical JIT bugs including `bcl`/`bclrl`, fallback-only terminators, privileged/trap fallback masking, XER struct layout, and AArch64 temp clobbers
 - ✅ Signal handler crash dumps fixed (stack overflow + missing arg + register shift)
 - ✅ Unix layer hardened: slirp pipe framing, XPRAM I/O, `strdup` null check, 17 bounds fixes
-- See [JIT-STATUS.md](JIT-STATUS.md) and [SheepShaver/AARCH64_JIT_PLAN.md](SheepShaver/AARCH64_JIT_PLAN.md) for details
+- See [JIT-STATUS.md](JIT-STATUS.md), [BasiliskII/qa/README.md](BasiliskII/qa/README.md),
+[qa/README.md](qa/README.md), and [SheepShaver/AARCH64_JIT_PLAN.md](SheepShaver/AARCH64_JIT_PLAN.md) for details
+
+### End-to-end QA and reporting
+
+The repository now has a layered QA scaffold for BasiliskII and SheepShaver:
+
+- BasiliskII matrix and run wrapper: `BasiliskII/qa/`
+- Shared emulator-neutral VNC/Gherkin stories: `qa/tests/vnc/`
+- Per-emulator VNC profiles: `qa/tests/vnc/profiles/basiliskii.json` and `qa/tests/vnc/profiles/sheepshaver.json`
+- Deterministic screenshot checks for CI: PNG dimensions/blank detection, SHA/aHash, optional Tesseract OCR, optional OpenCV template matching
+- PDF report generation from run artifacts via `qa/tests/vnc/tools/generate-pdf-report.mjs`
+
+The intended validation ladder is: opcode/vector preflight → ROM smoke → VNC desktop reachability → deterministic screenshot assertions → hardware/network/audio coverage → Markdown/PDF evidence reports. The default VNC driver is still `noop`, so CI can validate story parsing and report generation before a real VNC capture/input backend is wired in.
 
 **Bugs fixed in BasiliskII JIT (this fork):**
 1. IRQ deliverability bug — latching pending interrupts while masked

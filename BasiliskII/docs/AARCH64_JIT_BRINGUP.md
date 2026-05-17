@@ -9,23 +9,33 @@ This document describes the work done to bring up the experimental AArch64 (ARM6
 
 The codebase is a fork of the Koenig/cebix/aranym JIT originally written for x86, ported to ARM (32-bit) by contributors, with an ARM64 backend added experimentally. Since the initial bringup, the work has fixed a long series of structural and semantic bugs: byte-order mismatches, IRQ deliverability, legacy carry/X handling, boundary cycle charging, verifier misuse, ARM64 endblock slow-path bugs, short-branch decode on ARM64, 32-bit host-PC construction bugs, word-to-address-register self-alias clobbers, A-line trap control-flow modeling, 64-bit pointer truncation in the legacy `add_l`/`sub_l_ri` helpers, the `endblock_pc_isconst` direct-chain stale-state bug, and EMUL_OP barrier requirements. **Pure L2 now runs at 93.75% ROM coverage + 100% RAM, with SCSIGet × 7 + SCSISelect × 7, zero crashes, zero `bad_pc_p`, and 634M dispatches/120s with direct `B` chaining.**
 
-## Current status (2026-04-11)
+## Current status (2026-05-17)
 
-### Interpreter baseline
+### Interpreter and JIT baselines
 
-The pure interpreter (`jit false`) boots Mac OS 7.5.5 to the Finder desktop in approximately 60 seconds on the Orange Pi 6 Plus (CIX P1 12-core ARM64). The disk image (HD200MB with System 7.5.5) is confirmed working. An "improper shutdown" dialog appears on first boot and requires a Return keypress to dismiss.
+The pure interpreter (`jit false`) and JIT-enabled interpreter/dispatch modes remain the comparison baselines. The optlev=2 AArch64 JIT has moved beyond the April frontier: the opcode/vector harness is green (`301/301`, score 100), current ROM smoke windows run without the earlier `bad pc_p`/bus-error regressions, stable ROM edge profiling is repaired, and the mid-block branch side-exit fallthrough corruption has been fixed.
 
-### JIT status
+The next work is no longer "make any JIT path reach boot progress". It is system-level QA: prove that the fixed JIT can repeatedly reach and exercise a real Mac desktop, collect deterministic screenshot evidence, and cover hardware-adjacent features such as safe user-mode networking, audio backends, disk persistence, PRAM/time, and display modes.
 
-The ARM64 JIT **does not yet boot to desktop**. Two blocking issues remain:
+### QA status
 
-1. **Heap corruption with MAXRUN=1 single-instruction blocks**: An L2-compiled ROM block writes `0x08` to address `0x2038` (the system heap's first block size field, should be `0x110`). This causes the Memory Manager's heap walk at `0x0400e1a4` to loop infinitely, blocking all boot progress past SCSI probe.
+The active QA scaffold is documented in:
 
-2. **Register state corruption without MAXRUN=1**: Multi-instruction blocks corrupt A7 (stack pointer), producing `a7=0xffffff22` (bogus) and crashing early boot. This prevents removing the MAXRUN=1 workaround.
+- `BasiliskII/qa/README.md`
+- `BasiliskII/qa/matrix.md`
+- `qa/README.md`
+- `qa/tests/vnc/README.md`
 
-With MAXRUN=1, the JIT reaches SCSIGet×7 + SCSISelect×7 (full SCSI bus probe) with zero crashes and 634M dispatches/120s, but does not progress to DiskStatus or beyond.
+The validation ladder is now:
 
-### L2 coverage
+1. `jit-test/run.sh` opcode/vector preflight.
+2. `jit-test/rom-harness.sh` or `BasiliskII/qa/scripts/run-matrix.sh` ROM smoke.
+3. VNC/Xvfb desktop reachability using a known-good disk image.
+4. Deterministic screenshot assertions: PNG metrics, hashes, non-blank checks, optional Tesseract OCR, optional OpenCV template matching.
+5. User-story VNC flows shared with SheepShaver via `qa/tests/vnc/`.
+6. Hardware/network/audio coverage evidence and Markdown/PDF reports.
+
+### Historical April L2 coverage
 
 | Region | Coverage | Notes |
 |---|---|---|
@@ -68,17 +78,16 @@ The NuBus probe patch is guarded by a signature check at ROM offset `0xb27c`:
 - **Other ROM32 ROMs**: signature may or may not match. If not, the `040b`/`0404` interpreter containment activates automatically → 62.5% L2
 - **Classic/Plus ROMs**: different ROM version, JIT patches don't apply
 
-### Remaining work
+### Current remaining work
 
-To boot Mac OS with the JIT:
+The April MAXRUN/register-propagation frontier is historical. The active remaining work is QA-oriented:
 
-1. **Fix register state propagation in multi-instruction blocks.** Without `MAXRUN=1`, compiled blocks corrupt A7 (stack pointer). The register allocator's entry-state assumptions from trace time don't hold when blocks are entered from different source blocks or after interrupt delivery. This is the primary blocker.
-
-2. **Remove `MAXRUN=1` and test with mid-block tick injection.** Once multi-instruction blocks work, the `JIT_TICK_INTERVAL=64` tick injection ensures the 60Hz timer fires and interrupts are delivered mid-block. This has been implemented but is inactive with `MAXRUN=1`.
-
-3. **Investigate heap corruption at `0x2038`.** With `MAXRUN=1`, an L2-compiled ROM block writes `0x08` to the system heap's first block size field. This may be a symptom of the same register state bug that corrupts A7 in larger blocks, or a separate codegen issue in a specific opcode handler.
-
-4. **Performance tuning.** Once boot works, measure JIT vs interpreter speedup and optimize hot paths (direct block chaining, flag elimination, register allocation).
+1. Boot BasiliskII headless/VNC to the Mac desktop from a known-good disk image with optlev=2 enabled.
+2. Capture screenshots at boot, desktop, app launch, soak, and shutdown/restart milestones.
+3. Run deterministic screenshot assertions without model vision.
+4. Implement a real VNC capture/input backend behind `qa/tests/vnc/lib/vnc-driver.js` while keeping the existing `noop` CI mode.
+5. Inventory and test safe network/audio/device coverage, starting with `ether slirp` and SDL dummy audio.
+6. Generate Markdown/PDF reports from structured artifacts and keep emulator fixes separate from QA-only observations until a reproducible bug is isolated.
 
 ### Architecture
 

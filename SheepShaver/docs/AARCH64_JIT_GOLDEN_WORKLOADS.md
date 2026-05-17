@@ -91,11 +91,18 @@ Validates: threading, ADB injection, SDL event drain, VNC framebuffer update.
 cd /workspace/projects/macemu/SheepShaver
 make run-tmux
 # Connect VNC, click desktop icons, type text
+
+# Shared CI/story validation from the repository root:
+cd /workspace/projects/macemu
+qa/tests/vnc/run.js \
+  --emulator sheepshaver \
+  --features qa/tests/vnc/stories \
+  --artifacts /tmp/sheepshaver-vnc-noop
 ```
 
-**Pass condition**: Clicks and keystrokes reach Mac OS. No crash on input events.
+**Pass condition**: Clicks and keystrokes reach Mac OS. No crash on input events. Shared VNC stories produce structured artifacts and can be converted to PDF reports.
 
-**Status**: ✅ Stable after VNC threading fix (commit a0f4cc7c).
+**Status**: ✅ Stable after VNC threading fix (commit a0f4cc7c). The shared runner defaults to `noop`; a real backend should reuse the same `qa/tests/vnc/lib/vnc-driver.js` contract.
 
 ---
 
@@ -142,6 +149,19 @@ make run-tmux PREFS_DIR=/tmp/ss-bench
 **Status**: ⚠️ Crashes during `PatchNativeResourceManager` when loading game resources.
 Root cause: GetNamedResource/Get1NamedResource native hooks use invalid tvec for this ROM/OS path.
 Fix: those two hooks disabled (commit fbb716a0). Residual crash is in Mac ROM/68K emulator path.
+
+---
+
+## Shared QA/reporting layer
+
+SheepShaver should reuse the repository-level VNC/Gherkin tooling rather than growing a separate story tree:
+
+- Shared stories: `qa/tests/vnc/stories/`
+- SheepShaver profile: `qa/tests/vnc/profiles/sheepshaver.json`
+- Deterministic screenshot assertions: `qa/tests/vnc/tools/screenshot-read.js`
+- PDF report generator: `qa/tests/vnc/tools/generate-pdf-report.mjs`
+
+The same user stories should cover desktop reachability, app/control-panel launch, typing, network panel inspection, desktop soak, screenshot assertions, diagnostics, and report generation. SheepShaver-specific launch details belong in the profile, Makefile targets, or a matrix wrapper, not in duplicated Gherkin stories.
 
 ---
 

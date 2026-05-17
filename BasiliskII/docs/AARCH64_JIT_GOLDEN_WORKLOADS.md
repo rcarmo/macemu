@@ -67,7 +67,12 @@ It is not sufficient on its own for whole-runtime correctness.
 
 **How to run**:
 
-Use the repository’s current ROM-harness workflow / scripts for BasiliskII.
+```bash
+cd /workspace/projects/macemu
+./jit-test/rom-harness.sh
+# or, through the QA matrix wrapper:
+BasiliskII/qa/scripts/run-matrix.sh --case optlev2-rom-smoke --timeout 30
+```
 
 **Pass condition**:
 
@@ -94,8 +99,10 @@ ROM coverage is an important trend signal, but not by itself proof of safe deskt
 **Pass condition**:
 
 - Mac OS boots to desktop on the canonical boot disk image
+- VNC/Xvfb display is reachable when the desktop QA profile is used
 - no crash
 - no permanent wrong-state hang introduced by the JIT change
+- screenshots are captured for boot progress and desktop reached milestones
 
 **Notes**:
 
@@ -151,7 +158,56 @@ This is the canonical probe for “almost correct but still poisonous” JIT beh
 
 ---
 
-## Workload 7: Performance benchmark
+## Workload 7: Shared VNC user-story QA
+
+**What it tests**:
+
+- Finder desktop reachability through the same user-visible stories used by SheepShaver
+- mouse/keyboard scripting contract
+- application/control-panel launch
+- desktop soak responsiveness
+- failure diagnostics and artifact collection
+
+**How to run**:
+
+```bash
+cd /workspace/projects/macemu
+qa/tests/vnc/run.js \
+  --emulator basiliskii \
+  --features qa/tests/vnc/stories \
+  --artifacts BasiliskII/qa/artifacts/reports/vnc-noop
+```
+
+The default driver is `noop`, which is useful for CI story/report validation. Real desktop validation requires a future non-noop VNC backend behind `qa/tests/vnc/lib/vnc-driver.js`.
+
+**Pass condition**:
+
+- Story runner succeeds for the BasiliskII profile.
+- With a real backend, screenshot assertions confirm a non-blank display, expected dimensions, and committed OCR/template anchors where available.
+- Failures classify emulator bugs separately from missing guest assets, host permissions, or automation gaps.
+
+---
+
+## Workload 8: Hardware/network/audio QA
+
+**What it tests**:
+
+- safe user-mode networking (`ether slirp` first)
+- SDL dummy and real audio paths
+- disk image write persistence
+- PRAM/time behavior
+- display mode changes
+- optional CD-ROM/extfs/clipboard paths when assets and permissions allow
+
+**Pass condition**:
+
+- Each attempted device class has a report entry with prefs, logs, screenshots where relevant, and a clear PASS/FAIL/BLOCKED result.
+- Privileged host network changes are not required for the default matrix.
+- Missing guest tools/assets are documented as such rather than treated as emulator regressions.
+
+---
+
+## Workload 9: Performance benchmark
 
 **What it tests**:
 
@@ -184,13 +240,15 @@ L2  Opcode equivalence harness stable
 L3  ROM harness stable
 L4  Desktop boot stable
 L5  Graphics + allocator/low-memory workloads stable
-L6  Performance benchmark meaningful
+L6  Shared VNC stories + deterministic screenshot assertions stable
+L7  Hardware/network/audio evidence collected for the target profile
+L8  Performance benchmark meaningful
 ```
 
 ### Interpretation
 
 - Moving from L2 to L3 is not enough if L4 regresses
-- L6 numbers are only meaningful when L0–L5 are green
+- L8 numbers are only meaningful when L0–L7 are green
 
 ---
 
@@ -215,7 +273,7 @@ Every significant BasiliskII JIT change should state which workloads were checke
 - Workloads 3, 4, 6
 
 #### Performance-motivated change
-- all correctness workloads first, then Workload 7
+- all correctness, VNC, and hardware evidence workloads first, then Workload 9
 
 ---
 
@@ -237,13 +295,16 @@ This file exists to make the validation loop explicit.
 Until refined further, the working canonical set should be:
 
 1. `jit-test/run.sh` opcode equivalence harness
-2. BasiliskII ROM harness / ROM coverage workflow
-3. one canonical desktop-boot preset
-4. one canonical graphics-corruption repro preset
-5. one canonical low-memory/allocator-sensitive repro preset
-6. one canonical performance benchmark preset
+2. `jit-test/rom-harness.sh` or `BasiliskII/qa/scripts/run-matrix.sh --case optlev2-rom-smoke`
+3. `BasiliskII/qa/scripts/run-matrix.sh --case optlev2-desktop-vnc --dry-run` for prefs/manifest generation, then the real desktop run once the VNC backend is wired in
+4. `qa/tests/vnc/run.js --emulator basiliskii --features qa/tests/vnc/stories --artifacts BasiliskII/qa/artifacts/reports/vnc-noop` for shared story validation
+5. screenshot assertions with `qa/tests/vnc/tools/screenshot-read.js` for dimensions/non-blank/OCR/template checks
+6. PDF reporting with `qa/tests/vnc/tools/generate-pdf-report.mjs`
+7. one canonical graphics-corruption repro preset
+8. one canonical low-memory/allocator-sensitive repro preset
+9. one canonical performance benchmark preset
 
-The exact scripts/prefs should be named and frozen once the next audit/docs pass completes.
+The exact real-VNC launch profile and committed UI templates should be frozen after the first captured desktop run.
 
 ---
 

@@ -66,7 +66,22 @@ qa/tests/vnc/run.js \
   --artifacts BasiliskII/qa/artifacts/reports/vnc-noop
 ```
 
-The current driver is `noop`: it validates Gherkin stories and writes action/result artifacts without sending real VNC events. A real VNC backend should implement the driver contract in `qa/tests/vnc/lib/vnc-driver.js`.
+The current driver is `noop`: it validates Gherkin stories and writes action/result artifacts without sending real VNC events. This is suitable for CI preflight of stories and report generation. A real VNC backend should implement the driver contract in `qa/tests/vnc/lib/vnc-driver.js` and then reuse the same stories without changing feature files.
+
+### Screenshot assertions and reports
+
+Use the shared deterministic screenshot and report tools once real PNG captures exist:
+
+```bash
+qa/tests/vnc/tools/screenshot-read.js assert path/to/screenshot.png --width 640 --height 480 --not-blank
+
+qa/tests/vnc/tools/generate-pdf-report.mjs \
+  --run BasiliskII/qa/artifacts/reports/vnc-noop \
+  --output BasiliskII/qa/artifacts/reports/vnc-noop.pdf \
+  --title "BasiliskII VNC QA Report"
+```
+
+Prefer OCR/OpenCV assertions only when they use committed templates or stable text anchors. Do not use model vision in CI.
 
 ## Safety rules
 
@@ -74,3 +89,4 @@ The current driver is `noop`: it validates Gherkin stories and writes action/res
 - Prefer `ether slirp` for initial network attempts.
 - Use `SDL_AUDIODRIVER=dummy` for headless automation until real audio is intentionally tested.
 - Do not patch emulator logic from a QA observation until the issue is reproducible and isolated.
+- Separate emulator bugs from missing Mac OS assets, missing host permissions, and automation gaps in every report.
