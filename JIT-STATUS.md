@@ -42,6 +42,12 @@ and complex branch BO patterns (CTR+condition combo).
 
 ### Recent bug fixes (2026-05)
 
+- **Privileged/trap fallback masking** (2026-05-17): unknown `mfspr`/`mtspr` cases and
+  immediate trap opcodes (`tdi`/`twi`) were compiled as harmless zero/NOP behaviour. They now
+  return `false` so interpreter/privileged semantics are preserved instead of hidden by the JIT.
+- **Gate 2 comment drift** (2026-05-17): `ppc-cpu.cpp` still intentionally requires
+  `jblk.complete`, but comments claimed the gate had been removed. The comment now matches
+  the actual containment contract: incomplete compile probes are skipped and interpreted.
 - **Fallback-only JIT terminators** (2026-05-17): `lswx`/`stswx`, `tw`, and `sc` emitted
   an epilogue at their own PC but still returned `true` from `compile_one()`, allowing the
   containing block to be marked complete and cached as a self-returning native block. These

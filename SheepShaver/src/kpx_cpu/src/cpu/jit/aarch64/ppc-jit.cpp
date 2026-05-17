@@ -983,10 +983,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_store_gpr(RTMP0, rd);
 				return true;
 			}
-			/* Unknown SPR: return 0 (safe for user-mode emulation) */
-			emit_load_imm32(RTMP0, 0);
-			emit_store_gpr(RTMP0, rd);
-			return true;
+			/* Unknown SPR: fall back so the interpreter owns privileged/CPU-specific semantics. */
+			return false;
 		}
 		case 467: /* mtspr */
 		{
@@ -1023,8 +1021,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x39000000 | (PPCR_XER_CNT << 10) | (RSTATE << 5) | RTMP1);
 				return true;
 			}
-			/* Unknown SPR: NOP (safe for user-mode) */
-			return true;
+			/* Unknown SPR: fall back so the interpreter owns privileged/CPU-specific semantics. */
+			return false;
 		}
 		case 824: /* srawi rA,rS,SH (arithmetic shift right immediate, set CA) */
 		{
@@ -2506,10 +2504,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
-	case 2: /* tdi — 64-bit trap: treat as NOP on 32-bit PPC */
-		return true;
-	case 3: /* twi — trap word immediate: simplified as NOP (trap conditions rarely fire in normal code) */
-		return true;
+	case 2: /* tdi — trap doubleword immediate: fall back to interpreter */
+	case 3: /* twi — trap word immediate: fall back so trap conditions are evaluated */
+		return false;
 
 	case 4: /* AltiVec via NEON */
 	{
@@ -3124,7 +3121,6 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 			emit_load_fpr(0, frb);
 			emit32(0x1E61C000 | (0 << 5) | 0); /* FSQRT Dd, Dn */
 			emit_store_fpr(0, frd);
-			return true;
 			return true;
 		default: break; /* fall through to 5-bit XO check */
 		}

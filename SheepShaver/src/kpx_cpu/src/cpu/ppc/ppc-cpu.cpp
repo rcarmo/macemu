@@ -714,9 +714,9 @@ void powerpc_cpu::execute(uint32 entry)
 				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT=0 diagnostic override */
 				if (!jit_init_done) { ppc_jit_aarch64_init(4096); jit_init_done = true; }
 				ppc_jit_block jblk;
-				/* GATE 2 removed: partial blocks run natively up to truncation point.
-				 * The truncation epilogue writes a valid PPCR_PC; interpreter resumes from there.
-				 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — Gate 2 was overcautious. */
+				/* GATE 2: execute only complete native blocks. Incomplete blocks are
+				 * compile-time probes only; skip_jit lets the interpreter execute the
+				 * first uncompiled/fallback-only instruction at the original PC. */
 				if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.complete) {
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
