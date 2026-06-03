@@ -1165,13 +1165,17 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		case 136: /* subfe rD,rA,rB (rD = ~rA + rB + CA) */
 			emit_load_gpr(RTMP0, ra);
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN (NOT rA) */
+			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN Wd, Wm → ~rA */
+			emit32(0xD3407C00 | (RTMP0 << 5) | RTMP0);  /* UXTW Xd, Wn → zero-extend to 64 */
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS ~rA + rB */
+			emit32(0xD3407C00 | (RTMP1 << 5) | RTMP1);  /* UXTW Xd, Wn → zero-extend to 64 */
+			emit32(0x8B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD Xd, Xn, Xm (64-bit) */
 			emit_read_xer_ca(RTMP1);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* + CA */
+			emit32(0x8B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD Xd, Xn, Xm (64-bit) */
+			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP1);  /* LSR Xd, Xn, #32 → carry in RTMP1[0] */
+			emit32(0x39000000 | (PPCR_XER_CA << 10) | (RSTATE << 5) | RTMP1); /* STRB CA */
+			emit32(0x2A0003E0 | (RTMP0 << 16) | RTMP0); /* MOV Wd, Wn (truncate to 32) */
 			emit_store_gpr(RTMP0, rd);
-			emit_write_xer_ca_from_carry();
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 10: /* addc rD,rA,rB (set CA) */
@@ -1184,15 +1188,16 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		case 138: /* adde rD,rA,rB (rD = rA + rB + CA) */
 			emit_load_gpr(RTMP0, ra);
+			emit32(0xD3407C00 | (RTMP0 << 5) | RTMP0);  /* UXTW Xd, Wn → zero-extend to 64 */
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS rA+rB */
-			/* Now add CA: read XER.CA, add it */
-			emit32(0xD53B4200 | RTMP2); /* MRS NZCV (save carry from ADDS) */
+			emit32(0xD3407C00 | (RTMP1 << 5) | RTMP1);  /* UXTW Xd, Wn → zero-extend to 64 */
+			emit32(0x8B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD Xd, Xn, Xm (64-bit) */
 			emit_read_xer_ca(RTMP1);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD carry-in */
+			emit32(0x8B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD Xd, Xn, Xm (64-bit) */
+			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP1);  /* LSR Xd, Xn, #32 → carry in RTMP1[0] */
+			emit32(0x39000000 | (PPCR_XER_CA << 10) | (RSTATE << 5) | RTMP1); /* STRB CA */
+			emit32(0x2A0003E0 | (RTMP0 << 16) | RTMP0); /* MOV Wd, Wn (truncate to 32) */
 			emit_store_gpr(RTMP0, rd);
-			/* Write new CA: set if either ADDS or the CA addition overflowed */
-			emit_write_xer_ca_from_carry();
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 234: /* addme rD,rA (rD = rA + CA - 1, set CA) */
