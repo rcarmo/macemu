@@ -889,6 +889,7 @@ int main(int argc, char **argv)
 	// If a large range fails, try smaller sub-ranges (64MB chunks).
 	{
 		struct { uintptr mac_start; size_t size; const char *name; bool fill_ff; } io_ranges[] = {
+			{ 0x48000000, 0x02000000, "I/O-48", true },           // ROM/board probe alias; empty bus reads as 0xFF
 			{ 0x50000000, 0x0F000000, "I/O", false },             // Mac I/O (VIA, SCSI, ASC at 0x50Fxxxxx)
 			{ 0x5F000000, 0x01000000, "I/O-hi", false },          // Machine config registers (0x5ffffffc)
 			{ 0xE0000000, 0x10000000, "NuBus-super", true },      // Super-slot probe space; empty slots read as 0xFF

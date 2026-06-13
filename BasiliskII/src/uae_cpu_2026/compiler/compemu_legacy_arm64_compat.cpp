@@ -1855,6 +1855,47 @@ extern "C" void jit_op_unpk(void)
     }
 }
 
+/* --- BFFFO helper --- */
+extern "C" void jit_op_bfffo(void)
+{
+    /* Bit Field Find First One.
+     * jit_exception = extension word
+     * scratchregs[0] = effective address for memory EA, or reg number +
+     *                  0x80000000 for Dn source.
+     */
+    const uae_u32 ext = regs.jit_exception;
+    const uae_u32 ea_info = regs.scratchregs[0];
+    uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
+    const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
+    uae_u32 tmp;
+
+    if (ea_info & 0x80000000u) {
+        const int src_reg = ea_info & 7;
+        offset &= 0x1f;
+        const uae_u32 src = regs.regs[src_reg];
+        tmp = offset ? ((src << offset) | (src >> (32 - offset))) : src;
+    } else {
+        uae_u32 bdata[2];
+        uae_u32 addr = ea_info + (offset >> 3);
+        tmp = get_bitfield(addr, bdata, offset, width);
+    }
+
+    SET_NFLG(((uae_s32)tmp) < 0 ? 1 : 0);
+    tmp >>= (32 - width);
+    SET_ZFLG(tmp == 0);
+    SET_VFLG(0);
+    SET_CFLG(0);
+
+    uae_u32 mask = 1u << (width - 1);
+    while (mask) {
+        if (tmp & mask)
+            break;
+        mask >>= 1;
+        offset++;
+    }
+    regs.regs[(ext >> 12) & 7] = (uae_u32)offset;
+}
+
 /* --- BFINS helper --- */
 extern "C" void jit_op_bfins(void)
 {
@@ -2121,7 +2162,9 @@ extern "C" void jit_op_cinva(void)
 
 extern "C" void jit_op_cpusha(void)
 {
-    /* CPUSHA: Cache push all — no-op in emulation */
+    /* CPUSH*: guest cache maintenance. Host-side translated code must be
+       invalidated just like the SIGILL fallback path did for CPUSHA. */
+    FlushCodeCache(NULL, 0);
 }
 
 /* --- TRAPcc helper --- */

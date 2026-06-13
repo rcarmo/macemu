@@ -469,9 +469,14 @@ void m68k_do_compile_execute(void)
 	static bool use_sync_ticks = false;
 	static bool sync_ticks_init = false;
 	if (!sync_ticks_init) {
-		use_sync_ticks = getenv("B2_JIT_SYNC_TICKS") && getenv("B2_JIT_SYNC_TICKS")[0] == '1';
+		const char *sync_env = getenv("B2_JIT_SYNC_TICKS");
+		/* ARM64 full-JIT cannot safely let the async 60Hz tick thread mutate
+		   emulator state while generated code has live register/flag state.
+		   Use deterministic dispatcher-driven ticks by default; allow
+		   B2_JIT_SYNC_TICKS=0 only for diagnosis. */
+		use_sync_ticks = !(sync_env && sync_env[0] == '0');
 		if (use_sync_ticks)
-			fprintf(stderr, "JIT: synchronous tick model enabled\n");
+			fprintf(stderr, "JIT: synchronous tick model enabled (env=%s)\n", sync_env ? sync_env : "default");
 		sync_ticks_init = true;
 	}
 	unsigned long tick_counter = 0;

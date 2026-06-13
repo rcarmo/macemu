@@ -3308,10 +3308,31 @@ gen_opcode (unsigned int opcode)
      case i_BFCHG:
      case i_BFEXTS:
      case i_BFCLR:
-     case i_BFFFO:
      case i_BFSET:
-	/* BFSET: rare — keep as interpreter fallback */
+	/* Rare bitfield ops — keep as interpreter fallback until required. */
 	failure;
+	break;
+
+     case i_BFFFO:
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* Helper sets flags in regflags; end the block after it so the next
+	   compiled block reloads the correct CCR state. */
+	isjump;
+	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
+	if (curi->dmode == Dreg) {
+	    comprintf("\t{ int ea_enc = scratchie++;\n");
+	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
+	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
+	} else {
+	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
+	}
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_bfffo);\n");
+#else
+	failure;
+#endif
 	break;
 
      case i_BFINS:
@@ -3475,7 +3496,10 @@ gen_opcode (unsigned int opcode)
      case i_CPUSHP:
      case i_CPUSHA:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	failure;  /* cache ops are no-ops, let interpreter handle */
+	isjump;
+	comprintf("\tdont_care_flags();\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_cpusha);\n");
 #else
 	isjump;
 	failure;
