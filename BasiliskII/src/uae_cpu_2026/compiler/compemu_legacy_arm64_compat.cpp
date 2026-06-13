@@ -1131,21 +1131,21 @@ jit_pctrace_done:
 		if (verify_this_block)
 			jit_block_verify_entry_capture(verify_block_pc);
 #endif
+		int maxrun_limit = MAXRUN;
+		{
+			static int env_maxrun = -1;
+			if (env_maxrun < 0) {
+				const char *env = getenv("B2_JIT_MAXRUN");
+				env_maxrun = (env && *env) ? atoi(env) : MAXRUN;
+			}
+			maxrun_limit = env_maxrun;
+		}
 		for (;;) {
 			pc_hist[blocklen++].location = (uae_u16 *)regs.pc_p;
 			uae_u32 opcode = GET_OPCODE;
 			(*cpufunctbl[opcode])(opcode);
 			cpu_check_ticks();
 			total_cycles += 4 * CYCLE_UNIT;
-			int maxrun_limit = MAXRUN;
-			{
-				static int env_maxrun = -1;
-				if (env_maxrun < 0) {
-					const char *env = getenv("B2_JIT_MAXRUN");
-					env_maxrun = (env && *env) ? atoi(env) : MAXRUN;
-				}
-				maxrun_limit = env_maxrun;
-			}
 			bool must_end = __atomic_load_n(&regs.spcflags, __ATOMIC_ACQUIRE) || blocklen >= maxrun_limit;
 			if (!must_end && end_block(opcode)) {
 				uintptr new_pcp = (uintptr)regs.pc_p;
