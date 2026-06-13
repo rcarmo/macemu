@@ -6,7 +6,7 @@ cpu 4
 fpu true
 jit true
 jitfpu false
-jitcachesize 32768
+jitcachesize 131072
 screen win/640/480
 displaycolordepth 8
 nosound true

@@ -170,7 +170,7 @@ cpu 4
 fpu false
 jit $JIT
 jitfpu false
-jitcachesize ${B2_JIT_CACHE_SIZE:-32768}
+jitcachesize ${B2_JIT_CACHE_SIZE:-131072}
 screen win/640/480
 $AUDIO_PREF
 nocdrom true

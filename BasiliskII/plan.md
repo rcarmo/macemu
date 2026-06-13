@@ -210,9 +210,10 @@ Turn current ad hoc direct chaining into an explicit policy layer that can later
 
 **Started, still experimental.**
 
-An opt-in ARM64 direct-chain experiment is now wired to the Phase-1 edge summaries:
+An opt-in ARM64 direct-chain experiment is wired to the Phase-1 edge summaries:
 
 - `B2_JIT_ENABLE_STABLE_DIRECT_EDGES=1`
+- `B2_JIT_STABLE_DIRECT_ROM_ONLY=1` remains the AArch64 default safety bound when the experiment is enabled
 - stable-edge summaries are carried across recompiles
 - constant-successor chain patching can prefer the target block's real direct handler for source edges that were previously observed to be stable
 - dependency patching preserves source-edge direct preference when the target block is rebuilt or invalidated
@@ -221,7 +222,7 @@ This is deliberately narrow:
 
 - default behavior stays contract-first / validated-first
 - only explicit, stable, profiled edges are eligible
-- broad promotion policy is still deferred until ROM/runtime evidence improves
+- broad RAM/desktop promotion policy is still deferred until ROM/runtime evidence improves
 
 ### Acceptance
 

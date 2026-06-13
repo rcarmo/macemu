@@ -17,7 +17,7 @@ This audit identified **27 optimization opportunities** across 7 subsystems. **1
 
 Estimated combined speedup from the **implemented** changes: **30–55%** on Raspberry Pi. Remaining items could add another 15–30%.
 
-**2026-06-13 ARM64 JIT performance lane:** Full-JIT correctness is now strict-clean and default (`JIT-STATUS.md`, commit `980a0451`). The next 2×/CPU-load target should be treated as a measured optimization tranche, not a correctness bring-up tranche. The first reviewed hot spots are dispatch/runtime overhead: unconditional diagnostic `stderr` in the AArch64 compile/dispatch path, conservative validated chaining on most block exits, and the still-noop real VNC backend that prevents desktop performance evidence. Keep strict marker checks (`JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, `bad_pcp`) mandatory after every speed change.
+**2026-06-13 ARM64 JIT performance lane:** Full-JIT correctness is now strict-clean and default (`JIT-STATUS.md`, commit `980a0451`). The 2×/CPU-load target is a measured optimization tranche, not a correctness bring-up tranche. First experiments showed 32768KB translation-cache churn (18 hard flushes in a 20s ROM/headless profile window versus 2 with 131072KB), so the default full-JIT harness/QA cache has been raised to 131072KB. Apparently low-risk runtime-output and stable-edge direct-chain changes can alter timing enough to expose strict marker regressions, so they remain investigation items rather than defaults. Keep strict marker checks (`JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, `bad_pcp`) mandatory after every speed change; desktop CPU-load claims still require real VNC/display evidence.
 
 ---
 

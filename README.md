@@ -202,7 +202,8 @@ The build produces `BasiliskII` in `src/Unix/`.
   `B2_JIT_MAX_OPTLEV=1` to fall back to interpreter-only JIT dispatch.
 - Headless ROM proof harnesses intentionally use a small 8MB RAM footprint for
   deterministic stress. Desktop/VNC QA should use 64MB (`ramsize 67108864`) and
-  keep `jitcachesize 32768` unless cache-churn evidence says otherwise.
+  `jitcachesize 131072`; 32768KB runs showed repeated hard translation-cache
+  flushes under the full-JIT ROM/headless workload.
 
 **Running:**
 ```bash
@@ -214,6 +215,8 @@ The build produces `BasiliskII` in `src/Unix/`.
 | Variable | Default | Description |
 |---|---|---|
 | `B2_JIT_MAX_OPTLEV` | `2` | Max JIT optimization level (0=interpreter, 1=JIT dispatch, 2=native codegen) |
+| `B2_JIT_ENABLE_STABLE_DIRECT_EDGES` | `0` | Opt-in profiled ROM-only direct-edge promotion experiment |
+| `B2_JIT_STABLE_DIRECT_ROM_ONLY` | `1` on AArch64 | Restrict stable direct-edge promotion to ROM-to-ROM edges |
 | `B2_JIT_MANAGED_IRQ` | `0` | Enable managed IRQ delivery model (recommended: `1`) |
 
 **VNC server:**

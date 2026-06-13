@@ -31,14 +31,14 @@ cpu 4
 fpu false
 jit true
 jitfpu false
-jitcachesize ${B2_JIT_CACHE_SIZE:-32768}
+jitcachesize ${B2_JIT_CACHE_SIZE:-131072}
 screen win/640/480
 nosound true
 nocdrom true
 ignoresegv true
 EOF
 
-echo "Headless Mac: optlev=2, force-translate, cache=${B2_JIT_CACHE_SIZE:-32768}KB, timeout=${SECS}s" >&2
+echo "Headless Mac: optlev=2, force-translate, cache=${B2_JIT_CACHE_SIZE:-131072}KB, timeout=${SECS}s" >&2
 env HOME="$W" \
     B2_ROM_HARNESS=999999 \
     B2_JIT_FORCE_TRANSLATE=1 \
