@@ -1136,7 +1136,7 @@ LOWFUNC(NONE,WRITE,2,raw_fp_from_exten_mr,(RR4 adr, FR s))
 {
 	FMOV_xd(REG_WORK1, s);
 	FCMP_d0(s);
-	ADD_xxx(REG_WORK4, adr, R_MEMSTART);
+	ADD_xxwEX(REG_WORK4, R_MEMSTART, adr, EX_UXTW);
 
 	uae_u32* branchadd_iszero = (uae_u32*)get_target();
 	BEQ_i(0); // iszero
@@ -1187,7 +1187,7 @@ LENDFUNC(NONE,WRITE,2,raw_fp_from_exten_mr,(RR4 adr, FR s))
 
 LOWFUNC(NONE,READ,2,raw_fp_to_exten_rm,(FW d, RR4 adr))
 {
-	ADD_xxx(REG_WORK3, adr, R_MEMSTART);
+	ADD_xxwEX(REG_WORK3, R_MEMSTART, adr, EX_UXTW);
 
 	ADD_xxi(REG_WORK1, REG_WORK3, 4);
 	LDR_xXi(REG_WORK1, REG_WORK1, 0);

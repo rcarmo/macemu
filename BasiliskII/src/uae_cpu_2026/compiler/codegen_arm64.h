@@ -447,11 +447,11 @@
 
 #define LDR_dXi(Dt,Xn,i)      _W((0b1111110101 << 22) | (((i)/8) << 10) | ((Xn) << 5) | (Dt))
 #define LDR_sXi(St,Xn,i)      _W((0b1011110101 << 22) | (((i)/4) << 10) | ((Xn) << 5) | (St))
-#define LDR_dXx(Dt,Xn,Xm)     _W((0b11111100011 << 21) | ((Xm) << 16) | (0b011010 << 10) | ((Xn) << 5) | (Dt))
+#define LDR_dXx(Dt,Xn,Xm)     _W((0b11111100011 << 21) | ((Xn) << 16) | (EX_UXTW << 13) | (0 << 12) | (0b10 << 10) | ((Xm) << 5) | (Dt))
 
 #define STR_dXi(Dt,Xn,i)      _W((0b1111110100 << 22) | (((i)/8) << 10) | ((Xn) << 5) | (Dt))
 #define STR_sXi(St,Xn,i)      _W((0b1011110100 << 22) | (((i)/4) << 10) | ((Xn) << 5) | (St))
-#define STR_dXx(Dt,Xn,Xm)     _W((0b11111100001 << 21) | ((Xm) << 16) | (0b011010 << 10) | ((Xn) << 5) | (Dt))
+#define STR_dXx(Dt,Xn,Xm)     _W((0b11111100001 << 21) | ((Xn) << 16) | (EX_UXTW << 13) | (0 << 12) | (0b10 << 10) | ((Xm) << 5) | (Dt))
 #define FMOV_dd(Dd,Dn)        _W((0b00011110011 << 21) | (0b00000010000 << 10) | ((Dn) << 5) | (Dd))
 #define FMOV_ss(Sd,Sn)        _W((0b00011110001 << 21) | (0b00000010000 << 10) | ((Sn) << 5) | (Sd))
 #define FMOV_dx(Dd,Xn)        _W((0b10011110011 << 21) | (0b00111000000 << 10) | ((Xn) << 5) | (Dd))

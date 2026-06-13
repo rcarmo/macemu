@@ -5028,8 +5028,12 @@ MIDFUNC(2,jnf_MOVE16,(RR4 d, RR4 s))
 	CLEAR_LOW4_xx(REG_WORK3, s);
 	CLEAR_LOW4_xx(REG_WORK4, d);
 
-	ADD_xxx(REG_WORK3, REG_WORK3, R_MEMSTART);
-	ADD_xxx(REG_WORK4, REG_WORK4, R_MEMSTART);
+	/* CLEAR_LOW4_xx is a 64-bit logical op and can preserve dirty high
+	   bits from virtual 32-bit address registers.  Build host pointers with
+	   an explicit UXTW extension so MOVE16 cannot sign/garbage-extend guest
+	   addresses into probes such as 0xfffff03b0000. */
+	ADD_xxwEX(REG_WORK3, R_MEMSTART, REG_WORK3, EX_UXTW);
+	ADD_xxwEX(REG_WORK4, R_MEMSTART, REG_WORK4, EX_UXTW);
 
 	LDP_xxXi(REG_WORK1, REG_WORK2, REG_WORK3, 0);
 	STP_xxXi(REG_WORK1, REG_WORK2, REG_WORK4, 0);

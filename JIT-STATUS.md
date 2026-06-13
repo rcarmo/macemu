@@ -162,7 +162,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
 **JIT optlev=0:** ✅ Full boot, zero SEGVs
-**JIT optlev=2:** ✅ Full boot, zero SEGVs (mid-block branch side-exit fix applied)
+**JIT optlev=2:** ✅ Full-JIT default. Strict 300s ROM/steady-state soak reached RAM execution with no `JIT_FALLBACK`, no `SEGV_SKIP`, no `JITBLOCKVERIFY`, no `op=8c4c`, and no `bad_pcp` markers (2026-06-13).
 **JIT harness:** ✅ 301/301 vectors pass (score=100)
 
 See `BasiliskII/src/uae_cpu_2026/compiler/` for the 68K → AArch64 JIT.
@@ -183,6 +183,16 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 ### Test Harness (68K)
 
 **301 total vectors, all risky, score=100**
+
+### Recent bug fixes (2026-06)
+
+- **Full-JIT strict boot/soak** (2026-06-13): invalid opcode trap slots now use a native helper
+  barrier instead of the interpreter fallback path, AArch64 direct FPU indexed memory helpers
+  zero-extend 32-bit guest addresses, NuBus super-slot probes are mapped and filled with the
+  empty-slot `0xFF` bus value, and translation-cache exhaustion now performs a hard cache reset
+  instead of lazily continuing past the high ARM64 mmap. The strict preserved-log run
+  `/workspace/tmp/basiliskii-fulljit-validation/20260613T074106Z-strict-defaultmaxrun-300s`
+  reached `DC[64460000] pc=00156f94` with zero fallback/SEGV/verifier/bad-PC markers.
 
 ### Recent bug fixes (2026-05)
 

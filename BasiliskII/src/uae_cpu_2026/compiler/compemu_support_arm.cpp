@@ -967,6 +967,7 @@ extern "C" void jit_trace_add(uae_u32 pc, uae_u32 opcode);
 extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode);
 static void op_movea_l_postinc_an_comp_ff(uae_u32 opcode);
 static void op_aline_trap_comp_ff(uae_u32 opcode);
+static void op_illegal_trap_comp_ff(uae_u32 opcode);
 static void op_emulop_comp_ff(uae_u32 opcode);
 static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, uae_u32 arg1, uae_u32 arg2, bool has_arg2);
 
@@ -3937,6 +3938,11 @@ static void jit_runtime_aline_trap(uae_u32 opcode)
     Exception(0xA, 0);
 }
 
+static void jit_runtime_illegal_trap(uae_u32 opcode)
+{
+    op_illg(opcode);
+}
+
 static void init_comp(void);  /* forward declaration */
 
 static void op_emulop_comp_ff(uae_u32 opcode)
@@ -3973,6 +3979,16 @@ static void op_aline_trap_comp_ff(uae_u32 opcode)
        helper-updated regs.pc_p so runtime resumes from the exception vector
        or trap-established return path without interpreter fallback. */
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_aline_trap,
+        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
+}
+
+static void op_illegal_trap_comp_ff(uae_u32 opcode)
+{
+    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    /* Invalid opcode slots are architectural traps, not permission to drop
+       into the interpreter. This also covers ROM declaration-table probes that
+       can land on invalid words while preserving a fully coherent PC triple. */
+    jit_emit_runtime_helper_barrier((uintptr)jit_runtime_illegal_trap,
         (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
 }
 
@@ -4717,8 +4733,19 @@ uae_u32 get_jitted_size(void)
 static uint8 *do_alloc_code(uint32 size, int depth)
 {
 	UNUSED(depth);
+#if defined(CPU_AARCH64) && defined(__linux__)
+	/* AArch64 code pointers are 64-bit clean and helper calls use BLR.
+	   Do not allocate JIT code through the low-4GB scanner: in direct-addressing
+	   builds, low host addresses alias the emulated Mac address space
+	   (host = MEMBaseDiff + mac), so ROM/NuBus probes can read or fault on the
+	   JIT cache. Keep generated code in a normal high host mapping instead. */
+	void *code = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+		MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	return code == MAP_FAILED ? NULL : (uint8 *)code;
+#else
 	uint8* code = (uint8 *)vm_acquire_code(size, VM_MAP_DEFAULT | VM_MAP_32BIT);
 	return code == VM_MAP_FAILED ? NULL : code;
+#endif
 }
 
 static inline uint8 *alloc_code(uint32 size)
@@ -5486,13 +5513,21 @@ void build_comp(void)
             nfcompfunctbl[cft_map(opcode)] = op_fullsr_mv2sr_w_comp_ff;
         }
     }
-    /* Resolve A-line startup traps in L2 instead of exact interpreter fallback.
-       They are real control-flow/trap ops: run op_illg()/Exception() through a
-       runtime helper and end the block on the helper-updated regs.pc_p. */
+    /* Resolve architectural traps in L2 instead of exact interpreter fallback.
+       A-line has its own helper for clarity; all other invalid opcode slots use
+       op_illg() through a native helper barrier so full-JIT mode never needs a
+       local interpreter fallback for trap delivery. */
     for (opcode = 0xa000; opcode <= 0xafff; opcode++) {
         compfunctbl[cft_map(opcode)] = op_aline_trap_comp_ff;
         nfcompfunctbl[cft_map(opcode)] = op_aline_trap_comp_ff;
         prop[cft_map(opcode)].cflow = fl_trap;
+    }
+    for (opcode = 0; opcode < 65536; opcode++) {
+        if ((opcode & 0xf000) != 0xa000 && table68k[opcode].mnemo == i_ILLG) {
+            compfunctbl[cft_map(opcode)] = op_illegal_trap_comp_ff;
+            nfcompfunctbl[cft_map(opcode)] = op_illegal_trap_comp_ff;
+            prop[cft_map(opcode)].cflow = fl_trap;
+        }
     }
     /* EMUL_OP (0x71xx): compiled handler that replicates the interpreter
        fallback path exactly — flush, init_comp, PC triple, cputbl call. */
@@ -5767,7 +5802,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 
         redo_current_block = 0;
         if (current_compile_p >= MAX_COMPILE_PTR)
-            flush_icache_lazy(3);
+            flush_icache_hard(3); /* code cache full: lazy flush does not rewind current_compile_p */
 
         alloc_blockinfos();
 
@@ -6368,8 +6403,10 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         static int fail_log = 0;
                         if (fail_log < 200) {
                             fail_log++;
-                            fprintf(stderr, "JIT_FALLBACK op=%04x pc=%08x comptbl=%p optlev=%d allow_l2=%d\n",
+                            fprintf(stderr, "JIT_FALLBACK op=%04x pc=%08x block=%08x i=%d/%d host=%p comptbl=%p optlev=%d allow_l2=%d\n",
                                 (unsigned)opcode, (unsigned)op_m68k_pc,
+                                (unsigned)block_m68k_pc, i, blocklen,
+                                (void*)pc_hist[i].location,
                                 (void*)(comptbl ? comptbl[cft_map(opcode)] : NULL),
                                 optlev, (int)allow_l2);
                             fflush(stderr);
@@ -6791,9 +6828,12 @@ endblock_done:
         raise_in_cl_list(bi);
         bi->nexthandler = current_compile_p;
 
-        /* We will flush soon, anyway, so let's do it now */
+        /* Code cache exhausted: reclaim the buffer.  A lazy flush only moves
+           block metadata to checksum mode and deliberately does not reset
+           current_compile_p, so using it here lets the compiler write past the
+           high ARM64 mmap and turns cache exhaustion into SEGV_SKIP noise. */
         if (current_compile_p >= MAX_COMPILE_PTR)
-            flush_icache_lazy(3);
+            flush_icache_hard(3);
 
         bi->status = BI_ACTIVE;
 #if defined(CPU_AARCH64)

@@ -888,10 +888,11 @@ int main(int argc, char **argv)
 	// Use MAP_FIXED_NOREPLACE to avoid clobbering existing heap/JIT mappings.
 	// If a large range fails, try smaller sub-ranges (64MB chunks).
 	{
-		struct { uintptr mac_start; size_t size; const char *name; } io_ranges[] = {
-			{ 0x50000000, 0x0F000000, "I/O" },     // Mac I/O (VIA, SCSI, ASC at 0x50Fxxxxx)
-			{ 0x5F000000, 0x01000000, "I/O-hi" },  // Machine config registers (0x5ffffffc)
-			{ 0xF0000000, 0x10000000, "NuBus" },   // NuBus/video
+		struct { uintptr mac_start; size_t size; const char *name; bool fill_ff; } io_ranges[] = {
+			{ 0x50000000, 0x0F000000, "I/O", false },             // Mac I/O (VIA, SCSI, ASC at 0x50Fxxxxx)
+			{ 0x5F000000, 0x01000000, "I/O-hi", false },          // Machine config registers (0x5ffffffc)
+			{ 0xE0000000, 0x10000000, "NuBus-super", true },      // Super-slot probe space; empty slots read as 0xFF
+			{ 0xF0000000, 0x10000000, "NuBus", false },           // NuBus/video
 		};
 		for (auto &r : io_ranges) {
 			void *target = (void*)(MEMBaseDiff + r.mac_start);
@@ -903,9 +904,12 @@ int main(int argc, char **argv)
 				fprintf(stderr, "MEM: failed to map %s at %p size=%lx: %s\n",
 					r.name, target, (unsigned long)r.size, strerror(errno));
 			} else {
-				fprintf(stderr, "MEM: mapped %s at %p-%p (Mac 0x%08lx-0x%08lx)\n",
+				if (r.fill_ff)
+					memset(result, 0xFF, r.size);
+				fprintf(stderr, "MEM: mapped %s at %p-%p (Mac 0x%08lx-0x%08lx)%s\n",
 					r.name, result, (void*)((uintptr)result + r.size),
-					(unsigned long)r.mac_start, (unsigned long)(r.mac_start + r.size));
+					(unsigned long)r.mac_start, (unsigned long)(r.mac_start + r.size),
+					r.fill_ff ? " filled 0xFF" : "");
 			}
 		}
 
@@ -951,13 +955,25 @@ int main(int argc, char **argv)
 			uintptr_t reserved_end  = MEMBaseDiff + 0x0A014000UL; // end of vm_alloc RESERVED
 			uintptr_t unmapped_start= MEMBaseDiff + 0x0A815000UL; // after JIT cache
 
-			// Part 1: mprotect the PROT_NONE reserved region → R/W, fill 0xFF
-			if (mprotect((void *)lo_host_base, reserved_end - lo_host_base,
-			             PROT_READ | PROT_WRITE) == 0) {
-				memset((void *)lo_host_base, 0xFF, reserved_end - lo_host_base);
+			// Part 1: map/fill the low head → R/W, fill 0xFF.
+			// Older code assumed this range was already reserved PROT_NONE and only
+			// needed mprotect(). On current AArch64 direct-addressing runs with
+			// smaller RAM, it can be fully unmapped; mprotect() then fails with
+			// ENOMEM and ROM NuBus reads fall into SIGSEGV-skip corruption paths.
+			size_t head_size = reserved_end - lo_host_base;
+			void *head = mmap((void *)lo_host_base, head_size,
+				PROT_READ | PROT_WRITE,
+				MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED_NOREPLACE,
+				-1, 0);
+			if (head != MAP_FAILED) {
+				memset(head, 0xFF, head_size);
+				fprintf(stderr, "MEM: NuBus-lo 0x08000000-0x0A013FFF filled 0xFF (mmap)\n");
+			} else if (errno == EEXIST &&
+			           mprotect((void *)lo_host_base, head_size, PROT_READ | PROT_WRITE) == 0) {
+				memset((void *)lo_host_base, 0xFF, head_size);
 				fprintf(stderr, "MEM: NuBus-lo 0x08000000-0x0A013FFF filled 0xFF (mprotect)\n");
 			} else {
-				fprintf(stderr, "MEM: NuBus-lo mprotect failed: %s\n", strerror(errno));
+				fprintf(stderr, "MEM: NuBus-lo head map/protect failed: %s\n", strerror(errno));
 			}
 			// (JIT cache gap 0x0A014000-0x0A815000 is skipped; JIT overwrites it)
 

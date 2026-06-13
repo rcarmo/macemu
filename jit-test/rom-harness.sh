@@ -15,8 +15,14 @@ SECS="${B2_TIMEOUT:-120}"
 [ -f "$ROM" ] || { echo "ROM not found: $ROM" >&2; exit 1; }
 [ -x "$BIN" ] || { echo "Binary not found: $BIN" >&2; exit 1; }
 
-W=$(mktemp -d /tmp/headless-mac-XXXXXX)
-trap 'rm -rf "$W"' EXIT
+LOG_ROOT="${B2_LOG_ROOT:-/workspace/tmp/basiliskii-rom-harness}"
+mkdir -p "$LOG_ROOT"
+W=$(mktemp -d "$LOG_ROOT/headless-mac-XXXXXX")
+if [ "${B2_KEEP_LOGS:-1}" = "1" ]; then
+  trap 'echo "LOGDIR '$W'" >&2' EXIT
+else
+  trap 'rm -rf "$W"' EXIT
+fi
 cat >"$W/prefs" <<EOF
 rom $ROM
 ramsize 8388608
@@ -25,14 +31,14 @@ cpu 4
 fpu false
 jit true
 jitfpu false
-jitcachesize 8192
+jitcachesize ${B2_JIT_CACHE_SIZE:-32768}
 screen win/640/480
 nosound true
 nocdrom true
 ignoresegv true
 EOF
 
-echo "Headless Mac: optlev=2, force-translate, timeout=${SECS}s" >&2
+echo "Headless Mac: optlev=2, force-translate, cache=${B2_JIT_CACHE_SIZE:-32768}KB, timeout=${SECS}s" >&2
 env HOME="$W" \
     B2_ROM_HARNESS=999999 \
     B2_JIT_FORCE_TRANSLATE=1 \
@@ -49,6 +55,10 @@ PC=$(echo "$LAST" | sed -n 's/.* pc=\([0-9a-f]*\) .*/\1/p')
 SR=$(echo "$LAST" | sed -n 's/.* sr=\([0-9a-f]*\) .*/\1/p')
 SCSI=$(grep -c SCSIGet "$W/err" || true)
 SEGV=$(grep -c SEGV_SKIP "$W/err" || true)
+FALLBACK=$(grep -c JIT_FALLBACK "$W/err" || true)
+VERIFY=$(grep -c JITBLOCKVERIFY "$W/err" || true)
+BADPC=$(grep -c bad_pcp "$W/err" || true)
+OP8C4C=$(grep -c 'op=8c4c' "$W/err" || true)
 
 IN_RAM=no
 if [ -n "$PC" ]; then
@@ -62,10 +72,20 @@ grep '^DC\[' "$W/err" | tail -5 >&2
 for m in "FORCE_TRANSLATE" "max_optlev" "PatchROM ok" SCSIGet set_dsk_err DiskControl; do
   grep -q "$m" "$W/err" 2>/dev/null && echo "  ✅ $m" >&2 || echo "  ❌ $m" >&2
 done
-echo "pc=${PC:-?} sr=${SR:-?} dc=${DC_NUM:-0} in_ram=$IN_RAM scsi=$SCSI segv=$SEGV rc=$RC" >&2
+echo "pc=${PC:-?} sr=${SR:-?} dc=${DC_NUM:-0} in_ram=$IN_RAM scsi=$SCSI segv=$SEGV fallback=$FALLBACK verify=$VERIFY badpc=$BADPC op8c4c=$OP8C4C rc=$RC" >&2
+echo "raw logs: $W" >&2
 
 echo "METRIC headless_pc=${PC:-?}"
 echo "METRIC headless_dc=${DC_NUM:-0}"
 echo "METRIC headless_in_ram=$IN_RAM"
 echo "METRIC headless_scsi=$SCSI"
 echo "METRIC headless_segv=$SEGV"
+echo "METRIC headless_fallback=$FALLBACK"
+echo "METRIC headless_verify=$VERIFY"
+echo "METRIC headless_badpc=$BADPC"
+echo "METRIC headless_op8c4c=$OP8C4C"
+
+if [ "$FALLBACK" -ne 0 ] || [ "$SEGV" -ne 0 ] || [ "$VERIFY" -ne 0 ] || [ "$BADPC" -ne 0 ] || [ "$OP8C4C" -ne 0 ]; then
+  echo "FAIL: full-JIT strict marker check failed; inspect raw logs in $W" >&2
+  exit 1
+fi
