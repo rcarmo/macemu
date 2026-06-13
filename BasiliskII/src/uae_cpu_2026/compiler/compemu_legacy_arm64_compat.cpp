@@ -814,7 +814,7 @@ static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
 	regs.pc_p = p + 4;
 }
 
-static ALWAYS_INLINE void jit_install_fast_interpreter_overrides(void)
+static void jit_install_fast_interpreter_overrides(void)
 {
 	static bool installed = false;
 	if (installed)
@@ -828,7 +828,6 @@ static ALWAYS_INLINE void jit_install_fast_interpreter_overrides(void)
 void exec_nostats(void)
 {
 #if defined(CPU_AARCH64)
-	jit_install_fast_interpreter_overrides();
 	if (jit_diag_enabled()) {
 		jit_diag_exec_nostats_calls++;
 		jit_diag_dispatch_count++;
@@ -937,7 +936,6 @@ static void exec_nostats_limited(int maxrun_limit)
 void execute_normal(void)
 {
 #if defined(CPU_AARCH64)
-	jit_install_fast_interpreter_overrides();
 	if (jit_diag_enabled()) {
 		jit_diag_execute_normal_calls++;
 		jit_diag_dispatch_count++;

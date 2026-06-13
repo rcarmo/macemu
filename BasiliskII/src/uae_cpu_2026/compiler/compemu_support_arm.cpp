@@ -5372,6 +5372,10 @@ static inline void reset_compop(int opcode)
     nfcompfunctbl[opcode] = NULL;
 }
 
+#if defined(CPU_AARCH64)
+static void jit_install_fast_interpreter_overrides(void);
+#endif
+
 void build_comp(void)
 {
     int i, j;
@@ -5388,6 +5392,10 @@ void build_comp(void)
     regs.raw_cputbl_count = raw_cputbl_count;
     regs.mem_banks = (uintptr)mem_banks;
     regs.cache_tags = (uintptr)cache_tags;
+
+#if defined(CPU_AARCH64)
+    jit_install_fast_interpreter_overrides();
+#endif
 
     jit_log("<JIT compiler> : building compiler function tables");
 
