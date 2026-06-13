@@ -876,6 +876,22 @@ void exec_nostats(void)
 	}
 }
 
+#if defined(CPU_AARCH64)
+static void exec_nostats_limited(int maxrun_limit)
+{
+	int run_count = 0;
+	if (maxrun_limit <= 0 || maxrun_limit > MAXRUN)
+		maxrun_limit = MAXRUN;
+	for (;;) {
+		uae_u32 opcode = GET_OPCODE;
+		(*cpufunctbl[opcode])(opcode);
+		cpu_check_ticks();
+		if (end_block(opcode) || SPCFLAGS_TEST(SPCFLAG_ALL) || ++run_count >= maxrun_limit)
+			return;
+	}
+}
+#endif
+
 void execute_normal(void)
 {
 #if defined(CPU_AARCH64)
@@ -939,6 +955,18 @@ void execute_normal(void)
 			regs.pc = safe_pc;
 			regs.pc_p = get_real_address(safe_pc, 0, sz_word);
 			regs.pc_oldp = regs.pc_p - safe_pc;
+		}
+	}
+	/* Zero-filled RAM probes are common during early ROM/RAM setup and are
+	   unsafe to cache as native code because the guest can later write real
+	   code there.  Avoid the expensive trace+compile step but preserve the
+	   current dispatch cadence by interpreting at most one MAXRUN-sized chunk
+	   and re-checking the first word on the next entry. */
+	{
+		uae_u32 fast_pc = get_virtual_address((uae_u8*)regs.pc_p);
+		if (fast_pc < (uae_u32)ROMBaseMac && *((const uae_u16*)regs.pc_p) == 0) {
+			exec_nostats_limited(MAXRUN);
+			return;
 		}
 	}
 #endif
