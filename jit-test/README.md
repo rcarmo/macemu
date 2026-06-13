@@ -32,7 +32,7 @@ For each test vector:
 
 ## Current deterministic vectors
 
-`run.sh` currently covers 189 vectors across:
+`run.sh` currently covers 301 vectors across:
 - Decode/dispatch sanity (`nop`, `nop_triplet`)
 - Bit manipulation boundary behavior (`bitops`, `bitops_chg`, high-bit immediate `bitops_highbit`, high-bit toggle `bitops_chg_highbit`)
 - Core arithmetic/data movement (`move` + `moveq_signext` + moveq edge sign-extension checks, `alu` + negative roundtrip check, `addi/subi` incl. byte/word/long plus byte/word/long-boundary-wrap checks, `quick_ops` incl. long-negative roundtrip + word+word-wrap+long-wrap+byte+byte-wrap+address-register variants, `compare` + `cmpi` size coverage for both non-zero and zero immediates plus negative byte/word/long boundary forms, `muldiv`, `movem`, `misc` + `swap_roundtrip`, `not` size forms (`not_sizes`) plus explicit NOT.W/NOT.B upper-bit preservation checks, `clr` size forms (`clr_sizes`) plus byte/word partial-clear upper-bit preservation checks, `neg` size forms (`neg_sizes`) plus explicit zero-input NEG size path, `flags` incl. OR/AND/EOR-CCR path, `exg`, `imm_logic` incl. byte+word+long variants plus explicit byte/word/long high-bit edge logic checks, `tst` size forms on negative, zero, and positive inputs)
@@ -60,3 +60,4 @@ Any invariant violation aborts with machine-parseable failure metrics (`infra_fa
 - No ROM patches, stub-region hacks, or RAM presets to mask bugs.
 - Keep outputs machine-parseable and numeric.
 - Keep vectors deterministic and bounded-time.
+- Pair performance changes with strict ROM marker checks: no `JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, or `bad_pcp` markers.

@@ -196,9 +196,13 @@ The build produces `BasiliskII` in `src/Unix/`.
 **Key build notes:**
 - LTO (`-flto=auto`) is intentionally disabled on AArch64 — it strips JIT
   gate checks that the compiler determines are "dead code" but are actually
-  needed at runtime.
+  needed at runtime. Non-AArch64 ARM/RPi packaging can still use LTO where the
+  backend is not affected by those AArch64 JIT gate checks.
 - The default JIT optimization level is L2 (native ARM64 codegen). Set
   `B2_JIT_MAX_OPTLEV=1` to fall back to interpreter-only JIT dispatch.
+- Headless ROM proof harnesses intentionally use a small 8MB RAM footprint for
+  deterministic stress. Desktop/VNC QA should use 64MB (`ramsize 67108864`) and
+  keep `jitcachesize 32768` unless cache-churn evidence says otherwise.
 
 **Running:**
 ```bash
@@ -225,6 +229,8 @@ vncport 5900
 The AArch64 JIT backend is under active development.
 
 **BasiliskII (68K):**
+- ✅ Full-JIT optlev=2 is the default ARM64 path after the 2026-06-13 strict preserved-log validation.
+- ✅ Strict 300s ROM/steady-state soak reached `DC[64460000] pc=00156f94` with no `JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, or `bad_pcp` markers.
 - ✅ Boots to Mac OS Finder desktop at JIT optlev=1 (interpreter dispatch)
 - ✅ Boots to Mac OS Finder desktop at JIT optlev=2 (native ARM64 codegen)
 - ✅ Speedometer 4.02 Graphics benchmark runs (score: 210.368 vs Mac Classic = 1.0)

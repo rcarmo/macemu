@@ -167,7 +167,9 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 See `BasiliskII/src/uae_cpu_2026/compiler/` for the 68K → AArch64 JIT.
 
-### BasiliskII QA status
+### BasiliskII performance/QA status
+
+The active post-correctness performance goal is to pursue a measured 2× JIT throughput improvement and lower host CPU load. Treat `980a0451` as the correctness baseline: performance changes must preserve the 301/301 opcode harness and the strict ROM marker contract. Initial review points at avoidable dispatch/runtime overhead (default diagnostic stderr in `m68k_do_compile_execute()` / compile traces), conservative block-exit validation on hot edges, and the need for real desktop/VNC captures before claiming CPU-load improvements in GUI workloads.
 
 BasiliskII now has a repository-visible end-to-end QA scaffold in `BasiliskII/qa/` plus shared emulator-neutral VNC story tooling in `qa/tests/vnc/`. The intended post-JIT validation path is:
 

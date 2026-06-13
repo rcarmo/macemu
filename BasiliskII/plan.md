@@ -34,7 +34,7 @@ What we already have:
   - `live.flags_are_important`
   - `needed_flags`
 - opcode equivalence harness at **301/301 pass**
-- ROM harness still **not green**, so whole-runtime contract work remains first priority
+- strict ROM/steady-state harness green as of 2026-06-13: `DC[64460000] pc=00156f94`, zero fallback/SEGV/verifier/bad-PC markers
 
 What is still missing:
 
@@ -127,7 +127,7 @@ Finish making block chaining safe enough that future performance work sits on to
 
 ### Current status
 
-**In progress.**
+**Complete for the strict-clean full-JIT baseline.** Keep this phase as a regression contract for future performance work.
 
 This tranche has already started with:
 

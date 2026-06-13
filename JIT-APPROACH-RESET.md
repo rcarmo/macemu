@@ -57,10 +57,10 @@ It is more specific:
 
 Current state is best described as:
 
-- `optlev=1`: viable
-- `optlev=2`: advancing, but still under active semantic stabilization
-- harness quality: strong
-- runtime contract maturity: incomplete
+- `optlev=1`: viable comparison/dispatch baseline
+- `optlev=2`: strict-clean full-JIT default as of 2026-06-13 (`980a0451`)
+- harness quality: strong (`301/301`, score 100, plus strict ROM marker checks)
+- runtime contract maturity: good enough for default full-JIT operation; keep contract checks mandatory while optimizing
 
 #### SheepShaver PPC AArch64 JIT
 
@@ -153,7 +153,7 @@ For BasiliskII 68K:
 5. **opcode equivalence harness**
    - proves exact semantic parity for targeted instruction classes
 6. **performance benchmark**
-   - only meaningful after the above are green
+   - now active after the strict-clean full-JIT baseline; must preserve the opcode and ROM marker contracts
 
 For SheepShaver PPC:
 

@@ -10,12 +10,13 @@ Unless a case overrides them, use these defaults:
 | Binary | `BasiliskII/src/Unix/BasiliskII` |
 | ROM | `/workspace/projects/rpi-basilisk2-sdl2-nox/Quadra800.ROM` |
 | Disk | `/workspace/fixtures/basilisk/images/HD200MB` |
-| RAM | `8388608` bytes |
+| ROM/headless RAM | `8388608` bytes |
+| Desktop/VNC RAM | `67108864` bytes |
 | Model ID | `14` (Quadra 800 class) |
 | CPU | `4` |
 | FPU | `false` |
 | JIT FPU | `false` |
-| JIT cache | `8192` KB |
+| JIT cache | `32768` KB |
 | Display smoke | `screen win/640/480`, `SDL_VIDEODRIVER=dummy` |
 | Desktop/VNC | `screen win/640/480`, `vncserver true`, `vncport 5900`, usually under Xvfb or SDL dummy if supported |
 | Audio smoke | `nosound true` or `SDL_AUDIODRIVER=dummy` |
@@ -39,7 +40,7 @@ Run before desktop/hardware QA:
 | `optlev0-rom-smoke` | JIT dispatch, interpreter codegen | Mixed dispatcher baseline without native optlev2 code | `jit true`; `B2_JIT_FORCE_OPTLEV0=1`; dummy video/audio | Harness reaches tick budget; no `bad pc_p`; no unexpected bus-error regression |
 | `optlev2-rom-smoke` | ARM64 optlev2 JIT | Primary native JIT smoke | `jit true`; `B2_JIT_FORCE_TRANSLATE=1`; `B2_JIT_MAX_OPTLEV=2` | JIT preflight passed; harness reaches tick budget; no `bad pc_p`; no emulator crash |
 | `optlev2-stable-rom-smoke` | optlev2 + stable-edge profiling | Verify stable direct-edge profiling remains safe | optlev2 env plus `B2_JIT_ENABLE_STABLE_DIRECT_EDGES=1`, `B2_JIT_STABLE_DIRECT_ROM_ONLY=1` | Same as optlev2 plus no stable-edge trace anomalies |
-| `optlev2-desktop-vnc` | optlev2 desktop QA | Boot known disk to Finder via VNC | known disk; VNC enabled; dummy audio; no network | Desktop screenshot captured; Finder responsive; app/control panel can launch |
+| `optlev2-desktop-vnc` | optlev2 desktop QA | Boot known disk to Finder via VNC | known disk; `ramsize 67108864`; `jitcachesize 32768`; VNC enabled; dummy audio; no network | Desktop screenshot captured; Finder responsive; app/control panel can launch |
 | `optlev2-desktop-soak` | optlev2 desktop soak | Timed stability window at desktop | same as desktop VNC; configurable soak duration | No emulator crash/hang; CPU/log anomalies recorded; screenshots before/after |
 | `optlev2-network-slirp` | optlev2 + slirp | Safe user-mode network attempt | `ether slirp`; VNC; dummy audio | Mac OS sees network interface or failure is documented with logs; attempt guest-to-host/local service connectivity |
 | `optlev2-audio-dummy` | optlev2 + SDL dummy audio | Headless audio smoke | `nosound false`; `SDL_AUDIODRIVER=dummy` | Boots without SDL audio crash; logs contain no fatal audio setup errors |

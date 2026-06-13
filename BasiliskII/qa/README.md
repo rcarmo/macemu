@@ -4,6 +4,8 @@ This directory contains the first-pass QA matrix and automation scaffold for Bas
 
 The QA work assumes the ARM64 JIT opcode/vector layer is stable enough to test whole-emulator behaviour, but every desktop/hardware run still starts with JIT preflight checks.
 
+Use the small 8MB RAM footprint only for deterministic headless ROM proof runs. Desktop/VNC and hardware-adjacent QA should use 64MB (`ramsize 67108864`) and `jitcachesize 32768` unless a run explicitly investigates cache churn.
+
 ## Scope
 
 - Boot and desktop reachability with a known ROM/disk image.

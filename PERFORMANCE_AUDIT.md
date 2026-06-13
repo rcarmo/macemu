@@ -3,7 +3,7 @@
 > Full codebase and build settings audit — February 2026
 > Focus: Raspberry Pi (ARM64/ARMhf) with SDL2 framebuffer/KMS
 >
-> **Implementation status updated: February 2026**
+> **Implementation status updated: 2026-06-13**
 
 ## Executive Summary
 
@@ -11,11 +11,13 @@ This audit identified **27 optimization opportunities** across 7 subsystems. **1
 
 1. ~~**ARM byte-swap uses byte-at-a-time fallback**~~ — ✅ **FIXED** — now uses `__builtin_bswap32`/`__builtin_bswap16` (single `REV` instruction)
 2. ~~**ARM flag optimizations are dead code**~~ — ✅ **FIXED** — `OPTIMIZED_FLAGS` / `ARM_ASSEMBLY` / `AARCH64_ASSEMBLY` now defined; full aarch64 flag assembly added
-3. ~~**No `-O3`, no `-march`, no LTO**~~ — ✅ **FIXED** — `-O3`, `-march=armv8-a`/`armv7-a`, `-flto=auto` now set in configure.ac, CI, and Dockerfiles
+3. ~~**No `-O3`, no `-march`, no LTO**~~ — ✅/⚠️ **MOSTLY FIXED** — `-O3`/ARM tuning and no-exceptions/no-RTTI are set; LTO remains intentionally disabled for the experimental AArch64 BasiliskII JIT because it strips runtime gate checks that are semantically live.
 4. ~~**VNC per-pixel conversion blocks the display thread**~~ — ✅ **FIXED** — moved to background thread with scanline-level memcpy + async pixel conversion
 5. ~~**Audio callback blocks on a semaphore**~~ — ✅ **FIXED** — replaced with lock-free ring buffer; default buffer reduced to 2048 frames
 
 Estimated combined speedup from the **implemented** changes: **30–55%** on Raspberry Pi. Remaining items could add another 15–30%.
+
+**2026-06-13 ARM64 JIT performance lane:** Full-JIT correctness is now strict-clean and default (`JIT-STATUS.md`, commit `980a0451`). The next 2×/CPU-load target should be treated as a measured optimization tranche, not a correctness bring-up tranche. The first reviewed hot spots are dispatch/runtime overhead: unconditional diagnostic `stderr` in the AArch64 compile/dispatch path, conservative validated chaining on most block exits, and the still-noop real VNC backend that prevents desktop performance evidence. Keep strict marker checks (`JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, `bad_pcp`) mandatory after every speed change.
 
 ---
 
@@ -40,7 +42,7 @@ Estimated combined speedup from the **implemented** changes: **30–55%** on Ras
 |---------|--------|-------|--------|
 | Optimization level | `-O2` (autoconf default) | `-O3` for ARM targets | ✅ B.1 Done |
 | `-march` / `-mtune` | None | `-march=armv8-a -mtune=cortex-a72` (arm64), `-march=armv7-a -mfpu=neon-vfpv4 -mtune=cortex-a53` (armhf) | ✅ B.2 Done |
-| LTO | Disabled | `-flto=auto` in CFLAGS/CXXFLAGS/LDFLAGS | ✅ B.3 Done |
+| LTO | Disabled | Non-AArch64 ARM/RPi paths may use `-flto=auto`; BasiliskII AArch64 JIT keeps LTO disabled because it removes live gate checks | ⚠️ B.3 Partial |
 | PGO | Not available | Not available | — |
 | `-fno-exceptions` | i386 only | All GCC targets (ARM via configure.ac) | ✅ B.5 Done |
 | `-fno-rtti` | Not set | All GCC targets globally | ✅ B.5 Done |
@@ -54,8 +56,8 @@ The build relies on autoconf defaults (`-g -O2`). `-O3` enables auto-vectorizati
 **B.2 — No ARM architecture tuning.**
 `configure.ac` detects `HAVE_I386`, `HAVE_X86_64`, `HAVE_SPARC`, `HAVE_POWERPC`, `HAVE_M68K` — but has **no** `HAVE_ARM` or `HAVE_AARCH64` variables. No `-march=armv8-a`, no `-mtune=cortex-a72` (RPi 4) or `-mtune=cortex-a76` (RPi 5). The compiler generates generic ARMv8 code that misses microarchitecture-specific scheduling.
 
-**B.3 — LTO not enabled.**
-Link-Time Optimization allows cross-TU inlining — critical when the CPU loop in `newcpu.cpp` calls instruction handlers in generated `cpuemu*.cpp` files. `-flto=auto` would allow the compiler to inline hot handlers.
+**B.3 — LTO not enabled / not universally safe.**
+Link-Time Optimization allows cross-TU inlining — critical when the CPU loop in `newcpu.cpp` calls instruction handlers in generated `cpuemu*.cpp` files. However, current BasiliskII AArch64 JIT builds intentionally do **not** enable LTO because previous builds stripped runtime JIT gate checks that the optimizer considered dead. Revisit only with a strict harness/ROM soak comparison and explicit checks for removed gates.
 
 **B.4 — Debian hardening overhead.**
 `hardening=+all` enables `-fstack-protector-strong` (canary checks in hot loops) and `-fPIE`/`-pie` (costs a register for GOT on 32-bit ARM). For an emulator with a tight inner loop, PIE + stack-protector can cause **5–15% slowdown on ARM**.
@@ -69,7 +71,7 @@ The codebase doesn't use C++ exceptions or RTTI. These flags are only set for i3
 |----|--------|--------|--------|--------|
 | B.1 | Set explicit `-O3` in configure.ac for GCC | Medium | Low | ✅ Done |
 | B.2 | Add `-march=armv8-a -mtune=cortex-a72` for arm64, `-march=armv7-a -mfpu=neon-vfpv4` for armhf | Medium | Low | ✅ Done |
-| B.3 | Enable `-flto=auto` in CFLAGS/CXXFLAGS/LDFLAGS | High | Low | ✅ Done |
+| B.3 | Enable `-flto=auto` where safe; keep BasiliskII AArch64 JIT LTO-disabled until gate-stripping is solved | High | Low | ⚠️ Partial |
 | B.4 | Change `debian/rules` to `hardening=+format,+fortify,+relro,-pie,-stackprotector` | Medium | Low | ✅ Done |
 | B.5 | Apply `-fno-exceptions -fno-rtti` globally for all GCC C++ builds | Low | Low | ✅ Done |
 

@@ -12,6 +12,7 @@ ART_ROOT="${B2_QA_ARTIFACTS:-$B2_DIR/qa/artifacts}"
 TIMEOUT_SEC="${B2_QA_TIMEOUT:-60}"
 ROM_TICKS="${B2_QA_ROM_TICKS:-300}"
 VNC_PORT="${B2_QA_VNC_PORT:-5900}"
+RAM_SIZE="${B2_QA_RAM_SIZE:-8388608}"
 CASE=""
 DRY_RUN=0
 RUN_PREFLIGHT=0
@@ -22,7 +23,7 @@ Usage: $0 --list
        $0 --case CASE [--dry-run] [--timeout SEC] [--rom-ticks N] [--preflight]
 
 Environment overrides:
-  B2_BIN, B2_ROM, B2_DISK, B2_QA_ARTIFACTS, B2_QA_TIMEOUT, B2_QA_ROM_TICKS, B2_QA_VNC_PORT
+  B2_BIN, B2_ROM, B2_DISK, B2_QA_ARTIFACTS, B2_QA_TIMEOUT, B2_QA_ROM_TICKS, B2_QA_VNC_PORT, B2_QA_RAM_SIZE
 
 Cases:
 EOF
@@ -69,6 +70,7 @@ require_file() {
 
 case_defaults() {
   JIT=true
+  RAM_SIZE="${B2_QA_RAM_SIZE:-8388608}"
   MODE_ENV=()
   STABLE_ENV=()
   AUDIO_ENV=(SDL_AUDIODRIVER=dummy)
@@ -103,6 +105,7 @@ case_config() {
       ;;
     optlev2-desktop-vnc)
       MODE_ENV=(B2_JIT_FORCE_TRANSLATE=1 B2_JIT_MAX_OPTLEV=2)
+      RAM_SIZE="${B2_QA_RAM_SIZE:-67108864}"
       DISK_ENABLED=true
       VNC=true
       RUN_KIND=desktop
@@ -110,6 +113,7 @@ case_config() {
       ;;
     optlev2-desktop-soak)
       MODE_ENV=(B2_JIT_FORCE_TRANSLATE=1 B2_JIT_MAX_OPTLEV=2)
+      RAM_SIZE="${B2_QA_RAM_SIZE:-67108864}"
       DISK_ENABLED=true
       VNC=true
       RUN_KIND=desktop-soak
@@ -117,6 +121,7 @@ case_config() {
       ;;
     optlev2-network-slirp)
       MODE_ENV=(B2_JIT_FORCE_TRANSLATE=1 B2_JIT_MAX_OPTLEV=2)
+      RAM_SIZE="${B2_QA_RAM_SIZE:-67108864}"
       DISK_ENABLED=true
       NETWORK=slirp
       VNC=true
@@ -125,6 +130,7 @@ case_config() {
       ;;
     optlev2-audio-dummy)
       MODE_ENV=(B2_JIT_FORCE_TRANSLATE=1 B2_JIT_MAX_OPTLEV=2)
+      RAM_SIZE="${B2_QA_RAM_SIZE:-67108864}"
       DISK_ENABLED=true
       AUDIO_PREF="nosound false"
       AUDIO_ENV=(SDL_AUDIODRIVER=dummy)
@@ -134,6 +140,7 @@ case_config() {
       ;;
     optlev2-audio-real)
       MODE_ENV=(B2_JIT_FORCE_TRANSLATE=1 B2_JIT_MAX_OPTLEV=2)
+      RAM_SIZE="${B2_QA_RAM_SIZE:-67108864}"
       DISK_ENABLED=true
       AUDIO_PREF="nosound false"
       AUDIO_ENV=()
@@ -143,6 +150,7 @@ case_config() {
       ;;
     optlev2-disk-persistence)
       MODE_ENV=(B2_JIT_FORCE_TRANSLATE=1 B2_JIT_MAX_OPTLEV=2)
+      RAM_SIZE="${B2_QA_RAM_SIZE:-67108864}"
       DISK_ENABLED=true
       VNC=true
       RUN_KIND=desktop-disk
@@ -156,7 +164,7 @@ write_prefs() {
   local prefs="$1"
   cat >"$prefs" <<EOF
 rom $ROM
-ramsize 8388608
+ramsize $RAM_SIZE
 modelid 14
 cpu 4
 fpu false
@@ -215,6 +223,7 @@ GIT_COMMIT="$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unkno
   echo "prefs=$PREFS"
   echo "timeout_sec=$TIMEOUT_SEC"
   echo "rom_ticks=$ROM_TICKS"
+  echo "ram_size=$RAM_SIZE"
   printf 'mode_env='; printf '%s ' "${MODE_ENV[@]}"; printf '\n'
   printf 'stable_env='; printf '%s ' "${STABLE_ENV[@]}"; printf '\n'
   printf 'video_env='; printf '%s ' "${VIDEO_ENV[@]}"; printf '\n'

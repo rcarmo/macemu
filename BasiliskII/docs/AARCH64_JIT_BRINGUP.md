@@ -9,13 +9,13 @@ This document describes the work done to bring up the experimental AArch64 (ARM6
 
 The codebase is a fork of the Koenig/cebix/aranym JIT originally written for x86, ported to ARM (32-bit) by contributors, with an ARM64 backend added experimentally. Since the initial bringup, the work has fixed a long series of structural and semantic bugs: byte-order mismatches, IRQ deliverability, legacy carry/X handling, boundary cycle charging, verifier misuse, ARM64 endblock slow-path bugs, short-branch decode on ARM64, 32-bit host-PC construction bugs, word-to-address-register self-alias clobbers, A-line trap control-flow modeling, 64-bit pointer truncation in the legacy `add_l`/`sub_l_ri` helpers, the `endblock_pc_isconst` direct-chain stale-state bug, and EMUL_OP barrier requirements. **Pure L2 now runs at 93.75% ROM coverage + 100% RAM, with SCSIGet × 7 + SCSISelect × 7, zero crashes, zero `bad_pc_p`, and 634M dispatches/120s with direct `B` chaining.**
 
-## Current status (2026-05-17)
+## Current status (2026-06-13)
 
 ### Interpreter and JIT baselines
 
-The pure interpreter (`jit false`) and JIT-enabled interpreter/dispatch modes remain the comparison baselines. The optlev=2 AArch64 JIT has moved beyond the April frontier: the opcode/vector harness is green (`301/301`, score 100), current ROM smoke windows run without the earlier `bad pc_p`/bus-error regressions, stable ROM edge profiling is repaired, and the mid-block branch side-exit fallthrough corruption has been fixed.
+The pure interpreter (`jit false`) and JIT-enabled interpreter/dispatch modes remain the comparison baselines. The optlev=2 AArch64 JIT has moved beyond bring-up and is now the default full-JIT path. Commit `980a0451` made the strict-clean configuration the baseline after a 300s preserved-log ROM/steady-state soak reached `DC[64460000] pc=00156f94` with zero `JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, or `bad_pcp` markers. The opcode/vector harness is green (`301/301`, score 100), stable ROM edge profiling is repaired, and the mid-block branch side-exit fallthrough corruption has been fixed.
 
-The next work is no longer "make any JIT path reach boot progress". It is system-level QA: prove that the fixed JIT can repeatedly reach and exercise a real Mac desktop, collect deterministic screenshot evidence, and cover hardware-adjacent features such as safe user-mode networking, audio backends, disk persistence, PRAM/time, and display modes.
+The next work is no longer "make any JIT path reach boot progress". It is split into two evidence tracks: (1) system-level QA that repeatedly reaches and exercises a real Mac desktop with deterministic screenshots and hardware-adjacent coverage, and (2) measured performance work toward a 2× JIT throughput improvement and lower host CPU load without weakening the strict marker contract.
 
 ### QA status
 
@@ -80,14 +80,15 @@ The NuBus probe patch is guarded by a signature check at ROM offset `0xb27c`:
 
 ### Current remaining work
 
-The April MAXRUN/register-propagation frontier is historical. The active remaining work is QA-oriented:
+The April MAXRUN/register-propagation frontier is historical. The active remaining work is QA/performance-oriented:
 
-1. Boot BasiliskII headless/VNC to the Mac desktop from a known-good disk image with optlev=2 enabled.
+1. Boot BasiliskII headless/VNC to the Mac desktop from a known-good disk image with optlev=2 enabled, using 64MB RAM (`ramsize 67108864`) for desktop runs.
 2. Capture screenshots at boot, desktop, app launch, soak, and shutdown/restart milestones.
 3. Run deterministic screenshot assertions without model vision.
 4. Implement a real VNC capture/input backend behind `qa/tests/vnc/lib/vnc-driver.js` while keeping the existing `noop` CI mode.
 5. Inventory and test safe network/audio/device coverage, starting with `ether slirp` and SDL dummy audio.
 6. Generate Markdown/PDF reports from structured artifacts and keep emulator fixes separate from QA-only observations until a reproducible bug is isolated.
+7. Measure and reduce JIT dispatch/runtime overhead toward the current 2× performance goal; first candidates are unconditional diagnostics, conservative block-exit validation on hot edges, and desktop CPU-load evidence once real VNC captures exist.
 
 ### Architecture
 
