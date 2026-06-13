@@ -792,9 +792,39 @@ static void jit_trace_table_log(const char *tag, unsigned long step, uae_u32 pc)
 	jit_trace_table_maybe_dump_complete(tag, step, pc);
 }
 
+#if defined(CPU_AARCH64)
+static cpuop_func *jit_orig_op_0_0_ff = NULL;
+
+static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
+{
+	(void)opcode;
+	uae_u8 *p = regs.pc_p;
+	/* OR.B #<data>.B,D0.  This is the dominant interpreter fallback while
+	   executing zero-filled RAM probes; avoid get_ibyte()/get_real_address()
+	   and the generated handler's byte-lane generality on the hot path. */
+	uae_s8 src = (uae_s8)p[3];
+	uae_s8 dst = (uae_s8)(m68k_dreg(regs, 0) & 0xff);
+	src |= dst;
+	optflag_testb(src);
+	m68k_dreg(regs, 0) = (m68k_dreg(regs, 0) & ~0xff) | ((uae_u8)src);
+	regs.pc_p = p + 4;
+}
+
+static void jit_install_fast_interpreter_overrides(void)
+{
+	static bool installed = false;
+	if (installed)
+		return;
+	jit_orig_op_0_0_ff = cpufunctbl[0];
+	cpufunctbl[0] = jit_fast_op_0_0_ff;
+	installed = true;
+}
+#endif
+
 void exec_nostats(void)
 {
 #if defined(CPU_AARCH64)
+	jit_install_fast_interpreter_overrides();
 	jit_diag_exec_nostats_calls++;
 	jit_diag_dispatch_count++;
 	jit_diag_maybe_print();
@@ -890,11 +920,13 @@ static void exec_nostats_limited(int maxrun_limit)
 			return;
 	}
 }
+
 #endif
 
 void execute_normal(void)
 {
 #if defined(CPU_AARCH64)
+	jit_install_fast_interpreter_overrides();
 	jit_diag_execute_normal_calls++;
 	jit_diag_dispatch_count++;
 	/* If quit_program is set (e.g. M68K_EXEC_RETURN), skip everything
