@@ -2917,8 +2917,18 @@ static void bt_l_ri_noclobber(RR4 r, IM8 i);
 
 static void make_flags_live_internal(void)
 {
-    if (live.flags_in_flags == VALID)
+    if (live.flags_in_flags == VALID) {
+        /* Branch emission consumes hardware NZCV directly. Some arithmetic
+           helpers leave M68K carry represented as inverted ARM C; normalize
+           it before any direct condition-code consumer. */
+        if (flags_carry_inverted) {
+            MRS_NZCV_x(REG_WORK1);
+            EOR_xxCflag(REG_WORK1, REG_WORK1);
+            MSR_NZCV_x(REG_WORK1);
+            flags_carry_inverted = false;
+        }
         return;
+    }
     Dif(live.flags_on_stack == TRASH) {
         jit_abort("Want flags, got something on stack, but it is TRASH");
     }

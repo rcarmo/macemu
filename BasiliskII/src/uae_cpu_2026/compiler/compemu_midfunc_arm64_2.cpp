@@ -2815,7 +2815,10 @@ MIDFUNC(2,jff_CMP_b_imm,(RR1 d, IM8 v))
 	MOV_wi(REG_WORK2, v & 0xff);
 	CMP_wwLSLi(REG_WORK1, REG_WORK2, 24);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 }
 MENDFUNC(2,jff_CMP_b_imm,(RR1 d, IM8 v))
 
@@ -2840,7 +2843,10 @@ MIDFUNC(2,jff_CMP_b,(RR1 d, RR1 s))
 
 		EXIT_REGS(d,s);
 	}
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 }
 MENDFUNC(2,jff_CMP_b,(RR1 d, RR1 s))
 
@@ -2859,7 +2865,10 @@ MIDFUNC(2,jff_CMP_w_imm,(RR2 d, IM16 v))
 
 		unlock2(d);
 	}
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 }
 MENDFUNC(2,jff_CMP_w_imm,(RR2 d, IM16 v))
 
@@ -2884,7 +2893,10 @@ MIDFUNC(2,jff_CMP_w,(RR2 d, RR2 s))
 
 		EXIT_REGS(d,s);
 	}
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 }
 MENDFUNC(2,jff_CMP_w,(RR2 d, RR2 s))
 
@@ -2916,7 +2928,10 @@ MIDFUNC(2,jff_CMP_l_imm,(RR4 d, IM32 v))
 	LOAD_U32(REG_WORK1, v);
 	CMP_ww(d, REG_WORK1);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 	unlock2(d);
 }
 MENDFUNC(2,jff_CMP_l_imm,(RR4 d, IM32 v))
@@ -2932,7 +2947,10 @@ MIDFUNC(2,jff_CMP_l,(RR4 d, RR4 s))
 
 	CMP_ww(d, s);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 	EXIT_REGS(d,s);
 }
 MENDFUNC(2,jff_CMP_l,(RR4 d, RR4 s))
@@ -2958,7 +2976,10 @@ MIDFUNC(2,jff_CMPA_w_imm,(RR2 d, IM16 v))
 	CMP_ww(d, REG_WORK1);
 	unlock2(d);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 }
 MENDFUNC(2,jff_CMPA_w_imm,(RR2 d, IM16 v))
 
@@ -2973,7 +2994,10 @@ MIDFUNC(2,jff_CMPA_w,(RR2 d, RR2 s))
 	CMP_wwEX(d, s, EX_SXTH);
 	EXIT_REGS(d,s);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 }
 MENDFUNC(2,jff_CMPA_w,(RR2 d, RR2 s))
 
@@ -2984,7 +3008,10 @@ MIDFUNC(2,jff_CMPA_l_imm,(RR4 d, IM32 v))
 	LOAD_U32(REG_WORK1, v);
 	CMP_ww(d, REG_WORK1);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 	unlock2(d);
 }
 MENDFUNC(2,jff_CMPA_l_imm,(RR4 d, IM32 v))
@@ -3000,7 +3027,10 @@ MIDFUNC(2,jff_CMPA_l,(RR4 d, RR4 s))
 
 	CMP_ww(d, s);
 
-	flags_carry_inverted = true;
+	MRS_NZCV_x(REG_WORK3);
+	EOR_xxCflag(REG_WORK3, REG_WORK3);
+	MSR_NZCV_x(REG_WORK3);
+	flags_carry_inverted = false;
 	EXIT_REGS(d,s);
 }
 MENDFUNC(2,jff_CMPA_l,(RR4 d, RR4 s))
