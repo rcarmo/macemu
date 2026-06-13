@@ -607,8 +607,10 @@ int kill_rodent(int r)
 void do_nothing(void)
 {
 #if defined(CPU_AARCH64)
-	jit_diag_do_nothing_calls++;
-	jit_diag_dispatch_count++;
+	if (jit_diag_enabled()) {
+		jit_diag_do_nothing_calls++;
+		jit_diag_dispatch_count++;
+	}
 	countdown = 10000000;
 	if (quit_program > 0)
 		return;
@@ -827,9 +829,11 @@ void exec_nostats(void)
 {
 #if defined(CPU_AARCH64)
 	jit_install_fast_interpreter_overrides();
-	jit_diag_exec_nostats_calls++;
-	jit_diag_dispatch_count++;
-	jit_diag_maybe_print();
+	if (jit_diag_enabled()) {
+		jit_diag_exec_nostats_calls++;
+		jit_diag_dispatch_count++;
+		jit_diag_maybe_print();
+	}
 	{
 		uintptr pcp = (uintptr)regs.pc_p;
 		uintptr base = (uintptr)RAMBaseHost;
@@ -934,8 +938,10 @@ void execute_normal(void)
 {
 #if defined(CPU_AARCH64)
 	jit_install_fast_interpreter_overrides();
-	jit_diag_execute_normal_calls++;
-	jit_diag_dispatch_count++;
+	if (jit_diag_enabled()) {
+		jit_diag_execute_normal_calls++;
+		jit_diag_dispatch_count++;
+	}
 	/* If quit_program is set (e.g. M68K_EXEC_RETURN), skip everything
 	   and return immediately. Running further instructions would
 	   execute random memory past the test code boundary. */
@@ -947,7 +953,8 @@ void execute_normal(void)
 		m68k_do_specialties();
 	}
 
-	jit_diag_maybe_print();
+	if (jit_diag_enabled())
+		jit_diag_maybe_print();
 	/* If pc_p is outside valid Mac memory range (corrupt), re-derive it. */
 	{
 		uintptr pcp = (uintptr)regs.pc_p;

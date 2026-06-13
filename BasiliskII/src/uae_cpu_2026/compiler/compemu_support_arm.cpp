@@ -4996,7 +4996,8 @@ int check_for_cache_miss(void)
         if (bi != cache_tags[cl + 1].bi) {
             raise_in_cl_list(bi);
 #if defined(CPU_AARCH64)
-            jit_diag_execute_normal_cache_hit++;
+            if (jit_diag_enabled())
+                jit_diag_execute_normal_cache_hit++;
 #endif
             return 1;
         }
@@ -5008,9 +5009,11 @@ int check_for_cache_miss(void)
 static void recompile_block(void)
 {
 #if defined(CPU_AARCH64)
-    jit_diag_recompile_block_calls++;
-    jit_diag_dispatch_count++;
-    jit_diag_maybe_print();
+    if (jit_diag_enabled()) {
+        jit_diag_recompile_block_calls++;
+        jit_diag_dispatch_count++;
+        jit_diag_maybe_print();
+    }
     if ((uintptr)regs.pc_p & 1) {
         execute_normal();
         return;
@@ -5033,9 +5036,11 @@ static void recompile_block(void)
 static void cache_miss(void)
 {
 #if defined(CPU_AARCH64)
-    jit_diag_cache_miss_calls++;
-    jit_diag_dispatch_count++;
-    jit_diag_maybe_print();
+    if (jit_diag_enabled()) {
+        jit_diag_cache_miss_calls++;
+        jit_diag_dispatch_count++;
+        jit_diag_maybe_print();
+    }
 #endif
 #ifdef JIT_DEBUG_MEM_CORRUPTION
     jit_dbg_check_vec2_dispatch("cache_miss");
@@ -5116,9 +5121,11 @@ static int called_check_checksum(blockinfo* bi)
 static void check_checksum(void)
 {
 #if defined(CPU_AARCH64)
-    jit_diag_check_checksum_calls++;
-    jit_diag_dispatch_count++;
-    jit_diag_maybe_print();
+    if (jit_diag_enabled()) {
+        jit_diag_check_checksum_calls++;
+        jit_diag_dispatch_count++;
+        jit_diag_maybe_print();
+    }
 #endif
     blockinfo* bi = get_blockinfo_addr(regs.pc_p);
     uae_u32 cl = cacheline(regs.pc_p);
