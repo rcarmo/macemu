@@ -195,6 +195,7 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 
 
 /* Host register assignments */
+#define RCR0    19   /* x19 = pending CR0 result (callee-saved) */
 #define RSTATE  20   /* x20 = regs pointer (callee-saved) */
 #define RTMP0    0
 #define RTMP1    1
@@ -243,6 +244,7 @@ static int  ra_host_to_ppc[RA_NUM_REGS]; /* ARM64 slot → PPC GPR, -1 = free */
 static bool ra_dirty[RA_NUM_REGS];       /* true = cached value modified, needs writeback */
 static int  ra_lru[RA_NUM_REGS];         /* access counter for LRU eviction */
 static int  ra_clock = 0;                /* monotonic access counter */
+static bool ra_enabled = false;          /* enabled only for straight-line blocks */
 
 static void ra_reset(void) {
 	for (int i = 0; i < 32; i++) ra_ppc_to_host[i] = -1;
@@ -334,12 +336,20 @@ static void ra_flush_all(void) {
 }
 
 static void emit_load_gpr(int rd, int n) {
-	/* DISABLED: boot hang regression. Direct struct access. */
+	if (ra_enabled) {
+		int host = ra_load(n);
+		if (rd != host) a64_mov_reg(rd, host);
+		return;
+	}
 	a64_ldr_w_imm(rd, RSTATE, PPCR_GPR(n));
 }
 
 static void emit_store_gpr(int rs, int n) {
-	/* DISABLED: boot hang regression. Direct struct access. */
+	if (ra_enabled) {
+		int host = ra_store(n);
+		if (rs != host) a64_mov_reg(host, rs);
+		return;
+	}
 	a64_str_w_imm(rs, RSTATE, PPCR_GPR(n));
 }
 
@@ -347,8 +357,8 @@ static void emit_store_gpr(int rs, int n) {
    Uses gpr[n] (low 32) + gpr_hi[n] (high 32) as a split 64-bit register.
    On little-endian ARM64: load low word, load high word, combine. */
 static void emit_load_gpr64_tmp(int xd, int n, int tmp) {
-	/* LDR Wd, [RSTATE, #gpr_lo] — low 32 bits, zero-extends to Xd */
-	a64_ldr_w_imm(xd, RSTATE, PPCR_GPR(n));
+	/* Load low 32 bits (RA-aware), zero-extended to Xd */
+	emit_load_gpr(xd, n);
 	/* LDR Wtmp, [RSTATE, #gpr_hi] — high 32 bits, zero-extends to Xtmp */
 	a64_ldr_w_imm(tmp, RSTATE, PPCR_GPR_HI(n));
 	/* Combine into 64-bit Xd: Xd = (hi << 32) | lo
@@ -364,8 +374,8 @@ static void emit_load_gpr64(int xd, int n) {
 }
 
 static void emit_store_gpr64(int xs, int n) {
-	/* Store low 32: STR Ws, [RSTATE, #gpr_lo] */
-	a64_str_w_imm(xs, RSTATE, PPCR_GPR(n));
+	/* Store low 32 (RA-aware) */
+	emit_store_gpr(xs, n);
 	/* Store high 32: LSR Xtmp, Xs, #32; STR Wtmp, [RSTATE, #gpr_hi]
 	 * LSR Xd,Xn,#32 = UBFM Xd,Xn,#immr=32,#imms=63 = 0xD360FC00|(Xn<<5)|Xd */
 	int tmp = (xs == RTMP0) ? RTMP1 : RTMP0;
@@ -633,10 +643,11 @@ static void emit_materialize_cr0(void) {
 	lazy_cr0_reg = -1;
 }
 
-/* Mark CR0 as pending — the result in 'reg' will be used to compute CR0 later */
+/* Mark CR0 as pending — keep a stable copy in x19 so later scratch use cannot clobber it. */
 static void lazy_update_cr0(int result_reg) {
-	/* DISABLED: boot hang regression. Materialize immediately. */
-	emit_update_cr0(result_reg);
+	a64_mov_reg(RCR0, result_reg);
+	lazy_cr0_reg = RCR0;
+	lazy_cr0_valid = true;
 }
 
 /* Ensure CR0 is materialized — call before branches testing CR0, mfcr, block exits */
@@ -824,6 +835,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 0: /* cmp (cmpw crD,rA,rB) — signed compare */
 		{
 			uint32_t crd = (op >> 23) & 0x7;
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | 0x1F); /* SUBS WZR,Wn,Wm */
@@ -928,6 +940,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 144: /* mtcrf CRM,rS */
 		{
 			uint32_t crm = (op >> 12) & 0xFF;
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			if (crm == 0xFF) {
 				/* Move entire CR */
@@ -1110,6 +1123,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 32: /* cmpl (cmplw crD,rA,rB) */
 		{
 			uint32_t crd = (op >> 23) & 0x7;
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | 0x1F);
@@ -1543,6 +1557,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 512: /* mcrxr crD — move XER[SO,OV,CA] to CR field, clear XER flags */
 		{
 			uint32_t crd_f = (op >> 23) & 0x7;
+			lazy_flush_cr0();
 			/* Build nibble: bit3=SO, bit2=OV, bit1=CA, bit0=0 */
 			emit32(0x39400000 | (PPCR_XER_SO << 10) | (RSTATE << 5) | RTMP0); /* LDRB so */
 			emit_load_imm32(RTMP1, 3); emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSL #3 */
@@ -2021,6 +2036,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	{
 		uint32_t crd = (op >> 23) & 0x7;
 		ra = PPC_RA(op); uimm = PPC_UIMM(op);
+		lazy_flush_cr0();
 		emit_load_gpr(RTMP0, ra);
 		emit_load_imm32(RTMP1, (int32_t)(uint32_t)uimm);
 		/* Unsigned compare: CMP Wn, Wm */
@@ -2057,6 +2073,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	{
 		uint32_t crd = (op >> 23) & 0x7;
 		ra = PPC_RA(op); simm = PPC_SIMM(op);
+		lazy_flush_cr0();
 		emit_load_gpr(RTMP0, ra);
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		/* Signed compare: CMP Wn, Wm */
@@ -2941,6 +2958,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		case 0: /* fcmpu crD,frA,frB */
 		{
 			uint32_t crd = (op >> 23) & 0x7;
+			lazy_flush_cr0();
 			emit_load_fpr(0, fra);
 			emit_load_fpr(1, frb);
 			emit32(0x1E602000 | (1 << 16) | (0 << 5)); /* FCMP Dn, Dm */
@@ -2970,6 +2988,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		case 32: /* fcmpo crD,frA,frB — same as fcmpu for our purposes */
 		{
 			uint32_t crd = (op >> 23) & 0x7;
+			lazy_flush_cr0();
 			emit_load_fpr(0, fra);
 			emit_load_fpr(1, frb);
 			emit32(0x1E602000 | (1 << 16) | (0 << 5));
@@ -3535,6 +3554,54 @@ void ppc_jit_aarch64_invalidate_pc(uint32_t pc)
 	jit_bc_invalidate_pc(pc);
 }
 
+static bool opcode_may_touch_guest_memory(uint32_t op) {
+	uint32_t opc = op >> 26;
+	if ((opc >= 32 && opc <= 56) || opc == 58 || opc == 62)
+		return true; /* D/DS-form scalar/FP/string/64-bit load-store family */
+	if (opc == 4)
+		return true; /* AltiVec includes faultable lvx/stvx forms; keep conservative */
+	if (opc == 31) {
+		uint32_t xo = (op >> 1) & 0x3FF;
+		switch (xo) {
+		case 20: case 21: case 23: case 53: case 54: case 55: case 84: case 87:
+		case 119: case 149: case 150: case 151: case 181: case 183: case 214: case 215:
+		case 247: case 279: case 311: case 343: case 375: case 407: case 439:
+		case 535: case 567: case 597: case 599: case 631: case 663: case 695:
+		case 725: case 727: case 759: case 1014:
+			return true;
+		default:
+			break;
+		}
+	}
+	return false;
+}
+
+/* Conservative RA gate: the current register-cache scaffold is path-insensitive.
+ * Enable it only for straight-line, non-faultable blocks. Internal conditional branches
+ * can enter already-emitted code with a different mapping; guest-memory accesses can fault
+ * before dirty cached GPRs are flushed. Keep those blocks on direct struct LDR/STR until
+ * per-label/per-fault RA state is implemented. */
+static bool block_allows_register_allocation(uint32_t pc, const uint8_t *ram, size_t ramsize) {
+	uint32_t cur_pc = pc;
+	for (int i = 0; i < 512; i++, cur_pc += 4) {
+		if (cur_pc < (uint32_t)(uintptr_t)ram || cur_pc >= (uint32_t)(uintptr_t)ram + ramsize)
+			break;
+		const uint8_t *p = ram + (cur_pc - (uint32_t)(uintptr_t)ram);
+		uint32_t op = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+		              ((uint32_t)p[2] << 8) | p[3];
+		if (op == 0x00000000 || op == 0x4E800020) break;
+		uint32_t opc = op >> 26;
+		if (opcode_may_touch_guest_memory(op)) return false;
+		if (opc == 16) return false; /* bc/bdnz/bdz can branch within the block */
+		if (opc == 18) break;        /* b/bl terminates the block */
+		if (opc == 19) {
+			uint32_t xo = (op >> 1) & 0x3FF;
+			if (xo == 16 || xo == 528) break; /* bclr/bcctr terminate */
+		}
+	}
+	return true;
+}
+
 bool ppc_jit_aarch64_compile(
 	uint32_t pc,
 	const uint8_t *ram,
@@ -3589,6 +3656,7 @@ bool ppc_jit_aarch64_compile(
 	lazy_cr0_valid = false;
 	lazy_cr0_reg = -1;
 	ra_reset();
+	ra_enabled = block_allows_register_allocation(pc, ram, ramsize);
 
 	for (int i = 0; i < 512; i++) {
 		if (cur_pc < (uint32_t)(uintptr_t)ram ||

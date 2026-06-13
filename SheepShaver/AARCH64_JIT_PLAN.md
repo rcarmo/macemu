@@ -15,6 +15,8 @@ starting with an optimized interpreter and progressing to a direct-codegen JIT.
 | ROM harness (10K blocks) | **1800/1825** pass (98.6%) on PowerMac 9500 OldWorld ROM |
 | Unique opcodes inlined | **285+** PPC opcodes as native ARM64 |
 | Block completion policy | Only `jblk.complete` blocks execute natively; fallback-only/incomplete blocks are interpreted |
+| Lazy CR0 | ✅ Active again with x19 pending-result copy; materialized at consumers/exits |
+| Register allocation | ✅ Conservative: active only for straight-line, non-faultable blocks |
 | JIT benchmark (addi+bdnz 100M) | **~737 MIPS** (intra-block CBNZ tight loop, Orange Pi 6 Plus) |
 | Interpreter benchmark | 167 MIPS |
 | FPU | ✅ double + single + fused multiply-add + FPSCR rounding modes |
@@ -167,22 +169,23 @@ CR/FPSCR/LR/CTR/PC and byte-addressed XER fields at known offsets from x20
 - 8192 buckets, 16384 pool entries
 - PC → compiled code lookup; invalidate-by-PC; full flush on icbi
 
-### Phase 4c: Lazy CR0 flags ⚠️ scaffolded, currently disabled
-- Lazy CR0 scaffolding exists, but `lazy_update_cr0()` now materializes immediately after a boot regression
-- Current correctness contract: CR0 is architectural before each handler returns and at all block boundaries
-- Historical MacBench after the optimization tranche: CPU 835, FPU 1027
+### Phase 4c: Lazy CR0 flags ✅ re-enabled conservatively
+- Rc=1 results are copied to x19 (`RCR0`, callee-saved) and CR0 is materialized at CR consumers or block exits
+- This fixes the earlier boot-regression risk where the pending result lived in scratch state
+- Targeted Rc=1 1B-loop timing improved from a warmed immediate-CR0 baseline of ~2.84s to ~2.39–2.63s
 
-### Phase 4d: Register allocation ⚠️ scaffolded, currently disabled
-- x21–x28 register-cache scaffolding remains in the source
-- Active `emit_load_gpr()` / `emit_store_gpr()` use direct struct access after a boot regression
-- LRU/dirty-flush code is retained for future revalidation
+### Phase 4d: Register allocation ✅ re-enabled conservatively
+- x21–x28 register-cache scaffolding is active only for straight-line, non-faultable blocks
+- Blocks with conditional branches or guest-memory accesses keep direct struct LDR/STR until per-label/per-fault RA state is implemented
+- LRU/dirty-flush code is active under that gate
 
 ## Remaining Work
 
 ### Phase 5: Region JIT / optimization hardening
 - [x] Block-to-block chaining (compile-time `chain_code` plus runtime back-patching)
-- [ ] Revalidate and re-enable lazy CR0 only with targeted boot/parity proof
-- [ ] Revalidate and re-enable register allocation only with targeted boot/parity proof
+- [x] Revalidate and re-enable lazy CR0 with targeted harness/regression proof
+- [x] Revalidate and re-enable register allocation for straight-line non-faultable blocks
+- [ ] Broaden register allocation to branch/faultable blocks only after per-label/per-fault RA state exists
 - [ ] Profile-guided hot-block prioritization
 - [ ] Raise 512-instruction block limit if needed
 

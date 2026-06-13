@@ -3,8 +3,9 @@
 ## Goal
 
 Move from the current safe basic-block/chain JIT toward revalidated region-level optimizations.
-Register allocation and lazy CR0 both have scaffolding in-tree, but are currently disabled after
-boot-regression risk; the next phase is proof-driven re-enablement, not blind optimization.
+Lazy CR0 is re-enabled with a callee-saved pending-result copy, and register allocation is
+re-enabled only for straight-line non-faultable blocks. The next phase is broadening those
+optimizations with proof-driven per-label/per-fault state, not blind optimization.
 
 ## Baseline (current)
 
@@ -13,8 +14,8 @@ boot-regression risk; the next phase is proof-driven re-enablement, not blind op
 - Harness: 209/209 pass, score=100
 - Block cache: 8192-bucket hash table with 16384-entry pool
 - Block size: 512 instructions max
-- Register allocation: scaffolded but disabled; active path uses direct struct LDR/STR
-- Flags: CR0 is currently materialized immediately; lazy CR0 scaffold is disabled
+- Register allocation: active for straight-line non-faultable blocks; branch/faultable blocks use direct struct LDR/STR
+- Flags: lazy CR0 active; Rc=1 result copied to x19 and materialized at CR consumers/exits
 - Block chaining: compile-time `chain_code` plus runtime back-patching is implemented
 - Fallback policy: only `jblk.complete` blocks execute natively; incomplete/barrier blocks are interpreted
 
@@ -29,12 +30,13 @@ boot-regression risk; the next phase is proof-driven re-enablement, not blind op
 ### Phase 2: Lazy CR/flags
 - [x] Add lazy CR0 scaffolding and consumers
 - [x] Test: harness 209/209
-- [ ] Revalidate before enabling: current active path materializes CR0 immediately (`lazy_update_cr0()` calls `emit_update_cr0()`) after a boot-regression risk
+- [x] Re-enabled safely: `lazy_update_cr0()` copies the result to x19 (`RCR0`) and materializes at consumers/exits
 
 ### Phase 3: Register allocation within blocks
 - [x] Add x21–x28 PPC GPR cache scaffolding, LRU eviction, and dirty flush logic
 - [x] Test: harness 209/209 during original tranche
-- [ ] Revalidate before enabling: current active `emit_load_gpr()`/`emit_store_gpr()` path uses direct struct access after a boot-regression risk
+- [x] Re-enabled conservatively: active only for straight-line non-faultable blocks
+- [ ] Broaden only after implementing per-label/per-fault RA state
 
 ### Phase 4: Region JIT (block chaining)
 - [x] Fast JIT dispatch inner loop: after each block, check JIT cache directly without interpreter block cache round-trip (`a8afdf92`)

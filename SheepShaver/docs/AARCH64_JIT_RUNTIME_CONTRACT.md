@@ -44,11 +44,11 @@ State that the interpreter and the rest of the emulator are allowed to observe d
 ### Virtual state
 
 State temporarily held only in ARM64 registers and not yet written back to the struct.
-This JIT has **very limited virtual state** — all active emitted code reads and writes directly
-to the struct via `[RSTATE, #offset]` loads and stores. Register-allocation scaffolding exists
-but is disabled after a boot regression. In practice, values are virtual only for the duration
-of the few ARM64 instructions that compute a single PPC instruction's result before the final
-store.
+This JIT has **limited virtual state**. Most blocks read and write directly to the struct via
+`[RSTATE, #offset]` loads and stores. A conservative register allocator may cache PPC GPRs in
+x21–x28 only for straight-line, non-faultable blocks. Blocks with conditional branches or
+guest-memory accesses still use direct struct access so fallback/fault paths never observe
+dirty cached GPRs.
 
 ### Materialized state
 
@@ -120,21 +120,22 @@ instruction. Only the block entry PC is valid mid-block.
 
 ### 3. Flag model
 
-**Current CR0 implementation**: CR0 is materialised immediately. The earlier lazy-CR0
-scaffolding remains in the file, but `lazy_update_cr0()` is deliberately disabled after a boot
-regression and calls `emit_update_cr0()` directly.
+**Lazy CR0 is active**: Rc=1 results are copied into x19 (`RCR0`, callee-saved) and
+materialised only when CR is consumed or the block exits. The x19 copy fixes the earlier
+boot-regression class where the pending result lived in scratch state that later code could clobber.
 
 **XER and FPSCR** are always materialised immediately.
 
-- Instructions with RC=1 call `emit_update_cr0()` and update PPCR_CR directly.
+- Instructions with RC=1 call `lazy_update_cr0()`, which saves the result in `RCR0` and marks CR0 pending.
+- CR consumers (`mfcr`, CR logical ops, compare/CR writers that merge fields, conditional branches, epilogues) call `lazy_flush_cr0()` first.
 - Every carry-setting instruction calls `emit_write_xer_ca_from_carry()` which writes PPCR_XER_CA.
 - FPSCR rounding mode is synced to ARM64 FPCR on `mtfsfi`/`mtfsf`/`mtfsb0`/`mtfsb1`.
 
 **Contract**: At every block boundary, CR, XER.CA, XER.SO, and FPSCR are architectural.
-`lazy_flush_cr0()` is still called by epilogue paths as a harmless compatibility hook.
+`lazy_flush_cr0()` is called by every epilogue path; no downstream code observes stale CR0.
 
-**Rule**: Any new opcode handler that modifies CR, XER, or FPSCR must materialize those values
-before the emit function returns. There is no active deferred materialization mechanism.
+**Rule**: Any new opcode handler that modifies CR, XER, or FPSCR must either materialize directly
+or integrate with the lazy CR0 protocol before any consumer/fallback boundary.
 
 ### 4. GPR model
 
@@ -375,7 +376,7 @@ barrier. Not implemented in the current JIT.
 | # | Invariant | SheepShaver PPC JIT status |
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
-| 2 | Lazy flags valid only while ownership is unambiguous | ✅ CR0 is currently immediate (lazy scaffolding disabled); `lazy_flush_cr0()` remains a compatibility hook. XER/FPSCR always immediate. |
+| 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
 | 3 | Helper calls are semantic barriers | ✅ No helpers in compiled code. All unhandled/barrier ops → interpreter (full block barrier). |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code` and cache invalidation clears patch sites. |
 | 5 | Interpreter and JIT builds agree on shared semantics | ✅ 209/209 opcode harness green. `bcl` LR update fixed (2026-05). Full parity for all simple BO patterns. |
@@ -397,24 +398,30 @@ subsequent visits. See `jit_bc_pool` / `jit_bc_heads` in `ppc-jit.cpp`.
 some `return false` paths are semantic barriers, not merely unimplemented inline code. Enabling
 partial-block execution would require auditing every fallback site and proving resumability.
 
-### Weak seam 3: PC validation guard after JIT call may mask compiler bugs
+### Weak seam 3: Register allocation is conservative
+
+The x21–x28 GPR cache is enabled only for straight-line, non-faultable blocks. Internal
+conditional branches need per-label RA state, and guest-memory accesses need per-fault
+materialization guarantees before broader RA can be enabled safely.
+
+### Weak seam 4: PC validation guard after JIT call may mask compiler bugs
 
 The PC range check after `fn(regs_ptr())` silently skips blocks that set an out-of-range PC.
 This can mask JIT compiler bugs. It should log the occurrence rather than silently continuing.
 
-### Weak seam 4: Fallback classification coverage
+### Weak seam 5: Fallback classification coverage
 
 Several lower-risk `return false` paths in `compile_one` still lack explicit classification
 comments. As a result, the distinction between "not yet implemented", "permanently excluded",
 and "must fall back for exact interpreter semantics" is not always visible in code.
 
-### Weak seam 5: FPSCR sync coverage
+### Weak seam 6: FPSCR sync coverage
 
 FPSCR rounding mode is synced on `mtfsfi`/`mtfsf`/`mtfsb0`/`mtfsb1`. It is not verified
 that all ARM64 FP instructions correctly observe the rounding mode. This should be audited
 systematically against the FPSCR-to-FPCR mapping.
 
-### Weak seam 6: `bcl` with combined CTR+condition (`lk=1`) falls to interpreter
+### Weak seam 7: `bcl` with combined CTR+condition (`lk=1`) falls to interpreter
 
 The `bc` handler correctly falls back to the interpreter for `lk=1` on the combined
 CTR+condition path (`if (lk) return false`). The three simpler paths now correctly call

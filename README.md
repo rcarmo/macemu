@@ -252,7 +252,7 @@ The AArch64 JIT backend is under active development.
 - ✅ Full FPU: double+single arithmetic, fused multiply-add, FPSCR rounding mode sync
 - ✅ VNC keyboard + mouse input for remote control
 - ✅ Active JIT phases: hash+chaining block cache, fast dispatch, compile-time chaining, runtime back-patching, PPC64/rld correctness
-- ⚠️ Lazy CR0 and register-allocation scaffolding are present but currently disabled pending proof-driven revalidation
+- ✅ Lazy CR0 re-enabled safely with an x19 pending-result copy; register allocation re-enabled conservatively for straight-line non-faultable blocks
 - ✅ ROM/opcode audits have fixed critical JIT bugs including `bcl`/`bclrl`, fallback-only terminators, privileged/trap fallback masking, XER struct layout, and AArch64 temp clobbers
 - ✅ Signal handler crash dumps fixed (stack overflow + missing arg + register shift)
 - ✅ Unix layer hardened: slirp pipe framing, XPRAM I/O, `strdup` null check, 17 bounds fixes

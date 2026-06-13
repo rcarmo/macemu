@@ -13,10 +13,10 @@
 ### JIT Boot Status
 
 With JIT active, SheepShaver boots Mac OS to the Welcome splash screen.
-Block cache and chaining are active; lazy CR0 and register-allocation scaffolding remain in-tree but are currently disabled after boot-regression risk:
+Block cache and chaining are active; lazy CR0 has been re-enabled with a stable callee-saved pending-result copy, and register allocation is active only for straight-line non-faultable blocks:
 1. **Phase 1:** Hash + chaining block cache (8192 buckets)
-2. **Phase 2:** Lazy CR0 flags scaffolded, currently disabled (`lazy_update_cr0()` materializes immediately)
-3. **Phase 3:** Register allocation scaffolded, currently disabled (active path uses direct struct LDR/STR)
+2. **Phase 2:** Lazy CR0 flags active again: Rc=1 results are copied to x19 and materialized on CR consumers/block exits
+3. **Phase 3:** Register allocation active conservatively for straight-line non-memory blocks; path-sensitive/faultable blocks still use direct struct LDR/STR
 4. **Phase 4a:** Fast JIT dispatch inner loop (`a8afdf92`)
 5. **Phase 4b:** Compile-time block chaining — `chain_code` entry points (`4bcd9336`)
 6. **Phase 4c:** Runtime back-patching — chain site pool, `patch_chain_sites` on insert (`e1f11657`)
@@ -26,6 +26,7 @@ Block cache and chaining are active; lazy CR0 and register-allocation scaffoldin
 
 Historical MacBench results from the optimization tranche: CPU 835, FPU 1027.
 Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ).
+Latest targeted timing after lazy CR0 re-enable: Rc=1 1B loop improved from a warmed immediate-CR0 baseline of ~2.84s to ~2.39–2.63s; the earlier cold baseline was ~5.97s.
 
 ### ROM Harness
 
@@ -39,6 +40,17 @@ hardware, no SheepShaver runtime dependencies.
 
 Remaining 25 failures: CR field interactions in multi-instruction blocks
 and complex branch BO patterns (CTR+condition combo).
+
+### Recent bug fixes / optimization repairs (2026-06)
+
+- **Lazy CR0 re-enabled safely** (2026-06-13): Rc=1 handlers now copy the result to x19
+  (`RCR0`, callee-saved) and defer CR0 materialization until a CR consumer or block exit.
+  This avoids the earlier boot-hang class where the pending result lived in a scratch register
+  that later code clobbered.
+- **Conservative register allocation re-enabled** (2026-06-13): the x21–x28 GPR cache is now
+  used only for straight-line, non-faultable blocks. Blocks with conditional branches or
+  guest-memory accesses stay on direct struct LDR/STR until per-label/per-fault RA state is
+  implemented.
 
 ### Recent bug fixes (2026-05)
 
