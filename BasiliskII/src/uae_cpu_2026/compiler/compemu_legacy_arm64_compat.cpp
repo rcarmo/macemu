@@ -814,7 +814,7 @@ static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
 	regs.pc_p = p + 4;
 }
 
-static void jit_install_fast_interpreter_overrides(void)
+static ALWAYS_INLINE void jit_install_fast_interpreter_overrides(void)
 {
 	static bool installed = false;
 	if (installed)
