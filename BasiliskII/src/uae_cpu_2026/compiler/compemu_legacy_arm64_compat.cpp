@@ -1011,7 +1011,9 @@ void execute_normal(void)
 #endif
 	if (!check_for_cache_miss()) {
 		cpu_history pc_hist[MAXRUN];
+#ifdef UAE
 		memset(pc_hist, 0, sizeof(pc_hist));
+#endif
 		int blocklen = 0;
 		int total_cycles = 0;
 		/* Use the actual current fetch PC as the base for this traced block.
