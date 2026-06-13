@@ -184,21 +184,24 @@ static __inline__ uae_u32 get_byte(uaecptr addr)
 #define phys_get_byte get_byte
 static __inline__ void put_long(uaecptr addr, uae_u32 l)
 {
-    trace_write_log("L", addr, l);
+    if (trace_write_window_enabled())
+        trace_write_log("L", addr, l);
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     do_put_mem_long(m, l);
 }
 #define phys_put_long put_long
 static __inline__ void put_word(uaecptr addr, uae_u32 w)
 {
-    trace_write_log("W", addr, w);
+    if (trace_write_window_enabled())
+        trace_write_log("W", addr, w);
     uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
     do_put_mem_word(m, w);
 }
 #define phys_put_word put_word
 static __inline__ void put_byte(uaecptr addr, uae_u32 b)
 {
-    trace_write_log("B", addr, b);
+    if (trace_write_window_enabled())
+        trace_write_log("B", addr, b);
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
     do_put_mem_byte(m, b);
 }

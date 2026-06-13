@@ -464,8 +464,8 @@ static inline void basilisk_trace_host_write(const char *kind, const void *ptr, 
    We need byte-swap for multi-byte reads/writes. */
 static inline uae_u32 do_get_mem_long(uae_u32 *a) {return __builtin_bswap32(*a);}
 static inline uae_u32 do_get_mem_word(uae_u16 *a) {return __builtin_bswap16(*a);}
-static inline void do_put_mem_long(uae_u32 *a, uae_u32 v) {basilisk_trace_host_write("L", a, v); *a = __builtin_bswap32(v);}
-static inline void do_put_mem_word(uae_u16 *a, uae_u32 v) {basilisk_trace_host_write("W", a, v); *a = __builtin_bswap16(v);}
+static inline void do_put_mem_long(uae_u32 *a, uae_u32 v) {if (basilisk_trace_write_enabled()) basilisk_trace_host_write("L", a, v); *a = __builtin_bswap32(v);}
+static inline void do_put_mem_word(uae_u16 *a, uae_u32 v) {if (basilisk_trace_write_enabled()) basilisk_trace_host_write("W", a, v); *a = __builtin_bswap16(v);}
 #else
 /* Big-endian CPUs which can do unaligned accesses */
 static inline uae_u32 do_get_mem_long(uae_u32 *a) {return *a;}
