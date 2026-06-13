@@ -802,11 +802,13 @@ static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
 	/* OR.B #<data>.B,D0.  This is the dominant interpreter fallback while
 	   executing zero-filled RAM probes; avoid get_ibyte()/get_real_address()
 	   and the generated handler's byte-lane generality on the hot path. */
-	uae_s8 src = (uae_s8)p[3];
-	uae_s8 dst = (uae_s8)(m68k_dreg(regs, 0) & 0xff);
-	src |= dst;
-	optflag_testb(src);
-	m68k_dreg(regs, 0) = (m68k_dreg(regs, 0) & ~0xff) | ((uae_u8)src);
+	uae_u8 imm = p[3];
+	uae_u32 d0 = m68k_dreg(regs, 0);
+	uae_u8 result = (uae_u8)(d0 | imm);
+	regflags.nzcv = (result == 0 ? (uae_u32)FLAGVAL_Z : 0) |
+		((result & 0x80) ? (uae_u32)FLAGVAL_N : 0);
+	if (imm)
+		m68k_dreg(regs, 0) = (d0 & ~0xff) | result;
 	regs.pc_p = p + 4;
 }
 
@@ -853,10 +855,15 @@ void exec_nostats(void)
 	}
 #endif
 	static unsigned long trace_count = 0;
+	const bool trace_enabled = jit_tracewin_enabled();
 	for (;;) {
-		uae_u32 before_pc = m68k_getpc();
+		uae_u32 before_pc = 0;
 		uae_u32 opcode = GET_OPCODE;
-		bool trace_this = trace_count < jit_tracewin_limit() && jit_tracewin_match(before_pc);
+		bool trace_this = false;
+		if (trace_enabled && trace_count < jit_tracewin_limit()) {
+			before_pc = m68k_getpc();
+			trace_this = jit_tracewin_match(before_pc);
+		}
 		if (trace_this) {
 			fprintf(stderr,
 				"TRACEWINJ BEFORE step=%lu pc=%08x op=%04x regs.pc=%08x pc_p=%p oldp=%p d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x sr=%04x nzcv=%08x x=%08x\n",
@@ -1026,8 +1033,10 @@ void execute_normal(void)
 				pctrace_limit = env ? strtoul(env, NULL, 10) : 0;
 				pctrace_init = true;
 			}
-			uae_u32 pc = m68k_getpc();
-			if (pctrace_limit && pctrace_count < pctrace_limit && jit_pctrace_match(pc)) {
+			if (pctrace_limit && pctrace_count < pctrace_limit) {
+				uae_u32 pc = m68k_getpc();
+				if (!jit_pctrace_match(pc))
+					goto jit_pctrace_done;
 				static unsigned long pctrace_words = 0;
 				static bool pctrace_words_init = false;
 				if (!pctrace_words_init) {
@@ -1089,6 +1098,8 @@ void execute_normal(void)
 					fprintf(stderr, "\n");
 				}
 			}
+jit_pctrace_done:
+			;
 		}
 #endif
 #if defined(CPU_AARCH64)
