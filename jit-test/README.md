@@ -60,4 +60,4 @@ Any invariant violation aborts with machine-parseable failure metrics (`infra_fa
 - No ROM patches, stub-region hacks, or RAM presets to mask bugs.
 - Keep outputs machine-parseable and numeric.
 - Keep vectors deterministic and bounded-time.
-- Pair performance changes with strict ROM marker checks: no `JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, or `bad_pcp` markers.
+- Pair performance changes with strict ROM marker checks: no `JIT_FALLBACK`, `SEGV_SKIP`, `JITBLOCKVERIFY`, `op=8c4c`, `bad_pcp`, or fatal host signal markers (`SIGILL`, `SIGSEGV`, `SIGBUS`, illegal instruction, bus error, segmentation fault).
