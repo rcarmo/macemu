@@ -481,6 +481,16 @@ static void emit_write_xer_ca_from_carry(void) {
 	emit32(0x39000000 | (PPCR_XER_CA << 10) | (RSTATE << 5) | RTMP2); /* STRB */
 }
 
+/* Write ARM64 signed overflow flag (from last ADDS/SUBS/ADCS/SBCS) into
+ * XER.OV and accumulate it into XER.SO. */
+static void emit_write_xer_ov_so_from_overflow(void) {
+	emit32(0x1A9F77E0 | RTMP2); /* CSET W(RTMP2), VS */
+	emit32(0x39000000 | (PPCR_XER_OV << 10) | (RSTATE << 5) | RTMP2); /* STRB OV */
+	emit32(0x39400000 | (PPCR_XER_SO << 10) | (RSTATE << 5) | RTMP1); /* LDRB SO */
+	emit32(0x2A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* ORR SO,SO,OV */
+	emit32(0x39000000 | (PPCR_XER_SO << 10) | (RSTATE << 5) | RTMP1); /* STRB SO */
+}
+
 /* Set XER.CA byte to a specific value (0 or 1) */
 static void emit_set_xer_ca(int val) {
 	if (val) {
@@ -867,17 +877,31 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		}
 		case 266: /* add / add. */
+		case 778: /* addo / addo. */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, rd);
+			if (xo == 778) {
+				emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS */
+				emit_store_gpr(RTMP0, rd);
+				emit_write_xer_ov_so_from_overflow();
+			} else {
+				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD */
+				emit_store_gpr(RTMP0, rd);
+			}
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 40: /* subf (rD = rB - rA) */
+		case 552: /* subfo / subfo. */
 			emit_load_gpr(RTMP0, rb);
 			emit_load_gpr(RTMP1, ra);
-			emit32(0x4B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUB */
-			emit_store_gpr(RTMP0, rd);
+			if (xo == 552) {
+				emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUBS */
+				emit_store_gpr(RTMP0, rd);
+				emit_write_xer_ov_so_from_overflow();
+			} else {
+				emit32(0x4B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUB */
+				emit_store_gpr(RTMP0, rd);
+			}
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 28: /* and */
@@ -1178,11 +1202,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 8: /* subfc rD,rA,rB (rD = rB - rA, set CA) */
+		case 520: /* subfco / subfco. */
 			emit_load_gpr(RTMP0, rb);
 			emit_load_gpr(RTMP1, ra);
 			emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUBS */
 			emit_store_gpr(RTMP0, rd);
 			emit_write_xer_ca_from_carry();
+			if (xo == 520) emit_write_xer_ov_so_from_overflow();
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 136: /* subfe rD,rA,rB (rD = ~rA + rB + CA) */
@@ -1197,24 +1223,25 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 10: /* addc rD,rA,rB (set CA) */
+		case 522: /* addco / addco. */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS */
 			emit_store_gpr(RTMP0, rd);
 			emit_write_xer_ca_from_carry();
+			if (xo == 522) emit_write_xer_ov_so_from_overflow();
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 138: /* adde rD,rA,rB (rD = rA + rB + CA) */
+		case 650: /* addeo / addeo. */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS rA+rB */
-			/* Now add CA: read XER.CA, add it */
-			emit32(0xD53B4200 | RTMP2); /* MRS NZCV (save carry from ADDS) */
-			emit_read_xer_ca(RTMP1);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD carry-in */
+			emit_read_xer_ca(RTMP2);
+			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
+			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS rA+rB+CA */
 			emit_store_gpr(RTMP0, rd);
-			/* Write new CA: set if either ADDS or the CA addition overflowed */
 			emit_write_xer_ca_from_carry();
+			if (xo == 650) emit_write_xer_ov_so_from_overflow();
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 234: /* addme rD,rA (rD = rA + CA - 1, set CA) */
