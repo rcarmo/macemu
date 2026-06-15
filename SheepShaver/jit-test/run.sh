@@ -225,6 +225,13 @@ TEST_ORDER+=(add_dot_neg)
 TESTS[divw_basic]="38600064 38800007 7CA323D6"
 TEST_ORDER+=(divw_basic)
 
+# divwo normal and overflow cases. Overflow result follows interpreter helper:
+# divisor zero yields sign-fill of dividend and sets XER.OV/SO.
+TESTS[divwo_basic]="38600064 38800007 7CA327D6"
+TEST_ORDER+=(divwo_basic)
+TESTS[divwo_zero_overflow]="3860ffff 38800000 7CA327D6"
+TEST_ORDER+=(divwo_zero_overflow)
+
 # --- Counter branch (bctrl pattern) ---
 # li r3,0; lis r4,hi(target); ori r4,r4,lo(target); mtctr r4; bctrl
 # Can't easily encode absolute target, so just test mtctr+mfctr round-trip

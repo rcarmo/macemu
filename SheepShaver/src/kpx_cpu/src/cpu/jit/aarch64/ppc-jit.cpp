@@ -492,6 +492,13 @@ static void emit_write_xer_ov_so_from_overflow(void) {
 	emit32(0x39000000 | (PPCR_XER_SO << 10) | (RSTATE << 5) | RTMP1); /* STRB SO */
 }
 
+static void emit_write_xer_ov_so_from_reg(int reg) {
+	emit32(0x39000000 | (PPCR_XER_OV << 10) | (RSTATE << 5) | reg); /* STRB OV */
+	emit32(0x39400000 | (PPCR_XER_SO << 10) | (RSTATE << 5) | RTMP1); /* LDRB SO */
+	emit32(0x2A000000 | (reg << 16) | (RTMP1 << 5) | RTMP1); /* ORR SO,SO,OV */
+	emit32(0x39000000 | (PPCR_XER_SO << 10) | (RSTATE << 5) | RTMP1); /* STRB SO */
+}
+
 /* Set XER.CA byte to a specific value (0 or 1) */
 static void emit_set_xer_ca(int val) {
 	if (val) {
@@ -1038,6 +1045,29 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x1AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SDIV Wd,Wn,Wm */
 			emit_store_gpr(RTMP0, rd);
+			if (op & 1) lazy_update_cr0(RTMP0);
+			return true;
+		case 1003: /* divwo / divwo. */
+			emit_load_gpr(RTMP0, ra); /* dividend */
+			emit_load_gpr(RTMP1, rb); /* divisor */
+			/* overflow = divisor==0 || (dividend==INT_MIN && divisor==-1) */
+			emit_cmp_w_imm(RTMP1, 0);
+			emit32(0x1A9F17E0 | RTMP2); /* CSET RTMP2, EQ */
+			emit_load_imm32(RTMP3, (int32_t)0x80000000u);
+			emit32(0x6B000000 | (RTMP3 << 16) | (RTMP0 << 5) | 31); /* CMP dividend,INT_MIN */
+			emit32(0x1A9F17E0 | RTMP3); /* CSET RTMP3, EQ */
+			emit_load_imm32(RTMP4, -1);
+			emit32(0x6B000000 | (RTMP4 << 16) | (RTMP1 << 5) | 31); /* CMP divisor,-1 */
+			emit32(0x1A9F17E0 | RTMP4); /* CSET RTMP4, EQ */
+			emit32(0x0A000000 | (RTMP4 << 16) | (RTMP3 << 5) | RTMP3); /* AND min && -1 */
+			emit32(0x2A000000 | (RTMP3 << 16) | (RTMP2 << 5) | RTMP2); /* OR overflow */
+			emit32(0x1AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP3); /* normal SDIV */
+			emit_load_gpr(RTMP4, ra);
+			emit32(0x131F7C00 | (RTMP4 << 5) | RTMP4); /* special result = dividend >> 31 */
+			emit_cmp_w_imm(RTMP2, 0);
+			emit32(0x1A800000 | (RTMP3 << 16) | (0x1 << 12) | (RTMP4 << 5) | RTMP0); /* CSEL special:normal, NE */
+			emit_store_gpr(RTMP0, rd);
+			emit_write_xer_ov_so_from_reg(RTMP2);
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 19: /* mfcr rD */
