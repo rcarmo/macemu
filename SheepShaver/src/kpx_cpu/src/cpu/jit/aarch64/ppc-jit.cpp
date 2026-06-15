@@ -201,6 +201,7 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 #define RTMP1    1
 #define RTMP2    2
 #define RTMP3    3
+#define RTMP4    4
 
 /* FPR offsets: FPR[n] at offset 128 + n*8 (each is a 64-bit double) */
 #define PPCR_FPR(n) ((uint32_t)(256 + (n) * 8))
@@ -541,6 +542,81 @@ static void emit_load_ea_base(int ra_num) {
 	} else {
 		emit_load_gpr(RTMP0, ra_num);
 	}
+}
+
+static void patch_bcond(uint32_t *loc, uint8_t cond, uint32_t *target) {
+	int32_t off = (int32_t)((uint8_t *)target - (uint8_t *)loc);
+	*loc = 0x54000000 | (((off >> 2) & 0x7FFFF) << 5) | (cond & 0xF);
+}
+
+static void emit_cmp_w_imm(int rn, uint32_t imm) {
+	emit32(0x7100001F | ((imm & 0xFFF) << 10) | (rn << 5)); /* CMP Wn,#imm */
+}
+
+static void emit_add_w_imm(int rd, int rn, uint32_t imm) {
+	emit32(0x11000000 | ((imm & 0xFFF) << 10) | (rn << 5) | rd); /* ADD Wd,Wn,#imm */
+}
+
+static void emit_lsl_w_imm(int rd, int rn, uint32_t sh) {
+	if (sh == 0) { a64_mov_reg(rd, rn); return; }
+	emit_load_imm32(RTMP4, sh);
+	emit32(0x1AC02000 | (RTMP4 << 16) | (rn << 5) | rd); /* LSL Wd,Wn,Wm */
+}
+
+static void emit_lsr_w_imm(int rd, int rn, uint32_t sh) {
+	if (sh == 0) { a64_mov_reg(rd, rn); return; }
+	emit_load_imm32(RTMP4, sh);
+	emit32(0x1AC02400 | (RTMP4 << 16) | (rn << 5) | rd); /* LSR Wd,Wn,Wm */
+}
+
+static void emit_string_count_guard(uint32_t **guards, int *guard_count, uint32_t byte_index) {
+	emit_cmp_w_imm(RTMP3, byte_index + 1);
+	guards[(*guard_count)++] = jit_code_ptr;
+	emit32(0); /* B.LO done: patched after unrolled transfer */
+}
+
+static void emit_lswx_runtime_count(uint32_t rd) {
+	uint32_t *guards[127];
+	int guard_count = 0;
+	emit32(0x39400000 | (PPCR_XER_CNT << 10) | (RSTATE << 5) | RTMP3); /* LDRB count */
+	for (uint32_t i = 0; i < 127; i++) {
+		emit_string_count_guard(guards, &guard_count, i);
+		uint32_t r = (rd + (i >> 2)) & 31;
+		uint32_t b = i & 3;
+		uint32_t sh = (3 - b) * 8;
+		emit32(0x39400000 | (RTMP0 << 5) | RTMP1); /* LDRB byte,[EA] */
+		emit_lsl_w_imm(RTMP1, RTMP1, sh);
+		if (b == 0) {
+			a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
+		} else {
+			a64_ldr_w_imm(RTMP2, RSTATE, PPCR_GPR(r));
+			emit_load_imm32(RTMP4, (int32_t)~(0xFFu << sh));
+			emit32(0x0A000000 | (RTMP4 << 16) | (RTMP2 << 5) | RTMP2); /* clear byte */
+			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP2 << 5) | RTMP2); /* merge */
+			a64_str_w_imm(RTMP2, RSTATE, PPCR_GPR(r));
+		}
+		emit_add_w_imm(RTMP0, RTMP0, 1);
+	}
+	uint32_t *done = jit_code_ptr;
+	for (int i = 0; i < guard_count; i++) patch_bcond(guards[i], 3, done); /* LO/CC */
+}
+
+static void emit_stswx_runtime_count(uint32_t rs) {
+	uint32_t *guards[127];
+	int guard_count = 0;
+	emit32(0x39400000 | (PPCR_XER_CNT << 10) | (RSTATE << 5) | RTMP3); /* LDRB count */
+	for (uint32_t i = 0; i < 127; i++) {
+		emit_string_count_guard(guards, &guard_count, i);
+		uint32_t r = (rs + (i >> 2)) & 31;
+		uint32_t b = i & 3;
+		uint32_t sh = (3 - b) * 8;
+		a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
+		emit_lsr_w_imm(RTMP1, RTMP1, sh);
+		emit32(0x39000000 | (RTMP0 << 5) | RTMP1); /* STRB byte,[EA] */
+		emit_add_w_imm(RTMP0, RTMP0, 1);
+	}
+	uint32_t *done = jit_code_ptr;
+	for (int i = 0; i < guard_count; i++) patch_bcond(guards[i], 3, done); /* LO/CC */
 }
 
 /* ---- AltiVec Vector Register helpers ---- */
@@ -1723,9 +1799,22 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			}
 			return true;
 		}
-		case 533: /* lswx: runtime NB — fall back so interpreter executes this insn */
-		case 661: /* stswx: runtime NB — fall back so interpreter executes this insn */
-			return false;
+		case 533: /* lswx rD,rA,rB — runtime byte count from XER */
+			emit_load_ea_base(ra);
+			emit_load_gpr(RTMP1, rb);
+			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
+			ra_flush_all();
+			emit_lswx_runtime_count(rd);
+			ra_reset();
+			return true;
+		case 661: /* stswx rS,rA,rB — runtime byte count from XER */
+			emit_load_ea_base(ra);
+			emit_load_gpr(RTMP1, rb);
+			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
+			ra_flush_all();
+			emit_stswx_runtime_count(PPC_RS(op));
+			ra_reset();
+			return true;
 
 
 

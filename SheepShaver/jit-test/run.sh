@@ -198,6 +198,15 @@ TEST_ORDER+=(stb_lbz)
 TESTS[sth_lhz]="38601234 B0610300 38600000 A0A10300"
 TEST_ORDER+=(sth_lhz)
 
+# --- String load/store with runtime XER byte count ---
+# Store 0x11223344/0x55667788, set XER count=6, lswx r5,r1,r4.
+TESTS[lswx_xer_count6]="3C601122 60633344 90610600 3C605566 60637788 90610604 38800600 38C00006 7CC103A6 7CA1242A"
+TEST_ORDER+=(lswx_xer_count6)
+
+# Set XER count=6, stswx r5,r1,r4, then reload word+halfword.
+TESTS[stswx_xer_count6]="3CA0AABB 60A5CCDD 3CC0EEFF 60C60011 38800700 39200006 7D2103A6 7CA1252A 80E10700 A1010704"
+TEST_ORDER+=(stswx_xer_count6)
+
 # --- Record form (sets CR0) ---
 # li r3,42; addic. r5,r3,0  → CR0 should have GT bit set (positive result)
 # addic. rD,rA,SIMM = 0x34000000 | (rD<<21) | (rA<<16) | SIMM
