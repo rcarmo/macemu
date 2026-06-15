@@ -170,6 +170,11 @@
 // Enable Execute68k() safety checks?
 #define SAFE_EXEC_68K 0
 
+#if EMULATED_PPC && REAL_ADDRESSING
+static const uint32 PPC_HIGH_SCRATCH_BASE = 0xffff0000U;
+static const uint32 PPC_HIGH_SCRATCH_SIZE = 0x00010000U;
+#endif
+
 // Interrupts in EMUL_OP mode?
 #define INTERRUPTS_IN_EMUL_OP_MODE 1
 
@@ -226,6 +231,7 @@ X11_LOCK_TYPE x_display_lock = X11_LOCK_INIT; // X11 display lock
 
 static int zero_fd = 0;						// FD of /dev/zero
 static bool lm_area_mapped = false;			// Flag: Low Memory area mmap()ped
+static bool high_scratch_area_mapped = false;	// Flag: high PPC scratch page mmap()ped
 static bool rom_area_mapped = false;		// Flag: Mac ROM mmap()ped
 static bool ram_area_mapped = false;		// Flag: Mac RAM mmap()ped
 static bool dr_cache_area_mapped = false;	// Flag: Mac DR Cache mmap()ped
@@ -1120,6 +1126,15 @@ int main(int argc, char **argv)
 		}
 		lm_area_mapped = true;
 #endif
+#if EMULATED_PPC && REAL_ADDRESSING
+		// Some EMUL_OP/native thunk paths temporarily use a top-of-32-bit
+		// PowerPC stack. Map that scratch page so direct AArch64 JIT memory
+		// ops have the same deterministic storage the interpreter expects.
+		if (vm_mac_acquire_fixed(PPC_HIGH_SCRATCH_BASE, PPC_HIGH_SCRATCH_SIZE) == 0)
+			high_scratch_area_mapped = true;
+		else
+			D(bug("WARNING: could not map high PPC scratch page: %s\n", strerror(errno)));
+#endif
 #if REAL_ADDRESSING
 		// Allocate RAM at any address. Since ROM must be higher than RAM, allocate the RAM
 		// and ROM areas contiguously, plus a little extra to allow for ROM address alignment.
@@ -1326,6 +1341,12 @@ static void Quit(void)
 		vm_mac_release(DR_EMULATOR_BASE, DR_EMULATOR_SIZE);
 	if (dr_cache_area_mapped)
 		vm_mac_release(DR_CACHE_BASE, DR_CACHE_SIZE);
+
+	// Delete high PPC scratch page
+#if EMULATED_PPC && REAL_ADDRESSING
+	if (high_scratch_area_mapped)
+		vm_mac_release(PPC_HIGH_SCRATCH_BASE, PPC_HIGH_SCRATCH_SIZE);
+#endif
 
 	// Delete Low Memory area
 	if (lm_area_mapped)
