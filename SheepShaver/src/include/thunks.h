@@ -125,6 +125,10 @@ public:
 	static void Exit(void);
 	static uint32 PageSize();
 	static uint32 ZeroPage();
+	static uint32 Base();
+	static uint32 Proc();
+	static uint32 Data();
+	static uint32 End();
 	static uint32 Reserve(uint32 size);
 	static void Release(uint32 size);
 	static uint32 ReserveProc(uint32 size);
@@ -145,6 +149,26 @@ inline uint32 SheepMem::PageSize()
 inline uint32 SheepMem::ZeroPage()
 {
   return zero_page;
+}
+
+inline uint32 SheepMem::Base()
+{
+  return base;
+}
+
+inline uint32 SheepMem::Proc()
+{
+  return proc;
+}
+
+inline uint32 SheepMem::Data()
+{
+  return data;
+}
+
+inline uint32 SheepMem::End()
+{
+  return base + size;
 }
 
 inline uint32 SheepMem::Reserve(uint32 size)

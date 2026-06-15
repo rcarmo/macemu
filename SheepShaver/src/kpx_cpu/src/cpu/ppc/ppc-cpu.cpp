@@ -21,6 +21,9 @@
 #include "sysdeps.h"
 #include <stdlib.h>
 #include <assert.h>
+#ifdef SHEEPSHAVER
+#include "thunks.h"
+#endif
 #include "vm_alloc.h"
 #include "cpu/vm.hpp"
 #include "cpu/ppc/ppc-cpu.hpp"
@@ -41,10 +44,38 @@
 #include "debug.h"
 
 #if defined(__aarch64__) && defined(USE_AARCH64_JIT)
+extern uint32 RAMBase;
 extern uint8 *RAMBaseHost;
 extern uint32 RAMSize;
 extern uint32 ROMBase;
+extern uint8 *ROMBaseHost;
+extern uint32 ROMEnd;
 #include "cpu/jit/aarch64/ppc-jit.h"
+
+static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **base, size_t *size)
+{
+	uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
+	if (pc >= ram_start && pc + 4 >= pc && pc + 4 <= ram_start + RAMSize) {
+		*base = RAMBaseHost;
+		*size = RAMSize;
+		return true;
+	}
+	if (pc >= ROMBase && pc + 4 >= pc && pc + 4 <= ROMBase + 0x500000) {
+		*base = ROMBaseHost;
+		*size = 0x500000;
+		return true;
+	}
+#ifdef SHEEPSHAVER
+	if (pc >= SheepMem::Base() && pc + 4 >= pc && pc + 4 <= SheepMem::End()) {
+		*base = (const uint8 *)(uintptr_t)SheepMem::Base();
+		*size = SheepMem::End() - SheepMem::Base();
+		return true;
+	}
+#endif
+	*base = NULL;
+	*size = 0;
+	return false;
+}
 #endif
 
 #if PPC_PROFILE_GENERIC_CALLS
@@ -714,10 +745,14 @@ void powerpc_cpu::execute(uint32 entry)
 				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT=0 diagnostic override */
 				if (!jit_init_done) { ppc_jit_aarch64_init(4096); jit_init_done = true; }
 				ppc_jit_block jblk;
+				const uint8 *jit_region_base = NULL;
+				size_t jit_region_size = 0;
+				bool jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
+				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk);
 				/* GATE 2: execute only complete native blocks. Incomplete blocks are
 				 * compile-time probes only; skip_jit lets the interpreter execute the
 				 * first uncompiled/fallback-only instruction at the original PC. */
-				if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.complete) {
+				if (jit_compiled && jblk.complete) {
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
 				  pdi_jit_post:
@@ -731,8 +766,18 @@ void powerpc_cpu::execute(uint32 entry)
 					 *   3. Fall through to interpreter (goto skip_jit)
 					 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md */
 					uint32 jit_pc = pc();
-					if (jit_pc >= (uint32)(uintptr_t)RAMBaseHost + RAMSize &&
-					    !(jit_pc >= (uint32)ROMBase && jit_pc < (uint32)ROMBase + 0x500000)) {
+					uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
+					uint32 ram_end = ram_start + RAMSize;
+					uint32 mapped_end = ROMEnd ? ROMEnd : ((uint32)ROMBase + 0x500000);
+					if (mapped_end < ram_end)
+						mapped_end = ram_end;
+					bool jit_pc_mapped = (jit_pc >= ram_start && jit_pc < mapped_end) ||
+					                     (jit_pc >= (uint32)ROMBase && jit_pc < (uint32)ROMBase + 0x500000) ||
+#ifdef SHEEPSHAVER
+					                     (jit_pc >= SheepMem::Base() && jit_pc < SheepMem::End()) ||
+#endif
+					                     false;
+					if (!jit_pc_mapped) {
 						fprintf(stderr, "PPC-JIT-A64: GATE3: out-of-range PC 0x%08x after block at 0x%08x — handing to interpreter\n",
 						        jit_pc, jblk.ppc_start_pc);
 						/* Reset to block entry so interpreter starts from a known-good PC */
@@ -748,7 +793,8 @@ void powerpc_cpu::execute(uint32 entry)
 					 * JIT loop without touching the interpreter block cache.
 					 * This eliminates my_block_cache.find() + pdi_execute overhead for
 					 * hot block-to-block transitions where both blocks are JIT-compiled. */
-					if (ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk) && jblk.complete) {
+					jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
+					if (jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk) && jblk.complete) {
 						fn = (ppc_jit_entry_fn)(void*)jblk.code;
 						fn((void*)regs_ptr());
 						goto pdi_jit_post;
@@ -873,6 +919,9 @@ void powerpc_cpu::invalidate_cache()
 #if PPC_ENABLE_JIT
 	codegen.invalidate_cache();
 #endif
+#if defined(__aarch64__) && defined(USE_AARCH64_JIT)
+	ppc_jit_aarch64_flush();
+#endif
 #if PPC_DECODE_CACHE
 	decode_cache_p = decode_cache;
 #endif
@@ -911,5 +960,8 @@ void powerpc_cpu::invalidate_cache_range(uintptr start, uintptr end)
 #endif
 	spcflags().set(SPCFLAG_JIT_EXEC_RETURN);
 	my_block_cache.clear_range(start, end);
+#if defined(__aarch64__) && defined(USE_AARCH64_JIT)
+	ppc_jit_aarch64_flush();
+#endif
 #endif
 }
