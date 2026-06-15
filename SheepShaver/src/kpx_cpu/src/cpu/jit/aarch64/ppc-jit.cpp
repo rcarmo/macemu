@@ -697,6 +697,13 @@ static void emit_clear_branch_target_low_bits(int reg) {
 	emit32(0x0A000000 | (RTMP3 << 16) | (reg << 5) | reg); /* AND Wreg,Wreg,Wmask */
 }
 
+static void emit_guard_null_branch_target(int reg, uint32_t fallthrough_pc) {
+	emit_cmp_w_imm(reg, 0);
+	emit_load_imm32(RTMP3, (int32_t)fallthrough_pc);
+	/* reg = (reg == 0) ? fallthrough_pc : reg */
+	emit32(0x1A800000 | (reg << 16) | (0x0 << 12) | (RTMP3 << 5) | reg); /* CSEL EQ */
+}
+
 /* ---- Instruction offset map for intra-block branches ---- */
 static uint32_t *insn_code_offset[512];  /* ARM64 code ptr at start of each PPC insn */
 static uint32_t  insn_ppc_pc[512];       /* PPC PC of each compiled instruction */
@@ -2448,6 +2455,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			/* bclrl/bdnzlr branches to the old LR, then optional LK writes LR=pc+4. */
 			a64_ldr_w_imm(RTMP2, RSTATE, PPCR_LR); /* taken target = old LR */
 			emit_clear_branch_target_low_bits(RTMP2);
+			emit_guard_null_branch_target(RTMP2, pc + 4);
 			if (lk) { emit_load_imm32(RTMP1, (int32_t)(pc + 4)); a64_str_w_imm(RTMP1, RSTATE, PPCR_LR); }
 
 			/* RTMP0 = branch decision (1=taken, 0=fall through). */
@@ -2487,6 +2495,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x7100001F | (RTMP0 << 5)); /* CMP branch decision, #0 */
 			/* RTMP1 = decision ? old_LR : pc+4 */
 			emit32(0x1A800000 | (RTMP1 << 16) | (0x1 << 12) | (RTMP2 << 5) | RTMP1); /* CSEL NE */
+			emit_guard_null_branch_target(RTMP1, pc + 4);
 			a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
 			lazy_flush_cr0();
 			ra_flush_all();
@@ -2508,6 +2517,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);
 				emit_clear_branch_target_low_bits(RTMP0);
+				emit_guard_null_branch_target(RTMP0, pc + 4);
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
@@ -2539,6 +2549,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 					emit32(0x34000000 | (2 << 5) | RTMP0);
 					a64_mov_reg(RTMP1, RTMP2);
 				}
+				emit_guard_null_branch_target(RTMP1, pc + 4);
 				a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
@@ -3833,6 +3844,7 @@ bool ppc_jit_aarch64_compile(
 			ra_flush_all();
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_LR);
 			emit_clear_branch_target_low_bits(RTMP0);
+			emit_guard_null_branch_target(RTMP0, cur_pc + 4);
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 			a64_ldp_post(27, 28, A64_SP, 16);
 				a64_ldp_post(25, 26, A64_SP, 16);
