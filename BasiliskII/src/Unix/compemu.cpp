@@ -45222,15 +45222,11 @@ void REGPARAM2 op_e100_0_comp_ff(uae_u32 opcode) /* ASL */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 	dont_care_flags();
-    if (needed_flags & FLAG_V) {
-        FAIL(1);
-        return;
-    }
 {	int cnt = scratchie++;
 	mov_l_ri(cnt, srcreg);
 {	int data = dstreg;
 {	start_needflags();
-	shll_b_ri(data,srcreg);
+	if (needed_flags & FLAG_V) jff_ASL_b_imm(data,srcreg); else shll_b_ri(data,srcreg);
 	live_flags();
 	end_needflags();
 	duplicate_carry();
@@ -45528,15 +45524,11 @@ void REGPARAM2 op_e140_0_comp_ff(uae_u32 opcode) /* ASL */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 	dont_care_flags();
-    if (needed_flags & FLAG_V) {
-        FAIL(1);
-        return;
-    }
 {	int cnt = scratchie++;
 	mov_l_ri(cnt, srcreg);
 {	int data = dstreg;
 {	start_needflags();
-	shll_w_ri(data,srcreg);
+	if (needed_flags & FLAG_V) jff_ASL_w_imm(data,srcreg); else shll_w_ri(data,srcreg);
 	live_flags();
 	end_needflags();
 	duplicate_carry();
@@ -45834,15 +45826,11 @@ void REGPARAM2 op_e180_0_comp_ff(uae_u32 opcode) /* ASL */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 	dont_care_flags();
-    if (needed_flags & FLAG_V) {
-        FAIL(1);
-        return;
-    }
 {	int cnt = scratchie++;
 	mov_l_ri(cnt, srcreg);
 {	int data = dstreg;
 {	start_needflags();
-	shll_l_ri(data,srcreg);
+	if (needed_flags & FLAG_V) jff_ASL_l_imm(data,srcreg); else shll_l_ri(data,srcreg);
 	live_flags();
 	end_needflags();
 	duplicate_carry();
@@ -89315,14 +89303,10 @@ void REGPARAM2 op_e100_0_comp_nf(uae_u32 opcode) /* ASL */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 	dont_care_flags();
-    if (needed_flags & FLAG_V) {
-        FAIL(1);
-        return;
-    }
 {	int cnt = scratchie++;
 	mov_l_ri(cnt, srcreg);
 {	int data = dstreg;
-{	shll_b_ri(data,srcreg);
+{	if (needed_flags & FLAG_V) jff_ASL_b_imm(data,srcreg); else shll_b_ri(data,srcreg);
 	if(dstreg != data)
 		mov_b_rr(dstreg, data);
 }}}}
@@ -89589,14 +89573,10 @@ void REGPARAM2 op_e140_0_comp_nf(uae_u32 opcode) /* ASL */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 	dont_care_flags();
-    if (needed_flags & FLAG_V) {
-        FAIL(1);
-        return;
-    }
 {	int cnt = scratchie++;
 	mov_l_ri(cnt, srcreg);
 {	int data = dstreg;
-{	shll_w_ri(data,srcreg);
+{	if (needed_flags & FLAG_V) jff_ASL_w_imm(data,srcreg); else shll_w_ri(data,srcreg);
 	if(dstreg != data)
 		mov_w_rr(dstreg, data);
 }}}}
@@ -89863,14 +89843,10 @@ void REGPARAM2 op_e180_0_comp_nf(uae_u32 opcode) /* ASL */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 	dont_care_flags();
-    if (needed_flags & FLAG_V) {
-        FAIL(1);
-        return;
-    }
 {	int cnt = scratchie++;
 	mov_l_ri(cnt, srcreg);
 {	int data = dstreg;
-{	shll_l_ri(data,srcreg);
+{	if (needed_flags & FLAG_V) jff_ASL_l_imm(data,srcreg); else shll_l_ri(data,srcreg);
 	if(dstreg != data)
 		mov_l_rr(dstreg, data);
 }}}}

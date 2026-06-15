@@ -286,6 +286,8 @@ static int vm_acquire_mac_fixed(void *addr, size_t size)
  *  SIGSEGV handler
  */
 
+extern "C" void jit_describe_native_pc_for_segv(uintptr native_pc);
+
 static sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
 {
 	const uintptr fault_address = (uintptr)sigsegv_get_fault_address(sip);
@@ -308,10 +310,13 @@ static sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
 		static unsigned long segv_skip_count = 0;
 		segv_skip_count++;
 		if (segv_skip_count <= 5 || segv_skip_count % 500000 == 0) {
-			fprintf(stderr, "SEGV_SKIP[%lu] host=%p mac=%08lx pc=%p\n",
+			uintptr native_pc = (uintptr)sigsegv_get_fault_instruction_address(sip);
+			fprintf(stderr, "SEGV_SKIP[%lu] host=%p mac=%08lx pc=%p",
 				segv_skip_count, (void*)fault_address,
 				(unsigned long)(uae_u32)(fault_address - MEMBaseDiff),
-				sigsegv_get_fault_instruction_address(sip));
+				(void*)native_pc);
+			jit_describe_native_pc_for_segv(native_pc);
+			fprintf(stderr, "\n");
 		}
 		return SIGSEGV_RETURN_SKIP_INSTRUCTION;
 	}
@@ -890,7 +895,7 @@ int main(int argc, char **argv)
 	{
 		struct { uintptr mac_start; size_t size; const char *name; bool fill_ff; } io_ranges[] = {
 			{ 0x48000000, 0x02000000, "I/O-48", true },           // ROM/board probe alias; empty bus reads as 0xFF
-			{ 0x50000000, 0x0F000000, "I/O", false },             // Mac I/O (VIA, SCSI, ASC at 0x50Fxxxxx)
+			{ 0x50000000, 0x0F000000, "I/O", true },              // Mac I/O (VIA, SCSI, ASC at 0x50Fxxxxx), open bus defaults to 0xFF
 			{ 0x5F000000, 0x01000000, "I/O-hi", false },          // Machine config registers (0x5ffffffc)
 			{ 0xE0000000, 0x10000000, "NuBus-super", true },      // Super-slot probe space; empty slots read as 0xFF
 			{ 0xF0000000, 0x10000000, "NuBus", false },           // NuBus/video
@@ -917,6 +922,17 @@ int main(int argc, char **argv)
 		// Pre-populate I/O hardware registers with Quadra 800 values so the ROM
 		// boot reads correct data instead of zeros.
 		uint8_t *io_base = (uint8_t *)(MEMBaseDiff + 0x50000000UL);
+
+		// Hardware-probe defaults for ROM scanner byte probes.
+		// Each 0x50f0xxxx candidate page contributes a byte-pair signature;
+		// base=0 and +0x1e00=0x12 makes the scanner's D1 signature 0x12000000.
+		// +0x1a00 bit2 is a ready/status bit used by scanner output helpers.
+		for (uintptr_t off = 0; off < 0x100000; off += 0x2000) {
+			io_base[0x0F00000 + off + 0x0000] = 0x00;
+			io_base[0x0F00000 + off + 0x0002] = 0x00;
+			io_base[0x0F00000 + off + 0x1A00] = 0x04;
+			io_base[0x0F00000 + off + 0x1E00] = 0x12;
+		}
 
 		// VIA1 at 0x50F00000: PortA = 0x7F (all inputs, no outputs asserted)
 		// Quadra 800 VIA1 is at 0x50F00000; registers are 512-byte spaced.
@@ -999,14 +1015,14 @@ int main(int argc, char **argv)
 		{
 			uint8_t *cfg = (uint8_t *)(MEMBaseDiff + 0x5FFFFFFCUL);
 			cfg[0] = 0xA5; cfg[1] = 0x5A;  // upper word (big-endian): valid hw signature
-			cfg[2] = 0x10; cfg[3] = 0x03;  // lower word: 0x1003 = scan table entry[3]
-			                                // flags=0x0000773f (bit29=0 → no sound-driver
-			                                // init → MAC[0x02ba] stays 0 → clean trap path)
+			uint16_t machine_config_low = 0x1003;
+			if (const char *env = getenv("B2_MACHINE_CONFIG_LOW"))
+				machine_config_low = (uint16_t)strtoul(env, NULL, 0);
+			cfg[2] = (uint8_t)(machine_config_low >> 8);
+			cfg[3] = (uint8_t)(machine_config_low & 0xff);
 			void *page = (void *)((uintptr_t)cfg & ~0xFFFUL);
-			if (mprotect(page, 0x1000, PROT_READ) == 0)
-				fprintf(stderr, "MEM: 0x5ffffffc set to 0xA55AFFFF (PROT_READ)\n");
-			else
-				fprintf(stderr, "MEM: mprotect 0x5ffffffc failed: %s\n", strerror(errno));
+			(void)page;
+			fprintf(stderr, "MEM: diagnostic 0x5ffffffc left writable (0xA55A1003)\n");
 		}
 	}
 #endif

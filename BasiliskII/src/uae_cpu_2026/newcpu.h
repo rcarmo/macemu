@@ -205,8 +205,39 @@ static inline uae_u32 next_ilong (void)
     return r;
 }
 
+#ifdef USE_JIT
+extern "C" uae_u32 jit_current_interp_pc;
+extern "C" uae_u32 jit_current_interp_opcode;
+#endif
+
 static inline void m68k_setpc (uaecptr newpc)
 {
+    if (newpc >= 0x08000000) {
+        static unsigned m68k_setpc_bad_count = 0;
+        if (m68k_setpc_bad_count++ < 64) {
+            uaecptr sp = m68k_areg(regs, 7);
+            fprintf(stderr,
+                "M68K_SETPC_BAD[%u] newpc=%08x caller=%p oldpc=%08x interp_pc=%08x interp_op=%04x a0=%08x a1=%08x a6=%08x a7=%08x s0=%08x s4=%08x sr=%04x\n",
+                m68k_setpc_bad_count,
+                (unsigned)newpc,
+                __builtin_return_address(0),
+                (unsigned)regs.pc,
+#ifdef USE_JIT
+                (unsigned)jit_current_interp_pc,
+                (unsigned)jit_current_interp_opcode,
+#else
+                0u,
+                0u,
+#endif
+                (unsigned)m68k_areg(regs, 0),
+                (unsigned)m68k_areg(regs, 1),
+                (unsigned)m68k_areg(regs, 6),
+                (unsigned)sp,
+                (unsigned)get_long(sp),
+                (unsigned)get_long(sp + 4),
+                (unsigned)regs.sr);
+        }
+    }
 #ifndef FULLMMU
     regs.pc_p = regs.pc_oldp = get_real_address(newpc, 0, sz_word);
 #endif

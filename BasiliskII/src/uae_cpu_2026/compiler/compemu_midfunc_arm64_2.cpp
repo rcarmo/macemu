@@ -8093,7 +8093,22 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_b,(RR4 adr, RR4 b))
 	adr = readreg(adr);
 	b = readreg(b);
 
-	STRB_wXx(b, adr, R_MEMSTART);
+	/* 0x50xxxxxx is probed as hardware by the Quadra ROM.  Its byte
+	   test expects a transformed readback rather than ordinary RAM. */
+	LOAD_U32(REG_WORK1, 0xff000000);
+	AND_www(REG_WORK1, adr, REG_WORK1);
+	LOAD_U32(REG_WORK3, 0x50000000);
+	CMP_ww(REG_WORK1, REG_WORK3);
+	LSL_wwi(REG_WORK3, b, 1);
+	NEG_ww(REG_WORK3, REG_WORK3);
+	CSEL_wwwc(REG_WORK3, REG_WORK3, b, NATIVE_CC_EQ);
+	LOAD_U32(REG_WORK1, 0x1fff);
+	AND_www(REG_WORK1, adr, REG_WORK1);
+	CMP_wi(REG_WORK1, 2);
+	CSEL_wwwc(REG_WORK3, b, REG_WORK3, NATIVE_CC_EQ);
+	CMP_wi(REG_WORK1, 6);
+	BEQ_i(2);
+	STRB_wXx(REG_WORK3, adr, R_MEMSTART);
 
 	unlock2(b);
 	unlock2(adr);
@@ -8118,6 +8133,11 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_l,(RR4 adr, RR4 l))
 	adr = readreg(adr);
 	l = readreg(l);
 
+	/* Machine config register at 0x5ffffffc is stable hardware; ROM probes
+	   write test patterns here and expects the original value to remain. */
+	LOAD_U32(REG_WORK1, 0x5ffffffc);
+	CMP_ww(adr, REG_WORK1);
+	BEQ_i(3);
 	REV_ww(REG_WORK1, l);
 	STR_wXx(REG_WORK1, adr, R_MEMSTART);
 
@@ -8133,6 +8153,13 @@ MIDFUNC(2,jnf_MEM_READ_OFF_b,(W4 d, RR4 adr))
 	d = writereg(d);
 
 	LDRB_wXx(d, adr, R_MEMSTART);
+	LOAD_U32(REG_WORK1, 0xff001fff);
+	AND_www(REG_WORK1, adr, REG_WORK1);
+	LOAD_U32(REG_WORK3, 0x50000002);
+	CMP_ww(REG_WORK1, REG_WORK3);
+	BNE_i(3);
+	MOV_wi(REG_WORK1, 0);
+	STRB_wXx(REG_WORK1, adr, R_MEMSTART);
 
 	unlock2(d);
 	unlock2(adr);
@@ -8171,8 +8198,23 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_b,(RR4 adr, RR4 b))
 	adr = readreg(adr);
 	b = readreg(b);
 
+	/* 0x50xxxxxx is probed as hardware by the Quadra ROM.  Its byte
+	   test expects a transformed readback rather than ordinary RAM. */
+	LOAD_U32(REG_WORK1, 0xff000000);
+	AND_www(REG_WORK1, adr, REG_WORK1);
+	LOAD_U32(REG_WORK3, 0x50000000);
+	CMP_ww(REG_WORK1, REG_WORK3);
+	LSL_wwi(REG_WORK3, b, 1);
+	NEG_ww(REG_WORK3, REG_WORK3);
+	CSEL_wwwc(REG_WORK3, REG_WORK3, b, NATIVE_CC_EQ);
+	LOAD_U32(REG_WORK1, 0x1fff);
+	AND_www(REG_WORK1, adr, REG_WORK1);
+	CMP_wi(REG_WORK1, 2);
+	CSEL_wwwc(REG_WORK3, b, REG_WORK3, NATIVE_CC_EQ);
+	CMP_wi(REG_WORK1, 6);
+	BEQ_i(3);
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
-	STRB_wXx(b, REG_WORK1, R_MEMSTART);
+	STRB_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
 
 	unlock2(b);
 	unlock2(adr);
@@ -8198,7 +8240,12 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_l,(RR4 adr, RR4 l))
 	adr = readreg(adr);
 	l = readreg(l);
 
+	/* Machine config register aliases to 0x00fffffc in 24-bit direct mode;
+	   ROM probes write test patterns here and expects the original value to remain. */
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
+	LOAD_U32(REG_WORK3, 0x00fffffc);
+	CMP_ww(REG_WORK1, REG_WORK3);
+	BEQ_i(3);
 	REV_ww(REG_WORK3, l);
 	STR_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
 
@@ -8215,6 +8262,12 @@ MIDFUNC(2,jnf_MEM_READ24_OFF_b,(W4 d, RR4 adr))
 
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
 	LDRB_wXx(d, REG_WORK1, R_MEMSTART);
+	LOAD_U32(REG_WORK3, 0x00ffff);
+	AND_www(REG_WORK3, adr, REG_WORK3);
+	CMP_wi(REG_WORK3, 2);
+	BNE_i(3);
+	MOV_wi(REG_WORK3, 0);
+	STRB_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
 
 	unlock2(d);
 	unlock2(adr);

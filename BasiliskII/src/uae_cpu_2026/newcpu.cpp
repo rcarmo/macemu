@@ -882,6 +882,17 @@ void ex_rte(void)
 			fprintf(stderr, "RTE     SP: %08x  USP: %08x  SR: %04x  PC: %08x  Format: %04x olds=%d nr=%02x -> %08x\n", sp, regs.usp, newsr, m68k_getpc(), format, regs.s, nr, newpc);
 	}
 #endif
+	if (newpc >= 0x08000000 || newpc == 0x48f8fffe || newpc == 0x48f8ffff || newpc == 0x8c360000) {
+		memptr sp0 = m68k_areg(regs, 7) - 8;
+		static unsigned rte_bad_count = 0;
+		if (rte_bad_count++ < 64)
+			fprintf(stderr, "RTE_BAD[%u] newsr=%04x newpc=%08x format=%04x sp0=%08x nowsp=%08x words=%04x %04x %04x %04x %04x %04x c70=%08x c74=%08x\n",
+				(unsigned)rte_bad_count, (unsigned)newsr, (unsigned)newpc, (unsigned)(uae_u16)format,
+				(unsigned)sp0, (unsigned)m68k_areg(regs, 7),
+				(unsigned)get_word(sp0), (unsigned)get_word(sp0+2), (unsigned)get_word(sp0+4),
+				(unsigned)get_word(sp0+6), (unsigned)get_word(sp0+8), (unsigned)get_word(sp0+10),
+				(unsigned)get_long(0x0c70), (unsigned)get_long(0x0c74));
+	}
 	regs.sr = newsr;
 	MakeFromSR();
 	m68k_setpc_rte(newpc);
@@ -896,13 +907,19 @@ void Exception(int nr, uaecptr oldpc)
 {
     uae_u32 currpc = m68k_getpc ();
     MakeSR();
+    static unsigned aline_all_count = 0;
     if (((nr == 0xA || nr == 0xB) && currpc >= 0x04000500 && currpc <= 0x04000508) ||
-        (nr == 0xA && currpc == 0x040011e4 && trace_a995_env())) {
+        (nr == 0xA && currpc == 0x040011e4 && trace_a995_env()) ||
+        (nr == 0xA && getenv("B2_TRACE_ALL_ALINE") && aline_all_count++ < 200)) {
         fprintf(stderr,
-            "ALINE_EXC nr=%d currpc=%08x oldpc=%08x sr=%04x intmask=%u spc=%08x d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a7=%08x\n",
+            "ALINE_EXC nr=%d currpc=%08x oldpc=%08x vector=%08x vbr=%08x atab1454=%08x atab1458=%08x sr=%04x intmask=%u spc=%08x d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a7=%08x sp0=%08x sp4=%08x sp8=%08x sp12=%08x sp16=%08x\n",
             nr,
             (unsigned)currpc,
             (unsigned)oldpc,
+            (unsigned)get_long(regs.vbr + 4 * nr),
+            (unsigned)regs.vbr,
+            (unsigned)get_long(0x1454),
+            (unsigned)get_long(0x1458),
             (unsigned)regs.sr,
             (unsigned)regs.intmask,
             (unsigned)regs.spcflags,
@@ -911,7 +928,12 @@ void Exception(int nr, uaecptr oldpc)
             (unsigned)m68k_dreg(regs,2),
             (unsigned)m68k_areg(regs,0),
             (unsigned)m68k_areg(regs,1),
-            (unsigned)m68k_areg(regs,7));
+            (unsigned)m68k_areg(regs,7),
+            (unsigned)get_long(m68k_areg(regs,7)),
+            (unsigned)get_long(m68k_areg(regs,7) + 4),
+            (unsigned)get_long(m68k_areg(regs,7) + 8),
+            (unsigned)get_long(m68k_areg(regs,7) + 12),
+            (unsigned)get_long(m68k_areg(regs,7) + 16));
     }
 
     if (fixup.flag)

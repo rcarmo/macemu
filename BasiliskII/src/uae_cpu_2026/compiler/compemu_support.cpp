@@ -491,8 +491,33 @@ void m68k_do_compile_execute(void)
 		_dc++;
 		{
 			static unsigned long dc_log = 0;
-			if (++dc_log % 10000 == 0 || (dc_log <= 500)) {
-				uae_u32 _pc = m68k_getpc();
+			static uae_u32 prev_dc_pc = 0xffffffff;
+			static uae_u32 prev_dc_sr = 0;
+			static int rom_to_ram_logged = 0;
+			++dc_log;
+			uae_u32 _pc = m68k_getpc();
+			{
+				static int scanner_entry_log_count = 0;
+				if (_pc == 0x04002f98 && scanner_entry_log_count < 20) {
+					scanner_entry_log_count++;
+					fprintf(stderr, "SCAN2F98_ENTRY[%d] dc=%lu prev_pc=%08x prev_sr=%04x pc=%08x sr=%04x D0=%08x D1=%08x D2=%08x D3=%08x A0=%08x A1=%08x A2=%08x A6=%08x A7=%08x pc_p=%p oldp=%p\n",
+						scanner_entry_log_count, dc_log, prev_dc_pc, (unsigned)prev_dc_sr, _pc, (unsigned)regs.sr,
+						regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3], regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[14], regs.regs[15],
+						(void*)regs.pc_p, (void*)regs.pc_oldp);
+				}
+			}
+			if (!rom_to_ram_logged && prev_dc_pc >= 0x04000000 && _pc < 0x04000000) {
+				rom_to_ram_logged = 1;
+				fprintf(stderr, "ROM_TO_RAM dc=%lu prev_pc=%08x prev_sr=%04x pc=%08x sr=%04x intmask=%u spc=%08x D0=%08x D1=%08x D2=%08x D3=%08x A0=%08x A1=%08x A2=%08x A6=%08x A7=%08x pc_p=%p oldp=%p\n",
+					dc_log, prev_dc_pc, (unsigned)prev_dc_sr, _pc, (unsigned)regs.sr,
+					(unsigned)regs.intmask, (unsigned)regs.spcflags,
+					regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3],
+					regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[14], regs.regs[15],
+					(void*)regs.pc_p, (void*)regs.pc_oldp);
+			}
+			prev_dc_pc = _pc;
+			prev_dc_sr = regs.sr;
+			if (dc_log % 10000 == 0 || (dc_log <= 500)) {
 				if (dc_log % 10000 == 0 || dc_log <= 500) {
 					fprintf(stderr, "DC[%lu] pc=%08x sr=%04x intmask=%u spc=%08x",
 						dc_log, _pc, (unsigned)regs.sr, (unsigned)regs.intmask,
@@ -501,6 +526,11 @@ void m68k_do_compile_execute(void)
 						fprintf(stderr, " D0=%08x D3=%08x D7=%08x A0=%08x A7=%08x",
 							regs.regs[0], regs.regs[3], regs.regs[7],
 							regs.regs[8], regs.regs[15]);
+					if (_pc >= 0x040b9f90 && _pc <= 0x040ba1b0)
+						fprintf(stderr, " D0=%08x D1=%08x D2=%08x D3=%08x D7=%08x A1=%08x A2=%08x A3=%08x A6=%08x A7=%08x M3=%08x M3P4=%08x",
+							regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3], regs.regs[7],
+							regs.regs[9], regs.regs[10], regs.regs[11], regs.regs[14], regs.regs[15],
+							(unsigned)get_long(regs.regs[11]), (unsigned)get_long(regs.regs[11] + 4));
 					fprintf(stderr, "\n");
 				}
 				static int dump_once = 0;
@@ -6149,7 +6179,7 @@ extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode)
         return;
     MakeSR();
     fprintf(stderr,
-        "JITPCHIT[%lu] kind=%s pc=%08x op=%04x regs.pc=%08x regs.pc_p=%p oldp=%p sr=%04x intmask=%u d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a2=%08x a7=%08x spc=%08x\n",
+        "JITPCHIT[%lu] kind=%s pc=%08x op=%04x regs.pc=%08x regs.pc_p=%p oldp=%p sr=%04x intmask=%u d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a2=%08x a6=%08x a7=%08x spc=%08x\n",
         ++tc,
         kind_name,
         (unsigned)pc,
@@ -6165,6 +6195,7 @@ extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode)
         (unsigned)regs.regs[8],
         (unsigned)regs.regs[9],
         (unsigned)regs.regs[10],
+        (unsigned)regs.regs[14],
         (unsigned)regs.regs[15],
         (unsigned)regs.spcflags);
 }

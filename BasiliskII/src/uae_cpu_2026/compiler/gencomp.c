@@ -2203,7 +2203,15 @@ gen_opcode (unsigned int opcode)
 #ifdef DISABLE_I_BSR
     failure;
 #endif
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64: do not inline BSR target bodies into the same L2 trace block.
+	   Native BSR still pushes the return address and sets PC_P, but ending the
+	   block at the call boundary prevents fall-through into subroutine trace
+	   segments with an incoherent PC/stack model. */
+	isjump;
+#else
 	is_const_jump;
+#endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace();
 	comprintf("\tuae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;\n");
@@ -2656,15 +2664,15 @@ gen_opcode (unsigned int opcode)
 	    start_brace();
 	}
 	comprintf("\tdont_care_flags();\n");
-	/* Except for the handling of the V flag, this is identical to
-	   LSL. The handling of V is, uhm, unpleasant, so if it's needed,
-	   let the normal emulation handle it. Shoulders of giants kinda
-	   thing ;-) */
-	comprintf(
-		"    if (needed_flags & FLAG_V) {\n"
-		"        FAIL(1);\n"
-		"        " RETURN "\n"
-		"    }\n");
+	/* Register-count ASL still lacks complete V handling in this generic path.
+	   Immediate ASL uses ARM64 jff_ASL_*_imm helpers below, which do calculate V. */
+	if (curi->smode != immi) {
+		comprintf(
+			"    if (needed_flags & FLAG_V) {\n"
+			"        FAIL(1);\n"
+			"        " RETURN "\n"
+			"    }\n");
+	}
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -2705,9 +2713,12 @@ gen_opcode (unsigned int opcode)
 	}
 	else {
 	    switch(curi->size) {
-	     case sz_byte: comprintf("\tshll_b_ri(data,srcreg);\n"); break;
-	     case sz_word: comprintf("\tshll_w_ri(data,srcreg);\n"); break;
-	     case sz_long: comprintf("\tshll_l_ri(data,srcreg);\n"); break;
+	     case sz_byte:
+			comprintf("\tif (needed_flags & FLAG_V) jff_ASL_b_imm(data,srcreg); else shll_b_ri(data,srcreg);\n"); break;
+	     case sz_word:
+			comprintf("\tif (needed_flags & FLAG_V) jff_ASL_w_imm(data,srcreg); else shll_w_ri(data,srcreg);\n"); break;
+	     case sz_long:
+			comprintf("\tif (needed_flags & FLAG_V) jff_ASL_l_imm(data,srcreg); else shll_l_ri(data,srcreg);\n"); break;
 	     default: assert(0);
 	    }
 	}

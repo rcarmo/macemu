@@ -1246,7 +1246,7 @@ static bool patch_rom_32(void)
 	// This code tests d7 bit 17 and probes NuBus slot registers at (a3).
 	// BasiliskII doesn't emulate NuBus hardware; the emulated video uses
 	// the EMUL_OP driver. Change beq.s to bra.s to always skip the probe.
-	if (ROMBaseHost[0xba0b0] == 0x67 && ROMBaseHost[0xba0b1] == 0x24) {
+	if (false && ROMBaseHost[0xba0b0] == 0x67 && ROMBaseHost[0xba0b1] == 0x24) {
 		ROMBaseHost[0xba0b0] = 0x60;	// beq.s → bra.s (always skip)
 		D(bug("Patched NuBus slot probe at 0xba0b0\n"));
 	}
@@ -1258,7 +1258,7 @@ static bool patch_rom_32(void)
 	// Patch the entry itself with JMP(A6) (threaded-code return) so the
 	// scanner is skipped before any stack or VBR changes.
 	// Guard: 4fef ff00 = lea -256(sp),sp at the entry.
-	if (ROMBaseHost[0xb9874] == 0x4f && ROMBaseHost[0xb9875] == 0xef &&
+	if (false && ROMBaseHost[0xb9874] == 0x4f && ROMBaseHost[0xb9875] == 0xef &&
 	    ROMBaseHost[0xb9876] == 0xff && ROMBaseHost[0xb9877] == 0x00) {
 		/* Replace with: MOVEQ #0,D0; CLR.L ($0C30).W; JMP (A6)
 		   MOVEQ #0,D0: sets D0=0 so the handler returns success via RTS.

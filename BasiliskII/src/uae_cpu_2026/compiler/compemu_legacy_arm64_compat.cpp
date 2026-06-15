@@ -617,10 +617,13 @@ void do_nothing(void)
 	{
 		static unsigned long dn_count = 0;
 		dn_count++;
-		if (dn_count <= 5 || dn_count % 50000 == 0) {
-			fprintf(stderr, "DN[%lu] pc=%08x im=%u spc=%x d0=%08x a7=%08x\n",
+		if (dn_count <= 20 || dn_count % 50000 == 0) {
+			uaecptr sp = regs.regs[15];
+			fprintf(stderr, "DN[%lu] pc=%08x im=%u spc=%x d0=%08x d1=%08x d2=%08x d3=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a7=%08x s0=%08x s4=%08x t490=%08x t554=%08x t574=%08x\n",
 				dn_count, m68k_getpc(), (unsigned)regs.intmask,
-				(unsigned)regs.spcflags, regs.regs[0], regs.regs[15]);
+				(unsigned)regs.spcflags, regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3], regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[11], regs.regs[12], regs.regs[15],
+				(unsigned)get_long(sp), (unsigned)get_long(sp + 4),
+				(unsigned)get_long(0x490), (unsigned)get_long(0x554), (unsigned)get_long(0x574));
 		}
 	}
 	MakeSR();
@@ -860,16 +863,17 @@ void exec_nostats(void)
 	static unsigned long trace_count = 0;
 	const bool trace_enabled = jit_tracewin_enabled();
 	for (;;) {
-		uae_u32 before_pc = 0;
+		uae_u32 before_pc = m68k_getpc();
 		uae_u32 opcode = GET_OPCODE;
+		jit_current_interp_pc = before_pc;
+		jit_current_interp_opcode = opcode;
 		bool trace_this = false;
 		if (trace_enabled && trace_count < jit_tracewin_limit()) {
-			before_pc = m68k_getpc();
 			trace_this = jit_tracewin_match(before_pc);
 		}
 		if (trace_this) {
 			fprintf(stderr,
-				"TRACEWINJ BEFORE step=%lu pc=%08x op=%04x regs.pc=%08x pc_p=%p oldp=%p d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x sr=%04x nzcv=%08x x=%08x\n",
+				"TRACEWINJ BEFORE step=%lu pc=%08x op=%04x regs.pc=%08x pc_p=%p oldp=%p d0=%08x d1=%08x d2=%08x d3=%08x a0=%08x a1=%08x a2=%08x a3=%08x a7=%08x sr=%04x nzcv=%08x x=%08x\n",
 				trace_count + 1,
 				(unsigned)before_pc,
 				(unsigned)opcode,
@@ -878,9 +882,12 @@ void exec_nostats(void)
 				(void*)regs.pc_oldp,
 				(unsigned)regs.regs[0],
 				(unsigned)regs.regs[1],
+				(unsigned)regs.regs[2],
+				(unsigned)regs.regs[3],
 				(unsigned)regs.regs[8],
 				(unsigned)regs.regs[9],
 				(unsigned)regs.regs[10],
+				(unsigned)regs.regs[11],
 				(unsigned)regs.regs[15],
 				(unsigned)regs.sr,
 				(unsigned)regflags.nzcv,
@@ -892,7 +899,7 @@ void exec_nostats(void)
 			uae_u32 after_pc = m68k_getpc();
 			trace_count++;
 			fprintf(stderr,
-				"TRACEWINJ AFTER step=%lu pc=%08x op=%04x regs.pc=%08x pc_p=%p oldp=%p d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x sr=%04x nzcv=%08x x=%08x\n",
+				"TRACEWINJ AFTER step=%lu pc=%08x op=%04x regs.pc=%08x pc_p=%p oldp=%p d0=%08x d1=%08x d2=%08x d3=%08x a0=%08x a1=%08x a2=%08x a3=%08x a7=%08x sr=%04x nzcv=%08x x=%08x\n",
 				trace_count,
 				(unsigned)after_pc,
 				(unsigned)opcode,
@@ -901,9 +908,12 @@ void exec_nostats(void)
 				(void*)regs.pc_oldp,
 				(unsigned)regs.regs[0],
 				(unsigned)regs.regs[1],
+				(unsigned)regs.regs[2],
+				(unsigned)regs.regs[3],
 				(unsigned)regs.regs[8],
 				(unsigned)regs.regs[9],
 				(unsigned)regs.regs[10],
+				(unsigned)regs.regs[11],
 				(unsigned)regs.regs[15],
 				(unsigned)regs.sr,
 				(unsigned)regflags.nzcv,
@@ -917,6 +927,9 @@ void exec_nostats(void)
 }
 
 #if defined(CPU_AARCH64)
+extern "C" uae_u32 jit_current_interp_pc = 0;
+extern "C" uae_u32 jit_current_interp_opcode = 0;
+
 static void exec_nostats_limited(int maxrun_limit)
 {
 	int run_count = 0;
@@ -967,12 +980,14 @@ void execute_normal(void)
 				safe_pc &= 0x00FFFFFF;
 			if (fix_count++ < 50)
 				fprintf(stderr, "JIT: exec_normal bad pc_p=%p regs.pc=%08x safe=%08x "
-					"d0=%08x d1=%08x a0=%08x a7=%08x sr=%04x spc=%08x oldp=%p "
-					"isp=%08x msp=%08x s=%d m=%d\n",
+					"d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a6=%08x a7=%08x s0=%08x s4=%08x sr=%04x spc=%08x oldp=%p "
+					"isp=%08x msp=%08x s=%d m=%d last_setpc=%p last_kind=%u last_seq=%lu\n",
 					(void*)regs.pc_p, regs.pc, safe_pc,
-					regs.regs[0], regs.regs[1], regs.regs[8], regs.regs[15],
+					regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[8], regs.regs[9], regs.regs[14], regs.regs[15],
+					(unsigned)get_long(regs.regs[15]), (unsigned)get_long(regs.regs[15] + 4),
 					(unsigned)regs.sr, (unsigned)regs.spcflags, (void*)regs.pc_oldp,
-					(unsigned)regs.isp, (unsigned)regs.msp, regs.s, regs.m);
+					(unsigned)regs.isp, (unsigned)regs.msp, regs.s, regs.m,
+					(void*)jit_last_setpc_value, (unsigned)jit_last_setpc_kind, jit_last_setpc_seq);
 			/* Check if the guest Mac address is in valid executable memory:
 			   - RAM: 0 <= pc < RAMSize
 			   - ROM: ROMBaseMac <= pc < ROMBaseMac + ROMSize
@@ -1085,11 +1100,17 @@ void execute_normal(void)
 					uaecptr a0v = m68k_areg(regs, 0);
 					uaecptr a3v = m68k_areg(regs, 3);
 					fprintf(stderr,
-						"PCTMEM %08x m1e4=%08x m1e8=%08x m20c=%08x ma0m4=%08x ma3=%08x ma3p4=%08x\n",
+						"PCTMEM %08x m1e4=%08x m1e8=%08x m20c=%08x m0c30=%08x m0c64=%08x m0c68=%08x m0c6c=%08x m0c70=%08x m0c74=%08x ma0m4=%08x ma3=%08x ma3p4=%08x\n",
 						pc,
 						(unsigned)get_long(0x1e4),
 						(unsigned)get_long(0x1e8),
 						(unsigned)get_long(0x20c),
+						(unsigned)get_long(0x0c30),
+						(unsigned)get_long(0x0c64),
+						(unsigned)get_long(0x0c68),
+						(unsigned)get_long(0x0c6c),
+						(unsigned)get_long(0x0c70),
+						(unsigned)get_long(0x0c74),
 						(unsigned)get_long(a0v >= 4 ? a0v - 4 : a0v),
 						(unsigned)get_long(a3v),
 						(unsigned)get_long(a3v + 4));
@@ -1696,7 +1717,7 @@ extern "C" void jit_op_rte(void)
     m68k_areg(regs, 7) = sp;
     regs.sr = new_sr;
     MakeFromSR();
-    regs.pc = new_pc;
+    m68k_setpc_rte(new_pc);
     fill_prefetch_0();
 }
 

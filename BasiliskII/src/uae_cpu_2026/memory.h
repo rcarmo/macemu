@@ -172,6 +172,14 @@ static __inline__ uae_u32 fake_50f_status_byte(uaecptr addr, bool *handled)
     *handled = false;
     return 0;
 }
+static __inline__ bool is_50f_scanner_status(uaecptr addr)
+{
+    return (addr & 0xff001fff) == 0x50000002;
+}
+static __inline__ bool is_50f_scanner_data(uaecptr addr)
+{
+    return (addr & 0xff001fff) == 0x50000006;
+}
 static __inline__ uae_u32 get_byte(uaecptr addr)
 {
     bool handled = false;
@@ -179,13 +187,18 @@ static __inline__ uae_u32 get_byte(uaecptr addr)
     if (handled)
         return fake;
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
-    return do_get_mem_byte(m);
+    uae_u32 v = do_get_mem_byte(m);
+    if (is_50f_scanner_status(addr))
+        do_put_mem_byte(m, 0);
+    return v;
 }
 #define phys_get_byte get_byte
 static __inline__ void put_long(uaecptr addr, uae_u32 l)
 {
     if (trace_write_window_enabled())
         trace_write_log("L", addr, l);
+    if (addr == 0x5ffffffc)
+        return;
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     do_put_mem_long(m, l);
 }
@@ -202,6 +215,8 @@ static __inline__ void put_byte(uaecptr addr, uae_u32 b)
 {
     if (trace_write_window_enabled())
         trace_write_log("B", addr, b);
+    if (is_50f_scanner_data(addr))
+        return;
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
     do_put_mem_byte(m, b);
 }
