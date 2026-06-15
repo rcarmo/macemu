@@ -596,6 +596,14 @@ static void emit_save_lr_if_link(uint32_t cur_pc, bool lk) {
 	a64_str_w_imm(RTMP0, RSTATE, PPCR_LR);
 }
 
+/* PPC indirect branch targets use the target address with the low two bits
+ * ignored. Masking here keeps bclr/bcctr/blr in ISA-defined 4-byte alignment
+ * without relying on any ROM- or address-specific rejection. */
+static void emit_clear_branch_target_low_bits(int reg) {
+	emit_load_imm32(RTMP3, (int32_t)~3u);
+	emit32(0x0A000000 | (RTMP3 << 16) | (reg << 5) | reg); /* AND Wreg,Wreg,Wmask */
+}
+
 /* ---- Instruction offset map for intra-block branches ---- */
 static uint32_t *insn_code_offset[512];  /* ARM64 code ptr at start of each PPC insn */
 static uint32_t  insn_ppc_pc[512];       /* PPC PC of each compiled instruction */
@@ -2287,8 +2295,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			bool no_cond_test = (bo & 0x10);  /* BO[0]=1: skip condition test */
 			bool cond_bit_val = (bo & 0x08);  /* BO[1]=1: branch if CR[BI]=1 */
 
+			/* Materialize pending CR0 before reading LR; CR materialization uses
+			 * temporary registers and must not corrupt the saved branch target. */
+			lazy_flush_cr0();
+
 			/* bclrl/bdnzlr branches to the old LR, then optional LK writes LR=pc+4. */
 			a64_ldr_w_imm(RTMP2, RSTATE, PPCR_LR); /* taken target = old LR */
+			emit_clear_branch_target_low_bits(RTMP2);
 			if (lk) { emit_load_imm32(RTMP1, (int32_t)(pc + 4)); a64_str_w_imm(RTMP1, RSTATE, PPCR_LR); }
 
 			/* RTMP0 = branch decision (1=taken, 0=fall through). */
@@ -2348,6 +2361,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if ((bo & 0x14) == 0x14) { /* unconditional bctr */
 				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);
+				emit_clear_branch_target_low_bits(RTMP0);
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
@@ -2370,6 +2384,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				bool branch_if_true = (bo >> 3) & 1;
 				if (lk) { emit_load_imm32(RTMP1, (int32_t)(pc + 4)); a64_str_w_imm(RTMP1, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP1, RSTATE, PPCR_CTR);
+				emit_clear_branch_target_low_bits(RTMP1);
 				emit_load_imm32(RTMP2, (int32_t)(pc + 4));
 				if (branch_if_true) {
 					emit32(0x35000000 | (2 << 5) | RTMP0);
@@ -2453,7 +2468,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x4A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); break;
 			case 33:  /* crnor:  ~(a | b) = NOR */
 				emit32(0x2A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* OR */
-				emit32(0x2A2003E0 | RTMP1); /* MVN Wd, Wn → ORN WZR, Wn */
+				emit32(0x2A2003E0 | (RTMP1 << 16) | RTMP1); /* MVN Wd,Wn = ORN Wd,WZR,Wn */
 				emit_load_imm32(RTMP2, 1);
 				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND #1 */
 				break;
@@ -2461,7 +2476,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x0A200000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* BIC */ break;
 			case 289: /* creqv:  ~(a ^ b) = XNOR */
 				emit32(0x4A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* XOR */
-				emit32(0x2A2003E0 | RTMP1); /* MVN */
+				emit32(0x2A2003E0 | (RTMP1 << 16) | RTMP1); /* MVN */
 				emit_load_imm32(RTMP2, 1);
 				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND #1 */
 				break;
@@ -2469,7 +2484,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x2A200000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* ORN */ break;
 			case 225: /* crnand: ~(a & b) */
 				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND */
-				emit32(0x2A2003E0 | RTMP1); /* MVN */
+				emit32(0x2A2003E0 | (RTMP1 << 16) | RTMP1); /* MVN */
 				emit_load_imm32(RTMP2, 1);
 				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND #1 */
 				break;
@@ -3671,6 +3686,7 @@ bool ppc_jit_aarch64_compile(
 			lazy_flush_cr0();
 			ra_flush_all();
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_LR);
+			emit_clear_branch_target_low_bits(RTMP0);
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 			a64_ldp_post(27, 28, A64_SP, 16);
 				a64_ldp_post(25, 26, A64_SP, 16);
