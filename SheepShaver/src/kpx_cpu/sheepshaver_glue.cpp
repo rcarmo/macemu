@@ -815,8 +815,16 @@ sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
 	sheepshaver_cpu * const cpu = ppc_cpu;
 	const uint32 pc = cpu->pc();
 	
-	// Fault in Mac ROM or RAM?
-	bool mac_fault = (pc >= ROMBase && pc < (ROMBase + ROM_AREA_SIZE)) || (pc >= RAMBase && pc < (RAMBase + RAMSize)) || (pc >= DR_CACHE_BASE && pc < (DR_CACHE_BASE + DR_CACHE_SIZE));
+	// Fault while executing Mac code? Direct AArch64 JIT blocks can run code
+	// from SheepMem as well as ROM/RAM/DR-cache, so include that mapped PPC
+	// code range before applying the normal ignoresegv skip policy.
+	bool mac_fault = (pc >= ROMBase && pc < (ROMBase + ROM_AREA_SIZE)) ||
+	                 (pc >= RAMBase && pc < (RAMBase + RAMSize)) ||
+	                 (pc >= DR_CACHE_BASE && pc < (DR_CACHE_BASE + DR_CACHE_SIZE)) ||
+#ifdef SHEEPSHAVER
+	                 (pc >= SheepMem::Base() && pc < SheepMem::End()) ||
+#endif
+	                 false;
 	if (mac_fault) {
 
 		// "VM settings" during MacOS 8 installation
