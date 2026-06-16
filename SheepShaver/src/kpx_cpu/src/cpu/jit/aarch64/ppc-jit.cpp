@@ -1146,8 +1146,20 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_store_gpr(RTMP0, rd);
 				return true;
 			}
-			/* Unknown SPR: fall back so the interpreter owns privileged/CPU-specific semantics. */
-			return false;
+			if (spr == 25) { /* SDR1 — SheepShaver interpreter returns a sentinel */
+				emit_load_imm32(RTMP0, (int32_t)0xdead001fU);
+				emit_store_gpr(RTMP0, rd);
+				return true;
+			}
+			if (spr == 287) { /* PVR — return a 603e-compatible value used by OldWorld ROMs */
+				emit_load_imm32(RTMP0, 0x00060300);
+				emit_store_gpr(RTMP0, rd);
+				return true;
+			}
+			/* SheepShaver interpreter returns zero for unsupported SPR reads. */
+			a64_movz(RTMP0, 0, 0);
+			emit_store_gpr(RTMP0, rd);
+			return true;
 		}
 		case 467: /* mtspr */
 		{
@@ -1184,8 +1196,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x39000000 | (PPCR_XER_CNT << 10) | (RSTATE << 5) | RTMP1);
 				return true;
 			}
-			/* Unknown SPR: fall back so the interpreter owns privileged/CPU-specific semantics. */
-			return false;
+			/* SheepShaver interpreter ignores unsupported SPR writes. */
+			return true;
 		}
 		case 824: /* srawi rA,rS,SH (arithmetic shift right immediate, set CA) */
 		{
