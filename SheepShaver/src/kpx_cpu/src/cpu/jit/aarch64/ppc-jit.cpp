@@ -2690,8 +2690,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		bool lk = op & 1;
 		bool aa = op & 2;
 		uint32_t target = aa ? (uint32_t)li : (pc + li);
-		/* Validate target is in compilable range — reject jumps to EMUL_OP trampolines */
-		if ((target >> 26) == 6) return false; /* EMUL_OP opcode range */
+		/* Branch target is an address, not an opcode. Do not reject addresses
+		 * based on their high bits; if the target contains a SheepShaver opcode-6
+		 * instruction, the direct JIT handles it explicitly. */
 		if (lk) {
 			emit_load_imm32(RTMP0, (int32_t)(pc + 4));
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_LR);
