@@ -749,10 +749,11 @@ void powerpc_cpu::execute(uint32 entry)
 				size_t jit_region_size = 0;
 				bool jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
 				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk);
-				/* GATE 2: execute only complete native blocks. Incomplete blocks are
-				 * compile-time probes only; skip_jit lets the interpreter execute the
-				 * first uncompiled/fallback-only instruction at the original PC. */
-				if (jit_compiled && jblk.complete) {
+				/* GATE 2 removed: partial native blocks are safe. The direct compiler
+				 * emits an epilogue that stores the first uncompiled PPC PC before
+				 * returning, so executing a supported prefix is more faithful than
+				 * falling back to the interpreter at the block entry. */
+				if (jit_compiled) {
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
 				  pdi_jit_post:
@@ -794,7 +795,7 @@ void powerpc_cpu::execute(uint32 entry)
 					 * This eliminates my_block_cache.find() + pdi_execute overhead for
 					 * hot block-to-block transitions where both blocks are JIT-compiled. */
 					jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
-					if (jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk) && jblk.complete) {
+					if (jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk)) {
 						fn = (ppc_jit_entry_fn)(void*)jblk.code;
 						fn((void*)regs_ptr());
 						goto pdi_jit_post;
