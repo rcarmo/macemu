@@ -584,11 +584,14 @@ static void patch_cond_to_here(uint32_t *loc, uint8_t cond) {
 	patch_bcond(loc, cond, jit_code_ptr);
 }
 
-static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind) {
+static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind, int ppc_dst_reg) {
 	uint32_t *n1 = NULL, *n2 = NULL, *done = NULL;
-	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
 	/* Invalid high MMIO load: mirror SheepShaver's active SIGSEGV skip
-	 * behavior for EMULATED_PPC by leaving the destination register unchanged. */
+	 * behavior for EMULATED_PPC by leaving the destination register unchanged.
+	 * Seed dst_reg with the current PPC destination so the common store after
+	 * this helper is a no-op on the invalid path. */
+	emit_load_gpr(dst_reg, ppc_dst_reg);
+	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
 	done = jit_code_ptr; emit32(0); /* B done */
 	patch_cond_to_here(n1, 3);  /* LO: below MMIO */
 	patch_cond_to_here(n2, 2);  /* HS: high scratch */
@@ -1550,7 +1553,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 87: /* lbzx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 215: /* stbx rS,rA,rB */
@@ -1562,7 +1565,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 279: /* lhzx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 407: /* sthx rS,rA,rB */
@@ -1575,7 +1578,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 343: /* lhax rD,rA,rB (load halfword algebraic indexed) */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 371: /* mftb/mftbu rD — move from time base */
@@ -1595,7 +1598,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 247: /* stbux rS,rA,rB */
@@ -1610,7 +1613,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 439: /* sthux rS,rA,rB */
@@ -1626,7 +1629,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 55: /* lwzux rD,rA,rB */
@@ -1634,7 +1637,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4, rd);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 183: /* stwux rS,rA,rB */
@@ -2095,7 +2098,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			}
 		}
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2115,7 +2118,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2131,7 +2134,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2225,7 +2228,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* effective addr */
 		emit_store_gpr(RTMP0, ra); /* update rA */
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2754,7 +2757,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2976,7 +2979,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2997,7 +3000,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -3008,7 +3011,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3, rd);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
