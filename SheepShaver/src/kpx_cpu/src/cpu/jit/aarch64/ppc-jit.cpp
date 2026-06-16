@@ -566,6 +566,54 @@ static void emit_add_w_imm(int rd, int rn, uint32_t imm) {
 	emit32(0x11000000 | ((imm & 0xFFF) << 10) | (rn << 5) | rd); /* ADD Wd,Wn,#imm */
 }
 
+static bool emit_invalid_high_mmio_check(int ea_reg, uint32_t **normal1, uint32_t **normal2) {
+	/* Direct host addressing is valid for RAM/ROM/low-memory/SheepMem and for
+	 * the explicitly mapped high scratch page. Unmapped hardware/MMIO space in
+	 * 0xf0000000..0xfffeffff must not be accessed by generated native loads:
+	 * a SIGSEGV-skip would leave the destination register stale. */
+	emit_load_imm32(RTMP3, (int32_t)0xf0000000U);
+	emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wlow */
+	*normal1 = jit_code_ptr; emit32(0); /* B.LO normal */
+	emit_load_imm32(RTMP3, (int32_t)0xffff0000U);
+	emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Whigh */
+	*normal2 = jit_code_ptr; emit32(0); /* B.HS normal */
+	return true;
+}
+
+static void patch_cond_to_here(uint32_t *loc, uint8_t cond) {
+	patch_bcond(loc, cond, jit_code_ptr);
+}
+
+static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind) {
+	uint32_t *n1 = NULL, *n2 = NULL, *done = NULL;
+	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
+	a64_movz(dst_reg, 0, 0);
+	done = jit_code_ptr; emit32(0); /* B done */
+	patch_cond_to_here(n1, 3);  /* LO: below MMIO */
+	patch_cond_to_here(n2, 2);  /* HS: high scratch */
+	switch (load_kind) {
+	case 1: emit32(0x39400000 | (ea_reg << 5) | dst_reg); break; /* LDRB */
+	case 2: emit32(0x79400000 | (ea_reg << 5) | dst_reg); emit32(0x5AC00400 | (dst_reg << 5) | dst_reg); break; /* LDRH+REV16 */
+	case 3: emit32(0x79400000 | (ea_reg << 5) | dst_reg); emit32(0x5AC00400 | (dst_reg << 5) | dst_reg); emit32(0x13003C00 | (dst_reg << 5) | dst_reg); break; /* LHA */
+	case 4: emit32(0xB9400000 | (ea_reg << 5) | dst_reg); emit32(0x5AC00800 | (dst_reg << 5) | dst_reg); break; /* LDR+REV */
+	}
+	patch_bcond(done, 14, jit_code_ptr); /* AL */
+}
+
+static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_kind) {
+	uint32_t *n1 = NULL, *n2 = NULL, *done = NULL;
+	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
+	done = jit_code_ptr; emit32(0); /* B done for invalid */
+	patch_cond_to_here(n1, 3);
+	patch_cond_to_here(n2, 2);
+	switch (store_kind) {
+	case 1: emit32(0x39000000 | (ea_reg << 5) | val_reg); break; /* STRB */
+	case 2: emit32(0x79000000 | (ea_reg << 5) | val_reg); break; /* STRH */
+	case 4: emit32(0xB9000000 | (ea_reg << 5) | val_reg); break; /* STR */
+	}
+	patch_bcond(done, 14, jit_code_ptr);
+}
+
 static void emit_lsl_w_imm(int rd, int rn, uint32_t sh) {
 	if (sh == 0) { a64_mov_reg(rd, rn); return; }
 	emit_load_imm32(RTMP4, sh);
@@ -2053,10 +2101,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			}
 		}
-		/* LDR W(RTMP1), [X(RTMP0)] — load 32-bit from host address */
-		emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
-		/* Byte-swap: PPC is big-endian, ARM64 is little-endian */
-		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV Wd, Wn */
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2069,15 +2114,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_imm32(RTMP2, (int32_t)simm);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 		}
-		/* STR Wt, [Xn] */
-		emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 4);
 		return true;
 
 	case 34: /* lbz rD,d(rA) */
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit32(0x39400000 | (RTMP0 << 5) | RTMP1); /* LDRB Wt, [Xn] */
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2086,15 +2130,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_gpr(RTMP1, rd);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit32(0x39000000 | (RTMP0 << 5) | RTMP1); /* STRB Wt, [Xn] */
+		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 1);
 		return true;
 
 	case 40: /* lhz rD,d(rA) */
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit32(0x79400000 | (RTMP0 << 5) | RTMP1); /* LDRH Wt, [Xn] */
-		emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 Wd, Wn (byte-swap halfword) */
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2104,7 +2147,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 */
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit32(0x79000000 | (RTMP0 << 5) | RTMP1); /* STRH Wt, [Xn] */
+		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 2);
 		return true;
 
 	case 12: /* addic rD,rA,SIMM (sets XER[CA]) */
@@ -2718,10 +2761,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit32(0x79400000 | (RTMP0 << 5) | RTMP1); /* LDRH Wt, [Xn] */
-		emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 (byte-swap) */
-		/* Sign-extend from 16 to 32 bits */
-		emit32(0x13003C00 | (RTMP1 << 5) | RTMP1); /* SXTH Wd, Wn */
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
