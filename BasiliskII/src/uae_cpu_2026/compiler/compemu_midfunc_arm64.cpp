@@ -156,6 +156,21 @@ MIDFUNC(0,dont_care_flags,(void))
 }
 MENDFUNC(0,dont_care_flags,(void))
 
+/* Preserve the current M68K CCR before generated non-CCR control-flow
+   address plumbing (RTS/JSR/JMP/BSR) emits host calls or arithmetic that may
+   clobber native NZCV. Branch-like M68K instructions leave CCR unchanged, and
+   that has to remain true even when liveflags thought no later instruction in
+   the current native trace needed them: the successor block still may. */
+MIDFUNC(0,preserve_flags_before_nzcv_clobber,(void))
+{
+	int old_important = live.flags_are_important;
+	live.flags_are_important = 1;
+	clobber_flags();
+	live.flags_are_important = old_important;
+	flags_carry_inverted = false;
+}
+MENDFUNC(0,preserve_flags_before_nzcv_clobber,(void))
+
 /* Mark hardware NZCV as stale without saving it to regflags.nzcv.
    Used by DBcc (case 1/DBRA): the sub_w_ri sets NZCV for the branch
    decision, but M68K DBcc does NOT affect CCR. The pre-existing flags

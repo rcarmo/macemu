@@ -24294,6 +24294,7 @@ void REGPARAM2 op_4e75_0_comp_ff(uae_u32 opcode) /* RTS */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
+	preserve_flags_before_nzcv_clobber();
 	int newad=scratchie++;
 	readlong(SP_REG,newad,scratchie);
 	mov_l_mr((uintptr)&regs.pc,newad);
@@ -24392,6 +24393,7 @@ void REGPARAM2 op_4e90_0_comp_ff(uae_u32 opcode) /* JSR */
 {	int srca = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, srcreg + 8);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24420,6 +24422,7 @@ void REGPARAM2 op_4ea8_0_comp_ff(uae_u32 opcode) /* JSR */
 {	int srca = scratchie++;
 	mov_l_rr(srca, 8 + srcreg);
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24447,6 +24450,7 @@ void REGPARAM2 op_4eb0_0_comp_ff(uae_u32 opcode) /* JSR */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24469,6 +24473,7 @@ void REGPARAM2 op_4eb8_0_comp_ff(uae_u32 opcode) /* JSR */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24491,6 +24496,7 @@ void REGPARAM2 op_4eb9_0_comp_ff(uae_u32 opcode) /* JSR */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24515,6 +24521,7 @@ void REGPARAM2 op_4eba_0_comp_ff(uae_u32 opcode) /* JSR */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
 	mov_l_ri(srca, address + PC16off);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24540,6 +24547,7 @@ void REGPARAM2 op_4ebb_0_comp_ff(uae_u32 opcode) /* JSR */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 {	mov_l_ri(pctmp,address);
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -24568,6 +24576,7 @@ void REGPARAM2 op_4ed0_0_comp_ff(uae_u32 opcode) /* JMP */
 {	int srca = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, srcreg + 8);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -24591,6 +24600,7 @@ void REGPARAM2 op_4ee8_0_comp_ff(uae_u32 opcode) /* JMP */
 {	int srca = scratchie++;
 	mov_l_rr(srca, 8 + srcreg);
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -24613,6 +24623,7 @@ void REGPARAM2 op_4ef0_0_comp_ff(uae_u32 opcode) /* JMP */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -24630,6 +24641,7 @@ void REGPARAM2 op_4ef8_0_comp_ff(uae_u32 opcode) /* JMP */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -24647,6 +24659,7 @@ void REGPARAM2 op_4ef9_0_comp_ff(uae_u32 opcode) /* JMP */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -24666,6 +24679,7 @@ void REGPARAM2 op_4efa_0_comp_ff(uae_u32 opcode) /* JMP */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
 	mov_l_ri(srca, address + PC16off);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -24686,6 +24700,7 @@ void REGPARAM2 op_4efb_0_comp_ff(uae_u32 opcode) /* JMP */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 {	mov_l_ri(pctmp,address);
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -29544,6 +29559,7 @@ void REGPARAM2 op_6100_0_comp_ff(uae_u32 opcode) /* BSR */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -29567,6 +29583,7 @@ void REGPARAM2 op_6101_0_comp_ff(uae_u32 opcode) /* BSR */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, srcreg);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -29589,6 +29606,7 @@ void REGPARAM2 op_61ff_0_comp_ff(uae_u32 opcode) /* BSR */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -69774,6 +69792,7 @@ void REGPARAM2 op_4e75_0_comp_nf(uae_u32 opcode) /* RTS */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
+	preserve_flags_before_nzcv_clobber();
 	int newad=scratchie++;
 	readlong(SP_REG,newad,scratchie);
 	mov_l_mr((uintptr)&regs.pc,newad);
@@ -69872,6 +69891,7 @@ void REGPARAM2 op_4e90_0_comp_nf(uae_u32 opcode) /* JSR */
 {	int srca = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, srcreg + 8);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -69900,6 +69920,7 @@ void REGPARAM2 op_4ea8_0_comp_nf(uae_u32 opcode) /* JSR */
 {	int srca = scratchie++;
 	mov_l_rr(srca, 8 + srcreg);
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -69927,6 +69948,7 @@ void REGPARAM2 op_4eb0_0_comp_nf(uae_u32 opcode) /* JSR */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -69949,6 +69971,7 @@ void REGPARAM2 op_4eb8_0_comp_nf(uae_u32 opcode) /* JSR */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -69971,6 +69994,7 @@ void REGPARAM2 op_4eb9_0_comp_nf(uae_u32 opcode) /* JSR */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -69995,6 +70019,7 @@ void REGPARAM2 op_4eba_0_comp_nf(uae_u32 opcode) /* JSR */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
 	mov_l_ri(srca, address + PC16off);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -70020,6 +70045,7 @@ void REGPARAM2 op_4ebb_0_comp_nf(uae_u32 opcode) /* JSR */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 {	mov_l_ri(pctmp,address);
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -70048,6 +70074,7 @@ void REGPARAM2 op_4ed0_0_comp_nf(uae_u32 opcode) /* JMP */
 {	int srca = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, srcreg + 8);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -70071,6 +70098,7 @@ void REGPARAM2 op_4ee8_0_comp_nf(uae_u32 opcode) /* JMP */
 {	int srca = scratchie++;
 	mov_l_rr(srca, 8 + srcreg);
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -70093,6 +70121,7 @@ void REGPARAM2 op_4ef0_0_comp_nf(uae_u32 opcode) /* JMP */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -70110,6 +70139,7 @@ void REGPARAM2 op_4ef8_0_comp_nf(uae_u32 opcode) /* JMP */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -70127,6 +70157,7 @@ void REGPARAM2 op_4ef9_0_comp_nf(uae_u32 opcode) /* JMP */
 {	uae_u8 scratchie=S1;
 {	int srca = scratchie++;
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -70146,6 +70177,7 @@ void REGPARAM2 op_4efa_0_comp_nf(uae_u32 opcode) /* JMP */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
 	mov_l_ri(srca, address + PC16off);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -70166,6 +70198,7 @@ void REGPARAM2 op_4efb_0_comp_nf(uae_u32 opcode) /* JMP */
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 {	mov_l_ri(pctmp,address);
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	mov_l_mr((uintptr)&regs.pc,srca);
 	get_n_addr_jmp(srca,PC_P,scratchie);
 	mov_l_mr((uintptr)&regs.pc_oldp,PC_P);
@@ -74784,6 +74817,7 @@ void REGPARAM2 op_6100_0_comp_nf(uae_u32 opcode) /* BSR */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -74807,6 +74841,7 @@ void REGPARAM2 op_6101_0_comp_nf(uae_u32 opcode) /* BSR */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, srcreg);
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);
@@ -74829,6 +74864,7 @@ void REGPARAM2 op_61ff_0_comp_nf(uae_u32 opcode) /* BSR */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
+	preserve_flags_before_nzcv_clobber();
 {	uae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;
 	int ret=scratchie++;
 	mov_l_ri(ret,retadd);

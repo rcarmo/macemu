@@ -1173,15 +1173,17 @@ jit_pctrace_done:
 				uintptr blk_start = (uintptr)pc_hist[0].location;
 				uintptr cur_insn = (uintptr)pc_hist[blocklen - 1].location;
 				uae_u32 cur_guest_pc = get_virtual_address((uae_u8*)pc_hist[blocklen - 1].location);
-				bool forbid_trace_follow = (cur_guest_pc == 0x0401b70c && (opcode & 0xffc0) == 0x4ec0);
+				bool is_bsr = ((opcode & 0xff00) == 0x6100);
+				bool forbid_trace_follow = is_bsr || (cur_guest_pc == 0x0401b70c && (opcode & 0xffc0) == 0x4ec0);
 				/* Follow forward short branches to keep straight-line code
-				   together, but NEVER follow backward branches.  A backward
-				   branch (target <= current instruction) creates a loop;
-				   unrolling it into a single block causes DBRA/DBcc to
-				   execute a fixed unroll count instead of the runtime
-				   counter value.  The Resource Manager callback jump at
-				   0401b70c is data-dependent and must not be baked into a
-				   reusable trace. */
+				   together, but NEVER follow backward branches or BSR calls.
+				   A backward branch (target <= current instruction) creates a
+				   loop; unrolling it into a single block causes DBRA/DBcc to
+				   execute a fixed unroll count instead of the runtime counter
+				   value. BSR is a call boundary and must leave the return stack
+				   visible to a fresh successor dispatch. The Resource Manager
+				   callback jump at 0401b70c is data-dependent and must not be
+				   baked into a reusable trace. */
 				if (!forbid_trace_follow && new_pcp > cur_insn && new_pcp < blk_start + 512
 				    && blocklen < 32)
 					continue;

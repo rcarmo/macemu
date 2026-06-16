@@ -2122,6 +2122,7 @@ gen_opcode (unsigned int opcode)
 #ifdef DISABLE_I_RTS
 	failure;
 #endif
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	comprintf("\tint newad=scratchie++;\n"
 		  "\treadlong(SP_REG,newad,scratchie);\n"
 		  "\tmov_l_mr((uintptr)&regs.pc,newad);\n"
@@ -2173,6 +2174,7 @@ gen_opcode (unsigned int opcode)
 #endif
 	isjump;
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	start_brace();
 	comprintf("\tuae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;\n");
 	comprintf("\tint ret=scratchie++;\n"
@@ -2192,6 +2194,7 @@ gen_opcode (unsigned int opcode)
 #endif
 	isjump;
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	comprintf("\tmov_l_mr((uintptr)&regs.pc,srca);\n"
 		  "\tget_n_addr_jmp(srca,PC_P,scratchie);\n"
 		  "\tmov_l_mr((uintptr)&regs.pc_oldp,PC_P);\n"
@@ -2213,6 +2216,7 @@ gen_opcode (unsigned int opcode)
 	is_const_jump;
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	start_brace();
 	comprintf("\tuae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;\n");
 	comprintf("\tint ret=scratchie++;\n"

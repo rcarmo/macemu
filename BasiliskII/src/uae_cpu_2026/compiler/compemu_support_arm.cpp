@@ -623,6 +623,10 @@ static void jit_block_verify_snapshot_free(jit_block_verify_snapshot *snap)
 
 static bool jit_block_verify_snapshot_capture(jit_block_verify_snapshot *snap)
 {
+    /* Verifier snapshots should compare architectural SR, not whatever stale
+       regs.sr value was last materialized for diagnostics. JIT flags live in
+       regflags/NZCV between helpers, so sync SR before taking a snapshot. */
+    MakeSR();
     memset(snap, 0, sizeof(*snap));
     snap->mem_size = (size_t)RAMSize + (size_t)ROMSize;
     snap->mem = (uae_u8*)malloc(snap->mem_size);
