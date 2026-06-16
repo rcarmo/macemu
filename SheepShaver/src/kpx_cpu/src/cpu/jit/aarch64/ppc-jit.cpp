@@ -1397,9 +1397,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra);
 			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN (NOT rA) */
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS ~rA + rB */
-			emit_read_xer_ca(RTMP1);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* + CA */
+			emit_read_xer_ca(RTMP2);
+			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
+			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS ~rA+rB+CA */
 			emit_store_gpr(RTMP0, rd);
 			emit_write_xer_ca_from_carry();
 			if (op & 1) lazy_update_cr0(RTMP0);

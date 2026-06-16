@@ -252,6 +252,12 @@ TEST_ORDER+=(addic_carry)
 TESTS[adde_carry]="38600005 38800003 30A3ffff 7CC42114"
 TEST_ORDER+=(adde_carry)
 
+# subfe must include XER.CA in both the result and the final carry-out.
+# lis r3,0x2000; mtspr XER,r3 (CA=1); li r4,0; subfe r5,r4,r4; mfspr r6,XER
+# Expected: r5=0 and XER.CA remains set. Regression for stale carry from the pre-CA add.
+TESTS[subfe_carry_in]="3C602000 7C6103A6 38800000 7CA42110 7CC102A6"
+TEST_ORDER+=(subfe_carry_in)
+
 # --- rlwimi (rotate left word immediate then mask insert) ---
 # li r3,0xFF00; li r5,0x00FF; rlwimi r5,r3,0,24,31  → insert low byte of r3 into r5
 # rlwimi rA,rS,SH,MB,ME = 0x50000000 | (rS<<21) | (rA<<16) | (SH<<11) | (MB<<6) | (ME<<1)
