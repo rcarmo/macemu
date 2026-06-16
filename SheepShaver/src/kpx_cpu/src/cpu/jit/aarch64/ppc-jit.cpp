@@ -2607,11 +2607,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				return true;
 			}
 		}
-		case 150: /* isync */
+		case 150: /* isync — serialize execution; icbi performs cache invalidation */
 			lazy_flush_cr0();
 			ra_flush_all();
-			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)ppc_jit_aarch64_flush);
-			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR flush */
 			emit_load_imm32(RTMP0, (int32_t)(pc + 4));
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 			emit_return_to_dispatch();
