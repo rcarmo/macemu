@@ -587,7 +587,8 @@ static void patch_cond_to_here(uint32_t *loc, uint8_t cond) {
 static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind) {
 	uint32_t *n1 = NULL, *n2 = NULL, *done = NULL;
 	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
-	a64_movz(dst_reg, 0, 0);
+	/* Invalid high MMIO load: mirror SheepShaver's active SIGSEGV skip
+	 * behavior for EMULATED_PPC by leaving the destination register unchanged. */
 	done = jit_code_ptr; emit32(0); /* B done */
 	patch_cond_to_here(n1, 3);  /* LO: below MMIO */
 	patch_cond_to_here(n2, 2);  /* HS: high scratch */
