@@ -1549,20 +1549,19 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 87: /* lbzx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x39400000 | (RTMP0 << 5) | RTMP1); /* LDRB */
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 215: /* stbx rS,rA,rB */
 			emit_load_gpr(RTMP1, PPC_RS(op));
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x39000000 | (RTMP0 << 5) | RTMP1); /* STRB */
+			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 1);
 			return true;
 		case 279: /* lhzx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x79400000 | (RTMP0 << 5) | RTMP1); /* LDRH */
-			emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 */
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 407: /* sthx rS,rA,rB */
@@ -1570,14 +1569,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x79000000 | (RTMP0 << 5) | RTMP1); /* STRH */
+			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 2);
 			return true;
 		case 343: /* lhax rD,rA,rB (load halfword algebraic indexed) */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x79400000 | (RTMP0 << 5) | RTMP1); /* LDRH */
-			emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1); /* REV16 */
-			emit32(0x13003C00 | (RTMP1 << 5) | RTMP1); /* SXTH */
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 371: /* mftb/mftbu rD — move from time base */
@@ -1597,7 +1594,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0x39400000 | (RTMP0 << 5) | RTMP1);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 247: /* stbux rS,rA,rB */
@@ -1605,15 +1602,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0x39000000 | (RTMP0 << 5) | RTMP1);
+			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 1);
 			return true;
 		case 311: /* lhzux rD,rA,rB */
 			/* ra==0: use 0 as base; ra==rd: update gets overwritten by load (PPC undefined but harmless) */
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0x79400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 439: /* sthux rS,rA,rB */
@@ -1622,16 +1618,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0x79000000 | (RTMP0 << 5) | RTMP1);
+			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 2);
 			return true;
 		case 375: /* lhaux rD,rA,rB */
 			/* ra==0: use 0 as base; ra==rd: update gets overwritten by load (PPC undefined but harmless) */
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0x79400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1);
-			emit32(0x13003C00 | (RTMP1 << 5) | RTMP1);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 55: /* lwzux rD,rA,rB */
@@ -1639,8 +1633,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
+			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4);
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 183: /* stwux rS,rA,rB */
@@ -1649,7 +1642,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 			emit_store_gpr(RTMP0, ra);
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 4);
 			return true;
 		case 790: /* lhbrx rD,rA,rB (byte-reversed = native order on LE) */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
