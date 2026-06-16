@@ -754,6 +754,12 @@ void powerpc_cpu::execute(uint32 entry)
 				 * returning, so executing a supported prefix is more faithful than
 				 * falling back to the interpreter at the block entry. */
 				if (jit_compiled) {
+					/* Match dyngen block-entry semantics: drain pending special flags
+					 * before direct native block execution.  trigger_interrupt() first
+					 * raises TRIGGER, then check_spcflags() converts it to HANDLE, so
+					 * loop a few times to process the resulting interrupt immediately. */
+					for (int spc_iter = 0; !spcflags().empty() && spc_iter < 4; spc_iter++)
+						if (!check_spcflags()) goto return_site;
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
 				  pdi_jit_post:
@@ -796,6 +802,8 @@ void powerpc_cpu::execute(uint32 entry)
 					 * hot block-to-block transitions where both blocks are JIT-compiled. */
 					jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
 					if (jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk)) {
+						for (int spc_iter = 0; !spcflags().empty() && spc_iter < 4; spc_iter++)
+							if (!check_spcflags()) goto return_site;
 						fn = (ppc_jit_entry_fn)(void*)jblk.code;
 						fn((void*)regs_ptr());
 						goto pdi_jit_post;
