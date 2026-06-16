@@ -1758,12 +1758,20 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		}
 
-		/* Cache management — NOPs (no emulated cache hierarchy) */
+		/* Cache management — mostly NOPs (no emulated data-cache hierarchy). */
 		case 54:   /* dcbst — data cache block store */
 		case 86:   /* dcbf  — data cache block flush */
 		case 246:  /* dcbt  — data cache block touch (prefetch hint) */
 		case 278:  /* dcbtst — data cache block touch for store */
-		case 982:  /* icbi  — instruction cache block invalidate */
+			return true;
+		case 982:  /* icbi — instruction cache block invalidate */
+			lazy_flush_cr0();
+			ra_flush_all();
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)ppc_jit_aarch64_flush);
+			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR flush */
+			emit_load_imm32(RTMP0, (int32_t)(pc + 4));
+			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
+			emit_return_to_dispatch();
 			return true;
 
 		/* Memory barriers — NOPs (single-threaded emulator) */
@@ -2622,6 +2630,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			}
 		}
 		case 150: /* isync */
+			lazy_flush_cr0();
+			ra_flush_all();
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)ppc_jit_aarch64_flush);
+			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR flush */
+			emit_load_imm32(RTMP0, (int32_t)(pc + 4));
+			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
+			emit_return_to_dispatch();
 			return true;
 
 		case 0: /* mcrf crfD,crfS — copy CR field */
