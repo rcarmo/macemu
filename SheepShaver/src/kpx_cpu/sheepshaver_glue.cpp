@@ -138,6 +138,8 @@ enum {
 	PPC_I(SHEEP_MAX)
 };
 
+extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 pc);
+
 class sheepshaver_cpu
 	: public powerpc_cpu
 {
@@ -210,6 +212,7 @@ public:
 
 	// Make sure the SIGSEGV handler can access CPU registers
 	friend sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip);
+	friend void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 pc);
 };
 
 sheepshaver_cpu::sheepshaver_cpu()
@@ -755,6 +758,15 @@ inline void sheepshaver_cpu::get_resource(uint32 old_get_resource)
 
 // PowerPC CPU emulator
 static sheepshaver_cpu *ppc_cpu = NULL;
+
+extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 pc)
+{
+	(void)regs;
+	if (!ppc_cpu)
+		return;
+	ppc_cpu->pc() = pc;
+	ppc_cpu->execute_sheep(opcode);
+}
 
 void FlushCodeCache(uintptr start, uintptr end)
 {

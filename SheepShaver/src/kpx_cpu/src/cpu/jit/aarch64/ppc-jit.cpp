@@ -18,6 +18,8 @@
 #include "ppc-codegen-aarch64.h"
 #include "jit-target-cache.hpp"
 
+extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32_t opcode, uint32_t pc);
+
 /* ---- Code cache ---- */
 static uint8_t  *jit_cache_base = NULL;
 static size_t    jit_cache_size = 0;
@@ -650,6 +652,16 @@ static inline uint32_t VR_VB(uint32_t op) { return (op >> 11) & 0x1F; }
 static inline uint32_t VR_VC(uint32_t op) { return (op >> 6) & 0x1F; }
 
 /* Emit: store next_pc to regs->pc, epilogue, ret */
+static void emit_return_to_dispatch(void) {
+	a64_ldp_post(27, 28, A64_SP, 16);
+	a64_ldp_post(25, 26, A64_SP, 16);
+	a64_ldp_post(23, 24, A64_SP, 16);
+	a64_ldp_post(21, 22, A64_SP, 16);
+	a64_ldp_post(19, RSTATE, A64_SP, 16);
+	a64_ldp_post(A64_FP, A64_LR, A64_SP, 16);
+	a64_ret();
+}
+
 static void emit_epilogue_with_pc(uint32_t next_pc) {
 	/* Flush register allocator: write all dirty cached GPRs back to struct */
 	ra_flush_all();
@@ -2677,6 +2689,18 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		return true;
 	}
 
+	case 6: /* SheepShaver custom EMUL_OP / EXEC_NATIVE opcode */
+		lazy_flush_cr0();
+		ra_flush_all();
+		a64_mov_reg(RTMP0, RSTATE);                 /* arg0: regs */
+		emit_load_imm32(RTMP1, (int32_t)op);        /* arg1: opcode */
+		emit_load_imm32(RTMP2, (int32_t)pc);        /* arg2: current PPC PC */
+		emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_execute_sheep);
+		emit32(0xD63F0000 | (RTMP4 << 5));          /* BLR helper */
+		ra_reset();
+		emit_return_to_dispatch();
+		return true;
+
 	case 42: /* lha rD,d(rA) — load halfword algebraic (sign-extended) */
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
@@ -3854,7 +3878,7 @@ bool ppc_jit_aarch64_compile(
 
 		/* Check if this is a block-terminating opcode */
 		uint32_t term_opc = op >> 26;
-		bool is_terminator = (term_opc == 18); /* b/bl */
+		bool is_terminator = (term_opc == 18 || term_opc == 6); /* b/bl or SheepShaver helper */
 		if (term_opc == 19) {
 			uint32_t term_xo = (op >> 1) & 0x3FF;
 			if (term_xo == 16 || term_xo == 528) is_terminator = true; /* bclr/bcctr */
