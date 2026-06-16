@@ -2224,8 +2224,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* effective addr */
 		emit_store_gpr(RTMP0, ra); /* update rA */
-		emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
-		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV (byte-swap) */
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2237,7 +2236,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_imm32(RTMP2, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* effective addr */
 		emit_store_gpr(RTMP0, ra); /* update rA */
-		emit32(0xB9000000 | (RTMP0 << 5) | RTMP1); /* STR */
+		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 4);
 		return true;
 
 
@@ -2976,7 +2975,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit32(0x39400000 | (RTMP0 << 5) | RTMP1);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2987,7 +2986,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP2, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit32(0x39000000 | (RTMP0 << 5) | RTMP1);
+		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 1);
 		return true;
 
 	case 41: /* lhzu rD,d(rA) */
@@ -2997,8 +2996,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit32(0x79400000 | (RTMP0 << 5) | RTMP1);
-		emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -3009,9 +3007,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit32(0x79400000 | (RTMP0 << 5) | RTMP1);
-		emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1);
-		emit32(0x13003C00 | (RTMP1 << 5) | RTMP1);
+		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3);
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -3023,7 +3019,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_imm32(RTMP2, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 		emit_store_gpr(RTMP0, ra);
-		emit32(0x79000000 | (RTMP0 << 5) | RTMP1);
+		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 2);
 		return true;
 
 	case 49: /* lfsu frD,d(rA) */
