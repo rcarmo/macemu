@@ -2364,15 +2364,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_CTR);
 
 			if (!ctr_eq_zero) {
-				/* bdnz: branch if CTR != 0 */
-				uint32_t *target_code = find_code_for_pc(target_pc);
-				if (target_code) {
-					int32_t offset = (int32_t)((uint8_t *)target_code - (uint8_t *)jit_code_ptr);
-					if (offset >= -(1 << 20) && offset < (1 << 20)) { /* 19-bit signed ±1MB */
-						emit32(0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBNZ */
-						return true;
-					}
-				}
+				/* bdnz: branch if CTR != 0. Always return to dispatcher for
+				 * conditional edges so pending interrupts are observed between
+				 * loop iterations, matching interpreter block boundaries. */
 				/* Not taken: CBZ skips to after epilogue */
 				uint32_t *skip_loc = jit_code_ptr;
 				emit32(0); /* placeholder CBZ */
@@ -2383,15 +2377,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				*skip_loc = 0x34000000 | (((skip_off >> 2) & 0x7FFFF) << 5) | RTMP0;
 				return true;
 			} else {
-				/* bdz: branch if CTR == 0 */
-				uint32_t *target_code = find_code_for_pc(target_pc);
-				if (target_code) {
-					int32_t offset = (int32_t)((uint8_t *)target_code - (uint8_t *)jit_code_ptr);
-					if (offset >= -(1 << 20) && offset < (1 << 20)) { /* 19-bit signed ±1MB */
-						emit32(0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBZ */
-						return true;
-					}
-				}
+				/* bdz: branch if CTR == 0. Return to dispatcher for both paths. */
 				/* Not taken: CBNZ skips to after epilogue */
 				uint32_t *skip_loc = jit_code_ptr;
 				emit32(0); /* placeholder CBNZ */
@@ -2416,17 +2402,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x12000000 | (RTMP0 << 5) | RTMP0); /* AND #1 */
 			/* BO[3] (bit 1 of BO): 1=branch if set, 0=branch if clear */
 			bool branch_if_set = cond_bit_val;
-			uint32_t *target_code = find_code_for_pc(target_pc);
-			if (target_code) {
-				int32_t offset = (int32_t)((uint8_t *)target_code - (uint8_t *)jit_code_ptr);
-				if (offset >= -(1 << 20) && offset < (1 << 20)) { /* 19-bit signed ±1MB */
-					if (branch_if_set)
-						emit32(0x35000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBNZ */
-					else
-						emit32(0x34000000 | (((offset >> 2) & 0x7FFFF) << 5) | RTMP0); /* CBZ */
-					return true;
-				}
-			}
+			/* Return to dispatcher for conditional branch targets, including
+			 * intra-block targets, so interrupt/special-flag timing matches
+			 * interpreter block execution. */
 			if (branch_if_set) {
 				uint32_t *skip_loc = jit_code_ptr;
 				emit32(0); /* placeholder CBZ */
