@@ -859,6 +859,18 @@ TEST_ORDER+=(fuzz_mtcr_crand_bclr_taken)
 # Handler-path XER shape: SO/OV/CA set plus full byte-count field must round-trip.
 TESTS[fuzz_mtxer_fullbits]="3C60E000 6063007F 7C6103A6 7CA102A6"
 TEST_ORDER+=(fuzz_mtxer_fullbits)
+# Unconditional bctr must jump through CTR to the local target and return via
+# the original harness LR.
+TESTS[fuzz_bctr_taken]="7FE802A6 48000005 7CA802A6 38A50014 7CA903A6 4E800420 38601111 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_bctr_taken)
+# bctrl must branch through CTR and update LR to the instruction after bctrl.
+TESTS[fuzz_bctrl_link_return]="7FE802A6 48000005 7CA802A6 38A50020 7CA903A6 4E800421 7CE802A6 7FE803A6 38603333 48000010 7CC802A6 38802222 4E800020"
+TEST_ORDER+=(fuzz_bctrl_link_return)
+# Full mtcr with the exact late-path CR shape should directly drive bgtctr/bgtlr on CR1.
+TESTS[fuzz_mtcr_bgtctr_taken]="7FE802A6 3DA08480 61AD0044 7DAFF120 48000005 7CA802A6 38A5001C 7CA903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcr_bgtctr_taken)
+TESTS[fuzz_mtcr_bgtlr_taken]="7FE802A6 3DA08480 61AD0044 7DAFF120 48000005 7CA802A6 38A5001C 7CA803A6 4D850020 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcr_bgtlr_taken)
 
 # --- orc ---
 TESTS[orc_basic]="38600000 388000FF 7C652338"
