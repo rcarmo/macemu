@@ -823,6 +823,32 @@ TEST_ORDER+=(mcrxr_basic)
 TESTS[bclr_cond]="3860FFFF 2C030000 4D820020"
 TEST_ORDER+=(bclr_cond)
 
+# --- Suspect CR1 + indirect-branch cases ---
+# Targeted fuzz for the late JIT-only diversion around bgtctr/bgtlr, mtcrf CR1,
+# and link-register return semantics seen near the RAM handler wrapper path.
+# bcctr on CR1.GT should branch to the local target and still return through
+# the original harness LR after the local control-flow finishes.
+TESTS[fuzz_bcctr_cr1_taken]="7FE802A6 38600000 38800001 2C840000 48000005 7CA802A6 38A5001C 7CA903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_bcctr_cr1_taken)
+# bcctr on CR1.GT should fall through when CR1.GT is clear.
+TESTS[fuzz_bcctr_cr1_not_taken]="7FE802A6 38600000 3880FFFF 2C840000 48000005 7CA802A6 38A5001C 7CA903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_bcctr_cr1_not_taken)
+# Partial mtcrf to CR1 followed by bcctr must drive branch decision from CR1 only.
+TESTS[fuzz_mtcrf_cr1_bcctr_taken]="7FE802A6 3CA00400 7CA40120 38600000 48000005 7CC802A6 38C6001C 7CC903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcrf_cr1_bcctr_taken)
+# Clearing CR1 via partial mtcrf must force bcctr to fall through.
+TESTS[fuzz_mtcrf_cr1_bcctr_not_taken]="7FE802A6 38A00000 7CA40120 38600000 48000005 7CC802A6 38C6001C 7CC903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcrf_cr1_bcctr_not_taken)
+# bclr through LR on CR1.GT should branch to the local target.
+TESTS[fuzz_bclr_cr1_taken]="7FE802A6 38600000 38800001 2C840000 48000005 7CA802A6 38A5001C 7CA803A6 4D850020 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_bclr_cr1_taken)
+# bclr through LR on CR1.GT should fall through when CR1.GT is clear.
+TESTS[fuzz_bclr_cr1_not_taken]="7FE802A6 38600000 3880FFFF 2C840000 48000005 7CA802A6 38A5001C 7CA803A6 4D850020 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_bclr_cr1_not_taken)
+# blrl must branch to the old LR target and update LR to the instruction after blrl.
+TESTS[fuzz_blrl_link_return]="7FE802A6 38600000 48000005 7CA802A6 38A50020 7CA803A6 4E800021 7CE802A6 7FE803A6 38603333 48000010 7CC802A6 38802222 4E800020"
+TEST_ORDER+=(fuzz_blrl_link_return)
+
 # --- orc ---
 TESTS[orc_basic]="38600000 388000FF 7C652338"
 TEST_ORDER+=(orc_basic)
