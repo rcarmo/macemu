@@ -139,6 +139,10 @@ enum {
 };
 
 extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 pc);
+extern "C" void sheepshaver_jit_emul_return(void *regs);
+extern "C" void sheepshaver_jit_exec_return(void *regs);
+extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32 emul_op, uint32 next_pc);
+extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, uint32 next_pc);
 
 class sheepshaver_cpu
 	: public powerpc_cpu
@@ -213,6 +217,10 @@ public:
 	// Make sure the SIGSEGV handler can access CPU registers
 	friend sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip);
 	friend void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 pc);
+	friend void sheepshaver_jit_emul_return(void *regs);
+	friend void sheepshaver_jit_exec_return(void *regs);
+	friend void sheepshaver_jit_execute_emul_op(void *regs, uint32 emul_op, uint32 next_pc);
+	friend void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, uint32 next_pc);
 };
 
 sheepshaver_cpu::sheepshaver_cpu()
@@ -766,6 +774,40 @@ extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 
 		return;
 	ppc_cpu->pc() = pc;
 	ppc_cpu->execute_sheep(opcode);
+}
+
+extern "C" void sheepshaver_jit_emul_return(void *regs)
+{
+	(void)regs;
+	if (!ppc_cpu)
+		return;
+	QuitEmulator();
+}
+
+extern "C" void sheepshaver_jit_exec_return(void *regs)
+{
+	(void)regs;
+	if (!ppc_cpu)
+		return;
+	ppc_cpu->spcflags().set(SPCFLAG_CPU_EXEC_RETURN);
+}
+
+extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32 emul_op, uint32 next_pc)
+{
+	(void)regs;
+	if (!ppc_cpu)
+		return;
+	ppc_cpu->pc() = next_pc;
+	ppc_cpu->execute_emul_op(emul_op);
+}
+
+extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, uint32 next_pc)
+{
+	(void)regs;
+	if (!ppc_cpu)
+		return;
+	ppc_cpu->pc() = next_pc;
+	ppc_cpu->execute_native_op(selector);
 }
 
 void FlushCodeCache(uintptr start, uintptr end)

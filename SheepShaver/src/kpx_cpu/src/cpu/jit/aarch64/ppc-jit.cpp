@@ -19,6 +19,10 @@
 #include "jit-target-cache.hpp"
 
 extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32_t opcode, uint32_t pc);
+extern "C" void sheepshaver_jit_emul_return(void *regs);
+extern "C" void sheepshaver_jit_exec_return(void *regs);
+extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32_t emul_op, uint32_t next_pc);
+extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32_t selector, uint32_t next_pc);
 
 /* ---- Code cache ---- */
 static uint8_t  *jit_cache_base = NULL;
@@ -2780,11 +2784,38 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	case 6: /* SheepShaver custom EMUL_OP / EXEC_NATIVE opcode */
 		lazy_flush_cr0();
 		ra_flush_all();
-		a64_mov_reg(RTMP0, RSTATE);                 /* arg0: regs */
-		emit_load_imm32(RTMP1, (int32_t)op);        /* arg1: opcode */
-		emit_load_imm32(RTMP2, (int32_t)pc);        /* arg2: current PPC PC */
-		emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_execute_sheep);
-		emit32(0xD63F0000 | (RTMP4 << 5));          /* BLR helper */
+		a64_mov_reg(RTMP0, RSTATE); /* arg0: regs */
+		switch (op & 0x3F) {
+		case 0: /* EMUL_RETURN */
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_emul_return);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			break;
+		case 1: /* EXEC_RETURN */
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_exec_return);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			break;
+		case 2: { /* EXEC_NATIVE */
+			uint32_t selector = (op >> 6) & 0x3F;
+			if (op & (1u << 12)) {
+				a64_ldr_w_imm(RTMP2, RSTATE, PPCR_LR);
+				emit_clear_branch_target_low_bits(RTMP2);
+			} else {
+				emit_load_imm32(RTMP2, (int32_t)(pc + 4));
+			}
+			emit_load_imm32(RTMP1, (int32_t)selector);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_execute_native_op);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			break;
+		}
+		default: { /* EMUL_OP */
+			uint32_t emul_op = (op & 0x3F) - 3;
+			emit_load_imm32(RTMP1, (int32_t)emul_op);
+			emit_load_imm32(RTMP2, (int32_t)(pc + 4));
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_execute_emul_op);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			break;
+		}
+		}
 		ra_reset();
 		emit_return_to_dispatch();
 		return true;
