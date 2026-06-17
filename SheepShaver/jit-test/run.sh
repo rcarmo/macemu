@@ -77,6 +77,7 @@ run_ppc_test() {
     local name="$1"
     local hex="$2"   # space-separated 32-bit PPC hex words
     local outfile="$3"
+    local mode="${4:-default}" # default, interp, or jit
 
     local td="$RUN_DIR/test-${name}"
     mkdir -p "$td"
@@ -94,9 +95,16 @@ EOF
     pkill -f "SheepShaver --config $td/prefs" 2>/dev/null || true
 
     # Run with test mode env vars
-    SDL_VIDEODRIVER=x11 DISPLAY=:99 HOME="$td" \
+    local -a mode_env=()
+    if [ "$mode" = "interp" ]; then
+        mode_env=(SS_USE_JIT=0)
+    elif [ "$mode" = "jit" ]; then
+        mode_env=(SS_TEST_JIT=1)
+    fi
+    env SDL_VIDEODRIVER=x11 DISPLAY=:99 HOME="$td" \
       SS_TEST_HEX="$hex" \
       SS_TEST_DUMP=1 \
+      "${mode_env[@]}" \
       timeout -k 5s 15s "$BIN" --config "$td/prefs" \
       > "$td/emu.log" 2>&1 || true
 
@@ -448,6 +456,11 @@ TEST_ORDER+=(bl_basic)
 # srawi r5,r3,3: XO=31 XO=824, rS=3 rA=5 SH=3 = 0x7C651E70
 TESTS[srawi_basic]="3860ff80 7C651E70"
 TEST_ORDER+=(srawi_basic)
+
+# Regression for direct JIT srawi immediate encoding: set r12=-15, then
+# srawi r4,r12,4; rlwimi. r12,r4,31,1,31.  The JIT must encode ASR as
+# SBFM #sh,#31; swapping immr/imms produces an incorrect left-rotate-like result.
+SRAWI_SHIFT4_REG12_EQUIV="3D80FFFF 618CFFF1 7D842670 508CF87F"
 
 # --- lha (sign-extending halfword) ---
 # li r3,0x8000; sth r3,0x300(r1); lha r5,0x300(r1) → r5 = 0xFFFF8000
@@ -1133,6 +1146,23 @@ for name in "${TEST_ORDER[@]}"; do
         fi
     fi
 done
+
+# Focused interpreter-vs-direct-JIT regression checks for bugs that ordinary
+# deterministic runs cannot catch when the default CPU path uses direct JIT.
+out_interp="$RUN_DIR/srawi_shift4_reg12-interp.txt"
+out_jit="$RUN_DIR/srawi_shift4_reg12-jit.txt"
+run_ppc_test "srawi_shift4_reg12_interp" "$SRAWI_SHIFT4_REG12_EQUIV" "$out_interp" interp
+run_ppc_test "srawi_shift4_reg12_jit" "$SRAWI_SHIFT4_REG12_EQUIV" "$out_jit" jit
+TOTAL=$((TOTAL+1))
+if [ -s "$out_interp" ] && [ -s "$out_jit" ] && diff -q "$out_interp" "$out_jit" >/dev/null 2>&1; then
+    echo "METRIC opcode_srawi_shift4_reg12_equiv=1"
+    PASS=$((PASS+1))
+else
+    echo "METRIC opcode_srawi_shift4_reg12_equiv=0"
+    echo "  DIFF for srawi_shift4_reg12_equiv:" >&2
+    diff "$out_interp" "$out_jit" >&2 || true
+    FAIL=$((FAIL+1))
+fi
 
 SCORE=$(( TOTAL > 0 ? PASS * 100 / TOTAL : 0 ))
 echo "METRIC pass=$PASS"

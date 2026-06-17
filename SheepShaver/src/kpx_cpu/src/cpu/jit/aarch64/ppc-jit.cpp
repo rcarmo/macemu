@@ -1263,8 +1263,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				/* CA = (rS < 0) && ((rS & ((1<<sh)-1)) != 0) */
 				/* Save original for CA computation */
 				a64_mov_reg(RTMP1, RTMP0); /* RTMP1 = original rS */
-				/* ASR Wd, Wn, #sh */
-				emit32(0x13000000 | (sh << 10) | (0x1F << 16) | (RTMP0 << 5) | RTMP0);
+				/* ASR Wd, Wn, #sh = SBFM Wd,Wn,#sh,#31 */
+				emit32(0x13000000 | (sh << 16) | (0x1F << 10) | (RTMP0 << 5) | RTMP0);
 				emit_store_gpr(RTMP0, ra);
 				/* Compute CA: test if source negative AND shifted-out bits nonzero */
 				/* RTMP1 = original rS. Mask = (1<<sh)-1 */
