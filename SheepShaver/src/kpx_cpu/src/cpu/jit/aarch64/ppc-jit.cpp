@@ -23,6 +23,8 @@ extern "C" void sheepshaver_jit_emul_return(void *regs);
 extern "C" void sheepshaver_jit_exec_return(void *regs);
 extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32_t emul_op, uint32_t next_pc);
 extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32_t selector, uint32_t next_pc);
+extern "C" uint32_t sheepshaver_jit_safe_lwz(uint32_t ea, uint32_t old_value);
+extern "C" void sheepshaver_jit_safe_stw(uint32_t ea, uint32_t value);
 
 /* ---- Code cache ---- */
 static uint8_t  *jit_cache_base = NULL;
@@ -581,35 +583,87 @@ static void emit_add_w_imm(int rd, int rn, uint32_t imm) {
 	emit32(0x11000000 | ((imm & 0xFFF) << 10) | (rn << 5) | rd); /* ADD Wd,Wn,#imm */
 }
 
-static bool emit_invalid_high_mmio_check(int ea_reg, uint32_t **normal1, uint32_t **normal2) {
-	/* Direct host addressing is valid for RAM/ROM/low-memory/SheepMem and for
-	 * the explicitly mapped high scratch page. Unmapped hardware/MMIO space in
-	 * 0xf0000000..0xfffeffff must not be accessed by generated native loads:
-	 * a SIGSEGV-skip would leave the destination register stale. */
-	emit_load_imm32(RTMP3, (int32_t)0xf0000000U);
-	emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wlow */
-	*normal1 = jit_code_ptr; emit32(0); /* B.LO normal */
-	emit_load_imm32(RTMP3, (int32_t)0xffff0000U);
-	emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Whigh */
-	*normal2 = jit_code_ptr; emit32(0); /* B.HS normal */
-	return true;
-}
+extern uint32_t RAMBase;
+extern uint32_t RAMSize;
+extern uint32_t ROMBase;
+class SheepMem {
+public:
+	static uintptr_t base;
+	static uintptr_t data;
+	static uintptr_t zero_page;
+	static uint32_t page_size;
+};
 
 static void patch_cond_to_here(uint32_t *loc, uint8_t cond) {
 	patch_bcond(loc, cond, jit_code_ptr);
 }
 
+static void emit_branch_if_ea_in_range(int ea_reg, uint32_t start, uint32_t end_exclusive, uint32_t **valid_locs, int *valid_count) {
+	if (end_exclusive <= start)
+		return;
+	if (start != 0) {
+		emit_load_imm32(RTMP3, (int32_t)start);
+		emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wstart */
+		uint32_t *below_start = jit_code_ptr; emit32(0); /* B.LO skip */
+		emit_load_imm32(RTMP3, (int32_t)end_exclusive);
+		emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wend */
+		valid_locs[(*valid_count)++] = jit_code_ptr; emit32(0); /* B.LO valid */
+		patch_cond_to_here(below_start, 3);
+		return;
+	}
+	emit_load_imm32(RTMP3, (int32_t)end_exclusive);
+	emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wend */
+	valid_locs[(*valid_count)++] = jit_code_ptr; emit32(0); /* B.LO valid */
+}
+
+static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, bool allow_rom, bool store, uint32_t **valid_locs, int *valid_count) {
+	const uint32_t lowmem_end = 0x3000U >= access_size ? (0x3000U - access_size + 1) : 0;
+	if (lowmem_end)
+		emit_branch_if_ea_in_range(ea_reg, 0, lowmem_end, valid_locs, valid_count);
+
+	const uint32_t ram_start = RAMBase;
+	const uint32_t ram_end = RAMBase + RAMSize;
+	if (ram_end > ram_start && ram_end >= access_size)
+		emit_branch_if_ea_in_range(ea_reg, ram_start, ram_end - access_size + 1, valid_locs, valid_count);
+
+	if (allow_rom) {
+		const uint32_t rom_start = ROMBase;
+		const uint32_t rom_end = ROMBase + 0x500000U;
+		if (rom_end > rom_start && rom_end >= access_size)
+			emit_branch_if_ea_in_range(ea_reg, rom_start, rom_end - access_size + 1, valid_locs, valid_count);
+		}
+
+	const uint32_t sheep_base = (uint32_t)SheepMem::base;
+	const uint32_t sheep_end = (uint32_t)SheepMem::data;
+	if (sheep_end > sheep_base && sheep_end >= access_size) {
+		if (store) {
+			const uint32_t zp_start = (uint32_t)SheepMem::zero_page;
+			const uint32_t zp_end = zp_start + SheepMem::page_size;
+			if (zp_start > sheep_base)
+				emit_branch_if_ea_in_range(ea_reg, sheep_base, zp_start, valid_locs, valid_count);
+			if (zp_end < sheep_end)
+				emit_branch_if_ea_in_range(ea_reg, zp_end, sheep_end - access_size + 1, valid_locs, valid_count);
+		} else {
+			emit_branch_if_ea_in_range(ea_reg, sheep_base, sheep_end - access_size + 1, valid_locs, valid_count);
+		}
+	}
+
+	if (0xFFFFFFFFU >= access_size - 1)
+		emit_branch_if_ea_in_range(ea_reg, 0xFFFF0000U, 0xFFFFFFFFU - access_size + 2, valid_locs, valid_count);
+}
+
 static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind, int ppc_dst_reg) {
-	uint32_t *n1 = NULL, *n2 = NULL, *done = NULL;
-	/* Invalid high MMIO load: mirror SheepShaver's active SIGSEGV skip
-	 * behavior for EMULATED_PPC by leaving the destination register unchanged.
-	 * Seed dst_reg with the current PPC destination so the common store after
-	 * this helper is a no-op on the invalid path. */
+	uint32_t *valid_locs[8] = {0};
+	int valid_count = 0;
+	uint32_t *done = NULL;
+	uint32_t access_size = (load_kind == 1) ? 1 : (load_kind == 4 ? 4 : 2);
+	/* Invalid load: mirror SheepShaver's active SIGSEGV skip behavior for
+	 * EMULATED_PPC by leaving the destination register unchanged. */
 	emit_load_gpr(dst_reg, ppc_dst_reg);
-	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
+	emit_direct_access_valid_check(ea_reg, access_size, true, false, valid_locs, &valid_count);
 	done = jit_code_ptr; emit32(0); /* B done */
-	patch_cond_to_here(n1, 3);  /* LO: below MMIO */
-	patch_cond_to_here(n2, 2);  /* HS: high scratch */
+	for (int i = 0; i < valid_count; i++)
+		patch_cond_to_here(valid_locs[i], 3);
 	switch (load_kind) {
 	case 1: emit32(0x39400000 | (ea_reg << 5) | dst_reg); break; /* LDRB */
 	case 2: emit32(0x79400000 | (ea_reg << 5) | dst_reg); emit32(0x5AC00400 | (dst_reg << 5) | dst_reg); break; /* LDRH+REV16 */
@@ -620,11 +674,14 @@ static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kin
 }
 
 static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_kind) {
-	uint32_t *n1 = NULL, *n2 = NULL, *done = NULL;
-	emit_invalid_high_mmio_check(ea_reg, &n1, &n2);
+	uint32_t *valid_locs[8] = {0};
+	int valid_count = 0;
+	uint32_t *done = NULL;
+	uint32_t access_size = (store_kind == 1) ? 1 : (store_kind == 4 ? 4 : 2);
+	emit_direct_access_valid_check(ea_reg, access_size, false, true, valid_locs, &valid_count);
 	done = jit_code_ptr; emit32(0); /* B done for invalid */
-	patch_cond_to_here(n1, 3);
-	patch_cond_to_here(n2, 2);
+	for (int i = 0; i < valid_count; i++)
+		patch_cond_to_here(valid_locs[i], 3);
 	switch (store_kind) {
 	case 1: emit32(0x39000000 | (ea_reg << 5) | val_reg); break; /* STRB */
 	case 2: emit32(0x79000000 | (ea_reg << 5) | val_reg); break; /* STRH */
@@ -1393,20 +1450,27 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_load_gpr(RTMP1, rb);
 				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			}
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
-			emit_store_gpr(RTMP1, rd);
+			lazy_flush_cr0();
+			ra_flush_all();
+			emit_load_gpr(RTMP1, rd);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_lwz);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			ra_reset();
+			emit_store_gpr(RTMP0, rd);
 			return true;
 
 		case 151: /* stwx rS,rA,rB */
 			emit_load_gpr(RTMP1, PPC_RS(op));
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) {
 				emit_load_gpr(RTMP2, rb);
 				emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 			}
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1); /* STR */
+			lazy_flush_cr0();
+			ra_flush_all();
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_stw);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			ra_reset();
 			return true;
 
 		case 8: /* subfc rD,rA,rB (rD = rB - rA, set CA) */
@@ -1845,16 +1909,23 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 20: /* lwarx rD,rA,rB — load word and reserve (treat as lwzx) */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-			emit_store_gpr(RTMP1, rd);
+			lazy_flush_cr0();
+			ra_flush_all();
+			emit_load_gpr(RTMP1, rd);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_lwz);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			ra_reset();
+			emit_store_gpr(RTMP0, rd);
 			return true;
 		case 150: /* stwcx. rS,rA,rB — store word conditional (simplified: always succeed) */
 			emit_load_gpr(RTMP1, PPC_RS(op));
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+			lazy_flush_cr0();
+			ra_flush_all();
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_stw);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			ra_reset();
 			/* Set CR0.EQ to indicate success */
 			lazy_flush_cr0();
 			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);

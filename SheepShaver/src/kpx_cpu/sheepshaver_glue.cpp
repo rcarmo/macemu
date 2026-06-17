@@ -143,6 +143,8 @@ extern "C" void sheepshaver_jit_emul_return(void *regs);
 extern "C" void sheepshaver_jit_exec_return(void *regs);
 extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32 emul_op, uint32 next_pc);
 extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, uint32 next_pc);
+extern "C" uint32 sheepshaver_jit_safe_lwz(uint32 ea, uint32 old_value);
+extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value);
 
 class sheepshaver_cpu
 	: public powerpc_cpu
@@ -808,6 +810,40 @@ extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, u
 		return;
 	ppc_cpu->pc() = next_pc;
 	ppc_cpu->execute_native_op(selector);
+}
+
+static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
+{
+	if (ea + 3 < ea)
+		return false;
+	if (ea < 0x3000)
+		return true;
+	if (ea >= RAMBase && ea + 4 <= RAMBase + RAMSize)
+		return true;
+	if (!store && ea >= ROMBase && ea + 4 <= ROMBase + ROM_AREA_SIZE)
+		return true;
+	if (ea >= SheepMem::Base() && ea + 4 <= SheepMem::End()) {
+		if (store && ea >= SheepMem::ZeroPage() && ea < SheepMem::ZeroPage() + SheepMem::PageSize())
+			return false;
+		return true;
+	}
+	if (ea >= 0xffff0000U)
+		return true;
+	return false;
+}
+
+extern "C" uint32 sheepshaver_jit_safe_lwz(uint32 ea, uint32 old_value)
+{
+	if (!sheepshaver_jit_word_access_valid(ea, false))
+		return old_value;
+	return ReadMacInt32(ea);
+}
+
+extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value)
+{
+	if (!sheepshaver_jit_word_access_valid(ea, true))
+		return;
+	WriteMacInt32(ea, value);
 }
 
 void FlushCodeCache(uintptr start, uintptr end)
