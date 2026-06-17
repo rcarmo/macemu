@@ -2581,7 +2581,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			 * the not-taken target instead of returning an unmapped PC to GATE3. */
 			emit_load_imm32(RTMP3, (int32_t)(pc + 4));
 			emit_cmp_w_imm(RTMP1, 0);
-			emit32(0x1A800000 | (RTMP3 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP1); /* CSEL EQ fallback */
+			emit32(0x1A800000 | (RTMP1 << 16) | (0x0 << 12) | (RTMP3 << 5) | RTMP1); /* CSEL EQ fallback */
 			a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
 			lazy_flush_cr0();
 			ra_flush_all();
@@ -2605,7 +2605,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_clear_branch_target_low_bits(RTMP0);
 				emit_load_imm32(RTMP1, (int32_t)(pc + 4));
 				emit_cmp_w_imm(RTMP0, 0);
-				emit32(0x1A800000 | (RTMP1 << 16) | (0x0 << 12) | (RTMP0 << 5) | RTMP0); /* CSEL EQ fallback */
+				emit32(0x1A800000 | (RTMP0 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP0); /* CSEL EQ fallback */
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
@@ -2638,7 +2638,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 					a64_mov_reg(RTMP1, RTMP2);
 				}
 				emit_cmp_w_imm(RTMP1, 0);
-				emit32(0x1A800000 | (RTMP2 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP1); /* CSEL EQ fallback */
+				emit32(0x1A800000 | (RTMP1 << 16) | (0x0 << 12) | (RTMP2 << 5) | RTMP1); /* CSEL EQ fallback */
 				a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
