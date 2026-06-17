@@ -3925,6 +3925,7 @@ bool ppc_jit_aarch64_compile(
 	uint32_t cur_pc = pc;
 	int n_compiled = 0;
 	bool complete = true;
+	bool emitted_exit = false;
 	insn_count = 0;
 	lazy_cr0_valid = false;
 	lazy_cr0_reg = -1;
@@ -3953,6 +3954,7 @@ bool ppc_jit_aarch64_compile(
 				a64_ldp_post(19, RSTATE, A64_SP, 16);
 				a64_ldp_post(A64_FP, A64_LR, A64_SP, 16);
 				a64_ret();
+			emitted_exit = true;
 			n_compiled++;
 			cur_pc += 4;
 			break;
@@ -3970,6 +3972,7 @@ bool ppc_jit_aarch64_compile(
 			if (n_compiled == 0) return false; /* don't compile empty blocks */
 			lazy_flush_cr0();
 			emit_epilogue_with_pc(cur_pc);
+			emitted_exit = true;
 			n_compiled++;
 			cur_pc += 4;
 			break;
@@ -3990,6 +3993,7 @@ bool ppc_jit_aarch64_compile(
 			jit_cum_fail_total++;
 			lazy_flush_cr0();
 			emit_epilogue_with_pc(cur_pc);
+			emitted_exit = true;
 			complete = false;
 			break;
 		}
@@ -3998,8 +4002,14 @@ bool ppc_jit_aarch64_compile(
 		n_compiled++;
 		cur_pc += 4;
 
-		/* Block-terminating opcodes: break after compiling them */
-		if (is_terminator) break;
+		/* Block-terminating opcodes: compile_one() already emitted the terminal
+		 * epilogue/return, even when it ended in a direct chain branch instead of
+		 * a RET. Mark that so the outer post-pass doesn't append a spurious
+		 * fallthrough epilogue at cur_pc. */
+		if (is_terminator) {
+			emitted_exit = true;
+			break;
+		}
 	}
 
 	/* Track why blocks are incomplete */
@@ -4010,14 +4020,12 @@ bool ppc_jit_aarch64_compile(
 	if ((jit_blocks_attempted) % 100000 == 0 && jit_blocks_attempted > 0)
 		jit_report_misses();
 
-	/* If we didn't emit a ret yet, do it now */
-	if (n_compiled > 0 && jit_code_ptr > code_start) {
-		uint32_t last = *(jit_code_ptr - 1);
-		if (last != 0xD65F03C0) { /* not a RET */
-			lazy_flush_cr0();
-			emit_epilogue_with_pc(cur_pc);
-			complete = false;
-		}
+	/* If the block ran off the end of our straight-line window without any
+	 * explicit terminator/failure epilogue, end it at the next PPC PC. */
+	if (!emitted_exit && n_compiled > 0 && jit_code_ptr > code_start) {
+		lazy_flush_cr0();
+		emit_epilogue_with_pc(cur_pc);
+		complete = false;
 	}
 
 	size_t code_bytes = (uint8_t *)jit_code_ptr - (uint8_t *)code_start;
