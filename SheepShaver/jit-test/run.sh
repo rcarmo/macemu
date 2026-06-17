@@ -848,6 +848,17 @@ TEST_ORDER+=(fuzz_bclr_cr1_not_taken)
 # blrl must branch to the old LR target and update LR to the instruction after blrl.
 TESTS[fuzz_blrl_link_return]="7FE802A6 38600000 48000005 7CA802A6 38A50020 7CA803A6 4E800021 7CE802A6 7FE803A6 38603333 48000010 7CC802A6 38802222 4E800020"
 TEST_ORDER+=(fuzz_blrl_link_return)
+# Exact CR-bit logical pattern seen on the late wrapper path: mtcr full, cmpwi on
+# cr6, then `crand cr1.gt,cr1.so,cr6.eq` before indirect branch.
+TESTS[fuzz_mtcr_crand_bcctr_taken]="7FE802A6 3DA06B1F 61ADF022 7DAFF120 38E00000 2F070000 4CA7D202 48000005 7CA802A6 38A5001C 7CA903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcr_crand_bcctr_taken)
+TESTS[fuzz_mtcr_crand_bcctr_not_taken]="7FE802A6 3DA06B1F 61ADF022 7DAFF120 38E00001 2F070000 4CA7D202 48000005 7CA802A6 38A5001C 7CA903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcr_crand_bcctr_not_taken)
+TESTS[fuzz_mtcr_crand_bclr_taken]="7FE802A6 3DA06B1F 61ADF022 7DAFF120 38E00000 2F070000 4CA7D202 48000005 7CA802A6 38A5001C 7CA803A6 4D850020 38601111 7FE803A6 4800000C 38602222 7FE803A6"
+TEST_ORDER+=(fuzz_mtcr_crand_bclr_taken)
+# Handler-path XER shape: SO/OV/CA set plus full byte-count field must round-trip.
+TESTS[fuzz_mtxer_fullbits]="3C60E000 6063007F 7C6103A6 7CA102A6"
+TEST_ORDER+=(fuzz_mtxer_fullbits)
 
 # --- orc ---
 TESTS[orc_basic]="38600000 388000FF 7C652338"
