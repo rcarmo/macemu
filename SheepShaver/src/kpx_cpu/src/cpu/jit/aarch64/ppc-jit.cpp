@@ -83,7 +83,17 @@ static void jit_bc_flush(void) {
 /* Record a chain patch site: when the target block at next_pc is compiled,
  * patch_loc (pointing to the first LDP of the standard epilogue) will be
  * overwritten with B <chain_code_of_next_pc>. */
+static bool jit_chain_enabled(void) {
+	static int enabled = -1;
+	if (enabled < 0) {
+		const char *disable = getenv("SS_DISABLE_JIT_CHAIN");
+		enabled = !(disable && disable[0] && disable[0] != '0');
+	}
+	return enabled != 0;
+}
+
 static void record_chain_site(uint32_t next_pc, uint32_t *patch_loc) {
+	if (!jit_chain_enabled()) return;
 	if (chain_site_pool_next >= JIT_CHAIN_SITE_POOL) return; /* pool full, skip */
 	int bucket = (next_pc >> 2) & JIT_BC_MASK;
 	int idx = chain_site_pool_next++;
@@ -96,6 +106,7 @@ static void record_chain_site(uint32_t next_pc, uint32_t *patch_loc) {
 /* When a new block is inserted at pc with chain_code, back-patch all
  * standard epilogues that were waiting to chain to this PC. */
 static void patch_chain_sites(uint32_t pc, uint32_t *chain_code) {
+	if (!jit_chain_enabled()) return;
 	if (!chain_code) return;
 	int bucket = (pc >> 2) & JIT_BC_MASK;
 	int idx = chain_site_heads[bucket];
@@ -724,7 +735,7 @@ static void emit_epilogue_with_pc(uint32_t next_pc) {
 	 * restoring callee-saved registers and returning to the dispatch loop.
 	 * The callee-saved registers (x19–x28) remain valid on the stack from
 	 * the current block's prologue — the chained block re-uses that frame. */
-	const struct jit_bc_entry *chain_target = jit_bc_lookup(next_pc);
+	const struct jit_bc_entry *chain_target = jit_chain_enabled() ? jit_bc_lookup(next_pc) : NULL;
 	if (chain_target && chain_target->chain_code) {
 		int32_t off = (int32_t)((uint8_t *)chain_target->chain_code - (uint8_t *)jit_code_ptr);
 		if (off >= -(1 << 25) && off < (1 << 25)) {
@@ -2565,6 +2576,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x7100001F | (RTMP0 << 5)); /* CMP branch decision, #0 */
 			/* RTMP1 = decision ? old_LR : pc+4 */
 			emit32(0x1A800000 | (RTMP1 << 16) | (0x1 << 12) | (RTMP2 << 5) | RTMP1); /* CSEL NE */
+			/* In SheepShaver ignore-invalid-access mode, a null indirect branch target
+			 * from threaded ROM glue acts like an ignored helper call. Continue with
+			 * the not-taken target instead of returning an unmapped PC to GATE3. */
+			emit_load_imm32(RTMP3, (int32_t)(pc + 4));
+			emit_cmp_w_imm(RTMP1, 0);
+			emit32(0x1A800000 | (RTMP3 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP1); /* CSEL EQ fallback */
 			a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
 			lazy_flush_cr0();
 			ra_flush_all();
@@ -2586,6 +2603,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);
 				emit_clear_branch_target_low_bits(RTMP0);
+				emit_load_imm32(RTMP1, (int32_t)(pc + 4));
+				emit_cmp_w_imm(RTMP0, 0);
+				emit32(0x1A800000 | (RTMP1 << 16) | (0x0 << 12) | (RTMP0 << 5) | RTMP0); /* CSEL EQ fallback */
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
@@ -2617,6 +2637,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 					emit32(0x34000000 | (2 << 5) | RTMP0);
 					a64_mov_reg(RTMP1, RTMP2);
 				}
+				emit_cmp_w_imm(RTMP1, 0);
+				emit32(0x1A800000 | (RTMP2 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP1); /* CSEL EQ fallback */
 				a64_str_w_imm(RTMP1, RSTATE, PPCR_PC);
 				lazy_flush_cr0();
 				ra_flush_all();
