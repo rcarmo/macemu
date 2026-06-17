@@ -461,6 +461,9 @@ TEST_ORDER+=(srawi_basic)
 # srawi r4,r12,4; rlwimi. r12,r4,31,1,31.  The JIT must encode ASR as
 # SBFM #sh,#31; swapping immr/imms produces an incorrect left-rotate-like result.
 SRAWI_SHIFT4_REG12_EQUIV="3D80FFFF 618CFFF1 7D842670 508CF87F"
+SUBFEO_EQUIV="38600005 3880000A 3CC02000 7CC103A6 7CA32510 7CC102A6"
+MULLWO_EQUIV="3C604000 38800004 7CA325D6 7CC102A6"
+DIVWUO_ZERO_EQUIV="38600064 38800000 7CA32796 7CC102A6"
 
 # --- lha (sign-extending halfword) ---
 # li r3,0x8000; sth r3,0x300(r1); lha r5,0x300(r1) → r5 = 0xFFFF8000
@@ -1149,20 +1152,29 @@ done
 
 # Focused interpreter-vs-direct-JIT regression checks for bugs that ordinary
 # deterministic runs cannot catch when the default CPU path uses direct JIT.
-out_interp="$RUN_DIR/srawi_shift4_reg12-interp.txt"
-out_jit="$RUN_DIR/srawi_shift4_reg12-jit.txt"
-run_ppc_test "srawi_shift4_reg12_interp" "$SRAWI_SHIFT4_REG12_EQUIV" "$out_interp" interp
-run_ppc_test "srawi_shift4_reg12_jit" "$SRAWI_SHIFT4_REG12_EQUIV" "$out_jit" jit
-TOTAL=$((TOTAL+1))
-if [ -s "$out_interp" ] && [ -s "$out_jit" ] && diff -q "$out_interp" "$out_jit" >/dev/null 2>&1; then
-    echo "METRIC opcode_srawi_shift4_reg12_equiv=1"
-    PASS=$((PASS+1))
-else
-    echo "METRIC opcode_srawi_shift4_reg12_equiv=0"
-    echo "  DIFF for srawi_shift4_reg12_equiv:" >&2
-    diff "$out_interp" "$out_jit" >&2 || true
-    FAIL=$((FAIL+1))
-fi
+run_equiv_test() {
+    local name="$1"
+    local hex="$2"
+    local out_interp="$RUN_DIR/${name}-interp.txt"
+    local out_jit="$RUN_DIR/${name}-jit.txt"
+    run_ppc_test "${name}_interp" "$hex" "$out_interp" interp
+    run_ppc_test "${name}_jit" "$hex" "$out_jit" jit
+    TOTAL=$((TOTAL+1))
+    if [ -s "$out_interp" ] && [ -s "$out_jit" ] && diff -q "$out_interp" "$out_jit" >/dev/null 2>&1; then
+        echo "METRIC opcode_${name}=1"
+        PASS=$((PASS+1))
+    else
+        echo "METRIC opcode_${name}=0"
+        echo "  DIFF for $name:" >&2
+        diff "$out_interp" "$out_jit" >&2 || true
+        FAIL=$((FAIL+1))
+    fi
+}
+
+run_equiv_test srawi_shift4_reg12_equiv "$SRAWI_SHIFT4_REG12_EQUIV"
+run_equiv_test subfeo_equiv "$SUBFEO_EQUIV"
+run_equiv_test mullwo_equiv "$MULLWO_EQUIV"
+run_equiv_test divwuo_zero_equiv "$DIVWUO_ZERO_EQUIV"
 
 SCORE=$(( TOTAL > 0 ? PASS * 100 / TOTAL : 0 ))
 echo "METRIC pass=$PASS"

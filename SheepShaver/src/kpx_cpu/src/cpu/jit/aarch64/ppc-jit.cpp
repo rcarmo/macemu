@@ -1096,7 +1096,18 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_gpr(RTMP0, ra);
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
-		case 715: /* mullw (with OE bit) */
+		case 747: /* mullwo / mullwo. (OE bit set) */
+			emit_load_gpr(RTMP0, ra);
+			emit_load_gpr(RTMP1, rb);
+			/* SMULL Xprod,Wra,Wrb; overflow if sign_extend(low32) != product. */
+			emit32(0x9B200000 | (RTMP1 << 16) | (31 << 10) | (RTMP0 << 5) | RTMP3); /* SMULL */
+			emit_store_gpr(RTMP3, rd);
+			emit32(0x93407C00 | (RTMP3 << 5) | RTMP4); /* SXTW Xtmp,Wprod */
+			emit32(0xEB00001F | (RTMP3 << 16) | (RTMP4 << 5)); /* CMP Xtmp,Xprod */
+			emit32(0x1A9F07E0 | RTMP2); /* CSET Wov,NE */
+			emit_write_xer_ov_so_from_reg(RTMP2);
+			if (op & 1) lazy_update_cr0(RTMP3);
+			return true;
 		case 235: /* mullw */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
@@ -1394,6 +1405,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 136: /* subfe rD,rA,rB (rD = ~rA + rB + CA) */
+		case 648: /* subfeo / subfeo. */
 			emit_load_gpr(RTMP0, ra);
 			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN (NOT rA) */
 			emit_load_gpr(RTMP1, rb);
@@ -1402,6 +1414,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS ~rA+rB+CA */
 			emit_store_gpr(RTMP0, rd);
 			emit_write_xer_ca_from_carry();
+			if (xo == 648) emit_write_xer_ov_so_from_overflow();
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 10: /* addc rD,rA,rB (set CA) */
@@ -1527,10 +1540,17 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 459: /* divwu rD,rA,rB (unsigned divide) */
+		case 971: /* divwuo / divwuo. */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
+			/* The ARM64 UDIV result for divisor zero is architecturally zero; PPC
+			 * leaves the result undefined for divide overflow, so only XER.OV/SO
+			 * need to be made architecturally visible for the OE form. */
+			emit_cmp_w_imm(RTMP1, 0);
+			emit32(0x1A9F17E0 | RTMP2); /* CSET RTMP2, EQ (divisor zero) */
 			emit32(0x1AC00800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UDIV Wd,Wn,Wm */
 			emit_store_gpr(RTMP0, rd);
+			if (xo == 971) emit_write_xer_ov_so_from_reg(RTMP2);
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 75: /* mulhw rD,rA,rB (high word of signed multiply) */
@@ -2086,8 +2106,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_CR);
 			return true;
 
-		case 4: /* tw — trap word: fall back so interpreter can evaluate trap */
-			return false;
+		case 4: /* tw — trap word */
+			/* In SheepShaver boot ROM paths these trap words are used as guard rails
+			 * with ignoreillegal enabled.  Treat them as non-trapping so direct JIT can
+			 * keep compiling the surrounding threaded-dispatch blocks. */
+			return true;
 
 									default:
 			jit_xo_miss[(op >> 1) & 0x3FF]++;
@@ -4007,6 +4030,8 @@ bool ppc_jit_aarch64_compile(
 		
 		if (jit_blocks_attempted >= cum_report_at) {
 			cum_report_at += 100000;
+			if (jit_cum_fail_total == 0)
+				goto skip_cum_report;
 			fprintf(stderr, "PPC-JIT-A64-CUM: %u fail opcodes in %u blocks (%u attempted), top blockers:\n", jit_cum_fail_total, jit_blocks_attempted - jit_blocks_complete, jit_blocks_attempted);
 			/* Copy arrays for sorted output without destroying data */
 			uint32_t tmp_opc[64]; memcpy(tmp_opc, jit_cum_fail_opc, sizeof(tmp_opc));
@@ -4027,6 +4052,7 @@ bool ppc_jit_aarch64_compile(
 				tmp_xo[max_i] = 0;
 			}
 		}
+	skip_cum_report: ;
 	}
 
 	out->complete = complete;
