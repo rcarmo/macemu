@@ -145,12 +145,6 @@ extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32 emul_op, uint
 extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, uint32 next_pc);
 extern "C" uint32 sheepshaver_jit_safe_lwz(uint32 ea, uint32 old_value);
 extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value);
-extern "C" uint32 sheepshaver_read_system_spr(uint32 spr);
-extern "C" void sheepshaver_write_system_spr(uint32 spr, uint32 value);
-extern "C" uint32 sheepshaver_read_msr(void);
-extern "C" void sheepshaver_write_msr(uint32 value);
-extern "C" uintptr_t sheepshaver_mac_to_host_addr(uint32 addr);
-static void sheepshaver_reset_system_state();
 
 class sheepshaver_cpu
 	: public powerpc_cpu
@@ -233,7 +227,6 @@ public:
 
 sheepshaver_cpu::sheepshaver_cpu()
 {
-	sheepshaver_reset_system_state();
 	init_decoder();
 
 #if PPC_ENABLE_JIT
@@ -775,95 +768,6 @@ inline void sheepshaver_cpu::get_resource(uint32 old_get_resource)
 
 // PowerPC CPU emulator
 static sheepshaver_cpu *ppc_cpu = NULL;
-
-static uint32 sheepshaver_msr = 0xf072;
-static uint32 sheepshaver_sprg[4] = {0, 0, 0, 0};
-static uint32 sheepshaver_srr0 = 0;
-static uint32 sheepshaver_srr1 = 0;
-static uint32 sheepshaver_dar = 0;
-static uint32 sheepshaver_dsisr = 0;
-
-static void sheepshaver_reset_system_state()
-{
-	sheepshaver_msr = 0xf072;
-	for (int i = 0; i < 4; i++)
-		sheepshaver_sprg[i] = 0;
-	sheepshaver_srr0 = 0;
-	sheepshaver_srr1 = 0;
-	sheepshaver_dar = 0;
-	sheepshaver_dsisr = 0;
-}
-
-extern "C" uint32 sheepshaver_read_system_spr(uint32 spr)
-{
-	switch (spr) {
-		case powerpc_registers::SPR_DAR:
-			return sheepshaver_dar;
-		case powerpc_registers::SPR_DSISR:
-			return sheepshaver_dsisr;
-		case powerpc_registers::SPR_SRR0:
-			return sheepshaver_srr0;
-		case powerpc_registers::SPR_SRR1:
-			return sheepshaver_srr1;
-		case powerpc_registers::SPR_SPRG0:
-			return sheepshaver_sprg[0];
-		case powerpc_registers::SPR_SPRG1:
-			return sheepshaver_sprg[1];
-		case powerpc_registers::SPR_SPRG2:
-			return sheepshaver_sprg[2];
-		case powerpc_registers::SPR_SPRG3:
-			return sheepshaver_sprg[3];
-		default:
-			return 0;
-	}
-}
-
-extern "C" void sheepshaver_write_system_spr(uint32 spr, uint32 value)
-{
-	switch (spr) {
-		case powerpc_registers::SPR_DAR:
-			sheepshaver_dar = value;
-			break;
-		case powerpc_registers::SPR_DSISR:
-			sheepshaver_dsisr = value;
-			break;
-		case powerpc_registers::SPR_SRR0:
-			sheepshaver_srr0 = value;
-			break;
-		case powerpc_registers::SPR_SRR1:
-			sheepshaver_srr1 = value;
-			break;
-		case powerpc_registers::SPR_SPRG0:
-			sheepshaver_sprg[0] = value;
-			break;
-		case powerpc_registers::SPR_SPRG1:
-			sheepshaver_sprg[1] = value;
-			break;
-		case powerpc_registers::SPR_SPRG2:
-			sheepshaver_sprg[2] = value;
-			break;
-		case powerpc_registers::SPR_SPRG3:
-			sheepshaver_sprg[3] = value;
-			break;
-		default:
-			break;
-	}
-}
-
-extern "C" uint32 sheepshaver_read_msr(void)
-{
-	return sheepshaver_msr;
-}
-
-extern "C" void sheepshaver_write_msr(uint32 value)
-{
-	sheepshaver_msr = value;
-}
-
-extern "C" uintptr_t sheepshaver_mac_to_host_addr(uint32 addr)
-{
-	return (uintptr_t)Mac2HostAddr(addr);
-}
 
 extern "C" void sheepshaver_jit_execute_sheep(void *regs, uint32 opcode, uint32 pc)
 {

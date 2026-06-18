@@ -25,10 +25,6 @@ extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32_t emul_op, ui
 extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32_t selector, uint32_t next_pc);
 extern "C" uint32_t sheepshaver_jit_safe_lwz(uint32_t ea, uint32_t old_value);
 extern "C" void sheepshaver_jit_safe_stw(uint32_t ea, uint32_t value);
-extern "C" uint32_t sheepshaver_read_system_spr(uint32_t spr);
-extern "C" void sheepshaver_write_system_spr(uint32_t spr, uint32_t value);
-extern "C" uint32_t sheepshaver_read_msr(void);
-extern "C" void sheepshaver_write_msr(uint32_t value);
 
 /* ---- Code cache ---- */
 static uint8_t  *jit_cache_base = NULL;
@@ -1304,16 +1300,6 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_store_gpr(RTMP0, rd);
 				return true;
 			}
-			if (spr == 18 || spr == 19 || spr == 26 || spr == 27 || (spr >= 272 && spr <= 275)) {
-				lazy_flush_cr0();
-				ra_flush_all();
-				emit_load_imm32(RTMP0, (int32_t)spr);
-				emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_read_system_spr);
-				emit32(0xD63F0000 | (RTMP4 << 5));
-				ra_reset();
-				emit_store_gpr(RTMP0, rd);
-				return true;
-			}
 			/* SheepShaver interpreter returns zero for unsupported SPR reads. */
 			a64_movz(RTMP0, 0, 0);
 			emit_store_gpr(RTMP0, rd);
@@ -1352,16 +1338,6 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				a64_mov_reg(RTMP1, RTMP0);
 				emit_load_imm32(RTMP2, 0x7F); emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1);
 				emit32(0x39000000 | (PPCR_XER_CNT << 10) | (RSTATE << 5) | RTMP1);
-				return true;
-			}
-			if (spr == 18 || spr == 19 || spr == 26 || spr == 27 || (spr >= 272 && spr <= 275)) {
-				lazy_flush_cr0();
-				ra_flush_all();
-				emit_load_imm32(RTMP0, (int32_t)spr);
-				emit_load_gpr(RTMP1, PPC_RS(op));
-				emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_write_system_spr);
-				emit32(0xD63F0000 | (RTMP4 << 5));
-				ra_reset();
 				return true;
 			}
 			/* SheepShaver interpreter ignores unsupported SPR writes. */
@@ -1973,21 +1949,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 659: /* mfsrin — same */
 			return false;
 
-		case 83: /* mfmsr rD */
-			lazy_flush_cr0();
-			ra_flush_all();
-			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_read_msr);
-			emit32(0xD63F0000 | (RTMP4 << 5));
-			ra_reset();
+		case 83: /* mfmsr rD — simplified: return 0 */
+			emit_load_imm32(RTMP0, 0);
 			emit_store_gpr(RTMP0, rd);
-			return true;
-		case 146: /* mtmsr rS */
-			lazy_flush_cr0();
-			ra_flush_all();
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_write_msr);
-			emit32(0xD63F0000 | (RTMP4 << 5));
-			ra_reset();
 			return true;
 		case 310: /* eciwx rD,rA,rB — external control in word: NOP */
 			return true;
