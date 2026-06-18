@@ -971,6 +971,7 @@ static void op_move_l_reg_d16an_comp_ff(uae_u32 opcode);
 static void op_movem_l_postinc_comp_ff(uae_u32 opcode);
 static void op_btst_l_imm_dreg_comp_ff(uae_u32 opcode);
 static void op_btst_b_imm_d16an_comp_ff(uae_u32 opcode);
+extern void REGPARAM2 op_4cd8_0_comp_ff(uae_u32 opcode);
 static void op_rts_comp_ff(uae_u32 opcode);
 extern "C" void jit_trace_add(uae_u32 pc, uae_u32 opcode);
 extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode);
@@ -6437,6 +6438,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #if defined(CPU_AARCH64)
                     if ((opcode & 0xfff8) == 0x0828)
                         op_btst_b_imm_d16an_comp_ff(opcode);
+                    else if ((opcode & 0xfff8) == 0x4cd8)
+                        op_4cd8_0_comp_ff(opcode);
                     else
 #endif
                         comptbl[cft_map(opcode)](opcode);
