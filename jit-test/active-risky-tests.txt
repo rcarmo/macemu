@@ -1,8 +1,5 @@
 # Active risky vectors for mismatch-first autoresearch.
 # Add at most one new vector per iteration, in priority order.
-fuzz_mtcr_bgtctr_taken
-fuzz_mtcr_crand_bcctr_taken
-fuzz_mtcrf_cr1_bcctr_taken
 roxl_x_propagation
 roxr_x_propagation
 roxl_count_2
