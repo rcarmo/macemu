@@ -757,14 +757,22 @@ static void jit_block_verify_run(cpu_history *pc_hist, int blocklen, int total_c
     tick_inhibit = true;
 #endif
 
-    /* Re-run the exact interpreter block from the true entry state so the
-       verifier compares whole-block semantics, not a post-trace side state. */
+    /* Re-run the interpreter block from the true entry state, but stop at the
+       first architectural control-flow boundary.  The native compiler also
+       terminates at Bcc/JMP/RTS-style boundaries; executing the recorded
+       successor trace in the interpreter replay would compare different block
+       shapes instead of the compiled block's own semantics. */
+    int verify_blocklen = blocklen;
     jit_block_verify_snapshot_restore(&jit_block_verify_entry_state);
     regs.spcflags = 0;
     InterruptFlags = 0;
     for (int i = 0; i < blocklen; i++) {
         uae_u32 opcode = get_opcode_cft_map((uae_u16)*pc_hist[i].location);
         (*cpufunctbl[opcode])(opcode);
+        if (i + 1 < blocklen && (table68k[opcode].cflow & fl_end_block)) {
+            verify_blocklen = i + 1;
+            break;
+        }
     }
     if (!jit_block_verify_snapshot_capture(&interp)) {
 #if defined(CPU_AARCH64)
@@ -781,7 +789,7 @@ static void jit_block_verify_run(cpu_history *pc_hist, int blocklen, int total_c
     InterruptFlags = 0;
     jit_block_verify_compile_active = true;
     jit_block_verify_compile_pc = block_pc;
-    compile_block(pc_hist, blocklen, total_cycles);
+    compile_block(pc_hist, verify_blocklen, total_cycles);
     jit_block_verify_compile_active = false;
     jit_block_verify_compile_pc = 0xffffffffu;
 
@@ -791,7 +799,7 @@ static void jit_block_verify_run(cpu_history *pc_hist, int blocklen, int total_c
     jit_block_verify_reentrant = false;
 
     if (jit_block_verify_snapshot_capture(&native)) {
-        jit_block_verify_compare(&interp, &native, block_pc, blocklen);
+        jit_block_verify_compare(&interp, &native, block_pc, verify_blocklen);
         jit_block_verify_snapshot_free(&native);
     }
 
