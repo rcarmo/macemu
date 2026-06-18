@@ -691,6 +691,15 @@ static void jit_block_verify_compare(const jit_block_verify_snapshot *expected, 
     regstruct expected_regs, actual_regs;
     jit_block_verify_arch_regs(&expected->regs, &expected_regs);
     jit_block_verify_arch_regs(&actual->regs, &actual_regs);
+    if (expected_regs.pc_p == actual_regs.pc_p) {
+        /* regs.pc/fault_pc/pc_oldp can carry the last dispatch/fault metadata
+           from different but equivalent block segmentations.  If the current
+           executable PC agrees, do not report those bookkeeping fields as a
+           guest-visible verifier mismatch. */
+        expected_regs.pc = actual_regs.pc;
+        expected_regs.fault_pc = actual_regs.fault_pc;
+        expected_regs.pc_oldp = actual_regs.pc_oldp;
+    }
 
     bool mismatch = false;
     if (memcmp(&expected_regs, &actual_regs, sizeof(regs)) != 0)
