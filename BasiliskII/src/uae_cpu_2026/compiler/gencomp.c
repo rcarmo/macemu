@@ -1647,16 +1647,14 @@ gen_opcode (unsigned int opcode)
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace();
-	comprintf("\tint tmp=scratchie++;\n");
+	comprintf("\tint dst = dstreg + 8;\n");
 	switch(curi->size) {
-	 case sz_byte: comprintf("\tsign_extend_8_rr(tmp,src);\n"); break;
-	 case sz_word: comprintf("\tsign_extend_16_rr(tmp,src);\n"); break;
-	 case sz_long: comprintf("\ttmp=src;\n"); break;
+	 case sz_word: comprintf("\tjnf_ADDA_w(dst,src);\n"); break;
+	 case sz_long: comprintf("\tjnf_ADDA_l(dst,src);\n"); break;
 	 default: assert(0);
 	}
-	genamode (curi->dmode, "dstreg", sz_long, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tadd_l(dst,tmp);\n");
-	genastore ("dst", curi->dmode, "dstreg", sz_long, "dst");
+	if (curi->smode != Dreg && curi->smode != Areg)
+		comprintf("\tforget_about(src);\n");
 	break;
 
      case i_ADDX:
@@ -1882,16 +1880,15 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
 
 	start_brace();
-	comprintf("\tint tmps=scratchie++;\n");
 	switch(curi->size) {
-	 case sz_word: comprintf("\tsign_extend_16_rr(dst,src);\n"); break;
-	 case sz_long: comprintf("\tmov_l_rr(dst,src);\n"); break;
+	 case sz_word: comprintf("\tsign_extend_16_rr(dstreg + 8,src);\n"); break;
+	 case sz_long: comprintf("\tmov_l_rr(dstreg + 8,src);\n"); break;
 	 default: assert(0);
 	}
-	genastore ("dst", curi->dmode, "dstreg", sz_long, "dst");
+	if (curi->smode != Dreg && curi->smode != Areg)
+		comprintf("\tforget_about(src);\n");
 	break;
 
      case i_MVSR2:

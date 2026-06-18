@@ -8151,7 +8151,25 @@ MIDFUNC(2,jnf_MEM_READ_OFF_b,(W4 d, RR4 adr))
 {
 	adr = readreg(adr);
 	d = writereg(d);
+	MRS_NZCV_x(REG_WORK4);
 
+	/* Low NuBus mirror gap: direct-addressing ARM64 can alias this region
+	   onto reserved/JIT-cache host space. Match the existing interpreter
+	   SIGSEGV-skip/open-bus behavior without taking a host fault. */
+	LOAD_U32(REG_WORK1, 0x0a014000);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_low = (uae_u32*)get_target();
+	BCC_i(0);
+	LOAD_U32(REG_WORK1, 0x0a815000);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_high = (uae_u32*)get_target();
+	BCS_i(0);
+	MOV_wi(d, 0xff);
+	uae_u32 *done = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(normal_low, (uintptr)get_target());
+	write_jmp_target(normal_high, (uintptr)get_target());
 	LDRB_wXx(d, adr, R_MEMSTART);
 	LOAD_U32(REG_WORK1, 0xff001fff);
 	AND_www(REG_WORK1, adr, REG_WORK1);
@@ -8160,6 +8178,8 @@ MIDFUNC(2,jnf_MEM_READ_OFF_b,(W4 d, RR4 adr))
 	BNE_i(3);
 	MOV_wi(REG_WORK1, 0);
 	STRB_wXx(REG_WORK1, adr, R_MEMSTART);
+	write_jmp_target(done, (uintptr)get_target());
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
 	unlock2(adr);
@@ -8170,9 +8190,26 @@ MIDFUNC(2,jnf_MEM_READ_OFF_w,(W4 d, RR4 adr))
 {
 	adr = readreg(adr);
 	d = writereg(d);
+	MRS_NZCV_x(REG_WORK4);
 
+	LOAD_U32(REG_WORK1, 0x0a014000);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_low = (uae_u32*)get_target();
+	BCC_i(0);
+	LOAD_U32(REG_WORK1, 0x0a815000);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_high = (uae_u32*)get_target();
+	BCS_i(0);
+	MOV_wi(d, 0xffff);
+	uae_u32 *done = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(normal_low, (uintptr)get_target());
+	write_jmp_target(normal_high, (uintptr)get_target());
 	LDRH_wXx(REG_WORK1, adr, R_MEMSTART);
 	REV16_ww(d, REG_WORK1);
+	write_jmp_target(done, (uintptr)get_target());
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
 	unlock2(adr);
@@ -8183,9 +8220,26 @@ MIDFUNC(2,jnf_MEM_READ_OFF_l,(W4 d, RR4 adr))
 {
 	adr = readreg(adr);
 	d = writereg(d);
+	MRS_NZCV_x(REG_WORK4);
 
+	LOAD_U32(REG_WORK1, 0x0a014000);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_low = (uae_u32*)get_target();
+	BCC_i(0);
+	LOAD_U32(REG_WORK1, 0x0a815000);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_high = (uae_u32*)get_target();
+	BCS_i(0);
+	MOV_wi(d, 0x10);
+	uae_u32 *done = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(normal_low, (uintptr)get_target());
+	write_jmp_target(normal_high, (uintptr)get_target());
 	LDR_wXx(REG_WORK1, adr, R_MEMSTART);
 	REV_ww(d, REG_WORK1);
+	write_jmp_target(done, (uintptr)get_target());
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
 	unlock2(adr);

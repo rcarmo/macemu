@@ -46,6 +46,8 @@ DECLARE_MIDFUNC(mov_l_mi(IMPTR d, IMPTR s));
 DECLARE_MIDFUNC(pop_l(W4 d));
 DECLARE_MIDFUNC(push_l(RR4 s));
 DECLARE_MIDFUNC(sign_extend_16_rr(W4 d, RR2 s));
+DECLARE_MIDFUNC(jnf_ADDA_w(RW4 d, RR2 s));
+DECLARE_MIDFUNC(jnf_ADDA_l(RW4 d, RR4 s));
 DECLARE_MIDFUNC(lea_l_brr(W4 d, RR4 s, IM32 offset));
 DECLARE_MIDFUNC(lea_l_brr_indexed(W4 d, RR4 s, RR4 index, IM8 factor, IM8 offset));
 DECLARE_MIDFUNC(lea_l_rr_indexed(W4 d, RR4 s, RR4 index, IM8 factor));
