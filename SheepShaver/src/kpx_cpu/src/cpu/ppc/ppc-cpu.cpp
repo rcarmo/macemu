@@ -796,6 +796,13 @@ void powerpc_cpu::execute(uint32 entry)
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;
 					}
+					/* Idle-loop detection: if the JIT block branched back to its
+					 * own start PC, this is a hardware busy-wait (e.g. nanokernel
+					 * polling loop waiting for a decrementer interrupt).  Yield
+					 * briefly so the tick thread can progress Mac OS state; the
+					 * interpreter naturally yields via decode-cache overhead. */
+					if (pc() == jblk.ppc_start_pc)
+						sched_yield();
 					/* Fast dispatch: if next PC is already in JIT cache, stay in the
 					 * JIT loop without touching the interpreter block cache.
 					 * This eliminates my_block_cache.find() + pdi_execute overhead for
