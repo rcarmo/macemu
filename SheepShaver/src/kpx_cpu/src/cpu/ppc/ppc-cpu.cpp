@@ -796,13 +796,43 @@ void powerpc_cpu::execute(uint32 entry)
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;
 					}
-					/* Idle-loop detection: if the JIT block branched back to its
-					 * own start PC, this is a hardware busy-wait (e.g. nanokernel
-					 * polling loop waiting for a decrementer interrupt).  Yield
-					 * briefly so the tick thread can progress Mac OS state; the
-					 * interpreter naturally yields via decode-cache overhead. */
-					if (pc() == jblk.ppc_start_pc)
-						sched_yield();
+					/* Decrementer-accurate idle-loop escape.
+					 *
+					 * The PPC decrementer fires unconditionally after a fixed
+					 * instruction count.  When the JIT detects an idle loop
+					 * (block branches back to itself), force HandleInterrupt
+					 * delivery after a short instruction budget.  This matches
+					 * real hardware where the decrementer breaks busy-wait loops
+					 * regardless of software interrupt state.
+					 *
+					 * Only fire during idle loops to avoid spurious interrupts
+					 * during normal straight-line execution. */
+					if (pc() == jblk.ppc_start_pc) {
+						static uint32 idle_insn_count = 0;
+						idle_insn_count += jblk.n_insns ? jblk.n_insns : 4;
+						if (idle_insn_count >= 500) {
+							idle_insn_count = 0;
+							powerpc_registers r;
+							powerpc_registers::interrupt_copy(r, regs());
+							HandleInterrupt(&r);
+							powerpc_registers::interrupt_copy(regs(), r);
+							/* Also yield to tick thread so XLM_RUN_MODE can
+							 * progress via other boot threads. */
+							sched_yield();
+						}
+					} else {
+						/* Non-idle: periodic interrupt at normal 60Hz cadence
+						 * to maintain Mac OS timer state during fast JIT execution. */
+						static uint32 jit_decrementer = 0;
+						jit_decrementer += jblk.n_insns ? jblk.n_insns : 4;
+						if (jit_decrementer >= 15000) {
+							jit_decrementer = 0;
+							powerpc_registers r;
+							powerpc_registers::interrupt_copy(r, regs());
+							HandleInterrupt(&r);
+							powerpc_registers::interrupt_copy(regs(), r);
+						}
+					}
 					/* Fast dispatch: if next PC is already in JIT cache, stay in the
 					 * JIT loop without touching the interpreter block cache.
 					 * This eliminates my_block_cache.find() + pdi_execute overhead for
