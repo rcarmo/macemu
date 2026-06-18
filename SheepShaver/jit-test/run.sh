@@ -1169,6 +1169,11 @@ TEST_ORDER+=(fuzz_dar_roundtrip)
 TESTS[fuzz_dsisr_roundtrip]="3C600FED 6063CBA9 7C7203A6 38600000 7CB202A6"
 TEST_ORDER+=(fuzz_dsisr_roundtrip)
 
+# --- mfsr must NOT clobber rD (interpreter treats as illegal → skip) ---
+# li r3,0x5678; mfsr r3,0 → r3 must remain 0x5678 (not be zeroed)
+TESTS[fuzz_mfsr_no_clobber]="38605678 7C6004A6"
+TEST_ORDER+=(fuzz_mfsr_no_clobber)
+
 # --- mulhw with negative * positive ---
 TESTS[fuzz_mulhw_neg]="3860FFFF 38800002 7CA32096"
 TEST_ORDER+=(fuzz_mulhw_neg)

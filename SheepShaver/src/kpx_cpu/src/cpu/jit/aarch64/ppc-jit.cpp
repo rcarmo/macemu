@@ -790,17 +790,24 @@ static void emit_return_to_dispatch(void) {
 	a64_ret();
 }
 
+static uint32_t jit_compiling_block_pc = 0; /* set at block compile start */
+
 static void emit_epilogue_with_pc(uint32_t next_pc) {
 	/* Flush register allocator: write all dirty cached GPRs back to struct */
 	ra_flush_all();
 	emit_load_imm32(RTMP0, (int32_t)next_pc);
 	a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
+	/* NEVER chain backward branches (next_pc <= block start).  Tight polling
+	 * loops like the nanokernel idle loop (lwz/addi/stw/b .-) must return
+	 * to the dispatch loop so check_spcflags() can observe timer interrupts.
+	 * Without this, chained backward branches spin in native code forever. */
+	bool allow_chain = (next_pc > jit_compiling_block_pc);
 	/* Compile-time chaining: if the target PC is already in the JIT block
 	 * cache and has a chain entry, branch directly to it instead of
 	 * restoring callee-saved registers and returning to the dispatch loop.
 	 * The callee-saved registers (x19–x28) remain valid on the stack from
 	 * the current block's prologue — the chained block re-uses that frame. */
-	const struct jit_bc_entry *chain_target = jit_chain_enabled() ? jit_bc_lookup(next_pc) : NULL;
+	const struct jit_bc_entry *chain_target = (allow_chain && jit_chain_enabled()) ? jit_bc_lookup(next_pc) : NULL;
 	if (chain_target && chain_target->chain_code) {
 		int32_t off = (int32_t)((uint8_t *)chain_target->chain_code - (uint8_t *)jit_code_ptr);
 		if (off >= -(1 << 25) && off < (1 << 25)) {
@@ -811,7 +818,8 @@ static void emit_epilogue_with_pc(uint32_t next_pc) {
 	/* Runtime back-patching: record this epilogue location so that when
 	 * next_pc is compiled later, the first LDP can be patched to B chain_code.
 	 * patch_loc = address of the first LDP instruction we are about to emit. */
-	record_chain_site(next_pc, jit_code_ptr);
+	if (allow_chain)
+		record_chain_site(next_pc, jit_code_ptr);
 	/* Standard epilogue: restore callee-saved regs and return to dispatch */
 	a64_ldp_post(27, 28, A64_SP, 16);
 	a64_ldp_post(25, 26, A64_SP, 16);
@@ -1290,8 +1298,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_store_gpr(RTMP0, rd);
 				return true;
 			}
-			if (spr == 287) { /* PVR — return a 603e-compatible value used by OldWorld ROMs */
-				emit_load_imm32(RTMP0, 0x00060300);
+			if (spr == 287) { /* PVR — must match interpreter's PVR value */
+				extern uint32_t PVR;
+				emit_load_imm32(RTMP0, (int32_t)PVR);
 				emit_store_gpr(RTMP0, rd);
 				return true;
 			}
@@ -1958,14 +1967,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_CR);
 			return true;
 
-		case 595: /* mfsr — move from segment register (supervisor, treat as NOP returning 0) */
-			emit_load_imm32(RTMP0, 0);
-			emit_store_gpr(RTMP0, rd);
-			return true;
+		case 595: /* mfsr — not in interpreter decode table; must not compile
+		         * (interpreter treats as execute_illegal → skip with ignoreillegal) */
+			return false;
 		case 659: /* mfsrin — same */
-			emit_load_imm32(RTMP0, 0);
-			emit_store_gpr(RTMP0, rd);
-			return true;
+			return false;
 
 		case 83: /* mfmsr rD */
 			lazy_flush_cr0();
@@ -4044,6 +4050,7 @@ bool ppc_jit_aarch64_compile(
 
 	uint32_t *code_start = jit_cache_wp;
 	jit_code_ptr = jit_cache_wp;
+	jit_compiling_block_pc = pc;
 
 	/* Prologue: save callee-saved regs, set x20 = regs ptr from x0 */
 	a64_stp_pre(A64_FP, A64_LR, A64_SP, -16);
