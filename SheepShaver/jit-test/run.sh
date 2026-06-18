@@ -1152,6 +1152,23 @@ TEST_ORDER+=(fuzz_lwzu_update)
 TESTS[fuzz_xer_roundtrip]="3860FFFF 30630001 7C6102A6 7C650026"
 TEST_ORDER+=(fuzz_xer_roundtrip)
 
+# --- privileged SPR round-trips used by the late SheepShaver handler path ---
+# lis/ori r3,0x12345678; mtsprg3 r3; li r3,0; mfsprg3 r5
+TESTS[fuzz_sprg3_roundtrip]="3C601234 60635678 7C7343A6 38600000 7CB342A6"
+TEST_ORDER+=(fuzz_sprg3_roundtrip)
+# lis/ori r3,0x89ABCDEF; mtsrr0 r3; li r3,0; mfsrr0 r5
+TESTS[fuzz_srr0_roundtrip]="3C6089AB 6063CDEF 7C7A03A6 38600000 7CBA02A6"
+TEST_ORDER+=(fuzz_srr0_roundtrip)
+# lis/ori r3,0x13579BDF; mtsrr1 r3; li r3,0; mfsrr1 r5
+TESTS[fuzz_srr1_roundtrip]="3C601357 60639BDF 7C7B03A6 38600000 7CBB02A6"
+TEST_ORDER+=(fuzz_srr1_roundtrip)
+# lis/ori r3,0x2468ACE0; mtspr DAR,r3; li r3,0; mfspr r5,DAR
+TESTS[fuzz_dar_roundtrip]="3C602468 6063ACE0 7C7303A6 38600000 7CB302A6"
+TEST_ORDER+=(fuzz_dar_roundtrip)
+# lis/ori r3,0x0FEDCBA9; mtspr DSISR,r3; li r3,0; mfspr r5,DSISR
+TESTS[fuzz_dsisr_roundtrip]="3C600FED 6063CBA9 7C7203A6 38600000 7CB202A6"
+TEST_ORDER+=(fuzz_dsisr_roundtrip)
+
 # --- mulhw with negative * positive ---
 TESTS[fuzz_mulhw_neg]="3860FFFF 38800002 7CA32096"
 TEST_ORDER+=(fuzz_mulhw_neg)

@@ -215,11 +215,19 @@ struct powerpc_registers
 
 	enum {
 		SPR_XER		= 1,
+		SPR_DAR		= 19,
+		SPR_DSISR	= 18,
 		SPR_LR		= 8,
 		SPR_CTR		= 9,
 		SPR_SDR1	= 25,
-		SPR_PVR		= 287,
+		SPR_SRR0	= 26,
+		SPR_SRR1	= 27,
 		SPR_VRSAVE	= 256,
+		SPR_SPRG0	= 272,
+		SPR_SPRG1	= 273,
+		SPR_SPRG2	= 274,
+		SPR_SPRG3	= 275,
+		SPR_PVR		= 287,
 	};
 
 	static inline int GPR(int r) { return GPR_BASE + r; }

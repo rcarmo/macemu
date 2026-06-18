@@ -40,6 +40,10 @@
 #ifdef SHEEPSHAVER
 #include "main.h"
 #include "prefs.h"
+extern "C" uint32 sheepshaver_read_system_spr(uint32 spr);
+extern "C" void sheepshaver_write_system_spr(uint32 spr, uint32 value);
+extern "C" uint32 sheepshaver_read_msr(void);
+extern "C" void sheepshaver_write_msr(uint32 value);
 #endif
 
 #if ENABLE_MON
@@ -1154,7 +1158,11 @@ void powerpc_cpu::execute_mffs(uint32 opcode)
 
 void powerpc_cpu::execute_mfmsr(uint32 opcode)
 {
+#ifdef SHEEPSHAVER
+	operand_RD::set(this, opcode, sheepshaver_read_msr());
+#else
 	operand_RD::set(this, opcode, 0xf072);
+#endif
 	increment_pc(4);
 }
 
@@ -1175,6 +1183,16 @@ void powerpc_cpu::execute_mfspr(uint32 opcode)
 		d = PVR;
 		break;
 	}
+	case powerpc_registers::SPR_DAR:
+	case powerpc_registers::SPR_DSISR:
+	case powerpc_registers::SPR_SRR0:
+	case powerpc_registers::SPR_SRR1:
+	case powerpc_registers::SPR_SPRG0:
+	case powerpc_registers::SPR_SPRG1:
+	case powerpc_registers::SPR_SPRG2:
+	case powerpc_registers::SPR_SPRG3:
+		d = sheepshaver_read_system_spr(spr);
+		break;
 	default: d = 0;
 #else
 	default: execute_illegal(opcode);
@@ -1195,7 +1213,18 @@ void powerpc_cpu::execute_mtspr(uint32 opcode)
 	case powerpc_registers::SPR_LR:		lr() = s;		break;
 	case powerpc_registers::SPR_CTR:	ctr() = s;		break;
 	case powerpc_registers::SPR_VRSAVE:	vrsave() = s;	break;
-#ifndef SHEEPSHAVER
+#ifdef SHEEPSHAVER
+	case powerpc_registers::SPR_DAR:
+	case powerpc_registers::SPR_DSISR:
+	case powerpc_registers::SPR_SRR0:
+	case powerpc_registers::SPR_SRR1:
+	case powerpc_registers::SPR_SPRG0:
+	case powerpc_registers::SPR_SPRG1:
+	case powerpc_registers::SPR_SPRG2:
+	case powerpc_registers::SPR_SPRG3:
+		sheepshaver_write_system_spr(spr, s);
+		break;
+#else
 	default: execute_illegal(opcode);
 #endif
 	}

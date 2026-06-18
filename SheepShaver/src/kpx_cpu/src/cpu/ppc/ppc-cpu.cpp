@@ -722,6 +722,49 @@ void powerpc_cpu::execute(uint32 entry)
 
 			// Execute all cached blocks
 		  pdi_execute:
+			{
+				static const char *trace_compare_loop_env = getenv("SS_TRACE_COMPARE_LOOP");
+				static uint32 trace_prev_dispatch_pc = 0;
+				uint32 trace_pc = pc();
+				if (trace_compare_loop_env) {
+					switch (trace_pc) {
+						case 0x184e2408:
+						case 0x184a5410:
+						case 0x184b3880:
+						case 0x184c9410:
+						case 0x184f4450:
+						case 0x1846534c:
+						case 0x18491600:
+						case 0x184a9c10:
+						case 0x18464284:
+						case 0x184b37a0:
+						case 0x184a5408:
+						case 0x184652ac:
+						case 0x184a9c08:
+						case 0x184b36e0:
+						case 0x18492440:
+						case 0x184b3000:
+						case 0x183141ac:
+						case 0x183141b0:
+						case 0x183141cc:
+						case 0x18314208:
+						case 0x18314258:
+						case 0x18314280:
+						case 0x18310bb4:
+						case 0x18310ce8:
+						case 0x18310dd0:
+							fprintf(stderr,
+							        "TRACE_COMPARE_LOOP pc=%08x prev=%08x lr=%08x ctr=%08x cr=%08x xer=%08x"
+							        " r0=%08x r1=%08x r8=%08x r9=%08x r10=%08x r11=%08x r12=%08x r13=%08x"
+							        " r20=%08x r21=%08x r22=%08x r24=%08x r27=%08x r29=%08x\n",
+							        trace_pc, trace_prev_dispatch_pc, lr(), ctr(), cr(), xer(),
+							        gpr(0), gpr(1), gpr(8), gpr(9), gpr(10), gpr(11), gpr(12), gpr(13),
+							        gpr(20), gpr(21), gpr(22), gpr(24), gpr(27), gpr(29));
+							break;
+					}
+				}
+				trace_prev_dispatch_pc = trace_pc;
+			}
 #if defined(__aarch64__) && defined(USE_AARCH64_JIT)
 			/* AArch64 direct-codegen JIT: try to execute block natively.
 			 *
@@ -743,6 +786,8 @@ void powerpc_cpu::execute(uint32 entry)
 				static const char *jit_env = getenv("SS_USE_JIT");
 				static bool jit_enabled = !(jit_env && jit_env[0] == '0' && jit_env[1] == '\0');
 				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT=0 diagnostic override */
+				if (getenv("SS_SKIP_JIT_1831") && pc() >= 0x18310000 && pc() < 0x18314300)
+					goto skip_jit;
 				if (!jit_init_done) { ppc_jit_aarch64_init(4096); jit_init_done = true; }
 				ppc_jit_block jblk;
 				const uint8 *jit_region_base = NULL;
@@ -754,15 +799,55 @@ void powerpc_cpu::execute(uint32 entry)
 				 * returning, so executing a supported prefix is more faithful than
 				 * falling back to the interpreter at the block entry. */
 				if (jit_compiled) {
+					static uint32 recent_jit_starts[128] = {0};
+					static int recent_jit_pos = 0;
 					/* Match dyngen block-entry semantics: drain pending special flags
 					 * before direct native block execution.  trigger_interrupt() first
 					 * raises TRIGGER, then check_spcflags() converts it to HANDLE, so
 					 * loop a few times to process the resulting interrupt immediately. */
 					for (int spc_iter = 0; !spcflags().empty() && spc_iter < 4; spc_iter++)
 						if (!check_spcflags()) goto return_site;
+					recent_jit_starts[recent_jit_pos++ & 127] = jblk.ppc_start_pc;
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
 					fn((void*)regs_ptr());
 				  pdi_jit_post:
+					if (getenv("SS_TRACE_RECENT_JIT")) {
+						static bool wrapper_reported = false;
+						static bool handler_reported = false;
+						uint32 trace_pc = pc();
+						if (!wrapper_reported && trace_pc >= 0x183141c0 && trace_pc < 0x18314300) {
+							wrapper_reported = true;
+							fprintf(stderr,
+							        "HANDLER_WRAPPER from=%08x pc=%08x lr=%08x ctr=%08x cr=%08x xer=%08x"
+							        " r0=%08x r1=%08x r3=%08x r4=%08x r6=%08x r7=%08x r8=%08x r9=%08x"
+							        " r10=%08x r11=%08x r12=%08x r13=%08x r17=%08x r29=%08x\n",
+							        jblk.ppc_start_pc, trace_pc, lr(), ctr(), cr(), xer(),
+							        gpr(0), gpr(1), gpr(3), gpr(4), gpr(6), gpr(7), gpr(8), gpr(9),
+							        gpr(10), gpr(11), gpr(12), gpr(13), gpr(17), gpr(29));
+							fprintf(stderr, "RECENT_JIT");
+							for (int i = 0; i < 24; i++) {
+								int idx = (recent_jit_pos - 24 + i) & 127;
+								fprintf(stderr, " %08x", recent_jit_starts[idx]);
+							}
+							fprintf(stderr, "\n");
+						}
+						if (!handler_reported && trace_pc >= 0x18310bb4 && trace_pc < 0x18310df0) {
+							handler_reported = true;
+							fprintf(stderr,
+							        "HANDLER_ENTRY from=%08x pc=%08x lr=%08x ctr=%08x cr=%08x xer=%08x"
+							        " r0=%08x r1=%08x r2=%08x r3=%08x r4=%08x r6=%08x r7=%08x"
+							        " r8=%08x r9=%08x r10=%08x r11=%08x r12=%08x r13=%08x r24=%08x r29=%08x\n",
+							        jblk.ppc_start_pc, trace_pc, lr(), ctr(), cr(), xer(),
+							        gpr(0), gpr(1), gpr(2), gpr(3), gpr(4), gpr(6), gpr(7),
+							        gpr(8), gpr(9), gpr(10), gpr(11), gpr(12), gpr(13), gpr(24), gpr(29));
+							fprintf(stderr, "RECENT_JIT");
+							for (int i = 0; i < 24; i++) {
+								int idx = (recent_jit_pos - 24 + i) & 127;
+								fprintf(stderr, " %08x", recent_jit_starts[idx]);
+							}
+							fprintf(stderr, "\n");
+						}
+					}
 					/* GATE 3: PC range check.
 					 * If the JIT produced an out-of-range PC, the block branched to
 					 * hardware-mapped Mac OS space (e.g. NuBus/MMIO) that SheepShaver
@@ -852,7 +937,30 @@ void powerpc_cpu::execute(uint32 entry)
 #endif
   do_interpret:
 	for (;;) {
-		uint32 opcode = vm_read_memory_4(pc());
+		uint32 current_pc = pc();
+		uint32 opcode = vm_read_memory_4(current_pc);
+		if (getenv("SS_TRACE_COMPARE_INSN")) {
+			switch (current_pc) {
+				case 0x183141b0:
+				case 0x183141cc:
+				case 0x183141e8:
+				case 0x183141f0:
+				case 0x18314204:
+				case 0x18314208:
+				case 0x18314280:
+				case 0x18310bb4:
+				case 0x18310ce8:
+				case 0x18310dd0:
+					fprintf(stderr,
+					        "TRACE_COMPARE_INSN pc=%08x op=%08x lr=%08x ctr=%08x cr=%08x xer=%08x"
+					        " r0=%08x r1=%08x r2=%08x r3=%08x r4=%08x r6=%08x r7=%08x"
+					        " r8=%08x r9=%08x r10=%08x r11=%08x r12=%08x r13=%08x r17=%08x r24=%08x r29=%08x\n",
+					        current_pc, opcode, lr(), ctr(), cr(), xer(),
+					        gpr(0), gpr(1), gpr(2), gpr(3), gpr(4), gpr(6), gpr(7),
+					        gpr(8), gpr(9), gpr(10), gpr(11), gpr(12), gpr(13), gpr(17), gpr(24), gpr(29));
+					break;
+			}
+		}
 		const instr_info_t *ii = decode(opcode);
 #if PPC_EXECUTE_DUMP_STATE
 		if (dump_state)
