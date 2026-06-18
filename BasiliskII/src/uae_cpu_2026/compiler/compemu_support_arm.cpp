@@ -5711,6 +5711,11 @@ void build_comp(void)
         }
         prop[cft_map(opcode)].set_flags = table68k[opcode].flagdead;
         prop[cft_map(opcode)].use_flags = table68k[opcode].flaglive;
+        /* BTST only writes Z, but the generated metadata can understate that
+           for no-flags selection.  A following Bcc must therefore see the
+           freshly materialized BTST Z instead of incoming/stale NZCV. */
+        if (table68k[opcode].mnemo == i_BTST)
+            prop[cft_map(opcode)].set_flags |= FLAG_Z;
         /* Unconditional jumps don't evaluate condition codes, so they
          * don't actually use any flags themselves */
         if (prop[cft_map(opcode)].cflow & fl_const_jump)
@@ -5892,6 +5897,8 @@ void build_comp(void)
             }
             prop[cft_map(opcode)].set_flags = table68k[opcode].flagdead;
             prop[cft_map(opcode)].use_flags = table68k[opcode].flaglive;
+            if (table68k[opcode].mnemo == i_BTST)
+                prop[cft_map(opcode)].set_flags |= FLAG_Z;
         }
     }
 
