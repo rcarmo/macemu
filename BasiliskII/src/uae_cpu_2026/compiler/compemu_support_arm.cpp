@@ -667,10 +667,33 @@ static void jit_block_verify_entry_capture(uae_u32 block_pc)
     jit_block_verify_entry_pc = block_pc;
 }
 
+static inline uae_u32 jit_block_verify_arch_spcflags(uae_u32 spcflags)
+{
+#if defined(USE_JIT)
+    /* SPCFLAG_JIT_* bits are compiler/dispatcher control state, not guest
+       architectural state.  The interpreter side can legitimately finish a
+       verifier replay with JIT_END_COMPILE set while the native replay exits
+       through a clean block boundary. */
+    return spcflags & ~(SPCFLAG_JIT_END_COMPILE | SPCFLAG_JIT_EXEC_RETURN);
+#else
+    return spcflags;
+#endif
+}
+
+static void jit_block_verify_arch_regs(const regstruct *src, regstruct *dst)
+{
+    memcpy(dst, src, sizeof(*dst));
+    dst->spcflags = jit_block_verify_arch_spcflags(dst->spcflags);
+}
+
 static void jit_block_verify_compare(const jit_block_verify_snapshot *expected, const jit_block_verify_snapshot *actual, uae_u32 block_pc, int blocklen)
 {
+    regstruct expected_regs, actual_regs;
+    jit_block_verify_arch_regs(&expected->regs, &expected_regs);
+    jit_block_verify_arch_regs(&actual->regs, &actual_regs);
+
     bool mismatch = false;
-    if (memcmp(&expected->regs, &actual->regs, sizeof(regs)) != 0)
+    if (memcmp(&expected_regs, &actual_regs, sizeof(regs)) != 0)
         mismatch = true;
     if (memcmp(&expected->flags, &actual->flags, sizeof(regflags)) != 0)
         mismatch = true;
@@ -686,20 +709,20 @@ static void jit_block_verify_compare(const jit_block_verify_snapshot *expected, 
 
     fprintf(stderr, "JITBLOCKVERIFY block=%08x len=%d mismatch=1\n", (unsigned)block_pc, blocklen);
     for (int i = 0; i < 16; i++) {
-        if (expected->regs.regs[i] != actual->regs.regs[i]) {
+        if (expected_regs.regs[i] != actual_regs.regs[i]) {
             fprintf(stderr, "  reg[%d] interp=%08x native=%08x\n", i,
-                (unsigned)expected->regs.regs[i], (unsigned)actual->regs.regs[i]);
+                (unsigned)expected_regs.regs[i], (unsigned)actual_regs.regs[i]);
         }
     }
-    if (expected->regs.pc != actual->regs.pc || expected->regs.fault_pc != actual->regs.fault_pc ||
-        expected->regs.pc_p != actual->regs.pc_p || expected->regs.pc_oldp != actual->regs.pc_oldp ||
-        expected->regs.sr != actual->regs.sr || expected->regs.spcflags != actual->regs.spcflags) {
+    if (expected_regs.pc != actual_regs.pc || expected_regs.fault_pc != actual_regs.fault_pc ||
+        expected_regs.pc_p != actual_regs.pc_p || expected_regs.pc_oldp != actual_regs.pc_oldp ||
+        expected_regs.sr != actual_regs.sr || expected_regs.spcflags != actual_regs.spcflags) {
         fprintf(stderr,
             "  pc interp=%08x/%p/%p native=%08x/%p/%p sr interp=%04x native=%04x spc interp=%08x native=%08x\n",
-            (unsigned)expected->regs.pc, (void*)expected->regs.pc_p, (void*)expected->regs.pc_oldp,
-            (unsigned)actual->regs.pc, (void*)actual->regs.pc_p, (void*)actual->regs.pc_oldp,
-            (unsigned)expected->regs.sr, (unsigned)actual->regs.sr,
-            (unsigned)expected->regs.spcflags, (unsigned)actual->regs.spcflags);
+            (unsigned)expected_regs.pc, (void*)expected_regs.pc_p, (void*)expected_regs.pc_oldp,
+            (unsigned)actual_regs.pc, (void*)actual_regs.pc_p, (void*)actual_regs.pc_oldp,
+            (unsigned)expected_regs.sr, (unsigned)actual_regs.sr,
+            (unsigned)expected_regs.spcflags, (unsigned)actual_regs.spcflags);
     }
     if (expected->flags.nzcv != actual->flags.nzcv || expected->flags.x != actual->flags.x) {
         fprintf(stderr, "  flags interp nzcv=%08x x=%08x native nzcv=%08x x=%08x\n",
