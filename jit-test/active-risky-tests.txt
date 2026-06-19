@@ -301,3 +301,4 @@ divl_u64
 divl_s64
 bfins_dreg_imm
 bfins_dreg_narrow
+dbeq_x_clobber
