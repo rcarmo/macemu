@@ -811,13 +811,16 @@ void powerpc_cpu::execute(uint32 entry)
 							if (jblk.ppc_start_pc == last_idle_pc) {
 								if (++idle_count >= 50) {
 									idle_count = 0;
-									/* Force HandleInterrupt to pump SDL events
-									 * and progress Mac OS state, then yield. */
-									powerpc_registers r;
-									powerpc_registers::interrupt_copy(r, regs());
-									HandleInterrupt(&r);
-									powerpc_registers::interrupt_copy(regs(), r);
-									sched_yield();
+									/* Cooperative idle: wait for the tick thread's
+									 * next interrupt delivery rather than spinning.
+									 * Poll spcflags with short sleeps until the tick
+									 * thread fires (60Hz = every ~16.6ms), then
+									 * process the interrupt via check_spcflags. */
+									for (int w = 0; w < 200 && spcflags().empty(); w++)
+										usleep(100);
+									if (!spcflags().empty()) {
+										if (!check_spcflags()) goto return_site;
+									}
 								}
 							} else {
 								last_idle_pc = jblk.ppc_start_pc;
