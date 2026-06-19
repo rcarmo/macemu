@@ -798,25 +798,30 @@ void powerpc_cpu::execute(uint32 entry)
 					}
 					/* Decrementer exception simulation for hardware idle loops.
 					 *
-					 * The PPC decrementer exception physically redirects PC to the
-					 * exception vector, breaking busy-wait loops unconditionally.
-					 * SheepShaver's HandleInterrupt in MODE_68K only writes memory
-					 * and CR — it cannot break infinite loops with no conditional
-					 * exit (like the nanokernel polling loop at 18310dd0).
-					 *
-					 * When the JIT detects a block branching back to itself (idle
-					 * loop), advance PC past the backward branch to the exit
-					 * trampoline after a short instruction budget.  This matches
-					 * what real hardware does: the decrementer fires mid-loop and
-					 * vectors to the handler, which returns to the instruction
-					 * after the loop (the trampoline/exit path). */
-					if (pc() == jblk.ppc_start_pc) {
+					 * When the JIT detects a block executing at the SAME PC as
+					 * the previous block (unconditional backward branch to self),
+					 * this is a hardware busy-wait.  After enough consecutive
+					 * same-PC iterations, advance PC past the backward branch
+					 * to the exit trampoline — simulating the decrementer
+					 * exception that would break the loop on real hardware. */
+					{
+						static uint32 last_idle_pc = 0;
 						static uint32 idle_count = 0;
-						if (++idle_count >= 100) {
+						if (pc() == jblk.ppc_start_pc) {
+							if (jblk.ppc_start_pc == last_idle_pc) {
+								if (++idle_count >= 500) {
+									idle_count = 0;
+									uint32 n = jblk.n_insns ? jblk.n_insns : 6;
+									set_register(powerpc_registers::PC,
+										any_register(jblk.ppc_start_pc + n * 4));
+								}
+							} else {
+								last_idle_pc = jblk.ppc_start_pc;
+								idle_count = 1;
+							}
+						} else {
+							last_idle_pc = 0;
 							idle_count = 0;
-							uint32 n = jblk.n_insns ? jblk.n_insns : 6;
-							set_register(powerpc_registers::PC,
-								any_register(jblk.ppc_start_pc + n * 4));
 						}
 					}
 					/* Fast dispatch: if next PC is already in JIT cache, stay in the
