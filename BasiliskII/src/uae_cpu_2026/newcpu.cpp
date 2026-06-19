@@ -153,12 +153,38 @@ static bool trace_after_table_env()
 	return cached != 0;
 }
 
+static uae_u32 trace_anchor_pc()
+{
+	static uae_u32 value = 0;
+	static bool init = false;
+	if (!init) {
+		const char *env = getenv("B2_TRACE_ANCHOR_PC");
+		value = env && *env ? (uae_u32)strtoul(env, NULL, 0) : 0;
+		init = true;
+	}
+	return value;
+}
+
+/* Lockstep arming: when B2_TRACE_ANCHOR_PC is set, no instruction is logged
+ * until the anchor PC is first executed, so the interp window aligns exactly
+ * with the JIT window at the same single-visit boot anchor. */
+static bool trace_anchor_armed = false;
+
 static bool trace_window_matches(uae_u32 pc)
 {
 	if (!trace_window_enabled() || pc < trace_window_start() || pc > trace_window_end())
 		return false;
 	if (trace_after_table_env() && !basilisk_trace_after_table_ready)
 		return false;
+	uae_u32 anchor = trace_anchor_pc();
+	if (anchor) {
+		if (!trace_anchor_armed) {
+			if (pc == anchor)
+				trace_anchor_armed = true;
+			else
+				return false;
+		}
+	}
 	return true;
 }
 

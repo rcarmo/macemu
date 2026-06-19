@@ -76,7 +76,16 @@ static void sync_jit_prefs(uae_prefs &p)
 	p.illegal_mem = false;
 	p.address_space_24 = false;
 
-	const int distrust = (!jit_enabled || !canbang) ? 1 : 0;
+	int distrust = (!jit_enabled || !canbang) ? 1 : 0;
+	/* DIAGNOSTIC: force memory distrust under JIT so compiled code routes I/O
+	 * accesses through special_mem handlers instead of direct NATMEM. */
+	{
+		const char *env = getenv("B2_JIT_DISTRUST_MEM");
+		if (env && *env == '1') {
+			distrust = 1;
+			fprintf(stderr, "JIT: memory distrust FORCED (B2_JIT_DISTRUST_MEM=1)\n");
+		}
+	}
 	p.comptrustbyte = distrust;
 	p.comptrustword = distrust;
 	p.comptrustlong = distrust;

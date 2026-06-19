@@ -6171,11 +6171,27 @@ extern "C" void jit_trace_add(uae_u32 pc, uae_u32 opcode)
 extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode)
 {
     static unsigned long tc = 0;
+    static int armed = -1;       /* -1 = uninit, 0 = waiting for anchor, 1 = armed */
+    static uae_u32 anchor = 0;
+    static unsigned long limit = 0;
+    if (armed < 0) {
+        const char *aenv = getenv("B2_TRACE_ANCHOR_PC");
+        anchor = (aenv && *aenv) ? (uae_u32)strtoul(aenv, NULL, 0) : 0;
+        const char *lenv = getenv("B2_JIT_TRACE_LIMIT");
+        limit = (lenv && *lenv) ? strtoul(lenv, NULL, 0) : 400;
+        armed = anchor ? 0 : 1;  /* no anchor => emit immediately */
+    }
+    if (!armed) {
+        if (pc == anchor)
+            armed = 1;
+        else
+            return;
+    }
     const uae_u16 opcode = (uae_u16)(tagged_opcode & 0xffff);
     const uae_u16 kind = (uae_u16)(tagged_opcode >> 16);
     const char *kind_name = kind == 1 ? "compiled" :
         kind == 2 ? "fallback" : "unknown";
-    if (tc >= 400)
+    if (tc >= limit)
         return;
     MakeSR();
     fprintf(stderr,
