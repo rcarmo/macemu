@@ -796,41 +796,27 @@ void powerpc_cpu::execute(uint32 entry)
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;
 					}
-					/* Decrementer-accurate idle-loop escape.
+					/* Decrementer exception simulation for hardware idle loops.
 					 *
-					 * The PPC decrementer fires unconditionally after a fixed
-					 * instruction count.  When the JIT detects an idle loop
-					 * (block branches back to itself), force HandleInterrupt
-					 * delivery after a short instruction budget.  This matches
-					 * real hardware where the decrementer breaks busy-wait loops
-					 * regardless of software interrupt state.
+					 * The PPC decrementer exception physically redirects PC to the
+					 * exception vector, breaking busy-wait loops unconditionally.
+					 * SheepShaver's HandleInterrupt in MODE_68K only writes memory
+					 * and CR — it cannot break infinite loops with no conditional
+					 * exit (like the nanokernel polling loop at 18310dd0).
 					 *
-					 * Only fire during idle loops to avoid spurious interrupts
-					 * during normal straight-line execution. */
+					 * When the JIT detects a block branching back to itself (idle
+					 * loop), advance PC past the backward branch to the exit
+					 * trampoline after a short instruction budget.  This matches
+					 * what real hardware does: the decrementer fires mid-loop and
+					 * vectors to the handler, which returns to the instruction
+					 * after the loop (the trampoline/exit path). */
 					if (pc() == jblk.ppc_start_pc) {
-						static uint32 idle_insn_count = 0;
-						idle_insn_count += jblk.n_insns ? jblk.n_insns : 4;
-						if (idle_insn_count >= 500) {
-							idle_insn_count = 0;
-							powerpc_registers r;
-							powerpc_registers::interrupt_copy(r, regs());
-							HandleInterrupt(&r);
-							powerpc_registers::interrupt_copy(regs(), r);
-							/* Also yield to tick thread so XLM_RUN_MODE can
-							 * progress via other boot threads. */
-							sched_yield();
-						}
-					} else {
-						/* Non-idle: periodic interrupt at normal 60Hz cadence
-						 * to maintain Mac OS timer state during fast JIT execution. */
-						static uint32 jit_decrementer = 0;
-						jit_decrementer += jblk.n_insns ? jblk.n_insns : 4;
-						if (jit_decrementer >= 15000) {
-							jit_decrementer = 0;
-							powerpc_registers r;
-							powerpc_registers::interrupt_copy(r, regs());
-							HandleInterrupt(&r);
-							powerpc_registers::interrupt_copy(regs(), r);
+						static uint32 idle_count = 0;
+						if (++idle_count >= 100) {
+							idle_count = 0;
+							uint32 n = jblk.n_insns ? jblk.n_insns : 6;
+							set_register(powerpc_registers::PC,
+								any_register(jblk.ppc_start_pc + n * 4));
 						}
 					}
 					/* Fast dispatch: if next PC is already in JIT cache, stay in the
