@@ -4321,6 +4321,38 @@ void sync_m68k_pc(void)
  * Support functions exposed to newcpu                              *
  ********************************************************************/
 
+/* ---------------------------------------------------------------------------
+ * JIT I/O bank handlers (root-cause fix for the full-JIT boot hang)
+ *
+ * The 2026 uae_cpu tree dropped the UAE addrbank model: compiled loads/stores
+ * use direct NATMEM (MEMBaseDiff + addr) for *every* address, so register-
+ * indirect I/O polls (SCC/VIA/Cuda at 0x5xxxxxxx) read raw RAM pages instead of
+ * the emulated device, and the boot poll loops spin forever. The interpreter
+ * routes those same accesses through memory.h get_byte/put_byte, which carry the
+ * real device behaviour (e.g. the 0x50000002 scanner-status auto-clear).
+ *
+ * These wrappers expose the interpreter's get/put to the JIT "special memory"
+ * (mem-bank) dispatch used by jnf_MEM_READMEMBANK / jnf_MEM_WRITEMEMBANK. The
+ * bank-callback contract (offsets used by readmem_special/writemem_special) is:
+ *   [0]=lget [1]=wget [2]=bget [3]=lput [4]=wput [5]=bput [6]=xlate
+ * Each slot is a host function pointer; reads take (addr) -> value, writes take
+ * (addr, value), xlate takes (addr) -> host pointer. Routing compiled I/O here
+ * makes JIT accesses bit-identical to the interpreter by construction.
+ * --------------------------------------------------------------------------- */
+static uae_u32 jit_bank_lget(uae_u32 addr) { return get_long(addr); }
+static uae_u32 jit_bank_wget(uae_u32 addr) { return get_word(addr); }
+static uae_u32 jit_bank_bget(uae_u32 addr) { return get_byte(addr); }
+static void    jit_bank_lput(uae_u32 addr, uae_u32 v) { put_long(addr, v); }
+static void    jit_bank_wput(uae_u32 addr, uae_u32 v) { put_word(addr, v); }
+static void    jit_bank_bput(uae_u32 addr, uae_u32 v) { put_byte(addr, v); }
+static uintptr jit_bank_xlate(uae_u32 addr) { return (uintptr)get_real_address(addr); }
+
+static void *jit_io_bank[7] = {
+    (void *)jit_bank_lget, (void *)jit_bank_wget, (void *)jit_bank_bget,
+    (void *)jit_bank_lput, (void *)jit_bank_wput, (void *)jit_bank_bput,
+    (void *)jit_bank_xlate,
+};
+
 void compiler_init(void)
 {
     static bool initialized = false;
@@ -4333,7 +4365,12 @@ void compiler_init(void)
 
     for (int bank = 0; bank < 65536; ++bank) {
         baseaddr[bank] = (uae_u8 *)MEMBaseDiff;
-        mem_banks[bank] = NULL;
+        /* Point every bank at the interpreter-backed handler so the JIT
+         * special-memory (distrust) path dispatches real device emulation
+         * instead of dereferencing a NULL stub. Only the distrust path uses
+         * this table; default JIT (distrust=0) still uses direct NATMEM, so
+         * this leaves the default code path unchanged. */
+        mem_banks[bank] = jit_io_bank;
     }
 
     initialized = true;
