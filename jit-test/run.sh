@@ -9,7 +9,14 @@ ROM="${B2_TEST_ROM:-/workspace/projects/rpi-basilisk2-sdl2-nox/Quadra800.ROM}"
 DISK="${B2_TEST_DISK:-/workspace/fixtures/basilisk/images/HD200MB}"
 RUN_DIR="$(mktemp -d /tmp/ar-jit-opcodes-XXXXXX)"
 
+# Copy-on-write disk clone (real CoW via btrfs scratch; avoids full-image copies
+# and keeps every harness run isolated from the shared base fixture).
+COW_LIB=${COW_LIB:-/workspace/scripts/lib/cow-disk.sh}
+[ -r "$COW_LIB" ] && source "$COW_LIB"
+DISK_CLONE=""
+
 cleanup() {
+    [ -n "$DISK_CLONE" ] && command -v cow_release >/dev/null 2>&1 && cow_release "$DISK_CLONE"
     rm -rf "$RUN_DIR"
 }
 trap cleanup EXIT
@@ -80,6 +87,12 @@ if ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
     emit_failure_metrics 0 "build failed"
 fi
 echo "METRIC build_ok=1"
+
+# Use a fresh copy-on-write clone of the base disk for this harness run so the
+# shared fixture is never mutated (clone shares extents; only deltas stored).
+if command -v cow_clone >/dev/null 2>&1; then
+    DISK_CLONE="$(cow_clone "$DISK" "$RUN_DIR/disk.img" "jit-opc")" && DISK="$DISK_CLONE"
+fi
 
 # ---- Test harness ------------------------------------------------------------
 # Each test case is a hex sequence of M68K instructions.

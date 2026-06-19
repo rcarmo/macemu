@@ -13,6 +13,20 @@ TIMEOUT_SEC="${B2_QA_TIMEOUT:-60}"
 ROM_TICKS="${B2_QA_ROM_TICKS:-300}"
 VNC_PORT="${B2_QA_VNC_PORT:-5900}"
 RAM_SIZE="${B2_QA_RAM_SIZE:-8388608}"
+
+# Copy-on-write disk clones (real CoW via btrfs scratch; avoids 200MB/run copies
+# and keeps each run isolated from the shared base fixture).
+COW_LIB="${COW_LIB:-/workspace/scripts/lib/cow-disk.sh}"
+[ -r "$COW_LIB" ] && source "$COW_LIB"
+DISK_CLONE=""
+cow_matrix_cleanup() {
+  # Only release the clone if the emulator actually ran inline. Disk-enabled
+  # cases that exit at the manual-prepare scaffold keep their fresh CoW disk so
+  # the printed manual launch command remains valid.
+  [ "${EMU_LAUNCHED:-0}" = "1" ] && [ -n "$DISK_CLONE" ] && \
+    command -v cow_release >/dev/null 2>&1 && cow_release "$DISK_CLONE"
+}
+trap cow_matrix_cleanup EXIT
 CASE=""
 DRY_RUN=0
 RUN_PREFLIGHT=0
@@ -208,6 +222,11 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$CASE"
 RUN_DIR="$ART_ROOT/reports/$RUN_ID"
 mkdir -p "$RUN_DIR" "$ART_ROOT/logs" "$ART_ROOT/prefs"
 PREFS="$RUN_DIR/prefs"
+# Give this run its own fresh copy-on-write disk so it never mutates the shared
+# base fixture. Skip for dry-runs (no emulator launch).
+if [[ "$DISK_ENABLED" == true && "$DRY_RUN" != 1 ]] && command -v cow_clone >/dev/null 2>&1; then
+  DISK_CLONE="$(cow_clone "$DISK" "$RUN_DIR/boot-disk.img" "b2-$CASE")" && DISK="$DISK_CLONE"
+fi
 write_prefs "$PREFS"
 cp "$PREFS" "$ART_ROOT/prefs/$RUN_ID.prefs"
 
@@ -267,6 +286,7 @@ fi
 
 mkdir -p "$RUN_DIR/home"
 set +e
+EMU_LAUNCHED=1
 env HOME="$RUN_DIR/home" \
     B2_ROM_HARNESS="$ROM_TICKS" \
     "${MODE_ENV[@]}" \
