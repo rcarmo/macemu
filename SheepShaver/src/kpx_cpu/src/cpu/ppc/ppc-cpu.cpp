@@ -796,24 +796,28 @@ void powerpc_cpu::execute(uint32 entry)
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;
 					}
-					/* Decrementer exception simulation for hardware idle loops.
+					/* Idle-loop detection: when a block branches back to itself,
+					 * yield the CPU so the tick thread can fire TriggerInterrupt.
+					 * This matches the interpreter's natural decode-cache overhead
+					 * that gives the tick thread time between block executions.
 					 *
-					 * When the JIT detects a block executing at the SAME PC as
-					 * the previous block (unconditional backward branch to self),
-					 * this is a hardware busy-wait.  After enough consecutive
-					 * same-PC iterations, advance PC past the backward branch
-					 * to the exit trampoline — simulating the decrementer
-					 * exception that would break the loop on real hardware. */
+					 * Only yield for CONSECUTIVE same-PC executions to avoid
+					 * penalizing legitimate loops (memory copy, page table init)
+					 * that naturally exit after a bounded iteration count. */
 					{
 						static uint32 last_idle_pc = 0;
 						static uint32 idle_count = 0;
 						if (pc() == jblk.ppc_start_pc) {
 							if (jblk.ppc_start_pc == last_idle_pc) {
-								if (++idle_count >= 500) {
+								if (++idle_count >= 50) {
 									idle_count = 0;
-									uint32 n = jblk.n_insns ? jblk.n_insns : 6;
-									set_register(powerpc_registers::PC,
-										any_register(jblk.ppc_start_pc + n * 4));
+									/* Force HandleInterrupt to pump SDL events
+									 * and progress Mac OS state, then yield. */
+									powerpc_registers r;
+									powerpc_registers::interrupt_copy(r, regs());
+									HandleInterrupt(&r);
+									powerpc_registers::interrupt_copy(regs(), r);
+									sched_yield();
 								}
 							} else {
 								last_idle_pc = jblk.ppc_start_pc;
