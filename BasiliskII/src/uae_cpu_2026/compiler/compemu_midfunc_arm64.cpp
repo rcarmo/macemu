@@ -189,25 +189,18 @@ MENDFUNC(0,discard_flags_in_nzcv,(void))
 
 /* Save hardware NZCV to regflags.nzcv, then discard — for DBcc cases 2-15
    where the preceding CMP/CMPI result is still in hardware NZCV
-   (dbcc_cond_move_ne_w uses CBZ which doesn't touch NZCV). */
+   (dbcc_cond_move_ne_w uses CBZ which doesn't touch NZCV).
+   IMPORTANT: this must NOT write regflags.x.  CMP/CMPI and DBcc never
+   affect the 68k X flag, so deriving X from the carry here corrupts it
+   (observed as an X-flip 1->0 across a CMP.L/DBEQ search loop). Only the
+   C/Z/N/V (cznv) state is persisted; the X flag is left exactly as-is. */
 MIDFUNC(0,save_and_discard_flags_in_nzcv,(void))
 {
 	if (live.flags_in_flags == VALID) {
-		/* Save X flag from carry using raw ARM64.
-		   Bypasses register allocator to avoid eviction issues. */
-		MRS_NZCV_x(REG_WORK4);
-		if (flags_carry_inverted) {
-			EOR_xxCflag(REG_WORK4, REG_WORK4);
-		}
-		/* Extract carry bit (bit 29) and store to regflags.x */
-		{
-			uae_u32 mask = 1u << 29;
-			LOAD_U32(REG_WORK3, mask);
-			AND_www(REG_WORK4, REG_WORK4, REG_WORK3);
-		}
-		LOAD_U64(REG_WORK3, (uintptr)&regflags.x);
-		STR_wXi(REG_WORK4, REG_WORK3, 0);
-		/* Save NZCV to regflags.nzcv */
+		/* Save NZCV (cznv) so a downstream Bcc/Scc after this DBcc sees
+		   the correct C/Z/N/V. raw_flags_to_reg() normalizes the inverted
+		   carry internally before storing regflags.nzcv. Do NOT touch
+		   regflags.x / FLAGX. */
 		int tmp = writereg(FLAGTMP);
 		raw_flags_to_reg(tmp);
 		unlock2(tmp);
@@ -215,17 +208,6 @@ MIDFUNC(0,save_and_discard_flags_in_nzcv,(void))
 	live.flags_in_flags = TRASH;
 	live.flags_on_stack = VALID;
 	flags_carry_inverted = false;
-	/* Mark FLAGX as INMEM since we wrote directly to regflags.x */
-	if (live.state[FLAGX].status == DIRTY || live.state[FLAGX].status == CLEAN) {
-		int r = live.state[FLAGX].realreg;
-		if (r >= 0) {
-			live.nat[r].nholds--;
-			if (live.nat[r].nholds == 0)
-				live.nat[r].touched = 0;
-		}
-		live.state[FLAGX].realreg = -1;
-	}
-	set_status(FLAGX, INMEM);
 }
 MENDFUNC(0,save_and_discard_flags_in_nzcv,(void))
 
