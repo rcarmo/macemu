@@ -796,39 +796,67 @@ void powerpc_cpu::execute(uint32 entry)
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;
 					}
-					/* Idle-loop detection: when a block branches back to itself,
-					 * yield the CPU so the tick thread can fire TriggerInterrupt.
-					 * This matches the interpreter's natural decode-cache overhead
-					 * that gives the tick thread time between block executions.
+					/* Progress-based idle detection: when a block branches
+					 * back to itself, compare architectural state across
+					 * iterations.  A bounded loop (memcpy, page-table init)
+					 * changes ≥1 register every iteration → progress → run.
+					 * A true idle poll (e.g. 18310dd0: lwz/cmpwi/beq/b .−)
+					 * leaves ALL registers unchanged → no progress → yield.
 					 *
-					 * Only yield for CONSECUTIVE same-PC executions to avoid
-					 * penalizing legitimate loops (memory copy, page table init)
-					 * that naturally exit after a bounded iteration count. */
+					 * This replaces the fixed-threshold counter that falsely
+					 * tripped on legitimate bounded loops. */
 					{
-						static uint32 last_idle_pc = 0;
-						static uint32 idle_count = 0;
+						static uint32 idle_snap_pc = 0;
+						static uint32 idle_snap_gpr[32];
+						static uint32 idle_snap_cr = 0;
+						static uint32 idle_snap_ctr = 0;
+						static int no_progress_count = 0;
+
 						if (pc() == jblk.ppc_start_pc) {
-							if (jblk.ppc_start_pc == last_idle_pc) {
-								if (++idle_count >= 2000) {
-									idle_count = 0;
-									/* Cooperative idle: wait for the tick thread's
-									 * next interrupt delivery rather than spinning.
-									 * Poll spcflags with short sleeps until the tick
-									 * thread fires (60Hz = every ~16.6ms), then
-									 * process the interrupt via check_spcflags. */
-									for (int w = 0; w < 200 && spcflags().empty(); w++)
-										usleep(100);
-									if (!spcflags().empty()) {
-										if (!check_spcflags()) goto return_site;
+							/* Self-loop detected — check progress */
+							if (jblk.ppc_start_pc == idle_snap_pc) {
+								/* Compare current GPRs/CR/CTR to snapshot */
+								bool progress = false;
+								for (int i = 0; i < 32; i++) {
+									if (gpr(i) != idle_snap_gpr[i]) {
+										progress = true;
+										break;
+									}
+								}
+								if (!progress && regs().cr.get() != idle_snap_cr)
+									progress = true;
+								if (!progress && regs().ctr != idle_snap_ctr)
+									progress = true;
+
+								if (progress) {
+									no_progress_count = 0;
+								} else {
+									if (++no_progress_count >= 8) {
+										no_progress_count = 0;
+										/* True idle: no architectural change
+										 * across 8 consecutive iterations.
+										 * Yield until tick thread fires. */
+										for (int w = 0; w < 200 && spcflags().empty(); w++)
+											usleep(100);
+										if (!spcflags().empty()) {
+											if (!check_spcflags()) goto return_site;
+										}
 									}
 								}
 							} else {
-								last_idle_pc = jblk.ppc_start_pc;
-								idle_count = 1;
+								/* New self-loop target — take initial snapshot */
+								idle_snap_pc = jblk.ppc_start_pc;
+								no_progress_count = 0;
 							}
+							/* Always update snapshot for next comparison */
+							for (int i = 0; i < 32; i++)
+								idle_snap_gpr[i] = gpr(i);
+							idle_snap_cr = regs().cr.get();
+							idle_snap_ctr = regs().ctr;
 						} else {
-							last_idle_pc = 0;
-							idle_count = 0;
+							/* Not a self-loop — reset */
+							idle_snap_pc = 0;
+							no_progress_count = 0;
 						}
 					}
 					/* Fast dispatch: if next PC is already in JIT cache, stay in the
