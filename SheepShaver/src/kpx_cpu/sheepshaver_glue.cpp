@@ -827,6 +827,16 @@ static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
 			return false;
 		return true;
 	}
+	/* KERNEL_DATA areas (0x68ffe000 and alias 0x5fffe000, KERNEL_AREA_SIZE each):
+	 * shm-mapped 1:1 read/write, just like RAM. 6bb34571 added these to the D-form
+	 * fast-path valid check (emit_direct_access_valid_check) but NOT here, so indexed
+	 * stwx/lwzx through this helper silently dropped KERNEL_DATA stores (and loads
+	 * returned old), e.g. the nanokernel's stwx copy loop into 0x68ffe910+ — leaving
+	 * r30/r31 = 0 and flipping a downstream branch. Mirror the D-form coverage here. */
+	if (ea >= (uint32)KERNEL_DATA_BASE && ea + 4 <= (uint32)KERNEL_DATA_BASE + KERNEL_AREA_SIZE)
+		return true;
+	if (ea >= (uint32)KERNEL_DATA2_BASE && ea + 4 <= (uint32)KERNEL_DATA2_BASE + KERNEL_AREA_SIZE)
+		return true;
 	if (ea >= 0xffff0000U)
 		return true;
 	return false;
