@@ -1476,12 +1476,15 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 
 		case 23: /* lwzx rD,rA,rB */
+			/* Materialize any pending CR0 FIRST: emit_materialize_cr0 clobbers
+			 * RTMP0/1/2, so flushing after building the EA in RTMP0 would corrupt
+			 * it (a prior addic. leaves CR0=GT -> 0x40000000, the bad EA seen). */
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) {
 				emit_load_gpr(RTMP1, rb);
 				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
 			}
-			lazy_flush_cr0();
 			ra_flush_all();
 			emit_load_gpr(RTMP1, rd);
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_lwz);
@@ -1491,13 +1494,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 151: /* stwx rS,rA,rB */
+			/* CR0 first: emit_materialize_cr0 clobbers RTMP0/1/2 (see lwzx). */
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP1, PPC_RS(op));
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) {
 				emit_load_gpr(RTMP2, rb);
 				emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
 			}
-			lazy_flush_cr0();
 			ra_flush_all();
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_stw);
 			emit32(0xD63F0000 | (RTMP4 << 5));
@@ -1938,9 +1942,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		}
 		case 20: /* lwarx rD,rA,rB — load word and reserve (treat as lwzx) */
+			/* CR0 first: emit_materialize_cr0 clobbers RTMP0/1/2 (see lwzx). */
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			lazy_flush_cr0();
 			ra_flush_all();
 			emit_load_gpr(RTMP1, rd);
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_lwz);
@@ -1949,10 +1954,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_gpr(RTMP0, rd);
 			return true;
 		case 150: /* stwcx. rS,rA,rB — store word conditional (simplified: always succeed) */
+			/* CR0 first: emit_materialize_cr0 clobbers RTMP0/1/2 (see lwzx). */
+			lazy_flush_cr0();
 			emit_load_gpr(RTMP1, PPC_RS(op));
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			lazy_flush_cr0();
 			ra_flush_all();
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_stw);
 			emit32(0xD63F0000 | (RTMP4 << 5));

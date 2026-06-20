@@ -464,6 +464,12 @@ SRAWI_SHIFT4_REG12_EQUIV="3D80FFFF 618CFFF1 7D842670 508CF87F"
 SUBFEO_EQUIV="38600005 3880000A 3CC02000 7CC103A6 7CA32510 7CC102A6"
 MULLWO_EQUIV="3C604000 38800004 7CA325D6 7CC102A6"
 DIVWUO_ZERO_EQUIV="38600064 38800000 7CA32796 7CC102A6"
+# Indexed load after a flag-setting op (CR0-flush EA-clobber regression).
+# stw r1,0x10(r1); mr r11,r1; li r9,0x14; addic. r9,r9,-4; lwzx r12,r11,r9
+# addic. leaves CR0 pending; the indexed handler must materialize CR0 BEFORE
+# building the EA in RTMP0, else emit_materialize_cr0 clobbers x0 with CR0=GT
+# (0x40000000) and the load reads garbage. Interp r12=r1; unfixed JIT r12=0.
+LWZX_AFTER_ADDIC_EQUIV="90210010 39610000 39200014 3529FFFC 7D8B482E"
 
 # --- lha (sign-extending halfword) ---
 # li r3,0x8000; sth r3,0x300(r1); lha r5,0x300(r1) → r5 = 0xFFFF8000
@@ -1246,6 +1252,7 @@ run_equiv_test srawi_shift4_reg12_equiv "$SRAWI_SHIFT4_REG12_EQUIV"
 run_equiv_test subfeo_equiv "$SUBFEO_EQUIV"
 run_equiv_test mullwo_equiv "$MULLWO_EQUIV"
 run_equiv_test divwuo_zero_equiv "$DIVWUO_ZERO_EQUIV"
+run_equiv_test lwzx_after_addic_equiv "$LWZX_AFTER_ADDIC_EQUIV"
 
 SCORE=$(( TOTAL > 0 ? PASS * 100 / TOTAL : 0 ))
 echo "METRIC pass=$PASS"
