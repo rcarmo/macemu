@@ -564,9 +564,29 @@ void m68k_do_compile_execute(void)
 #if defined(CPU_AARCH64)
 		if (use_sync_ticks) {
 			tick_inhibit = false;
+			/* Drive the 60Hz tick by WALL-CLOCK at this safe block-dispatch
+			   boundary. The async tick thread stays inhibited for thread-safety
+			   (it must not mutate emulator state while generated code holds live
+			   register/flag state). The old cycle-counter trigger (jit_countdown)
+			   STARVED the timer: tight compiled spin loops such as the SCC poll
+			   at 040ba0a8 never decrement the cycle counter, so the 60Hz
+			   interrupt was never raised (8 ticks vs the interpreter's ~1487 over
+			   the same span) and InterruptFlags stayed pending-but-undelivered,
+			   hanging boot. Wall-clock here fires interrupts at the real 60Hz
+			   even inside cycle-counterless spins. */
 			extern int32 jit_countdown;
-			if (jit_countdown < 0) {
+			if (jit_countdown < 0)
 				jit_countdown = 10000000;
+			static uint64 last_tick_us = 0;
+			uint64 now_us = GetTicks_usec();
+			if (last_tick_us == 0)
+				last_tick_us = now_us;
+			if (now_us - last_tick_us >= 16667) {
+				/* clamp catch-up so a stall can't unleash a tick burst */
+				if (now_us - last_tick_us > 100000)
+					last_tick_us = now_us;
+				else
+					last_tick_us += 16667;
 				jit_one_tick();
 			}
 		}
