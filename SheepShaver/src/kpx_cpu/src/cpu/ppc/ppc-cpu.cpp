@@ -809,7 +809,7 @@ void powerpc_cpu::execute(uint32 entry)
 						static uint32 idle_count = 0;
 						if (pc() == jblk.ppc_start_pc) {
 							if (jblk.ppc_start_pc == last_idle_pc) {
-								if (++idle_count >= 50) {
+								if (++idle_count >= 2000) {
 									idle_count = 0;
 									/* Cooperative idle: wait for the tick thread's
 									 * next interrupt delivery rather than spinning.
