@@ -8093,6 +8093,11 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_b,(RR4 adr, RR4 b))
 	adr = readreg(adr);
 	b = readreg(b);
 
+	/* The special-address guards below issue CMP instructions that clobber
+	   the host NZCV holding the just-computed guest flags (e.g. from a
+	   preceding MOVE.B/CLR.B). Save and restore them like the read paths do,
+	   otherwise the block-exit flush captures the address-compare result. */
+	MRS_NZCV_x(REG_WORK4);
 	/* 0x50xxxxxx is probed as hardware by the Quadra ROM.  Its byte
 	   test expects a transformed readback rather than ordinary RAM. */
 	LOAD_U32(REG_WORK1, 0xff000000);
@@ -8109,6 +8114,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_b,(RR4 adr, RR4 b))
 	CMP_wi(REG_WORK1, 6);
 	BEQ_i(2);
 	STRB_wXx(REG_WORK3, adr, R_MEMSTART);
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(b);
 	unlock2(adr);
@@ -8133,6 +8139,9 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_l,(RR4 adr, RR4 l))
 	adr = readreg(adr);
 	l = readreg(l);
 
+	/* The 0x5ffffffc guard CMP clobbers host NZCV holding just-computed guest
+	   flags (e.g. MOVE.L/CLR.L). Preserve them as the read paths do. */
+	MRS_NZCV_x(REG_WORK4);
 	/* Machine config register at 0x5ffffffc is stable hardware; ROM probes
 	   write test patterns here and expects the original value to remain. */
 	LOAD_U32(REG_WORK1, 0x5ffffffc);
@@ -8140,6 +8149,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_l,(RR4 adr, RR4 l))
 	BEQ_i(3);
 	REV_ww(REG_WORK1, l);
 	STR_wXx(REG_WORK1, adr, R_MEMSTART);
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(l);
 	unlock2(adr);
@@ -8252,6 +8262,8 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_b,(RR4 adr, RR4 b))
 	adr = readreg(adr);
 	b = readreg(b);
 
+	/* CMP guards below clobber guest NZCV; preserve like the read paths. */
+	MRS_NZCV_x(REG_WORK4);
 	/* 0x50xxxxxx is probed as hardware by the Quadra ROM.  Its byte
 	   test expects a transformed readback rather than ordinary RAM. */
 	LOAD_U32(REG_WORK1, 0xff000000);
@@ -8269,6 +8281,7 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_b,(RR4 adr, RR4 b))
 	BEQ_i(3);
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
 	STRB_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(b);
 	unlock2(adr);
@@ -8294,6 +8307,8 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_l,(RR4 adr, RR4 l))
 	adr = readreg(adr);
 	l = readreg(l);
 
+	/* CMP guard below clobbers guest NZCV; preserve like the read paths. */
+	MRS_NZCV_x(REG_WORK4);
 	/* Machine config register aliases to 0x00fffffc in 24-bit direct mode;
 	   ROM probes write test patterns here and expects the original value to remain. */
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
@@ -8302,6 +8317,7 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_l,(RR4 adr, RR4 l))
 	BEQ_i(3);
 	REV_ww(REG_WORK3, l);
 	STR_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(l);
 	unlock2(adr);

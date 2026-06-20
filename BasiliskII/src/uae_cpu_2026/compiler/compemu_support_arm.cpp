@@ -6558,6 +6558,34 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                             opcode, _before, _after, (long)(_after - _before));
                     }
 #endif
+                    /* Targeted per-op native-code dump for one m68k block.
+                       Set B2_JIT_DUMP_BLOCK_PC=0x04006d04 to dump every op of
+                       that block into /workspace/tmp/jitdump as op<pc>_<opcode>.bin
+                       so the EA codegen can be objdump'd op-by-op. */
+                    {
+                        static int tgt_init = 0;
+                        static uae_u32 tgt_pc = 0xffffffff;
+                        if (!tgt_init) {
+                            tgt_init = 1;
+                            const char *e = getenv("B2_JIT_DUMP_BLOCK_PC");
+                            if (e && *e) tgt_pc = (uae_u32)strtoul(e, NULL, 0);
+                        }
+                        if (tgt_pc != 0xffffffff && block_m68k_pc >= tgt_pc - 0x200 && block_m68k_pc <= tgt_pc + 0x400 && (_after - _before) > 0) {
+                            char fname[256];
+                            snprintf(fname, sizeof(fname),
+                                "/workspace/tmp/jitdump/op%08x_%04x.bin",
+                                (unsigned)op_m68k_pc, opcode);
+                            FILE *f = fopen(fname, "wb");
+                            if (f) {
+                                fwrite(_before, 1, _after - _before, f);
+                                fclose(f);
+                                fprintf(stderr,
+                                    "JIT_DUMP_BLOCK: blk=0x%08x op_pc=0x%08x op=0x%04x bytes=%ld file=%s\n",
+                                    (unsigned)block_m68k_pc, (unsigned)op_m68k_pc,
+                                    opcode, (long)(_after - _before), fname);
+                            }
+                        }
+                    }
                     /* Dump first 3 blocks' native code to file for disassembly */
                     {
                         static int dump_count = 0;
