@@ -648,12 +648,34 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 		}
 	}
 
+	/* KERNEL_DATA areas: KERNEL_DATA_BASE=0x68ffe000 and its alias
+	 * KERNEL_DATA2_BASE=0x5fffe000, KERNEL_AREA_SIZE=0x2000 each.  These are
+	 * shm-mapped 1:1 into the host address space (VMBaseDiff==0), exactly like
+	 * RAM/ROM/SheepMem, so the inline LDR/STR using the guest EA as a host
+	 * pointer is valid here too.  The nanokernel performs heavy D-form
+	 * stw/lwz into this region during early kernel-data init (e.g.
+	 * stw r13,1668(r1) at 0x18310278 with r1=0x68ffe000).  Without these
+	 * ranges those stores were silently dropped (no-op) and the matching
+	 * loads returned 0, so kernel-data-ready was never latched and boot
+	 * stalled.  Indexed forms (stwx/lwzx) already went through the safe
+	 * helper and handled this correctly; the D-form fast path did not. */
+	{
+		const uint32_t kd1_start = 0x68ffe000U;
+		const uint32_t kd1_end   = 0x68ffe000U + 0x2000U;
+		const uint32_t kd2_start = 0x5fffe000U;
+		const uint32_t kd2_end   = 0x5fffe000U + 0x2000U;
+		if (kd1_end >= access_size)
+			emit_branch_if_ea_in_range(ea_reg, kd1_start, kd1_end - access_size + 1, valid_locs, valid_count);
+		if (kd2_end >= access_size)
+			emit_branch_if_ea_in_range(ea_reg, kd2_start, kd2_end - access_size + 1, valid_locs, valid_count);
+	}
+
 	if (0xFFFFFFFFU >= access_size - 1)
 		emit_branch_if_ea_in_range(ea_reg, 0xFFFF0000U, 0xFFFFFFFFU - access_size + 2, valid_locs, valid_count);
 }
 
 static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind, int ppc_dst_reg) {
-	uint32_t *valid_locs[8] = {0};
+	uint32_t *valid_locs[12] = {0};
 	int valid_count = 0;
 	uint32_t *done = NULL;
 	uint32_t access_size = (load_kind == 1) ? 1 : (load_kind == 4 ? 4 : 2);
@@ -674,7 +696,7 @@ static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kin
 }
 
 static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_kind) {
-	uint32_t *valid_locs[8] = {0};
+	uint32_t *valid_locs[12] = {0};
 	int valid_count = 0;
 	uint32_t *done = NULL;
 	uint32_t access_size = (store_kind == 1) ? 1 : (store_kind == 4 ? 4 : 2);
