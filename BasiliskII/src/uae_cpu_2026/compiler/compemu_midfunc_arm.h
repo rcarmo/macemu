@@ -63,6 +63,7 @@ DECLARE_MIDFUNC(dont_care_flags(void));
 DECLARE_MIDFUNC(preserve_flags_before_nzcv_clobber(void));
 DECLARE_MIDFUNC(discard_flags_in_nzcv(void));
 DECLARE_MIDFUNC(save_and_discard_flags_in_nzcv(void));
+DECLARE_MIDFUNC(dbf_dec_test_ne_w(RW4 d));
 DECLARE_MIDFUNC(dbcc_cond_move_ne_w(RW4 d, RR4 s, RR4 src_w));
 DECLARE_MIDFUNC(make_flags_live(void));
 DECLARE_MIDFUNC(forget_about(W4 r));

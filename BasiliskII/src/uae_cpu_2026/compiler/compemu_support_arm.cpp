@@ -1013,6 +1013,7 @@ static void op_btst_l_imm_dreg_comp_ff(uae_u32 opcode);
 static void op_btst_b_imm_d16an_comp_ff(uae_u32 opcode);
 extern void REGPARAM2 op_4cd8_0_comp_ff(uae_u32 opcode);
 static void op_rts_comp_ff(uae_u32 opcode);
+static void op_bsr_comp_ff(uae_u32 opcode);
 extern "C" void jit_trace_add(uae_u32 pc, uae_u32 opcode);
 extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode);
 static void op_movea_l_postinc_an_comp_ff(uae_u32 opcode);
@@ -4008,6 +4009,26 @@ static void jit_runtime_rts(uae_u32 opcode)
     m68k_do_rts();
 }
 
+static void jit_runtime_bsr(uae_u32 opcode)
+{
+    const uaecptr pc = m68k_getpc();
+    const uae_u8 disp8 = opcode & 0xff;
+    uaecptr oldpc;
+    uae_s32 offset;
+
+    if (disp8 == 0) {
+        oldpc = pc + 4;
+        offset = (uae_s32)(uae_s16)get_word(pc + 2) + 2;
+    } else if (disp8 == 0xff) {
+        oldpc = pc + 6;
+        offset = (uae_s32)get_long(pc + 2) + 2;
+    } else {
+        oldpc = pc + 2;
+        offset = (uae_s32)(uae_s8)disp8 + 2;
+    }
+    m68k_do_bsr(oldpc, offset);
+}
+
 static void jit_runtime_btst_l_imm_dreg(uae_u32 opcode)
 {
     uae_u32 real_opcode = cft_map(opcode);
@@ -4145,6 +4166,13 @@ static void op_rts_comp_ff(uae_u32 opcode)
         (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
 }
 
+static void op_bsr_comp_ff(uae_u32 opcode)
+{
+    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    uintptr op_pc = jit_compile_current_op_host_pc ? jit_compile_current_op_host_pc : (uintptr)(comp_pc_p + m68k_pc_offset_thisinst);
+    jit_emit_runtime_helper_barrier((uintptr)jit_runtime_bsr, op_pc, opcode, 0, false);
+}
+
 static void op_btst_l_imm_dreg_comp_ff(uae_u32 opcode)
 {
     uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
@@ -4230,6 +4258,11 @@ static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, u
     if (has_arg2)
         compemu_raw_mov_l_ri(REG_PAR2, arg2);
     compemu_raw_set_pc_full_i(jit_hostpc_to_macpc(pc), pc);
+    /* The C helper follows the platform ABI and may clobber caller-saved
+       host registers. After flush(1), guest state is sound in memory; reset
+       allocator host-register associations before the call so forced endblock
+       code cannot later use stale clobbered host values. */
+    prepare_for_call_2();
     compemu_raw_call(helper);
     live.state[PC_P].realreg = -1;
     live.state[PC_P].val = 0;
@@ -5858,6 +5891,16 @@ void build_comp(void)
     /* RTS: dynamic stack return must not reuse a traced return target. */
     compfunctbl[cft_map(0x4e75)] = op_rts_comp_ff;
     nfcompfunctbl[cft_map(0x4e75)] = op_rts_comp_ff;
+
+    /* BSR is a call boundary: materialize live state, push the return address,
+       and end the native block at the runtime target instead of direct-chaining
+       into a reusable callee block with caller-specific live-register state. */
+    compfunctbl[cft_map(0x6100)] = op_bsr_comp_ff;
+    nfcompfunctbl[cft_map(0x6100)] = op_bsr_comp_ff;
+    compfunctbl[cft_map(0x6101)] = op_bsr_comp_ff;
+    nfcompfunctbl[cft_map(0x6101)] = op_bsr_comp_ff;
+    compfunctbl[cft_map(0x61ff)] = op_bsr_comp_ff;
+    nfcompfunctbl[cft_map(0x61ff)] = op_bsr_comp_ff;
 
     /* BTST.L #imm,Dn: exact runtime helper while auditing high-bit Z flag
        propagation in the legacy x86-shaped bt/sbb flag sequence. */

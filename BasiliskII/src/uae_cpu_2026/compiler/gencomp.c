@@ -2364,9 +2364,14 @@ gen_opcode (unsigned int opcode)
 	    /* DBF/DBRA: always decrements, never tests condition codes.
 	       M68K spec: DBcc does NOT affect CCR.
 	       Test src.W for zero BEFORE decrementing (terminal when 0),
-	       then decrement without flag side-effects.
-	       Use test_w_rr(a,b) with a!=b to avoid the jff_TST_w path
-	       which calls clobber_flags() and corrupts regflags.nzcv. */
+	       then decrement the low word without flag side-effects.  On
+	       ARM64, do this in one midfunc instead of allocating scratchie
+	       virtual registers: scratch virtuals can collide with dirty
+	       architectural registers in the legacy allocator and corrupt
+	       their eventual writeback. */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tdbf_dec_test_ne_w(src);\n");
+#else
 	    {
 	        comprintf("\tint tmp1 = scratchie++;\n");
 	        comprintf("\tint tmp2 = scratchie++;\n");
@@ -2380,6 +2385,7 @@ gen_opcode (unsigned int opcode)
 	        comprintf("\tlea_l_brr(decr, src, (uae_s32)-1);\n");
 	        comprintf("\tmov_w_rr(src, decr);\n");
 	    }
+#endif
 	    start_brace();
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	    comprintf("\tuintptr v2,v;\n"

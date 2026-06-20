@@ -1380,6 +1380,22 @@ MIDFUNC(2,roxr_b_ri,(RW1 d, IM8 i))
 }
 MENDFUNC(2,roxr_b_ri,(RW1 d, IM8 i))
 
+/* DBF/DBRA in-place terminal test/decrement.
+   Sets hardware Z/N from the original low word so register_branch(..., NE)
+   can test the terminal condition, then decrements the low word without
+   allocating scratch virtual registers or changing NZCV again. DBcc does not
+   architecturally modify CCR; caller must discard the temporary NZCV. */
+MIDFUNC(1,dbf_dec_test_ne_w,(RW4 d))
+{
+	d = rmw(d);
+	UXTH_ww(REG_WORK1, d);
+	TST_ww(REG_WORK1, REG_WORK1);
+	SUB_wwi(REG_WORK1, d, 1);
+	BFXIL_xxii(d, REG_WORK1, 0, 16);
+	unlock2(d);
+}
+MENDFUNC(1,dbf_dec_test_ne_w,(RW4 d))
+
 /* Conditional move for DBcc terminal test: if src.W != 0, set d = s.
    Does NOT modify hardware NZCV or regflags.nzcv.
    Uses UXTH + CBNZ + MOV sequence that preserves all flags. */
