@@ -25,6 +25,10 @@ extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32_t emul_op, ui
 extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32_t selector, uint32_t next_pc);
 extern "C" uint32_t sheepshaver_jit_safe_lwz(uint32_t ea, uint32_t old_value);
 extern "C" void sheepshaver_jit_safe_stw(uint32_t ea, uint32_t value);
+/* Frame buffer base/size helpers (sheepshaver_glue.cpp) for the D-form load/store
+ * valid-check: the framebuffer is 1:1-mapped guest memory (VMBaseDiff==0) like RAM/ROM. */
+extern "C" uint32_t sheepshaver_jit_fb_base(void);
+extern "C" uint32_t sheepshaver_jit_fb_size(void);
 
 /* ---- Code cache ---- */
 static uint8_t  *jit_cache_base = NULL;
@@ -668,6 +672,22 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 			emit_branch_if_ea_in_range(ea_reg, kd1_start, kd1_end - access_size + 1, valid_locs, valid_count);
 		if (kd2_end >= access_size)
 			emit_branch_if_ea_in_range(ea_reg, kd2_start, kd2_end - access_size + 1, valid_locs, valid_count);
+	}
+
+	/* Frame buffer (the_buffer @ screen_base, the_buffer_size bytes): 1:1-mapped guest
+	 * memory like RAM/ROM/KERNEL_DATA, but was NOT covered here, so the D-form
+	 * guarded load/store SKIPPED framebuffer accesses (load left the stale rd, store
+	 * dropped) -> QuickDraw/video reads of the framebuffer got the old register value.
+	 * Shadow-interp verify pinned this: JIT D-form lwz of 0x186xxxxx returned the old
+	 * register while the interpreter read correctly. screen_base/the_buffer_size are
+	 * runtime globals; only add the range once the framebuffer is allocated
+	 * (screen_base != 0) so we never emit a bogus [0, size) low-memory range. */
+	{
+		const uint32_t fb_start = sheepshaver_jit_fb_base();
+		const uint32_t fb_size  = sheepshaver_jit_fb_size();
+		const uint32_t fb_end   = fb_start + fb_size;
+		if (fb_start != 0 && fb_size != 0 && fb_end > fb_start && fb_end >= access_size)
+			emit_branch_if_ea_in_range(ea_reg, fb_start, fb_end - access_size + 1, valid_locs, valid_count);
 	}
 
 	if (0xFFFFFFFFU >= access_size - 1)

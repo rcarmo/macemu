@@ -850,6 +850,18 @@ static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
 		return true;
 	if (ea >= (uint32)KERNEL_DATA2_BASE && ea + 4 <= (uint32)KERNEL_DATA2_BASE + KERNEL_AREA_SIZE)
 		return true;
+	/* Frame buffer (the_buffer @ screen_base, current-mode size): valid mapped guest
+	 * memory but was NOT in this set, so safe_lwz returned the stale old_value (and
+	 * safe_stw dropped) for QuickDraw/video reads+writes of the framebuffer. Shadow-interp
+	 * verify pinned this: JIT loads of 0x186xxxxx returned the old register while the
+	 * interpreter read correctly. Cover it so safe_lwz/safe_stw use ReadMacInt32/
+	 * WriteMacInt32. Size from the current video mode (SheepShaver-owned VModes/cur_mode). */
+	{
+		uint32 fbsz = (cur_mode >= 0 && cur_mode < 64)
+		            ? (uint32)VModes[cur_mode].viRowBytes * (uint32)VModes[cur_mode].viYsize : 0;
+		if (screen_base && fbsz && ea >= screen_base && ea + 4 <= screen_base + fbsz)
+			return true;
+	}
 	if (ea >= 0xffff0000U)
 		return true;
 	return false;
@@ -867,6 +879,15 @@ extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value)
 	if (!sheepshaver_jit_word_access_valid(ea, true))
 		return;
 	WriteMacInt32(ea, value);
+}
+
+/* Frame buffer extent for the JIT D-form load/store valid-check (emit_direct_access_valid_check
+ * in ppc-jit.cpp). SheepShaver-owned: screen_base + current video mode size. 0 = not configured. */
+extern "C" uint32 sheepshaver_jit_fb_base(void) { return screen_base; }
+extern "C" uint32 sheepshaver_jit_fb_size(void)
+{
+	if (cur_mode < 0 || cur_mode >= 64) return 0;
+	return (uint32)VModes[cur_mode].viRowBytes * (uint32)VModes[cur_mode].viYsize;
 }
 
 void FlushCodeCache(uintptr start, uintptr end)
