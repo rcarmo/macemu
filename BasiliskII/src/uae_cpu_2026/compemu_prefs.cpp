@@ -60,6 +60,18 @@ static void sync_jit_prefs(uae_prefs &p)
 	p.compfpu = PrefsFindBool("jitfpu");
 	p.comp_hardflush = !PrefsFindBool("jitlazyflush");
 	p.comp_constjump = PrefsFindBool("jitinline");
+#if defined(CPU_AARCH64)
+	/* AArch64: constant-jump block inlining can merge a branch source block
+	 * with a distant target while retaining source-block metadata. In the
+	 * ROM A-trap path this produced real opt2 divergence (e.g. block
+	 * 0401bfcc following BRA.W to 0401ba28) and corrupted downstream heap
+	 * history at the e1loop frontier. Keep blocks separately compiled by
+	 * default; this is still JIT execution, not interpreter fallback. */
+	{
+		const char *env = getenv("B2_JIT_ENABLE_CONSTJUMP");
+		p.comp_constjump = (env && *env == '1') ? 1 : 0;
+	}
+#endif
 	p.compnf = true;
 	/* Allow disabling flag optimization for debugging */
 	{
