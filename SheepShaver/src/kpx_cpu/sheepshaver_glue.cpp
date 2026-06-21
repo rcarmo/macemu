@@ -803,13 +803,26 @@ extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32 emul_op, uint
 	ppc_cpu->execute_emul_op(emul_op);
 }
 
-extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector, uint32 next_pc)
+extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector_and_fn, uint32 pc_plus4)
 {
 	(void)regs;
 	if (!ppc_cpu)
 		return;
-	ppc_cpu->pc() = next_pc;
+	/* Match the interpreter's execute_sheep() EXEC_NATIVE semantics EXACTLY:
+	 *   execute_native_op(sel); if (FN) pc()=lr(); else pc()+=4;
+	 * The pc-update is evaluated AFTER the native op runs. The previous JIT
+	 * codegen captured LR *before* the callout and passed it as next_pc, which
+	 * is wrong whenever the native op modifies LR (e.g. NATIVE_VIDEO_VBL): the
+	 * JIT then resumed at the stale pre-op LR and branched into RAM data
+	 * (0x1009cf04/0x1009d69c) -> bogus EMUL_OP selectors / hang. FN is encoded
+	 * in bit 31 of the selector argument; pc_plus4 is the EXEC_NATIVE pc + 4. */
+	uint32 selector = selector_and_fn & 0x3F;
+	ppc_cpu->pc() = pc_plus4 - 4;            /* EXEC_NATIVE instruction pc during the op */
 	ppc_cpu->execute_native_op(selector);
+	if (selector_and_fn & 0x80000000u)
+		ppc_cpu->pc() = ppc_cpu->lr();      /* FN: resume at LR as it stands AFTER the op */
+	else
+		ppc_cpu->pc() += 4;                 /* else fall through to pc+4 */
 }
 
 static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)

@@ -2901,13 +2901,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			break;
 		case 2: { /* EXEC_NATIVE */
 			uint32_t selector = (op >> 6) & 0x3F;
-			if (op & (1u << 12)) {
-				a64_ldr_w_imm(RTMP2, RSTATE, PPCR_LR);
-				emit_clear_branch_target_low_bits(RTMP2);
-			} else {
-				emit_load_imm32(RTMP2, (int32_t)(pc + 4));
-			}
-			emit_load_imm32(RTMP1, (int32_t)selector);
+			/* Match interpreter execute_sheep(): run the native op FIRST, then
+			 * pc = (FN ? lr() : pc+4) evaluated AFTER it. Do NOT capture LR here
+			 * (it may be changed by the native op). Encode FN (opcode bit 12) in
+			 * bit 31 of the selector arg; pass pc+4 as the fall-through pc. */
+			uint32_t sel_arg = selector | ((op & (1u << 12)) ? 0x80000000u : 0u);
+			emit_load_imm32(RTMP1, (int32_t)sel_arg);
+			emit_load_imm32(RTMP2, (int32_t)(pc + 4));
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_execute_native_op);
 			emit32(0xD63F0000 | (RTMP4 << 5));
 			break;
