@@ -6688,6 +6688,40 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         }
                     }
 #endif
+#if defined(CPU_AARCH64)
+                    {
+                        /* DBcc (cc>=2) loop back-edge: the per-op codegen already
+                           computed the correct dynamic PC_P (loop target vs
+                           fall-through, honoring the Dn.W decrement and the -1
+                           wrap). Like dynamic returns, the trace recorder only
+                           followed one observed outcome, so if the block is
+                           allowed to trace-follow PAST the DBcc it discards the
+                           loop back-edge and the search compares only the first
+                           list entry (root cause CONT.24). End the native block
+                           here at the runtime PC_P so both the loop and exit
+                           edges are honored. DBF/DBT (cc<2) are intentionally
+                           excluded: cc=1 (DBF/DBRA) is handled by its own
+                           register_branch path and must not change. */
+                        const uae_u16 dop = (uae_u16)opcode;
+                        const uae_u16 dop_sw = (uae_u16)(((dop & 0xff) << 8) | (dop >> 8));
+                        const bool is_dbcc_cond =
+                            (((dop & 0xF0F8) == 0x50C8) && (((dop >> 8) & 0xf) >= 2)) ||
+                            (((dop_sw & 0xF0F8) == 0x50C8) && (((dop_sw >> 8) & 0xf) >= 2));
+                        if (is_dbcc_cond) {
+                            live.flags_are_important = 1;
+                            flush(1);
+                            compemu_raw_mov_l_rm(0, (uintptr)specflags);
+#if defined(USE_DATA_BUFFER)
+                            data_check_end(12, 64);
+#endif
+                            compemu_raw_maybe_do_nothing(retired_cycles);
+                            compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);
+                            compemu_raw_endblock_pc_inreg(REG_PC_TMP, retired_cycles);
+                            forced_interpreter_barrier = true;
+                            break;
+                        }
+                    }
+#endif
                     freescratch();
                     bool flushed_after_native_op = false;
 #if defined(CPU_AARCH64)
