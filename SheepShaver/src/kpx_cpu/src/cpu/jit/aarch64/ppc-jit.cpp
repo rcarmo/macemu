@@ -27,6 +27,8 @@ extern "C" uint32_t sheepshaver_jit_safe_lwz(uint32_t ea, uint32_t old_value);
 extern "C" void sheepshaver_jit_safe_stw(uint32_t ea, uint32_t value);
 extern "C" uint32_t sheepshaver_jit_safe_load(uint32_t ea, uint32_t old_value, uint32_t load_kind);
 extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t store_kind);
+extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
+extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
 /* Frame buffer base/size helpers (sheepshaver_glue.cpp) for the D-form load/store
  * valid-check: the framebuffer is 1:1-mapped guest memory (VMBaseDiff==0) like RAM/ROM. */
 extern "C" uint32_t sheepshaver_jit_fb_base(void);
@@ -1995,34 +1997,49 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x39000000 | (PPCR_XER_CA << 10) | (RSTATE << 5) | RTMP0);
 			return true;
 		}
-		case 20: /* lwarx rD,rA,rB — load word and reserve (treat as lwzx) */
+		case 20: /* lwarx rD,rA,rB — load word and reserve */
 			/* CR0 first: emit_materialize_cr0 clobbers RTMP0/1/2 (see lwzx). */
 			lazy_flush_cr0();
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 			ra_flush_all();
-			emit_load_gpr(RTMP1, rd);
-			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_lwz);
+			/* RTMP0 = EA; call sheepshaver_jit_lwarx(regs, ea) -> loads value AND sets the
+			 * reservation (reserve_valid/addr) like the interpreter. Args: x0=regs, x1=ea. */
+			a64_mov_reg(RTMP1, RTMP0);  /* x1 = ea */
+			a64_mov_reg(RTMP0, RSTATE); /* x0 = regs */
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_lwarx);
 			emit32(0xD63F0000 | (RTMP4 << 5));
 			ra_reset();
 			emit_store_gpr(RTMP0, rd);
 			return true;
-		case 150: /* stwcx. rS,rA,rB — store word conditional (simplified: always succeed) */
+		case 150: /* stwcx. rS,rA,rB — store word conditional (honors reservation) */
 			/* CR0 first: emit_materialize_cr0 clobbers RTMP0/1/2 (see lwzx). */
 			lazy_flush_cr0();
-			emit_load_gpr(RTMP1, PPC_RS(op));
+			emit_load_gpr(RTMP1, PPC_RS(op)); /* arg1 = value (W1) */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
 			ra_flush_all();
-			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_stw);
-			emit32(0xD63F0000 | (RTMP4 << 5));
+			/* RTMP0 = EA, RTMP1 = value; call sheepshaver_jit_stwcx(regs, ea, value) ->
+			 * returns 1 if the reservation held (store done), 0 if it failed.
+			 * Args: x0=regs, x1=ea, x2=value. */
+			a64_mov_reg(RTMP2, RTMP1);  /* x2 = value */
+			a64_mov_reg(RTMP1, RTMP0);  /* x1 = ea */
+			a64_mov_reg(RTMP0, RSTATE); /* x0 = regs */
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_stwcx);
+			emit32(0xD63F0000 | (RTMP4 << 5)); /* RTMP0 = ok (0/1) */
 			ra_reset();
-			/* Set CR0.EQ to indicate success */
+			/* CR0 = clear; EQ = ok; SO = XER.SO (mirrors execute_stwcx). Build the
+			 * 4-bit field (ok<<1)|SO then shift into CR0 position and merge — same
+			 * pattern as cmp/cmpi codegen. */
+			emit_load_imm32(RTMP1, 1); emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSLV RTMP0, RTMP0, #1 -> EQ position */
+			emit_or_xer_so_into_cr_nibble(RTMP0); /* | XER.SO into bit 0 */
+			emit_load_imm32(RTMP1, 28); emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSLV RTMP0, RTMP0, #28 -> CR0 field */
 			lazy_flush_cr0();
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);
-			emit_load_imm32(RTMP1, 0x20000000); /* EQ bit in CR0 */
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			a64_str_w_imm(RTMP0, RSTATE, PPCR_CR);
+			a64_ldr_w_imm(RTMP1, RSTATE, PPCR_CR);
+			emit_load_imm32(RTMP2, 0x0FFFFFFF);
+			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND: clear CR0 field */
+			emit32(0x2A000000 | (RTMP0 << 16) | (RTMP1 << 5) | RTMP1); /* ORR: merge new CR0 */
+			a64_str_w_imm(RTMP1, RSTATE, PPCR_CR);
 			return true;
 
 		case 595: /* mfsr — not in interpreter decode table; must not compile

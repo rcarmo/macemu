@@ -959,6 +959,34 @@ extern "C" uint32 sheepshaver_jit_fb_size(void)
 	return (uint32)VModes[cur_mode].viRowBytes * (uint32)VModes[cur_mode].viYsize;
 }
 
+/* lwarx/stwcx. reservation helpers — replicate powerpc_cpu::execute_lwarx/execute_stwcx
+ * so the JIT's load-and-reserve / store-conditional honor the architectural reservation.
+ * Previously the JIT compiled lwarx as a plain load (no reservation set) and stwcx. as
+ * unconditional-success (CR0.EQ always set), so a guest atomic acquire/retry loop
+ * (lwarx; ...; stwcx.; bne retry) that must FAIL+retry when the reservation was lost
+ * (e.g. cleared across an interrupt/context switch, or the reserved word changed) instead
+ * falsely "succeeded" -> broken synchronization -> divergent control flow vs the interpreter.
+ * regs is the powerpc_registers pointer (x0 / RSTATE) passed by the generated code. */
+extern "C" uint32 sheepshaver_jit_lwarx(powerpc_registers *r, uint32 ea)
+{
+	uint32 v = sheepshaver_jit_safe_lwz(ea, 0);
+	r->reserve_valid = 1;
+	r->reserve_addr  = ea;
+	return v;
+}
+extern "C" uint32 sheepshaver_jit_stwcx(powerpc_registers *r, uint32 ea, uint32 value)
+{
+	uint32 ok = 0;
+	if (r->reserve_valid) {
+		if (r->reserve_addr == ea) {
+			sheepshaver_jit_safe_stw(ea, value);
+			ok = 1;
+		}
+		r->reserve_valid = 0;
+	}
+	return ok;
+}
+
 void FlushCodeCache(uintptr start, uintptr end)
 {
 	D(bug("FlushCodeCache(%08x, %08x)\n", start, end));
