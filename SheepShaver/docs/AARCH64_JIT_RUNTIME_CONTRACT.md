@@ -299,13 +299,16 @@ barrier-and-helper framework.
 The JIT uses a hash + chaining block cache: 8192 buckets with 16384 pool entries and an
 8 MB production code cache (`ppc_jit_aarch64_init(8192)`). Lookup by `uint32_t ppc_pc`
 before compilation; on hit, execute cached code directly.
-Invalidation: per-PC via `jit_bc_invalidate_pc()`; global flush via `jit_bc_flush()`
-called on cache overflow. **icbi** is handled by `ppc_jit_aarch64_icbi(ea)`: it full-
-flushes only when a live compiled block's guest range `[pc, pc+n_insns*4)` overlaps the
-icbi'd 32-byte line, and otherwise skips (nothing compiled there = nothing to
-invalidate). A conservative `[min,max)` span of all compiled-block guest PCs (widened on
-insert, reset on flush) lets the handler fast-reject the common no-overlap icbi without
-scanning the block pool. This replaced an unconditional full flush on every icbi, which
+Invalidation: cache-overflow and containment invalidations use a full `jit_bc_flush()` because
+direct-chain back-patching means an older block may contain a raw `B chain_code` to a target; a
+per-PC unlink cannot unpatch those emitted branches. The private `jit_bc_invalidate_pc()` is only
+safe for internal table maintenance when no direct predecessor can still branch to the code.
+**icbi** is handled by `ppc_jit_aarch64_icbi(ea)`: it full-flushes only when a live compiled
+block's guest range `[pc, pc+n_insns*4)` overlaps the icbi'd 32-byte line, and otherwise skips
+(nothing compiled there = nothing to invalidate). A conservative `[min,max)` span of all
+compiled-block guest PCs (widened on insert, reset on flush; endpoints are uint64_t to avoid
+32-bit wrap) lets the handler fast-reject the common no-overlap icbi without scanning the block
+pool. This replaced an unconditional full flush on every icbi, which
 measured ~3550 full cache wipes per desktop boot (each wiping a near-empty cache, so the
 working set was recompiled thousands of times) — the dominant host-CPU sink. **isync** is a
 block terminator only (serialization barrier; no cache invalidation). The production cache was
@@ -414,7 +417,7 @@ barrier. Not implemented in the current JIT.
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
 | 3 | Helper calls are semantic barriers | ✅ Guarded load/store and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x28 + RA barrier keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
-| 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code` and cache invalidation clears patch sites. |
+| 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code`; containment/corrupt-entry invalidation is a full flush because per-PC unlinking cannot unpatch already-emitted direct branches. |
 | 5 | Interpreter and JIT builds agree on shared semantics | ✅ 241/241 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added `shift_ra_upper_clean` for RA-cache upper-32 canonicalisation). `bcl` LR update fixed (2026-05). |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
