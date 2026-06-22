@@ -1064,6 +1064,11 @@ TEST_ORDER+=(vec_vxor_self)
 TESTS[vec_lvx_stvx]="100C0718 38600600 7C0119CE 10210CC4 7C2118CE 38600700 7C2119CE 80A10700 80C10704"
 TEST_ORDER+=(vec_lvx_stvx)
 
+# VSCR state round-trip: mtvscr must update architectural VSCR, and mfvscr must read it.
+# Store vector [0,0,0,0x12345678], lvx v0, mtvscr v0, mfvscr v1, stvx v1, lwz word3 -> 0x12345678.
+TESTS[vec_vscr_roundtrip]="38600000 90610600 90610604 90610608 3C601234 60635678 9061060C 38600600 7C0118CE 10000C88 10200C08 7C2119CE 80A1060C"
+TEST_ORDER+=(vec_vscr_roundtrip)
+
 # Wrong-function/pass-through AltiVec exclusions. These should run via interpreter
 # until exact native semantics exist; the former native mappings were not merely
 # low-precision estimates: vexptefp/vlogefp used reciprocal estimate (wrong function),

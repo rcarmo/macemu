@@ -3263,8 +3263,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E010000|(sh<<11)); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
 		case 1036: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsl SSHL.16B (shift left by register) */
 		case 1100: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E20B800|(1<<5)|1); emit32(0x6E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsr NEG+USHL.16B (negate shift, then shift left = right shift) */
-		case 1604: return true; /* mtvscr NOP */
-		case 1540: emit_load_imm32(RTMP0,0); emit32(0x4E010C00|(RTMP0<<5)|0); emit_store_vr(0,vd); return true; /* mfvscr - return 0 */
+		case 1604: /* mtvscr — EXCLUDED: must update architectural VSCR */
+		case 1540: /* mfvscr — EXCLUDED: must read architectural VSCR */
+			return false;
 		case 782: /* vpkpx — EXCLUDED: approximate narrow is not exact pixel pack semantics */
 			return false;
 		case 974: /* vupkhpx — unpack high pixel (widen) */
