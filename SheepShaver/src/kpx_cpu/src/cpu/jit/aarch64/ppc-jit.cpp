@@ -3566,60 +3566,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
-		case 0: /* fcmpu crD,frA,frB */
-		{
-			uint32_t crd = (op >> 23) & 0x7;
-			lazy_flush_cr0();
-			emit_load_fpr(0, fra);
-			emit_load_fpr(1, frb);
-			emit32(0x1E602000 | (1 << 16) | (0 << 5)); /* FCMP Dn, Dm */
-			/* ARM64 FCMP sets NZCV: N=less, Z=equal, C=greater_or_unord, V=unordered */
-			a64_movz(RTMP0, 0, 0);
-			emit_load_imm32(RTMP1, 8); /* LT */
-			emit32(0x1A800000 | (RTMP0 << 16) | (0xB << 12) | (RTMP1 << 5) | RTMP0); /* CSEL LT */
-			emit_load_imm32(RTMP1, 4); /* GT */
-			emit32(0x1A800000 | (RTMP0 << 16) | (0xC << 12) | (RTMP1 << 5) | RTMP0); /* CSEL GT */
-			emit_load_imm32(RTMP1, 2); /* EQ */
-			emit32(0x1A800000 | (RTMP0 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP0); /* CSEL EQ */
-			/* TODO: handle unordered (set FU bit) */
-			/* OR in XER[SO] as bit 0 for VXSNAN etc — for now just copy SO */
-			emit_or_xer_so_into_cr_nibble(RTMP0);
-			uint32_t shift = (7 - crd) * 4;
-			if (shift) { emit_load_imm32(RTMP1, shift); emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			lazy_flush_cr0();
-			a64_ldr_w_imm(RTMP1, RSTATE, PPCR_CR);
-			emit_load_imm32(RTMP2, ~(0xF << shift));
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1);
-			emit32(0x2A000000 | (RTMP0 << 16) | (RTMP1 << 5) | RTMP1);
-			a64_str_w_imm(RTMP1, RSTATE, PPCR_CR);
-			return true;
-		}
-
-
-		case 32: /* fcmpo crD,frA,frB — same as fcmpu for our purposes */
-		{
-			uint32_t crd = (op >> 23) & 0x7;
-			lazy_flush_cr0();
-			emit_load_fpr(0, fra);
-			emit_load_fpr(1, frb);
-			emit32(0x1E602000 | (1 << 16) | (0 << 5));
-			a64_movz(RTMP0, 0, 0);
-			emit_load_imm32(RTMP1, 8);
-			emit32(0x1A800000 | (RTMP0 << 16) | (0xB << 12) | (RTMP1 << 5) | RTMP0);
-			emit_load_imm32(RTMP1, 4);
-			emit32(0x1A800000 | (RTMP0 << 16) | (0xC << 12) | (RTMP1 << 5) | RTMP0);
-			emit_load_imm32(RTMP1, 2);
-			emit32(0x1A800000 | (RTMP0 << 16) | (0x0 << 12) | (RTMP1 << 5) | RTMP0);
-			uint32_t shift = (7 - crd) * 4;
-			if (shift) { emit_load_imm32(RTMP1, shift); emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			lazy_flush_cr0();
-			a64_ldr_w_imm(RTMP1, RSTATE, PPCR_CR);
-			emit_load_imm32(RTMP2, ~(0xF << shift));
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1);
-			emit32(0x2A000000 | (RTMP0 << 16) | (RTMP1 << 5) | RTMP1);
-			a64_str_w_imm(RTMP1, RSTATE, PPCR_CR);
-			return true;
-		}
+		case 0:  /* fcmpu crD,frA,frB — EXCLUDED: unordered/FPSCR semantics not exact */
+		case 32: /* fcmpo crD,frA,frB — EXCLUDED: unordered/FPSCR semantics not exact */
+			/* ARM64 FCMP reports unordered as V=1, which the old CSEL sequence treated as LT,
+			 * while the interpreter sets FU (CR field bit 0) and updates FPSCR.FPCC. fcmpo also
+			 * has ordered-compare exception behaviour. Delegate until the full FPCC/exception
+			 * semantics are implemented exactly. */
+			return false;
 
 		case 12: /* frsp frD,frB — round to single precision */
 			emit_load_fpr(0, frb);
