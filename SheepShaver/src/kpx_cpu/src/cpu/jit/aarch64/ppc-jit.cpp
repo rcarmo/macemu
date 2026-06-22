@@ -29,6 +29,10 @@ extern "C" uint32_t sheepshaver_jit_safe_load(uint32_t ea, uint32_t old_value, u
 extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t store_kind);
 extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
 extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
+/* icbi targeted-invalidate helper: only full-flush the JIT cache when a compiled
+ * block actually overlaps the icbi'd 32-byte line (most icbi targets are code being
+ * written, not executed, so nothing is compiled there). Defined below near the flush. */
+extern "C" void ppc_jit_aarch64_icbi(uint32_t ea);
 /* Frame buffer base/size helpers (sheepshaver_glue.cpp) for the D-form load/store
  * valid-check: the framebuffer is 1:1-mapped guest memory (VMBaseDiff==0) like RAM/ROM. */
 extern "C" uint32_t sheepshaver_jit_fb_base(void);
@@ -1958,11 +1962,18 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 246:  /* dcbt  — data cache block touch (prefetch hint) */
 		case 278:  /* dcbtst — data cache block touch for store */
 			return true;
-		case 982:  /* icbi — instruction cache block invalidate */
+		case 982:  /* icbi rA,rB — instruction cache block invalidate */
 			lazy_flush_cr0();
 			ra_flush_all();
-			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)ppc_jit_aarch64_flush);
-			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR flush */
+			/* Compute EA = (rA?GPR[rA]:0) + GPR[rB] into w0 and let the helper
+			 * flush only if a compiled block overlaps that 32-byte line. */
+			emit_load_gpr(RTMP0, PPC_RB(op));
+			if (PPC_RA(op) != 0) {
+				emit_load_gpr(RTMP1, PPC_RA(op));
+				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD W0,W0,W1 */
+			}
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)ppc_jit_aarch64_icbi);
+			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR icbi(ea=w0) */
 			emit_load_imm32(RTMP0, (int32_t)(pc + 4));
 			a64_str_w_imm(RTMP0, RSTATE, PPCR_PC);
 			emit_return_to_dispatch();
@@ -4034,6 +4045,40 @@ void ppc_jit_aarch64_flush(void)
 	 * Contract: see SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md — flush discipline. */
 	jit_cache_wp = (uint32_t *)jit_cache_base;
 	jit_bc_flush();
+}
+
+/* icbi (instruction cache block invalidate) targeted handler.
+ *
+ * The guest issues icbi per 32-byte line when it writes or relocates code
+ * (driver/CFM loads, Mixed-Mode/68k glue, MakeDataExecutable). The semantics:
+ * any cached translation of instructions in that line is now stale and must be
+ * dropped. The previous JIT handler responded by flushing the ENTIRE 4 MB code
+ * cache on every icbi -> measured ~3550 full flushes per boot, each wiping a
+ * near-empty cache (the JIT never accumulated code) -> the working set was
+ * recompiled from scratch thousands of times. That was the dominant host-CPU sink.
+ *
+ * Correct + cheap: only flush when a live compiled block's contiguous guest range
+ * [pc, pc + n_insns*4) actually overlaps the icbi'd line. If nothing is compiled
+ * there (the common case: code being written, not executed), there is provably
+ * nothing to invalidate, so we skip the flush entirely. When we DO flush, the
+ * behaviour is identical to before (full flush handles direct-chaining safely),
+ * so this introduces no new chain-coherency risk. */
+extern "C" void ppc_jit_aarch64_icbi(uint32_t ea)
+{
+	const uint32_t line_start = ea & ~31u;
+	const uint32_t line_end   = line_start + 32u;
+	for (int i = 0; i < jit_bc_pool_next; i++) {
+		const struct jit_bc_entry *e = &jit_bc_pool[i];
+		if (!e->code) continue; /* invalidated slot */
+		const uint32_t bstart = e->pc;
+		const uint32_t bend   = e->pc + (uint32_t)e->n_insns * 4u;
+		/* overlap test: [bstart,bend) intersects [line_start,line_end) */
+		if (bstart < line_end && bend > line_start) {
+			ppc_jit_aarch64_flush();
+			return;
+		}
+	}
+	/* No compiled block overlaps the icbi'd line: nothing to invalidate. */
 }
 
 void ppc_jit_aarch64_invalidate_pc(uint32_t pc)

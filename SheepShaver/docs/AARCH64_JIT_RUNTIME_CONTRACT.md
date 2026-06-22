@@ -288,7 +288,14 @@ barrier-and-helper framework.
 The JIT uses a hash + chaining block cache: 8192 buckets with 16384 pool entries.
 Lookup by `uint32_t ppc_pc` before compilation; on hit, execute cached code directly.
 Invalidation: per-PC via `jit_bc_invalidate_pc()`; global flush via `jit_bc_flush()`
-called on any icbi/isync event or cache overflow.
+called on cache overflow. **icbi** is handled by `ppc_jit_aarch64_icbi(ea)`: it full-
+flushes only when a live compiled block's guest range `[pc, pc+n_insns*4)` overlaps the
+icbi'd 32-byte line, and otherwise skips (nothing compiled there = nothing to
+invalidate). This replaced an unconditional full flush on every icbi, which measured
+~3550 full cache wipes per desktop boot (each wiping a near-empty cache, so the working
+set was recompiled thousands of times) — the dominant host-CPU sink. **isync** is a
+block terminator only (serialization barrier; no cache invalidation). Post-fix a desktop
+boot does ~54 (healthy, cache-full) flushes instead of ~3600.
 
 Previous concern (now resolved): compiled blocks accumulated without reuse; the 4MB
 code cache would fill and all subsequent blocks fell back to the interpreter.
