@@ -4143,10 +4143,11 @@ static bool opcode_may_touch_guest_memory(uint32_t op) {
 }
 
 /* Conservative RA gate: the current register-cache scaffold is path-insensitive.
- * Enable it only for straight-line, non-faultable blocks. Internal conditional branches
- * can enter already-emitted code with a different mapping; guest-memory accesses can fault
- * before dirty cached GPRs are flushed. Keep those blocks on direct struct LDR/STR until
- * per-label/per-fault RA state is implemented. */
+ * Enable it for straight-line blocks (no internal conditional branches). Guest-memory
+ * accesses ARE now allowed: a flush+reset RA barrier is emitted before each one so the
+ * register struct is authoritative across the access (helper/MMIO/fault paths read and
+ * may modify guest state via RSTATE). Internal conditional branches remain disqualifying
+ * until per-label/per-fault RA state is implemented. */
 static bool block_allows_register_allocation(uint32_t pc, const uint8_t *ram, size_t ramsize) {
 	uint32_t cur_pc = pc;
 	for (int i = 0; i < 512; i++, cur_pc += 4) {
@@ -4157,7 +4158,11 @@ static bool block_allows_register_allocation(uint32_t pc, const uint8_t *ram, si
 		              ((uint32_t)p[2] << 8) | p[3];
 		if (op == 0x00000000 || op == 0x4E800020) break;
 		uint32_t opc = op >> 26;
-		if (opcode_may_touch_guest_memory(op)) return false;
+		/* Guest-memory opcodes no longer disqualify the block: a flush+reset RA
+		 * barrier is emitted before each such access in the compile loop, keeping
+		 * the struct authoritative across the access. Internal conditional branches
+		 * still do (the cache scaffold is path-insensitive: a branch target reached
+		 * with a different mapping than the fall-through would read wrong regs). */
 		if (opc == 16) return false; /* bc/bdnz/bdz can branch within the block */
 		if (opc == 18) break;        /* b/bl terminates the block */
 		if (opc == 19) {
@@ -4306,6 +4311,19 @@ bool ppc_jit_aarch64_compile(
 			insn_code_offset[insn_count] = jit_code_ptr;
 			insn_ppc_pc[insn_count] = cur_pc;
 			insn_count++;
+		}
+
+		/* RA barrier: before any guest-memory access, write back all dirty cached
+		 * GPRs and drop the cache so the struct is authoritative across the access.
+		 * The guarded load/store helper (and any MMIO re-entry or fault/skip path)
+		 * reads — and may modify — guest GPRs via RSTATE, so cached-only dirty values
+		 * must be in the struct before the access, and post-access reads must reload
+		 * in case the struct changed. This makes RA-enabled memory-touching blocks
+		 * exactly equivalent to direct struct LDR/STR at every memory boundary while
+		 * still caching the straight-line arithmetic runs between accesses. */
+		if (ra_enabled && opcode_may_touch_guest_memory(op)) {
+			ra_flush_all();
+			ra_reset();
 		}
 
 		if (!compile_one(op, cur_pc)) {
