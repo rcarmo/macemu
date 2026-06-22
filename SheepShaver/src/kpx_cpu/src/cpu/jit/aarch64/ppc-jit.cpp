@@ -4192,7 +4192,7 @@ void ppc_jit_aarch64_flush(void)
  * The guest issues icbi per 32-byte line when it writes or relocates code
  * (driver/CFM loads, Mixed-Mode/68k glue, MakeDataExecutable). The semantics:
  * any cached translation of instructions in that line is now stale and must be
- * dropped. The previous JIT handler responded by flushing the ENTIRE 4 MB code
+ * dropped. The previous JIT handler responded by flushing the ENTIRE code
  * cache on every icbi -> measured ~3550 full flushes per boot, each wiping a
  * near-empty cache (the JIT never accumulated code) -> the working set was
  * recompiled from scratch thousands of times. That was the dominant host-CPU sink.

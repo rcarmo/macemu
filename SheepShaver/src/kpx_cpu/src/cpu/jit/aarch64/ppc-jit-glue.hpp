@@ -22,7 +22,7 @@ static inline bool try_jit_execute(powerpc_cpu *cpu_obj, void *regs_ptr, uint32_
                                     const uint8_t *ram_base, size_t ram_size)
 {
 	if (!jit_aarch64_initialized) {
-		if (!ppc_jit_aarch64_init(4096)) /* 4MB code cache */
+		if (!ppc_jit_aarch64_init(8192)) /* 8MB code cache (match ppc-cpu.cpp production path) */
 			return false;
 		jit_aarch64_initialized = true;
 	}
