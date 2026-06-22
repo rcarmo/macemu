@@ -460,6 +460,11 @@ TESTS[extsb_positive]="3860007f 7C650774"
 TEST_ORDER+=(extsb_positive)
 
 
+# fctiw obeys FPSCR.RN (default nearest), unlike fctiwz. Keep delegated until exact
+# native rounding/FPSCR exception semantics exist. 1.5 should round to nearest, not truncate.
+TESTS[fp_fctiw_nearest]="3C603FF8 90610100 38600000 90610104 C8210100 FC00081C D8010108 80A10108 80C1010C"
+TEST_ORDER+=(fp_fctiw_nearest)
+
 # --- FP operations ---
 # fneg: store 2.0 as double, negate it, check sign
 # 2.0 double = 0x40000000_00000000

@@ -3581,13 +3581,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
-		case 14: /* fctiw frD,frB — convert to integer word (round per FPSCR) */
-			emit_load_fpr(0, frb);
-			emit32(0x9E780000 | (0 << 5) | RTMP0); /* FCVTZS Xd, Dn (toward zero) */
-			/* Store as int in FPR (low 32 bits) */
-			emit32(0x9E670000 | (RTMP0 << 5) | 0); /* FMOV Dd, Xn */
-			emit_store_fpr(0, frd);
-			return true;
+		case 14: /* fctiw frD,frB — EXCLUDED: FPSCR.RN rounding/exception semantics not exact */
+			/* The old native handler used FCVTZS (round toward zero), which is fctiwz
+			 * semantics. fctiw must obey FPSCR.RN (default nearest), update FPSCR exception
+			 * bits, and optionally CR1 for Rc. Delegate until exact semantics are native. */
+			return false;
 
 		case 15: /* fctiwz frD,frB — convert to integer word (round toward zero) */
 			emit_load_fpr(0, frb);
