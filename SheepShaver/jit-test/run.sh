@@ -1054,6 +1054,22 @@ TEST_ORDER+=(vec_vxor_self)
 TESTS[vec_lvx_stvx]="100C0718 38600600 7C0119CE 10210CC4 7C2118CE 38600700 7C2119CE 80A10700 80C10704"
 TEST_ORDER+=(vec_lvx_stvx)
 
+# Wrong-function/pass-through AltiVec exclusions. These should run via interpreter
+# until exact native semantics exist; the former native mappings were not merely
+# low-precision estimates: vexptefp/vlogefp used reciprocal estimate (wrong function),
+# and vslo/vsro were pass-throughs (wrong function).
+# vexptefp v2,v0 with v0=1.0f; old FRECPE native would produce reciprocal-ish bits, not interp.
+TESTS[vec_vexptefp_excluded]="3C803F80 90810600 90810604 90810608 9081060C 38600600 7C0118CE 104002C4 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vexptefp_excluded)
+# vlogefp v2,v0 with v0=2.0f; old FRECPE native would produce reciprocal-ish bits, not interp.
+TESTS[vec_vlogefp_excluded]="3C804000 90810600 90810604 90810608 9081060C 38600600 7C0118CE 10400344 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vlogefp_excluded)
+# vslo/vsro should not pass the source through unchanged.
+TESTS[vec_vslo_excluded]="10050718 10230718 10400A98 38600600 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vslo_excluded)
+TESTS[vec_vsro_excluded]="10050718 10230718 10400B18 38600600 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vsro_excluded)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
