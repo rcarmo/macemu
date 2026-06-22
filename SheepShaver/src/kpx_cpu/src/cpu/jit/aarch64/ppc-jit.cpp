@@ -1097,28 +1097,38 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	switch (opc) {
 
 	case 14: /* addi / li */
+	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		if (ra == 0) {
-			emit_load_imm32(RTMP0, (int32_t)simm);
+			int d = gpr_out(rd, RTMP0);
+			emit_load_imm32(d, (int32_t)simm);          /* li: immediate straight into dest */
+			gpr_out_commit(rd, d);
 		} else {
-			emit_load_gpr(RTMP0, ra);
+			int s = gpr_in(ra, RTMP0);
 			emit_load_imm32(RTMP1, (int32_t)simm);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD Wd,Wn,Wm */
+			int d = gpr_out(rd, RTMP0);
+			emit32(0x0B000000 | (RTMP1 << 16) | (s << 5) | d); /* ADD Wd,Wn,Wm */
+			gpr_out_commit(rd, d);
 		}
-		emit_store_gpr(RTMP0, rd);
 		return true;
+	}
 
 	case 15: /* addis / lis */
+	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		if (ra == 0) {
-			emit_load_imm32(RTMP0, (int32_t)simm << 16);
+			int d = gpr_out(rd, RTMP0);
+			emit_load_imm32(d, (int32_t)simm << 16);
+			gpr_out_commit(rd, d);
 		} else {
-			emit_load_gpr(RTMP0, ra);
+			int s = gpr_in(ra, RTMP0);
 			emit_load_imm32(RTMP1, (int32_t)simm << 16);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
+			int d = gpr_out(rd, RTMP0);
+			emit32(0x0B000000 | (RTMP1 << 16) | (s << 5) | d);
+			gpr_out_commit(rd, d);
 		}
-		emit_store_gpr(RTMP0, rd);
 		return true;
+	}
 
 	case 23: /* rlwnm rA,rS,rB,MB,ME (rotate left word then AND mask) */
 	{
@@ -1146,63 +1156,89 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	}
 
 	case 24: /* ori (and NOP = ori 0,0,0) */
+	{
 		ra = PPC_RA(op); rd = PPC_RS(op); uimm = PPC_UIMM(op);
 		if (rd == 0 && ra == 0 && uimm == 0) return true; /* NOP */
-		emit_load_gpr(RTMP0, rd);
+		int s = gpr_in(rd, RTMP0);
+		int d = gpr_out(ra, RTMP0);
 		if (uimm) {
 			emit_load_imm32(RTMP1, (int32_t)(uint32_t)uimm);
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ORR */
+			emit32(0x2A000000 | (RTMP1 << 16) | (s << 5) | d); /* ORR */
+		} else if (d != s) {
+			emit32(0x2A0003E0 | (s << 16) | d); /* MOV d, s */
 		}
-		emit_store_gpr(RTMP0, ra);
+		gpr_out_commit(ra, d);
 		return true;
+	}
 
 	case 25: /* oris */
+	{
 		ra = PPC_RA(op); rd = PPC_RS(op); uimm = PPC_UIMM(op);
-		emit_load_gpr(RTMP0, rd);
+		int s = gpr_in(rd, RTMP0);
+		int d = gpr_out(ra, RTMP0);
 		if (uimm) {
 			emit_load_imm32(RTMP1, (int32_t)((uint32_t)uimm << 16));
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
+			emit32(0x2A000000 | (RTMP1 << 16) | (s << 5) | d);
+		} else if (d != s) {
+			emit32(0x2A0003E0 | (s << 16) | d); /* MOV d, s */
 		}
-		emit_store_gpr(RTMP0, ra);
+		gpr_out_commit(ra, d);
 		return true;
+	}
 
 	case 26: /* xori rA,rS,UIMM */
+	{
 		ra = PPC_RA(op); rd = PPC_RS(op); uimm = PPC_UIMM(op);
-		emit_load_gpr(RTMP0, rd);
+		int s = gpr_in(rd, RTMP0);
+		int d = gpr_out(ra, RTMP0);
 		if (uimm) {
 			emit_load_imm32(RTMP1, (int32_t)(uint32_t)uimm);
-			emit32(0x4A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* EOR */
+			emit32(0x4A000000 | (RTMP1 << 16) | (s << 5) | d); /* EOR */
+		} else if (d != s) {
+			emit32(0x2A0003E0 | (s << 16) | d); /* MOV d, s */
 		}
-		emit_store_gpr(RTMP0, ra);
+		gpr_out_commit(ra, d);
 		return true;
+	}
 
 	case 27: /* xoris rA,rS,UIMM */
+	{
 		ra = PPC_RA(op); rd = PPC_RS(op); uimm = PPC_UIMM(op);
-		emit_load_gpr(RTMP0, rd);
+		int s = gpr_in(rd, RTMP0);
+		int d = gpr_out(ra, RTMP0);
 		if (uimm) {
 			emit_load_imm32(RTMP1, (int32_t)((uint32_t)uimm << 16));
-			emit32(0x4A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
+			emit32(0x4A000000 | (RTMP1 << 16) | (s << 5) | d);
+		} else if (d != s) {
+			emit32(0x2A0003E0 | (s << 16) | d); /* MOV d, s */
 		}
-		emit_store_gpr(RTMP0, ra);
+		gpr_out_commit(ra, d);
 		return true;
+	}
 
 	case 28: /* andi. */
+	{
 		ra = PPC_RA(op); rd = PPC_RS(op); uimm = PPC_UIMM(op);
-		emit_load_gpr(RTMP0, rd);
+		int s = gpr_in(rd, RTMP0);
+		int d = gpr_out(ra, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)(uint32_t)uimm);
-		emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND */
-		emit_store_gpr(RTMP0, ra);
-		lazy_update_cr0(RTMP0); /* andi. always updates CR0 */
+		emit32(0x0A000000 | (RTMP1 << 16) | (s << 5) | d); /* AND */
+		gpr_out_commit(ra, d);
+		lazy_update_cr0(d); /* andi. always updates CR0 */
 		return true;
+	}
 
 	case 29: /* andis. — rA = rS & (UIMM << 16), always updates CR0 */
+	{
 		ra = PPC_RA(op); rd = PPC_RS(op); uimm = PPC_UIMM(op);
-		emit_load_gpr(RTMP0, rd);
+		int s = gpr_in(rd, RTMP0);
+		int d = gpr_out(ra, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)((uint32_t)uimm << 16));
-		emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND */
-		emit_store_gpr(RTMP0, ra);
-		lazy_update_cr0(RTMP0);
+		emit32(0x0A000000 | (RTMP1 << 16) | (s << 5) | d); /* AND */
+		gpr_out_commit(ra, d);
+		lazy_update_cr0(d);
 		return true;
+	}
 
 	case 31: { /* XO-form extended opcodes */
 		uint32_t xo = PPC_XO(op);
