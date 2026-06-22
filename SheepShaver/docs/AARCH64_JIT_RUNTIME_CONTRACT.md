@@ -44,11 +44,15 @@ State that the interpreter and the rest of the emulator are allowed to observe d
 ### Virtual state
 
 State temporarily held only in ARM64 registers and not yet written back to the struct.
-This JIT has **limited virtual state**. Most blocks read and write directly to the struct via
-`[RSTATE, #offset]` loads and stores. A conservative register allocator may cache PPC GPRs in
-x21–x28 only for straight-line, non-faultable blocks. Blocks with conditional branches or
-guest-memory accesses still use direct struct access so fallback/fault paths never observe
-dirty cached GPRs.
+This JIT has **limited virtual state**. Many blocks read and write directly to the struct via
+`[RSTATE, #offset]` loads and stores. A conservative register allocator caches PPC GPRs in
+x21–x28 for straight-line blocks (no internal conditional branches). Guest-memory accesses are
+permitted in RA-enabled blocks: an **RA barrier** (`ra_flush_all()` + `ra_reset()`) is emitted
+immediately before each guest-memory instruction, so the register struct is authoritative at
+every memory boundary — exactly equivalent to direct struct access there — and no fallback,
+fault, or helper/MMIO re-entry path ever observes dirty cached GPRs. Blocks with internal
+conditional branches still use direct struct access (the cache scaffold is path-insensitive:
+a branch target reached with a different mapping than the fall-through would read wrong regs).
 
 ### Materialized state
 
@@ -139,12 +143,15 @@ or integrate with the lazy CR0 protocol before any consumer/fallback boundary.
 
 ### 4. GPR model
 
-GPRs are read with `emit_load_gpr(rd, n)` → `LDR Wd, [RSTATE, #PPCR_GPR(n)]` at the start
-of each handler. They are written with `emit_store_gpr(rs, n)` → `STR Wd, [RSTATE, #PPCR_GPR(n)]`
-at the end of each handler. Values are virtual only for the duration of a single handler's
-computation (a few ARM64 instructions).
+GPRs are read with `emit_load_gpr(rd, n)` and written with `emit_store_gpr(rs, n)`. When register
+allocation is disabled for the block these are direct `LDR Wd, [RSTATE, #PPCR_GPR(n)]` /
+`STR Wd, [RSTATE, #PPCR_GPR(n)]`. When RA is enabled they route through the x21–x28 cache
+(`ra_load`/`ra_store`), and dirty values are written back by `ra_flush_all()` at every block exit
+and at every RA barrier (immediately before a guest-memory access).
 
-**Contract**: At every block boundary, all GPRs are architectural.
+**Contract**: At every block boundary, and at every guest-memory access within an RA-enabled
+block, all GPRs are architectural. Between those points an RA-enabled block may hold GPRs only
+in x21–x28 (callee-saved, so preserved across the guarded-access helper BLR).
 
 ---
 
@@ -155,7 +162,9 @@ computation (a few ARM64 instructions).
 **Preconditions**:
 - `pc` is a valid PPC address within `[ram, ram + ramsize)`
 - `ram` and `ramsize` are consistent with the current MAC RAM mapping
-- JIT cache has space (`jit_cache_wp < jit_cache_end - 256`)
+- JIT cache has space (`jit_cache_wp < jit_cache_end - 2048`); the 2048-word (8KB) margin
+  guarantees a fresh block compiles before the per-instruction overflow guard trips (large
+  blocks: guarded load/store sequences, unrolled string ops)
 
 **What the compiler does**:
 1. Emits prologue (callee-save, x20 = regs ptr)
@@ -291,9 +300,11 @@ Invalidation: per-PC via `jit_bc_invalidate_pc()`; global flush via `jit_bc_flus
 called on cache overflow. **icbi** is handled by `ppc_jit_aarch64_icbi(ea)`: it full-
 flushes only when a live compiled block's guest range `[pc, pc+n_insns*4)` overlaps the
 icbi'd 32-byte line, and otherwise skips (nothing compiled there = nothing to
-invalidate). This replaced an unconditional full flush on every icbi, which measured
-~3550 full cache wipes per desktop boot (each wiping a near-empty cache, so the working
-set was recompiled thousands of times) — the dominant host-CPU sink. **isync** is a
+invalidate). A conservative `[min,max)` span of all compiled-block guest PCs (widened on
+insert, reset on flush) lets the handler fast-reject the common no-overlap icbi without
+scanning the block pool. This replaced an unconditional full flush on every icbi, which
+measured ~3550 full cache wipes per desktop boot (each wiping a near-empty cache, so the
+working set was recompiled thousands of times) — the dominant host-CPU sink. **isync** is a
 block terminator only (serialization barrier; no cache invalidation). Post-fix a desktop
 boot does ~54 (healthy, cache-full) flushes instead of ~3600.
 
@@ -304,13 +315,27 @@ code cache would fill and all subsequent blocks fell back to the interpreter.
 
 ## Helper contract
 
-No runtime helpers are called from compiled blocks in the current PPC JIT. All complex
-operations (EMUL_OP, unimplemented opcodes) cause block termination and interpreter fallback.
+Compiled blocks call a small set of out-of-line C helpers for guest-memory accesses that fall
+outside the statically-enumerated 1:1-mapped regions, and for atomic reservation ops:
 
-This is architecturally clean: every helper call is a full block barrier by construction.
+- `sheepshaver_jit_safe_load` / `sheepshaver_jit_safe_store` — the slow path of a guarded
+  D-form/indexed load/store. The fast path inlines the access when the EA is in a known-mapped
+  region (`emit_direct_access_valid_check`); otherwise the helper mincore-probes the page and
+  reads/writes genuinely-mapped guest memory via Read/WriteMacInt like the interpreter, leaving
+  the old value only for truly-unmapped MMIO.
+- `sheepshaver_jit_lwarx` / `sheepshaver_jit_stwcx` — real reservation semantics for atomic
+  acquire/retry loops.
 
-If helpers are added in the future, they must be classified as H1 (exact + mandatory barrier)
-unless explicitly proven to be H2 (continuation allowed after proof of state consistency).
+These helpers follow the AArch64 ABI, so callee-saved x19–x28 (RSTATE, RCR0, and the RA cache)
+survive the BLR. They may, however, re-enter the emulator (MMIO handlers) and read — or modify —
+guest GPRs via RSTATE. The **RA barrier** (flush-all-dirty + reset before each guest-memory
+access) exists precisely to keep the register struct authoritative across these calls, so the
+helper and any re-entry observe coherent guest state. Each helper call is otherwise a localized
+operation, not a full block barrier: the block continues after it.
+
+Any further helpers must be classified as H1 (exact + mandatory barrier) unless explicitly proven
+to be H2 (continuation allowed after proof of state consistency — as the guarded-access helpers
+are, via the RA barrier and callee-saved discipline).
 
 ---
 
@@ -384,9 +409,9 @@ barrier. Not implemented in the current JIT.
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
-| 3 | Helper calls are semantic barriers | ✅ No helpers in compiled code. All unhandled/barrier ops → interpreter (full block barrier). |
+| 3 | Helper calls are semantic barriers | ✅ Guarded load/store and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x28 + RA barrier keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code` and cache invalidation clears patch sites. |
-| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 209/209 opcode harness green. `bcl` LR update fixed (2026-05). Full parity for all simple BO patterns. |
+| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 240/240 opcode harness green. `bcl` LR update fixed (2026-05). Full parity for all simple BO patterns. |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 
@@ -405,11 +430,13 @@ subsequent visits. See `jit_bc_pool` / `jit_bc_heads` in `ppc-jit.cpp`.
 some `return false` paths are semantic barriers, not merely unimplemented inline code. Enabling
 partial-block execution would require auditing every fallback site and proving resumability.
 
-### Weak seam 3: Register allocation is conservative
+### Weak seam 3: Register allocation excludes only internal-branch blocks
 
-The x21–x28 GPR cache is enabled only for straight-line, non-faultable blocks. Internal
-conditional branches need per-label RA state, and guest-memory accesses need per-fault
-materialization guarantees before broader RA can be enabled safely.
+The x21–x28 GPR cache is enabled for all straight-line blocks. Guest-memory accesses are
+handled by an RA barrier (flush-all-dirty + reset before each access), so memory-touching
+blocks now use RA — measured at ~72% of all compiled blocks (up from ~34%). Only blocks with
+internal conditional branches remain excluded: the cache scaffold is path-insensitive and would
+need per-label RA state before a branch target could be entered with a guaranteed mapping.
 
 ### Weak seam 4: PC validation guard after JIT call may mask compiler bugs
 

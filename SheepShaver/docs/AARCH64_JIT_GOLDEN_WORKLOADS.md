@@ -60,7 +60,12 @@ make run-jit-tmux TMUX_SESSION=ss-boot-jit PREFS_DIR=/tmp/ss-boot-jit VNC_PORT=5
 
 **Pass condition**: Mac OS desktop visible via VNC. No SIGSEGV. Crash log clean.
 
-**Status**: ⚠️ JIT reaches the Mac OS Welcome splash with current containment gates. Interpreter desktop remains the stable full-boot lane; continue using this workload for JIT boot-progress validation.
+**Status**: ✅ Under strict JIT (`SS_USE_JIT=1`) the emulator boots through ROM init, extension
+loading and Finder launch to a **holding desktop** (Finder menu bar + Apple menu navigable) with
+**zero interpreter fallbacks** and GATE3=0 (no bad-selector dispatch). Verified repeatedly via
+VNC snapshot. Residual: a cosmetic QuickDraw text-blit divergence (“black blocks” behind dialog
+text) remains under investigation; it does not affect boot stability or desktop hold. Wall-clock
+performance is not yet benchmarked (pending an authorized spot run).
 
 ---
 
@@ -126,9 +131,12 @@ make run-tmux PREFS_DIR=/tmp/ss-bench
 - Interpreter score: baseline
 - JIT with containment gates: comparable to interpreter for full-system workloads (correctness first)
 - JIT with block cache/chaining: expected speedup on hot native PPC loops; tight-loop microbench is ~737 MIPS
-- Revalidated lazy CR0/register allocation: target for future optimization phases
+- Register allocation broadened to memory-touching blocks (~72% of compiled blocks) and icbi
+  cache-flush thrash eliminated (~3600 → ~54 flushes/boot): host-overhead reductions landed and
+  regression-verified; wall-clock/CPU% quantification pending an authorized spot benchmark
 
-**Status**: ⚠️ Block cache/chaining is implemented, but full benchmark validation still requires a stable JIT boot to desktop and repeatable MacBench run.
+**Status**: ⚠️ Block cache/chaining is implemented and the JIT holds the Finder desktop, but a
+repeatable in-guest MacBench/Speedometer run still requires an authorized benchmark window.
 
 ---
 
@@ -173,7 +181,9 @@ A change is mature when all workloads below it are green:
 L0  Interpreter-only boot                  (Workload 2 green)
 L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
-L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof)
+L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
+    lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
+    barrier; harness 240/240 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
@@ -185,6 +195,6 @@ Do not report performance numbers until the workload's maturity level is declare
 
 | Workload | Blocker |
 |----------|---------|
-| 3 (JIT boot) | Remaining full-desktop JIT boot stability beyond Welcome splash |
-| 6 (Speedometer) | Stable JIT boot-to-desktop plus repeatable benchmark run |
+| 3 (JIT boot) | Desktop holds under strict JIT; residual cosmetic QuickDraw text-blit divergence only |
+| 6 (Speedometer) | Authorized benchmark window for a repeatable in-guest run |
 | 7 (PoP) | PatchNativeResourceManager crash in ROM path |
