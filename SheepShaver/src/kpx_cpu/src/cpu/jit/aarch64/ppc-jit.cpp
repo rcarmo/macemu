@@ -407,6 +407,26 @@ static void emit_store_gpr(int rs, int n) {
 	a64_str_w_imm(rs, RSTATE, PPCR_GPR(n));
 }
 
+/* Direct-host GPR accessors that avoid the RTMP<->host round-trip moves emitted by
+ * emit_load_gpr/emit_store_gpr when register allocation is enabled. A handler reads
+ * its sources with gpr_in() and writes its result into the register returned by
+ * gpr_out(), then calls gpr_out_commit(). With RA on this operates directly on the
+ * x21-x28 cache (no moves); with RA off it falls back to the scratch register + an
+ * explicit struct LDR/STR, exactly matching emit_load_gpr/emit_store_gpr.
+ * Smaller emitted blocks => the 4MB code cache holds more before filling (fewer
+ * cache-full flushes / recompiles) plus lower icache/issue pressure. */
+static int gpr_in(int n, int scratch) {
+	if (ra_enabled) return ra_load(n);
+	a64_ldr_w_imm(scratch, RSTATE, PPCR_GPR(n));
+	return scratch;
+}
+static int gpr_out(int n, int scratch) {
+	return ra_enabled ? ra_store(n) : scratch;
+}
+static void gpr_out_commit(int n, int reg) {
+	if (!ra_enabled) a64_str_w_imm(reg, RSTATE, PPCR_GPR(n));
+}
+
 /* 64-bit GPR access for G5/PPC64 instructions.
    Uses gpr[n] (low 32) + gpr_hi[n] (high 32) as a split 64-bit register.
    On little-endian ARM64: load low word, load high word, combine. */
@@ -1216,53 +1236,68 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 		case 266: /* add / add. */
 		case 778: /* addo / addo. */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
+		{
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(rd, RTMP0);
 			if (xo == 778) {
-				emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS */
-				emit_store_gpr(RTMP0, rd);
+				emit32(0x2B000000 | (s2 << 16) | (s1 << 5) | d); /* ADDS */
+				gpr_out_commit(rd, d);
 				emit_write_xer_ov_so_from_overflow();
 			} else {
-				emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADD */
-				emit_store_gpr(RTMP0, rd);
+				emit32(0x0B000000 | (s2 << 16) | (s1 << 5) | d); /* ADD */
+				gpr_out_commit(rd, d);
 			}
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 40: /* subf (rD = rB - rA) */
 		case 552: /* subfo / subfo. */
-			emit_load_gpr(RTMP0, rb);
-			emit_load_gpr(RTMP1, ra);
+		{
+			int s1 = gpr_in(rb, RTMP0); /* minuend */
+			int s2 = gpr_in(ra, RTMP1); /* subtrahend */
+			int d  = gpr_out(rd, RTMP0);
 			if (xo == 552) {
-				emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUBS */
-				emit_store_gpr(RTMP0, rd);
+				emit32(0x6B000000 | (s2 << 16) | (s1 << 5) | d); /* SUBS */
+				gpr_out_commit(rd, d);
 				emit_write_xer_ov_so_from_overflow();
 			} else {
-				emit32(0x4B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUB */
-				emit_store_gpr(RTMP0, rd);
+				emit32(0x4B000000 | (s2 << 16) | (s1 << 5) | d); /* SUB */
+				gpr_out_commit(rd, d);
 			}
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 28: /* and */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x0A000000 | (s2 << 16) | (s1 << 5) | d); /* AND */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 444: /* or / or. (also mr) */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x2A000000 | (s2 << 16) | (s1 << 5) | d); /* ORR */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 316: /* xor */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x4A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x4A000000 | (s2 << 16) | (s1 << 5) | d); /* EOR */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 104: /* neg / neg. */
 			emit_load_gpr(RTMP0, ra);
 			emit32(0x4B0003E0 | (RTMP0 << 16) | RTMP0);
@@ -1716,43 +1751,58 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		}
 		case 476: /* nand rA,rS,rB  (rA = ~(rS & rB)) */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND Wd = rS & rB */
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN Wd = ~(rS & rB) */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x0A000000 | (s2 << 16) | (s1 << 5) | d); /* AND d = rS & rB */
+			emit32(0x2A2003E0 | (d << 16) | d); /* MVN d = ~(rS & rB) */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 124: /* nor rA,rS,rB */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ORR */
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x2A000000 | (s2 << 16) | (s1 << 5) | d); /* ORR */
+			emit32(0x2A2003E0 | (d << 16) | d); /* MVN */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 284: /* eqv rA,rS,rB (XNOR) */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x4A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* EOR */
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x4A000000 | (s2 << 16) | (s1 << 5) | d); /* EOR */
+			emit32(0x2A2003E0 | (d << 16) | d); /* MVN */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 60: /* andc rA,rS,rB */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x0A200000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* BIC Wd,Wn,Wm */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x0A200000 | (s2 << 16) | (s1 << 5) | d); /* BIC d = rS & ~rB */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 412: /* orc rA,rS,rB */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x2A200000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ORN Wd,Wn,Wm */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(PPC_RS(op), RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(ra, RTMP0);
+			emit32(0x2A200000 | (s2 << 16) | (s1 << 5) | d); /* ORN d = rS | ~rB */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 459: /* divwu rD,rA,rB (unsigned divide) */
 		case 971: /* divwuo / divwuo. */
 			emit_load_gpr(RTMP0, ra);
