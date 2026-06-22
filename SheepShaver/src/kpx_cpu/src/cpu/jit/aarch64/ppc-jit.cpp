@@ -241,6 +241,7 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 #define PPCR_XER_OV   1029
 #define PPCR_XER_CA   1030
 #define PPCR_XER_CNT  1031
+#define PPCR_VRSAVE 1036
 #define PPCR_FPSCR  1040
 #define PPCR_LR     1044
 #define PPCR_CTR    1048
@@ -1509,6 +1510,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit_store_gpr(RTMP0, rd);
 				return true;
 			}
+			if (spr == 256) { /* VRSAVE */
+				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_VRSAVE);
+				emit_store_gpr(RTMP0, rd);
+				return true;
+			}
 			if (spr == 287) { /* PVR — must match interpreter's PVR value */
 				extern uint32_t PVR;
 				emit_load_imm32(RTMP0, (int32_t)PVR);
@@ -1531,6 +1537,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (spr == 9) { /* CTR */
 				emit_load_gpr(RTMP0, PPC_RS(op));
 				a64_str_w_imm(RTMP0, RSTATE, PPCR_CTR);
+				return true;
+			}
+			if (spr == 256) { /* VRSAVE */
+				emit_load_gpr(RTMP0, PPC_RS(op));
+				a64_str_w_imm(RTMP0, RSTATE, PPCR_VRSAVE);
 				return true;
 			}
 			if (spr == 1) { /* XER — unpack PPC format into {so,ov,ca,byte_count} */

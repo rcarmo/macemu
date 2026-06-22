@@ -1220,6 +1220,10 @@ TESTS[fuzz_xer_roundtrip]="3860FFFF 30630001 7C6102A6 7C650026"
 TEST_ORDER+=(fuzz_xer_roundtrip)
 
 # --- privileged SPR round-trips used by the late SheepShaver handler path ---
+# lis/ori r3,0x12345678; mtspr VRSAVE,r3; li r3,0; mfspr VRSAVE,r5
+TESTS[fuzz_vrsave_roundtrip]="3C601234 60635678 7C6043A6 38600000 7CA042A6"
+TEST_ORDER+=(fuzz_vrsave_roundtrip)
+
 # lis/ori r3,0x12345678; mtsprg3 r3; li r3,0; mfsprg3 r5
 TESTS[fuzz_sprg3_roundtrip]="3C601234 60635678 7C7343A6 38600000 7CB342A6"
 TEST_ORDER+=(fuzz_sprg3_roundtrip)
