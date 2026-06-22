@@ -944,6 +944,10 @@ TEST_ORDER+=(addic_ca)
 TESTS[mfspr_xer]="7CA102A6"
 TEST_ORDER+=(mfspr_xer)
 
+# mfmsr r5 must match the interpreter's simplified MSR value (0x0000f072), not zero.
+TESTS[mfmsr_basic]="7CA000A6"
+TEST_ORDER+=(mfmsr_basic)
+
 # --- cmpw with negative ---
 TESTS[cmpw_neg]="3860FFFF 38800001 7C032000"
 TEST_ORDER+=(cmpw_neg)

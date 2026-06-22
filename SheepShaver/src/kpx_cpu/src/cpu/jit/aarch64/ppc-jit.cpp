@@ -2199,8 +2199,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 659: /* mfsrin — same */
 			return false;
 
-		case 83: /* mfmsr rD — simplified: return 0 */
-			emit_load_imm32(RTMP0, 0);
+		case 83: /* mfmsr rD — match interpreter's simplified MSR value */
+			emit_load_imm32(RTMP0, 0xf072);
 			emit_store_gpr(RTMP0, rd);
 			return true;
 		case 310: /* eciwx rD,rA,rB — external control in word: NOP */
