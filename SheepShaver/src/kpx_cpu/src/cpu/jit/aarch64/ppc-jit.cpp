@@ -1307,9 +1307,28 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		case 491: /* divw */
+			/* Match the interpreter on the architecturally-undefined cases
+			 * (divisor==0, or dividend==INT_MIN && divisor==-1): a real PPC fills the
+			 * result with the dividend's sign bit (dividend>>31). Plain AArch64 SDIV
+			 * instead yields 0 / INT_MIN there, so select the sign-fill explicitly.
+			 * Same predicate/result as divwo below, without the OV write. */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x1AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SDIV Wd,Wn,Wm */
+			emit_cmp_w_imm(RTMP1, 0);
+			emit32(0x1A9F17E0 | RTMP2); /* CSET RTMP2, EQ (divisor==0) */
+			emit_load_imm32(RTMP3, (int32_t)0x80000000u);
+			emit32(0x6B000000 | (RTMP3 << 16) | (RTMP0 << 5) | 31); /* CMP dividend, INT_MIN */
+			emit32(0x1A9F17E0 | RTMP3); /* CSET RTMP3, EQ */
+			emit_load_imm32(RTMP4, -1);
+			emit32(0x6B000000 | (RTMP4 << 16) | (RTMP1 << 5) | 31); /* CMP divisor, -1 */
+			emit32(0x1A9F17E0 | RTMP4); /* CSET RTMP4, EQ */
+			emit32(0x0A000000 | (RTMP4 << 16) | (RTMP3 << 5) | RTMP3); /* AND (INT_MIN && -1) */
+			emit32(0x2A000000 | (RTMP3 << 16) | (RTMP2 << 5) | RTMP2); /* OR -> special predicate RTMP2 */
+			emit32(0x1AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP3); /* SDIV RTMP3 = a/b */
+			emit_load_gpr(RTMP4, ra);
+			emit32(0x131F7C00 | (RTMP4 << 5) | RTMP4); /* RTMP4 = (int32)dividend >> 31 (ASR #31) */
+			emit_cmp_w_imm(RTMP2, 0);
+			emit32(0x1A800000 | (RTMP3 << 16) | (0x1 << 12) | (RTMP4 << 5) | RTMP0); /* CSEL RTMP0 = NE ? signfill : sdiv */
 			emit_store_gpr(RTMP0, rd);
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
@@ -1648,25 +1667,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		case 234: /* addme rD,rA (rD = rA + CA - 1, set CA) */
 		{
+			/* rA + 0xFFFFFFFF + CA. Mirror adde: preset ARM C = XER.CA, then a SINGLE
+			 * ADCS so the carry is counted exactly once (the old ADDS+ADCS chain
+			 * double-counted the first add's carry -> wrong result and wrong CA). */
 			emit_load_gpr(RTMP0, ra);
-			emit_read_xer_ca(RTMP1); /* RTMP1 = CA (0 or 1) */
-			/* rD = rA + CA + 0xFFFFFFFF. Compute as: ADDS tmp, rA, CA; ADDS tmp, tmp, -1 */
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS Wd, rA, CA */
-			emit_load_imm32(RTMP1, -1);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS Wd, Wd, -1 */
-			/* CA = carry out. The second ADDS sets C correctly for the final add. */
-			/* But we need CA = carry out of the FULL operation rA + CA_in + 0xFFFFFFFF.
-			   Since we can't chain carries with two ADDS, compute in 64-bit instead. */
-			/* Actually: use ADDS+ADCS chain. ADDS rA, CA → sets C1. ADCS rD, result, -1 → C = C1|C2 */
-			/* Simpler: just compute directly. rA + CA_in - 1. If rA + CA_in >= 1, no borrow → CA=1.
-			   CA_out = (rA != 0) || (CA_in != 0), except edge case rA=0,CA=0 → result=0xFFFFFFFF, CA=0.
-			   Actually: CA_out = carry of (~0 + rA + CA_in) = carry of (rA + CA_in + 0xFFFFFFFF). */
-			/* Cleanest: reload and use ADDS/ADCS */
-			emit_load_gpr(RTMP0, ra);
-			emit_read_xer_ca(RTMP1);
-			emit_load_imm32(RTMP2, -1); /* 0xFFFFFFFF */
-			emit32(0x2B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS Wd, rA, 0xFFFFFFFF */
-			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS Wd, Wd, CA_in */
+			emit_load_imm32(RTMP1, -1); /* 0xFFFFFFFF */
+			emit_read_xer_ca(RTMP2);
+			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
+			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS Wd = rA + 0xFFFFFFFF + CA */
 			emit_store_gpr(RTMP0, rd);
 			emit_write_xer_ca_from_carry();
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1684,12 +1692,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 		case 232: /* subfme rD,rA (rD = ~rA + CA - 1, set CA) */
 		{
+			/* ~rA + 0xFFFFFFFF + CA. Same single-ADCS pattern as addme. */
 			emit_load_gpr(RTMP0, ra);
 			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN Wd, Wn = ~rA */
-			emit_read_xer_ca(RTMP1);
-			emit_load_imm32(RTMP2, -1);
-			emit32(0x2B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS Wd, ~rA, -1 */
-			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS Wd, Wd, CA_in */
+			emit_load_imm32(RTMP1, -1); /* 0xFFFFFFFF */
+			emit_read_xer_ca(RTMP2);
+			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
+			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS Wd = ~rA + 0xFFFFFFFF + CA */
 			emit_store_gpr(RTMP0, rd);
 			emit_write_xer_ca_from_carry();
 			if (op & 1) lazy_update_cr0(RTMP0);
@@ -1706,13 +1715,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 		}
-		case 476: /* nand rA,rS,rB */
+		case 476: /* nand rA,rS,rB  (rA = ~(rS & rB)) */
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x0A200000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* BIC then invert... */
-			/* Actually: AND then MVN */
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND */
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* ORN Wd,WZR,Wm = MVN */
+			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND Wd = rS & rB */
+			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN Wd = ~(rS & rB) */
 			emit_store_gpr(RTMP0, ra);
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
