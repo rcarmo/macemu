@@ -123,7 +123,7 @@ void AddPrefsDefaults(void)
 	PrefsAddBool("jitfpu", true);
 	PrefsAddBool("jitdebug", false);
 	PrefsAddInt32("jitcachesize", 32768);
-	PrefsAddBool("jitlazyflush", true);
+	PrefsAddBool("jitlazyflush", false);	// AArch64: lazy translation-cache invalidation reuses STALE compiled blocks (checksum reactivation reuses out-of-range stale driver blocks across _BlockMove cache flushes) -> 040ba0xx NuBus spin. Eager (hard) flush forces recompile and boots past. See notes/macemu-jit-io-rootcause.md CONT.66-68.
 	PrefsAddBool("jitinline", true);
 	PrefsAddBool("doublebuffer", false);
 #else

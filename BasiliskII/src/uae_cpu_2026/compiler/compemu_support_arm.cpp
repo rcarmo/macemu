@@ -6061,9 +6061,11 @@ void flush_icache_hard(int n)
 {
 #if defined(CPU_AARCH64)
     jit_diag_flush_icache_hard_calls++;
-    fprintf(stderr, "JIT_DIAG flush_icache_hard called (n=%d), total=%lu\n", n, jit_diag_flush_icache_hard_calls);
-    fflush(stderr);
-    jit_diag_maybe_print();
+    if (jit_diag_enabled()) {
+        fprintf(stderr, "JIT_DIAG flush_icache_hard called (n=%d), total=%lu\n", n, jit_diag_flush_icache_hard_calls);
+        fflush(stderr);
+        jit_diag_maybe_print();
+    }
 #endif
     blockinfo* bi, * dbi;
 
