@@ -89,10 +89,24 @@ struct jit_bc_entry {
 static struct jit_bc_entry jit_bc_pool[JIT_BC_POOL];
 static int jit_bc_heads[JIT_BC_BUCKETS];  /* -1=empty; initialised by jit_bc_flush() before first use */
 static int jit_bc_pool_next = 0;          /* next free pool entry */
+/* Conservative [min,max) span of all compiled-block guest PCs. Used by the icbi
+ * handler to skip the full pool scan when the icbi'd line lies outside any
+ * compiled code. Only ever widened (invalidated slots are not subtracted), so it
+ * is always a superset of live block ranges -> never skips a real overlap. */
+static uint32_t jit_bc_span_min = 0xFFFFFFFFu;
+static uint32_t jit_bc_span_max = 0;
+
+static inline void jit_bc_span_add(uint32_t pc, int n_insns) {
+	uint32_t end = pc + (uint32_t)(n_insns > 0 ? n_insns : 1) * 4u;
+	if (pc < jit_bc_span_min) jit_bc_span_min = pc;
+	if (end > jit_bc_span_max) jit_bc_span_max = end;
+}
 
 static void jit_bc_flush(void) {
 	for (int i = 0; i < JIT_BC_BUCKETS; i++) jit_bc_heads[i] = -1;
 	jit_bc_pool_next = 0;
+	jit_bc_span_min = 0xFFFFFFFFu;
+	jit_bc_span_max = 0;
 	/* Also clear chain patch sites — all recorded epilogues are now invalid */
 	for (int i = 0; i < JIT_BC_BUCKETS; i++) chain_site_heads[i] = -1;
 	chain_site_pool_next = 0;
@@ -188,6 +202,7 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 			jit_bc_pool[idx].chain_code = chain_code;
 			jit_bc_pool[idx].complete   = complete;
 			jit_bc_pool[idx].n_insns    = n_insns;
+			jit_bc_span_add(pc, n_insns);
 			/* Existing entries can be refreshed after invalidation/recompile; satisfy
 			 * any epilogues that were recorded while the target was unavailable. */
 			patch_chain_sites(pc, chain_code);
@@ -206,6 +221,7 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 	jit_bc_pool[idx].chain_code = chain_code;
 	jit_bc_pool[idx].complete   = complete;
 	jit_bc_pool[idx].n_insns    = n_insns;
+	jit_bc_span_add(pc, n_insns);
 	jit_bc_pool[idx].next       = jit_bc_heads[bucket];
 	jit_bc_heads[bucket]        = idx;
 	/* Back-patch any standard epilogues in older blocks that were waiting
@@ -4080,6 +4096,11 @@ extern "C" void ppc_jit_aarch64_icbi(uint32_t ea)
 {
 	const uint32_t line_start = ea & ~31u;
 	const uint32_t line_end   = line_start + 32u;
+	/* Fast reject: if the icbi'd line lies entirely outside the compiled-PC span,
+	 * no block can overlap it, so skip the O(pool) scan. The span is a conservative
+	 * superset of live block ranges, so this never misses a real overlap. */
+	if (line_end <= jit_bc_span_min || line_start >= jit_bc_span_max)
+		return;
 	for (int i = 0; i < jit_bc_pool_next; i++) {
 		const struct jit_bc_entry *e = &jit_bc_pool[i];
 		if (!e->code) continue; /* invalidated slot */
