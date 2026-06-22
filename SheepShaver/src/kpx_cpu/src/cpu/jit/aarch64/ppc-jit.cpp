@@ -3237,8 +3237,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 910: { emit_load_vr(0,vb); emit32(0x6E21C800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vcfux UCVTF.4S */
 		case 970: { emit_load_vr(0,vb); emit32(0x4EA1B800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vctsxs FCVTZS.4S */
 		case 906: { emit_load_vr(0,vb); emit32(0x6EA1B800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vctuxs FCVTZU.4S */
-		case 354: { emit_load_vr(0,vb); emit32(0x4E21D800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vexptefp FRECPE (approx) */
-		case 418: { emit_load_vr(0,vb); emit32(0x4EA1D800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vlogefp (approx via FRECPE) */
+		case 354: /* vexptefp — EXCLUDED: FRECPE approximation is not PPC vexptefp semantics */
+		case 418: /* vlogefp — EXCLUDED: FRECPE approximation is not PPC vlogefp semantics */
+			return false;
 		case 8: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E209C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmuloub UMULL.8H (odd bytes) */
 		case 72: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E60A000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmulouh UMULL.4S */
 		case 264: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E20A000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmuleub UMULL2.8H */
@@ -3264,10 +3265,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 1100: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E20B800|(1<<5)|1); emit32(0x6E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsr NEG+USHL.16B (negate shift, then shift left = right shift) */
 		case 1604: return true; /* mtvscr NOP */
 		case 1540: emit_load_imm32(RTMP0,0); emit32(0x4E010C00|(RTMP0<<5)|0); emit_store_vr(0,vd); return true; /* mfvscr - return 0 */
-case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
-			emit_load_vr(0, va); emit_load_vr(1, vb);
-			emit32(0x0E612800 | (1 << 16) | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
+		case 782: /* vpkpx — EXCLUDED: approximate narrow is not exact pixel pack semantics */
+			return false;
 		case 974: /* vupkhpx — unpack high pixel (widen) */
 			emit_load_vr(0, vb);
 			emit32(0x2F10A400 | (0 << 5) | 0);
@@ -3304,10 +3303,9 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 			emit32(0x4EB1B800 | (0 << 5) | 0);
 			emit32(0x4EA08400 | (1 << 16) | (0 << 5) | 0);
 			emit_store_vr(0, vd); return true;
-		case 1356: /* vslo — shift left by octet (approx: pass through) */
-			emit_load_vr(0, va); emit_store_vr(0, vd); return true;
-		case 1420: /* vsro — shift right by octet (approx) */
-			emit_load_vr(0, va); emit_store_vr(0, vd); return true;
+		case 1356: /* vslo — EXCLUDED: pass-through is not exact octet-shift semantics */
+		case 1420: /* vsro — EXCLUDED: pass-through is not exact octet-shift semantics */
+			return false;
 		default: break;
 		}
 		switch (vao) {
@@ -3316,10 +3314,12 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		case 43: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E002000|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
 		case 42: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E601C00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
 
-		case 32: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E21CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true; /* vmhaddshs (approx via FMLA) */
-		case 33: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E21CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true; /* vmhraddshs (approx) */
+		case 32: /* vmhaddshs — EXCLUDED: FMLA approximation is not exact saturated halfword semantics */
+		case 33: /* vmhraddshs — EXCLUDED: approximation is not exact rounded saturated semantics */
+			return false;
 		case 34: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmladduhm MUL+ADD */
-		case 36: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E209C00|(1<<16)|(0<<5)|0); emit32(0x4E208400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumubm (approx) */
+		case 36: /* vmsumubm — EXCLUDED: current MUL+ADD approximation is not exact vector sum semantics */
+			return false;
 		case 37: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumshm */
 		case 38: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E609C00|(1<<16)|(0<<5)|0); emit32(0x6E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumshs */
 		case 40: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E209C00|(1<<16)|(0<<5)|0); emit32(0x6E208400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumubm */
