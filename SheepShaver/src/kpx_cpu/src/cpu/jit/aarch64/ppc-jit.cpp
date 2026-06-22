@@ -619,18 +619,25 @@ static void patch_cond_to_here(uint32_t *loc, uint8_t cond) {
 static void emit_branch_if_ea_in_range(int ea_reg, uint32_t start, uint32_t end_exclusive, uint32_t **valid_locs, int *valid_count) {
 	if (end_exclusive <= start)
 		return;
+	const uint32_t size = end_exclusive - start;
+	/* Unsigned range membership in a single compare:
+	 *     (ea - start) <u size   <=>   ea in [start, end_exclusive)
+	 * If ea < start the subtraction wraps to a large unsigned value >= size, so the
+	 * branch is not taken (correctly out of range). This replaces the previous
+	 * two-compare/two-branch form (CMP ea,start / B.LO skip / CMP ea,end / B.LO valid),
+	 * shrinking every guarded load/store's valid-check by ~2 insns and one branch per
+	 * range with identical semantics. RTMP3/RTMP4 are free scratch here (callers pass
+	 * ea in RTMP0 and the loaded/stored value in RTMP1). */
+	int cmp_reg;
 	if (start != 0) {
 		emit_load_imm32(RTMP3, (int32_t)start);
-		emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wstart */
-		uint32_t *below_start = jit_code_ptr; emit32(0); /* B.LO skip */
-		emit_load_imm32(RTMP3, (int32_t)end_exclusive);
-		emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wend */
-		valid_locs[(*valid_count)++] = jit_code_ptr; emit32(0); /* B.LO valid */
-		patch_cond_to_here(below_start, 3);
-		return;
+		emit32(0x4B000000 | (RTMP3 << 16) | (ea_reg << 5) | RTMP3); /* SUB W3,Wea,W3 = ea-start */
+		cmp_reg = RTMP3;
+	} else {
+		cmp_reg = ea_reg; /* ea - 0 == ea */
 	}
-	emit_load_imm32(RTMP3, (int32_t)end_exclusive);
-	emit32(0x6B000000 | (RTMP3 << 16) | (ea_reg << 5) | 31); /* CMP Wea,Wend */
+	emit_load_imm32(RTMP4, (int32_t)size);
+	emit32(0x6B000000 | (RTMP4 << 16) | (cmp_reg << 5) | 31); /* CMP Wcmp,Wsize */
 	valid_locs[(*valid_count)++] = jit_code_ptr; emit32(0); /* B.LO valid */
 }
 
