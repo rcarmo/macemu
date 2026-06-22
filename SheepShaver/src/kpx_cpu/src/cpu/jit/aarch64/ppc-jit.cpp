@@ -2228,7 +2228,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				if (nb - bytes_done >= 4) {
 					emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
 					emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-					emit_store_gpr(RTMP1, r);
+					a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
 					if (bytes_done + 4 < nb) emit32(0x11001000 | (RTMP0 << 5) | RTMP0);
 					bytes_done += 4;
 				} else {
@@ -2239,7 +2239,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 						if (sh) { emit_load_imm32(3, sh); emit32(0x1AC02000 | (3 << 16) | (RTMP2 << 5) | RTMP2); }
 						emit32(0x2A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1);
 					}
-					emit_store_gpr(RTMP1, r);
+					a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
 					bytes_done = nb;
 				}
 				r = (r + 1) & 31;
@@ -2256,12 +2256,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			uint32_t bytes_done = 0;
 			while (bytes_done < nb) {
 				if (nb - bytes_done >= 4) {
-					emit_load_gpr(RTMP1, r);
+					a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
 					emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
 					emit32(0xB8004400 | (RTMP0 << 5) | RTMP1);
 					bytes_done += 4;
 				} else {
-					emit_load_gpr(RTMP1, r);
+					a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
 					for (uint32_t b = 0; b < nb - bytes_done; b++) {
 						a64_mov_reg(RTMP2, RTMP1);
 						uint32_t sh = (3 - b) * 8;
@@ -3485,7 +3485,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		for (uint32_t r = rd; r < 32; r++) {
 			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
 			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
-			emit_store_gpr(RTMP1, r);
+			a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
 			if (r < 31) emit32(0x11001000 | (RTMP0 << 5) | RTMP0); /* ADD Wn, Wn, #4 */
 		}
 		return true;
@@ -3497,7 +3497,7 @@ case 782: /* vpkpx — pack pixel 32→16 bit (approximate narrow) */
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
 		for (uint32_t r = rd; r < 32; r++) {
-			emit_load_gpr(RTMP1, r);
+			a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
 			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
 			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1); /* STR Wt, [Xn] */
 			if (r < 31) emit32(0x11001000 | (RTMP0 << 5) | RTMP0); /* ADD +4 */

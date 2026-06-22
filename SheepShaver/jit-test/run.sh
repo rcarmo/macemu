@@ -231,6 +231,16 @@ TEST_ORDER+=(lswx_xer_count6)
 TESTS[stswx_xer_count6]="3CA0AABB 60A5CCDD 3CC0EEFF 60C60011 38800700 39200006 7D2103A6 7CA1252A 80E10700 A1010704"
 TEST_ORDER+=(stswx_xer_count6)
 
+# Immediate-count string forms: lswx/stswx already cover runtime XER counts; these
+# cover lswi/stswi's unrolled fixed-count multi-access handlers.
+# Store 0x11223344/0x55667788, then lswi r5,r1,6.
+TESTS[lswi_imm_count6]="3C601122 60633344 90610600 3C605566 60637788 90610604 7CA134AA"
+TEST_ORDER+=(lswi_imm_count6)
+
+# addi r4,r1,0x700; stswi r5,r4,6; reload word+halfword.
+TESTS[stswi_imm_count6]="3CA0AABB 60A5CCDD 3CC0EEFF 60C60011 38810700 7CA435AA 80E40000 A1040004"
+TEST_ORDER+=(stswi_imm_count6)
+
 # --- Record form (sets CR0) ---
 # li r3,42; addic. r5,r3,0  → CR0 should have GT bit set (positive result)
 # addic. rD,rA,SIMM = 0x34000000 | (rD<<21) | (rA<<16) | SIMM
