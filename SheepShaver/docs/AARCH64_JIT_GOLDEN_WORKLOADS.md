@@ -36,7 +36,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 248/248 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean` for RA-cache upper-32 canonicalisation after 64-bit host shifts, fixed-count `lswi`/`stswi` multi-access coherency vectors, `mfmsr_basic` for the interpreter's simplified MSR value, and AltiVec exclusion vectors for wrong-function/pass-through handlers).
+**Status**: ✅ 249/249 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean` for RA-cache upper-32 canonicalisation after 64-bit host shifts, fixed-count `lswi`/`stswi` multi-access coherency vectors, `mfmsr_basic`, AltiVec exclusion vectors for wrong-function/pass-through handlers, and `fcmpu_nan_unordered` for FP unordered/FPSCR compare semantics).
 
 ---
 
@@ -195,7 +195,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 248/248 + strict-JIT desktop holds
+    barrier; harness 249/249 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
