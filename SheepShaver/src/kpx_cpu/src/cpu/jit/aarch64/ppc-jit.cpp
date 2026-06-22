@@ -2919,7 +2919,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND #1 */
 				break;
 			case 417: /* crorc:  a | ~b */
-				emit32(0x2A200000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* ORN */ break;
+				emit32(0x2A200000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* ORN: a | ~b (full 32-bit) */
+				emit_load_imm32(RTMP2, 1);
+				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND #1: ~b sets bits 1..31, mask back to the single CR bit */
+				break;
 			case 225: /* crnand: ~(a & b) */
 				emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* AND */
 				emit32(0x2A2003E0 | (RTMP1 << 16) | RTMP1); /* MVN */
