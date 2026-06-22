@@ -125,8 +125,14 @@ static void patch_chain_sites(uint32_t pc, uint32_t *chain_code) {
 	while (idx >= 0) {
 		struct jit_chain_site *site = &chain_site_pool[idx];
 		if (site->target_pc == pc && site->patch_loc) {
-			int32_t off = (int32_t)((uint8_t *)chain_code - (uint8_t *)site->patch_loc);
-			if (off >= -(1 << 25) && off < (1 << 25)) {
+			uint8_t *cc = (uint8_t *)chain_code;
+			uint8_t *pl = (uint8_t *)site->patch_loc;
+			int32_t off = (int32_t)(cc - pl);
+			/* Both the patch site and the chain target must be in-cache (see
+			 * emit_epilogue_with_pc): never back-patch a stale/out-of-cache target. */
+			if (cc >= jit_cache_base && cc < jit_cache_base + jit_cache_size &&
+			    pl >= jit_cache_base && pl < jit_cache_base + jit_cache_size &&
+			    off >= -(1 << 25) && off < (1 << 25)) {
 				*site->patch_loc = 0x14000000 | ((off >> 2) & 0x3FFFFFF); /* B offset */
 				/* Flush ARM64 I-cache for the patched word */
 				jit_cache_flush(site->patch_loc, sizeof(uint32_t));
@@ -865,11 +871,21 @@ static void emit_epilogue_with_pc(uint32_t next_pc) {
 	 * the current block's prologue — the chained block re-uses that frame. */
 	const struct jit_bc_entry *chain_target = (allow_chain && jit_chain_enabled()) ? jit_bc_lookup(next_pc) : NULL;
 	if (chain_target && chain_target->chain_code) {
-		int32_t off = (int32_t)((uint8_t *)chain_target->chain_code - (uint8_t *)jit_code_ptr);
-		if (off >= -(1 << 25) && off < (1 << 25)) {
-			emit32(0x14000000 | ((off >> 2) & 0x3FFFFFF)); /* B <offset> */
-			return; /* no LDP+RET: caller re-uses current stack frame */
+		/* The chain target MUST point inside the code cache. Under heavy icbi/isync
+		 * flushing a bc entry's chain_code was observed stale/corrupt (pointing into
+		 * a mapped library), and emitting a direct B to it produced a wild branch ->
+		 * SIGILL (executing a library ELF header). Enforce the in-cache invariant;
+		 * if violated, fall back to the dispatch-return epilogue (always safe). */
+		uint8_t *cc = (uint8_t *)chain_target->chain_code;
+		if (cc >= jit_cache_base && cc < jit_cache_base + jit_cache_size) {
+			int32_t off = (int32_t)((uint8_t *)chain_target->chain_code - (uint8_t *)jit_code_ptr);
+			if (off >= -(1 << 25) && off < (1 << 25)) {
+				emit32(0x14000000 | ((off >> 2) & 0x3FFFFFF)); /* B <offset> */
+				return; /* no LDP+RET: caller re-uses current stack frame */
+			}
 		}
+		/* else: chain target outside the code cache (stale/corrupt) -> never chain;
+		 * fall through to the dispatch-return epilogue below. */
 	}
 	/* Runtime back-patching: record this epilogue location so that when
 	 * next_pc is compiled later, the first LDP can be patched to B chain_code.
@@ -4059,14 +4075,24 @@ bool ppc_jit_aarch64_compile(
 	 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — block lifecycle. */
 	const struct jit_bc_entry *cached = jit_bc_lookup(pc);
 	if (cached) {
-		out->code       = cached->code;
-		out->chain_code = cached->chain_code;
-		out->code_size    = 0; /* not tracked for cached entries */
-		out->ppc_start_pc = pc;
-		out->ppc_end_pc   = pc; /* not tracked for cached entries */
-		out->n_insns      = 0; /* not tracked for cached entries */
-		out->complete     = cached->complete;
-		return true;
+		/* A cached block's code MUST point inside the code cache. Under heavy
+		 * icbi/isync flushing the dispatch was observed to call fn(jblk.code)
+		 * with code pointing outside the cache (a mapped library ELF header) ->
+		 * wild BLR -> SIGILL. Validate and, if corrupt, drop the stale entry and
+		 * recompile fresh (safe: a block is always recompilable from guest RAM). */
+		uint8_t *cc = (uint8_t *)cached->code;
+		if (cc >= jit_cache_base && cc < jit_cache_base + jit_cache_size) {
+			out->code       = cached->code;
+			out->chain_code = cached->chain_code;
+			out->code_size    = 0; /* not tracked for cached entries */
+			out->ppc_start_pc = pc;
+			out->ppc_end_pc   = pc; /* not tracked for cached entries */
+			out->n_insns      = 0; /* not tracked for cached entries */
+			out->complete     = cached->complete;
+			return true;
+		}
+		jit_bc_invalidate_pc(pc);
+		/* stale/corrupt entry (code outside cache): drop it and recompile fresh */
 	}
 
 	if (!jit_cache_wp || jit_cache_wp >= jit_cache_end - 256) {
@@ -4141,7 +4167,9 @@ bool ppc_jit_aarch64_compile(
 		if (term_opc == 19) {
 			uint32_t term_xo = (op >> 1) & 0x3FF;
 			if (term_xo == 16 || term_xo == 528) is_terminator = true; /* bclr/bcctr */
+			if (term_xo == 150) is_terminator = true; /* isync: serializes + returns to dispatch */
 		}
+		if (term_opc == 31 && ((op >> 1) & 0x3FF) == 982) is_terminator = true; /* icbi: flushes JIT cache + returns to dispatch; MUST end the block so the loop never emits live code (or compile-time chains) past the cache-reset point */
 
 		if (op == 0x00000000) { /* illegal — end of test code / zero-filled memory */
 			if (n_compiled == 0) return false; /* don't compile empty blocks */
