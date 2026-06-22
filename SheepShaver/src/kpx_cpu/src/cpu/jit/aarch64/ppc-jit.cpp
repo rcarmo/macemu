@@ -2311,25 +2311,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 
-		case 794: /* srad rA,rS,rB — shift right algebraic doubleword */
-			emit_load_gpr64(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x9AC02800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ASR Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, ra);
-			emit_set_xer_ca(0); /* simplified — full CA needs shifted-out-bits check */
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 826: /* sradi rA,rS,SH — shift right algebraic doubleword immediate */
-		{
-			uint32_t sh = ((op >> 11) & 0x1F) | (((op >> 1) & 1) << 5);
-			emit_load_gpr64(RTMP0, PPC_RS(op));
-			if (sh) emit32(0x9340FC00 | (sh << 10) | (RTMP0 << 5) | RTMP0); /* ASR Xd,Xn,#sh */
-			emit_store_gpr64(RTMP0, ra);
-			emit_set_xer_ca(0); /* simplified */
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-		}
+		case 794: /* srad rA,rS,rB — EXCLUDED: CA semantics not yet exact */
+		case 826: /* sradi rA,rS,SH — EXCLUDED: CA semantics not yet exact */
+			/* These algebraic doubleword shifts must set XER.CA when negative bits are
+			 * shifted out. The old native handlers forced CA=0 (a known simplification),
+			 * which is observably wrong for code that reads XER/record forms. Delegate to
+			 * the interpreter until exact shifted-out-bit logic is implemented. */
+			return false;
 
 		case 58: /* cntlzd rA,rS */
 			emit_load_gpr64(RTMP0, PPC_RS(op));
@@ -2425,28 +2413,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
 			return true;
 
-		case 84: /* ldarx rD,rA,rB — simplified as load */
-			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
-			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit_store_gpr64(RTMP1, rd);
-			return true;
-
-		case 214: /* stdcx. rS,rA,rB — simplified: always succeed */
-			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
-			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* save EA before 64-bit load clobbers RTMP0 */
-			emit_load_gpr64(RTMP1, PPC_RS(op));
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
-			/* CR0 = EQ (reserve succeeded) */
-			lazy_flush_cr0();
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);
-			emit_load_imm32(RTMP1, ~(0xF << 28)); emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_load_imm32(RTMP1, 0x20000000); emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			a64_str_w_imm(RTMP0, RSTATE, PPCR_CR);
-			return true;
+		case 84:  /* ldarx rD,rA,rB — EXCLUDED: reservation semantics not implemented */
+		case 214: /* stdcx. rS,rA,rB — EXCLUDED: reservation semantics not implemented */
+			/* The old native handlers repeated the 32-bit lwarx/stwcx. bug class: ldarx was
+			 * a plain load and stdcx. always succeeded. Guest atomic acquire/retry loops need
+			 * real reserve_valid/reserve_addr checks (and 64-bit store-on-success) before
+			 * these can be compiled safely. Delegate until exact helpers exist. */
+			return false;
 
 		case 4: /* tw — trap word */
 			/* In SheepShaver boot ROM paths these trap words are used as guard rails
