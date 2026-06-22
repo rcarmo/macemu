@@ -414,7 +414,7 @@ static void emit_store_gpr(int rs, int n) {
  * gpr_out(), then calls gpr_out_commit(). With RA on this operates directly on the
  * x21-x28 cache (no moves); with RA off it falls back to the scratch register + an
  * explicit struct LDR/STR, exactly matching emit_load_gpr/emit_store_gpr.
- * Smaller emitted blocks => the 4MB code cache holds more before filling (fewer
+ * Smaller emitted blocks => the 8MB code cache holds more before filling (fewer
  * cache-full flushes / recompiles) plus lower icache/issue pressure. */
 static int gpr_in(int n, int scratch) {
 	if (ra_enabled) return ra_load(n);
@@ -813,13 +813,13 @@ static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_k
 }
 
 static void emit_lsl_w_imm(int rd, int rn, uint32_t sh) {
-	if (sh == 0) { a64_mov_reg(rd, rn); return; }
+	if (sh == 0) { a64_mov_w_reg(rd, rn); return; }
 	emit_load_imm32(RTMP4, sh);
 	emit32(0x1AC02000 | (RTMP4 << 16) | (rn << 5) | rd); /* LSL Wd,Wn,Wm */
 }
 
 static void emit_lsr_w_imm(int rd, int rn, uint32_t sh) {
-	if (sh == 0) { a64_mov_reg(rd, rn); return; }
+	if (sh == 0) { a64_mov_w_reg(rd, rn); return; }
 	emit_load_imm32(RTMP4, sh);
 	emit32(0x1AC02400 | (RTMP4 << 16) | (rn << 5) | rd); /* LSR Wd,Wn,Wm */
 }
