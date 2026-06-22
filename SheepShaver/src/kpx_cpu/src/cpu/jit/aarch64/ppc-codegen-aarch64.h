@@ -70,6 +70,14 @@ static inline void a64_mov_reg(int rd, int rn) {
     emit32(0xAA0003E0 | (rn << 16) | rd);  /* ORR Xd, XZR, Xn */
 }
 
+/* MOV (register) Wd = Wn, zero-extending into Xd.
+ * Use for 32-bit PPC GPR values cached in host regs; using a64_mov_reg() here
+ * preserves stale upper 32 bits after handlers that intentionally use X ops
+ * (e.g. 64-bit shifts for PPC shift>=32 semantics). */
+static inline void a64_mov_w_reg(int rd, int rn) {
+    emit32(0x2A0003E0 | (rn << 16) | rd);  /* ORR Wd, WZR, Wn */
+}
+
 /* MOV immediate (16-bit, no shift) */
 static inline void a64_movz(int rd, uint16_t imm16, int shift) {
     emit32(0xD2800000 | (shift << 21) | ((uint32_t)imm16 << 5) | rd);

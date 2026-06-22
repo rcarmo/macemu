@@ -163,6 +163,13 @@ TEST_ORDER+=(shift_slw)
 TESTS[shift_srw]="38600100 38800004 7C652430"
 TEST_ORDER+=(shift_srw)
 
+# RA cache-width regression: slw uses a 64-bit host shift and can leave non-zero
+# upper bits in its X result. The 32-bit GPR cache must zero-extend on store/load;
+# otherwise the following srw by 32 reads stale upper bits and returns nonzero.
+# lis/ori r3,0x80000001; li r4,16; slw r5,r3,r4; li r4,32; srw r6,r5,r4 → r6=0
+TESTS[shift_ra_upper_clean]="3C608000 60630001 38800010 7C652030 38800020 7CA62430"
+TEST_ORDER+=(shift_ra_upper_clean)
+
 # --- Compare + branch ---
 # li r3,10; li r4,10; cmpw cr0,r3,r4; beq +8; li r5,1; b +8; li r5,2; nop
 TESTS[cmp_beq]="3860000a 3880000a 7C032000 41820008 38a00001 48000008 38a00002 60000000"

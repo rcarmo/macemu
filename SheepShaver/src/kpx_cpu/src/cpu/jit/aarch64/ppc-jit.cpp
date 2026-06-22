@@ -93,19 +93,20 @@ static int jit_bc_pool_next = 0;          /* next free pool entry */
  * handler to skip the full pool scan when the icbi'd line lies outside any
  * compiled code. Only ever widened (invalidated slots are not subtracted), so it
  * is always a superset of live block ranges -> never skips a real overlap. */
-static uint32_t jit_bc_span_min = 0xFFFFFFFFu;
-static uint32_t jit_bc_span_max = 0;
+static uint64_t jit_bc_span_min = UINT64_MAX;
+static uint64_t jit_bc_span_max = 0;
 
 static inline void jit_bc_span_add(uint32_t pc, int n_insns) {
-	uint32_t end = pc + (uint32_t)(n_insns > 0 ? n_insns : 1) * 4u;
-	if (pc < jit_bc_span_min) jit_bc_span_min = pc;
+	uint64_t start = (uint64_t)pc;
+	uint64_t end = start + (uint64_t)(n_insns > 0 ? n_insns : 1) * 4u;
+	if (start < jit_bc_span_min) jit_bc_span_min = start;
 	if (end > jit_bc_span_max) jit_bc_span_max = end;
 }
 
 static void jit_bc_flush(void) {
 	for (int i = 0; i < JIT_BC_BUCKETS; i++) jit_bc_heads[i] = -1;
 	jit_bc_pool_next = 0;
-	jit_bc_span_min = 0xFFFFFFFFu;
+	jit_bc_span_min = UINT64_MAX;
 	jit_bc_span_max = 0;
 	/* Also clear chain patch sites — all recorded epilogues are now invalid */
 	for (int i = 0; i < JIT_BC_BUCKETS; i++) chain_site_heads[i] = -1;
@@ -392,7 +393,7 @@ static void ra_flush_all(void) {
 static void emit_load_gpr(int rd, int n) {
 	if (ra_enabled) {
 		int host = ra_load(n);
-		if (rd != host) a64_mov_reg(rd, host);
+		if (rd != host) a64_mov_w_reg(rd, host);
 		return;
 	}
 	a64_ldr_w_imm(rd, RSTATE, PPCR_GPR(n));
@@ -401,7 +402,7 @@ static void emit_load_gpr(int rd, int n) {
 static void emit_store_gpr(int rs, int n) {
 	if (ra_enabled) {
 		int host = ra_store(n);
-		if (rs != host) a64_mov_reg(host, rs);
+		if (rs != host) a64_mov_w_reg(host, rs);
 		return;
 	}
 	a64_str_w_imm(rs, RSTATE, PPCR_GPR(n));
@@ -4204,18 +4205,19 @@ void ppc_jit_aarch64_flush(void)
  * so this introduces no new chain-coherency risk. */
 extern "C" void ppc_jit_aarch64_icbi(uint32_t ea)
 {
-	const uint32_t line_start = ea & ~31u;
-	const uint32_t line_end   = line_start + 32u;
+	const uint64_t line_start = (uint64_t)(ea & ~31u);
+	const uint64_t line_end   = line_start + 32u;
 	/* Fast reject: if the icbi'd line lies entirely outside the compiled-PC span,
 	 * no block can overlap it, so skip the O(pool) scan. The span is a conservative
-	 * superset of live block ranges, so this never misses a real overlap. */
+	 * superset of live block ranges, so this never misses a real overlap. Use
+	 * 64-bit endpoints so high 32-bit guest addresses cannot wrap line_end/bend. */
 	if (line_end <= jit_bc_span_min || line_start >= jit_bc_span_max)
 		return;
 	for (int i = 0; i < jit_bc_pool_next; i++) {
 		const struct jit_bc_entry *e = &jit_bc_pool[i];
 		if (!e->code) continue; /* invalidated slot */
-		const uint32_t bstart = e->pc;
-		const uint32_t bend   = e->pc + (uint32_t)e->n_insns * 4u;
+		const uint64_t bstart = (uint64_t)e->pc;
+		const uint64_t bend   = bstart + (uint64_t)e->n_insns * 4u;
 		/* overlap test: [bstart,bend) intersects [line_start,line_end) */
 		if (bstart < line_end && bend > line_start) {
 			ppc_jit_aarch64_flush();
