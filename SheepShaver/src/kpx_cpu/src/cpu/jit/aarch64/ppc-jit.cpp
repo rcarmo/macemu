@@ -1462,7 +1462,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		{
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSL Wd,Wn,Wm */
+			/* PPC slw uses a 6-bit shift amount (rB&0x3f); shift>=32 yields 0. ARM 32-bit
+			 * LSL masks to 5 bits (wrong for 32..63). Use a 64-bit shift of the zero-
+			 * extended operand: shifts of 32..63 push all bits out of the low word -> 0. */
+			emit32(0x9AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSLV Xd,Xn,Xm (64-bit) */
 			emit_store_gpr(RTMP0, ra);
 			return true;
 		}
@@ -1470,7 +1473,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		{
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit_load_gpr(RTMP1, rb);
-			emit32(0x1AC02400 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSR Wd,Wn,Wm */
+			/* PPC srw: 6-bit shift amount; shift>=32 yields 0. emit_load_gpr zero-extends
+			 * rS into the full X reg, so a 64-bit LSR of 32..63 produces 0 in the low word. */
+			emit32(0x9AC02400 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSRV Xd,Xn,Xm (64-bit) */
 			emit_store_gpr(RTMP0, ra);
 			return true;
 		}
