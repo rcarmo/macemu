@@ -4095,10 +4095,14 @@ bool ppc_jit_aarch64_compile(
 		/* stale/corrupt entry (code outside cache): drop it and recompile fresh */
 	}
 
-	if (!jit_cache_wp || jit_cache_wp >= jit_cache_end - 256) {
-		/* Code cache full — flush everything and start over.
-		 * This invalidates all cached blocks, which is safe because
-		 * the code they point to is about to be overwritten. */
+	if (!jit_cache_wp || jit_cache_wp >= jit_cache_end - 2048) {
+		/* Code cache full — flush everything and start over. The 2048-word (8KB)
+		 * margin guarantees a fresh block has room to compile before the
+		 * per-instruction overflow guard below can trip; the old 256-word margin
+		 * was far smaller than a large block's emission (guarded load/store
+		 * sequences, unrolled string ops), so a block compiled near the end
+		 * overflowed past jit_cache_end into the adjacent mapping -> executing it
+		 * ran off the cache into foreign bytes -> wild branch / SIGILL. */
 		fprintf(stderr, "PPC-JIT-A64: code cache full, flushing\n");
 		ppc_jit_aarch64_flush();
 		if (!jit_cache_wp) return false;
@@ -4137,6 +4141,19 @@ bool ppc_jit_aarch64_compile(
 		if (cur_pc < (uint32_t)(uintptr_t)ram ||
 		    cur_pc >= (uint32_t)(uintptr_t)ram + ramsize)
 			break;
+
+		/* Per-instruction overflow guard: never let a block's emitted code cross
+		 * jit_cache_end. A single PPC instruction can expand to a few KB (unrolled
+		 * string ops, guarded load/store). If we are within 1024 words (4KB) of the
+		 * end and have already compiled something, terminate the block here with a
+		 * clean epilogue; the remainder recompiles fresh after the next flush. */
+		if (n_compiled > 0 && jit_code_ptr >= jit_cache_end - 1024) {
+			lazy_flush_cr0();
+			emit_epilogue_with_pc(cur_pc);
+			emitted_exit = true;
+			complete = false;
+			break;
+		}
 
 		const uint8_t *p = ram + (cur_pc - (uint32_t)(uintptr_t)ram);
 		uint32_t op = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
