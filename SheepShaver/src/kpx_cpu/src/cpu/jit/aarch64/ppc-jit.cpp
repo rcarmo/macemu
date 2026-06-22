@@ -1467,6 +1467,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			 * extended operand: shifts of 32..63 push all bits out of the low word -> 0. */
 			emit32(0x9AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSLV Xd,Xn,Xm (64-bit) */
 			emit_store_gpr(RTMP0, ra);
+			if (op & 1) lazy_update_cr0(RTMP0); /* slw. updates CR0 (32-bit result; materialize uses CMP Wn) */
 			return true;
 		}
 		case 536: /* srw rA,rS,rB (shift right word) */
@@ -1477,6 +1478,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			 * rS into the full X reg, so a 64-bit LSR of 32..63 produces 0 in the low word. */
 			emit32(0x9AC02400 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSRV Xd,Xn,Xm (64-bit) */
 			emit_store_gpr(RTMP0, ra);
+			if (op & 1) lazy_update_cr0(RTMP0); /* srw. updates CR0 */
 			return true;
 		}
 		case 792: /* sraw rA,rS,rB (arithmetic shift right, set CA) */
