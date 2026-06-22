@@ -743,7 +743,7 @@ void powerpc_cpu::execute(uint32 entry)
 				static const char *jit_env = getenv("SS_USE_JIT");
 				static bool jit_enabled = !(jit_env && jit_env[0] == '0' && jit_env[1] == '\0');
 				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT=0 diagnostic override */
-				if (!jit_init_done) { ppc_jit_aarch64_init(4096); jit_init_done = true; }
+				if (!jit_init_done) { ppc_jit_aarch64_init(8192); jit_init_done = true; } /* 8MB JIT code cache */
 				ppc_jit_block jblk;
 				const uint8 *jit_region_base = NULL;
 				size_t jit_region_size = 0;
