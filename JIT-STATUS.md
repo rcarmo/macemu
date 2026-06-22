@@ -174,8 +174,12 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
 **JIT optlev=0:** ✅ Full boot, zero SEGVs
-**JIT optlev=2:** ✅ Full-JIT default. Strict 300s ROM/steady-state soak reached RAM execution with no `JIT_FALLBACK`, no `SEGV_SKIP`, no `JITBLOCKVERIFY`, no `op=8c4c`, and no `bad_pcp` markers (2026-06-13).
-**JIT harness:** ✅ 301/301 vectors pass (score=100)
+**JIT optlev=2:** ⚠️ Full-JIT default. Reaches an intermediate RAM-execution milestone (2026-06-13 strict soak: `DC[64460000] pc=00156f94`, no `JIT_FALLBACK`/`SEGV_SKIP`/`JITBLOCKVERIFY`/`op=8c4c`/`bad_pcp`), but pure all-native boot does **not** yet reach the desktop: it advances to `DC ~280-319M` then deterministically spins in the late-ROM `040ba0xx` SCC/serial state machine. **Root cause CONFIRMED (2026-06-22)** — see below.
+**JIT harness:** ✅ 301/301 vectors pass (score=100) when run on an idle box. Note: the harness spuriously fails (`INFRA missing REGDUMP`) under concurrent shared-box load from timeouts; individual vectors still pass.
+
+#### Current frontier (2026-06-22) — resource-map `d0` corruption (CONFIRMED)
+
+The Resource Manager reference-add offset-shift loop at `0x0401beb4` (`add.w d0,$6(a0); addq.w #8,a0; dbra d5`, in the same `0x0401bexx` routine as the historical Bug 16/17 fixes) shifts type-list offset fields by `d0` — 8 for type-adds, 12 for reference-adds. A non-perturbing in-block tracer (`B2_JIT_SNAP_PCS`) showed memory `d0` is correct (12) at the loop entry/dbra but corrupted to **8** at the shared loop body for reference-adds, because the `0x0401beb4` block is shared between the type-add direct entry (d0=8) and the ref-add DBF back-edge (d0=12) and the ref-add's `d0=12` is not propagated into the shared block's memory view. Result: every ref-add under-shifts subsequent offsets by 4 bytes → PACK offset divergence (`0x19a` vs interp `0x1b2`) → KMAP type-search lands wrong → `040ba0xx` spin. Fix target: DBF back-edge / shared-block `d0` coherency. Full analysis + tracer recipe + the critical `compemu_support_arm.cpp` include-rebuild gotcha are in `BasiliskII/docs/AARCH64_JIT_BRINGUP.md` ("Current frontier (2026-06-22)").
 
 See `BasiliskII/src/uae_cpu_2026/compiler/` for the 68K → AArch64 JIT.
 

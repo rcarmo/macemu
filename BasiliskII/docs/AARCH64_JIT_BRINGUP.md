@@ -17,6 +17,76 @@ The pure interpreter (`jit false`) and JIT-enabled interpreter/dispatch modes re
 
 The next work is no longer "make any JIT path reach boot progress". It is split into two evidence tracks: (1) system-level QA that repeatedly reaches and exercises a real Mac desktop with deterministic screenshots and hardware-adjacent coverage, and (2) measured performance work toward a 2× JIT throughput improvement and lower host CPU load without weakening the strict marker contract.
 
+## Current frontier (2026-06-22): resource-map ref-add offset-shift `d0` corruption
+
+> NOTE: the 2026-06-13 "reached RAM execution" result above is an intermediate boot
+> milestone (`DC[64460000]`), not a full desktop boot. With pure optlev=2 the all-native
+> boot advances to `DC ~280-319M` and then deterministically spins in the late ROM
+> `040ba0xx` SCC/serial state machine (`040b98e0-040ba140`). The interpreter boots past this
+> point; the all-native boot does not. This is the active blocker.
+
+### Confirmed root cause (continues the Bug 16/17 series in the same `0401bexx` routine)
+
+The Resource Manager reference-add / type-list relocation routine at `0x0401be82-0x0401bec0`
+(the same routine that contained Bug 16 `adda.w` self-alias at `0x0401be8a` and Bug 17 the
+`movem.l d0/a0-a1,-(a7)` store-temp alias at `0x0401bfd0`) has its offset-shift loop
+
+```
+0x0401beb4: add.w  d0,$6(a0)   ; type-list offset_field += d0
+0x0401beb8: addq.w #8,a0
+0x0401beba: dbra   d5,$0401beb4 ; DBF/DBRA (cc=1)
+```
+
+shift by `d0=8` for *type*-adds and `d0=12` for *reference*-adds (d0 set by `moveq #c` at
+`0x0401beaa`, preserved across the `bsr 0x0401bfd0` BlockMove via its `movem` save/restore).
+
+A non-perturbing in-block JIT register tracer (`B2_JIT_SNAP_PCS`, see env table) captured the
+architectural `regs.regs[0]` value at each loop PC for reference-adds (e.g. PACK, `d5=16`):
+
+| Loop PC | memory `d0` (ref-add) | correct? |
+|---|---|---|
+| `0x0401beb8` (loop entry) | 12 | ✅ |
+| `0x0401beba` (dbra) | 12 | ✅ |
+| `0x0401beb4` (loop body `add.w`) | **8** (always, never 12) | ❌ |
+
+So memory `d0` is corrupted `12 -> 8` across the DBF back-edge (`0x0401beba -> 0x0401beb4`),
+with no instruction writing `d0`. The `0x0401beb4` block is **shared** between the type-add
+path (direct entry, `d0=8`) and the ref-add path (back-edge from the `0x0401beb8` block,
+`d0=12`); the ref-add's `d0=12` is not propagated to the shared block's memory view. Every
+reference-add therefore shifts subsequent type-list offset fields by 8 instead of 12, so the
+type-list offsets end short (e.g. PACK's CDEF offset is `0x19a` all-native vs `0x1b2`
+interpreter), the later KMAP/resource type-search lands on the wrong entry, branches into the
+`040ba0xx` SCC state machine, and spins. Fix target: DBF back-edge / shared-block `d0`
+coherency reconciliation (`match_states` / block-link incoming register state). The per-op
+native codegen of the `add.w`/`dbra` is itself correct (verified by objdump); the bug is in
+cross-block register/memory state into the shared loop-body block.
+
+### Build gotcha (IMPORTANT)
+
+`compiler/compemu_support_arm.cpp` is `#include`d by `compiler/compemu_support.cpp` (it is
+NOT a separately-compiled translation unit). GNU make does not track this include
+dependency, so editing `compemu_support_arm.cpp` does **not** rebuild `obj/compemu_support.o`
+and the binary silently keeps stale JIT code. Always force the rebuild:
+
+```bash
+touch  BasiliskII/src/uae_cpu_2026/compiler/compemu_support.cpp
+rm -f  BasiliskII/src/Unix/obj/compemu_support.o
+make -j$(nproc)
+```
+
+This gotcha silently no-op'd several env-gated diagnostics during investigation; the
+`jit-test/run.sh` plain `make` is also affected. Also note `jit_pc_in_env_ranges()` only
+recognizes a hardcoded set of `B2_JIT_*_PCS` env names — a new diagnostic env name must be
+added to that cache array or it parses as empty (always-false).
+
+### jit-test under shared-box load
+
+The `jit-test/run.sh` harness launches ~604 short SDL-on-`:99` emulator runs with 30s
+per-test timeouts. Under concurrent load (e.g. a sibling SheepShaver build/boot on the same
+box) it spuriously reports many `INFRA missing REGDUMP` failures purely from timeouts —
+individual vectors still pass when run alone. Run the opcode harness only when the box is
+idle before trusting the score.
+
 ### QA status
 
 The active QA scaffold is documented in:
@@ -822,6 +892,8 @@ Added `--enable-aarch64-jit-experimental` to the autoconf build system, enabling
 | `B2_JIT_MAX_OPTLEV=N` | Cap maximum optimization level |
 | `B2_JIT_FLUSH_EACH_OP=1` | Diagnostic: canonicalize guest state after every compiled opcode |
 | `B2_JIT_FLUSH_OP_PCS=pc[-pc],...` | Diagnostic: canonicalize guest state only after selected compiled opcode PCs |
+| `B2_JIT_SNAP_PCS=pc[-pc],...` | Diagnostic: NON-perturbing in-block register/memory snapshot+log at selected compiled opcode PCs (emits `jit_emit_flush_delta_snapshot()` + log call WITHOUT `flush()`/`init_comp()`, so it captures real register vs `regs.regs[]` values even in direct-chained loops). Used to confirm the 2026-06-22 `d0`-corruption root cause. Requires the env name to be present in the `jit_pc_in_env_ranges()` cache array. |
+| `B2_JIT_FORCE_OPTLEV0_PCS=pc[-pc],...` | Diagnostic: force blocks whose entry PC is in range to optlev 0 (interpreted) |
 
 ### Runtime Verification Framework
 
