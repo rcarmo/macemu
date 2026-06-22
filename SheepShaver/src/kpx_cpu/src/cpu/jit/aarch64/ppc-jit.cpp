@@ -642,14 +642,18 @@ static void emit_branch_if_ea_in_range(int ea_reg, uint32_t start, uint32_t end_
 }
 
 static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, bool allow_rom, bool store, uint32_t **valid_locs, int *valid_count) {
-	const uint32_t lowmem_end = 0x3000U >= access_size ? (0x3000U - access_size + 1) : 0;
-	if (lowmem_end)
-		emit_branch_if_ea_in_range(ea_reg, 0, lowmem_end, valid_locs, valid_count);
-
+	/* RAM is by far the most frequently accessed region, so test it FIRST: the hot
+	 * path then matches on the first comparison. Region order does not affect the
+	 * valid/invalid outcome (membership is the union of all ranges), only how many
+	 * comparisons execute before a hit, so this reordering is purely a speed win. */
 	const uint32_t ram_start = RAMBase;
 	const uint32_t ram_end = RAMBase + RAMSize;
 	if (ram_end > ram_start && ram_end >= access_size)
 		emit_branch_if_ea_in_range(ea_reg, ram_start, ram_end - access_size + 1, valid_locs, valid_count);
+
+	const uint32_t lowmem_end = 0x3000U >= access_size ? (0x3000U - access_size + 1) : 0;
+	if (lowmem_end)
+		emit_branch_if_ea_in_range(ea_reg, 0, lowmem_end, valid_locs, valid_count);
 
 	if (allow_rom) {
 		const uint32_t rom_start = ROMBase;
@@ -720,16 +724,18 @@ static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kin
 	int valid_count = 0;
 	uint32_t *done = NULL;
 	uint32_t access_size = (load_kind == 1) ? 1 : (load_kind == 4 ? 4 : 2);
-	/* dst holds the current (stale) value; this is also arg1 (old_value) for the helper. */
-	emit_load_gpr(dst_reg, ppc_dst_reg);
 	emit_direct_access_valid_check(ea_reg, access_size, true, false, valid_locs, &valid_count);
 	/* INVALID fast-path branch: EA is outside the statically-enumerated 1:1 regions.
+	 * The stale destination value is arg1 (old_value) for the helper, but it is ONLY
+	 * needed on this cold path: on the valid path the inline LDR below overwrites dst,
+	 * so loading it up-front was dead work on the hot path. Load it here instead.
 	 * Instead of silently leaving the stale destination (which skipped real loads of
 	 * dynamically-mapped CFM arenas -> FATAL-0x39 stale-CTR bctrl), call the safe helper:
 	 * it reads genuinely-mapped guest memory like the interpreter (mincore-probed) and
 	 * leaves the old value only for truly-unmapped MMIO. Load-bearing blocks run with RA
 	 * disabled (block_allows_register_allocation rejects guest-memory opcodes), so guest
 	 * state lives in RSTATE(x20, callee-saved) and the BLR cannot corrupt it. */
+	emit_load_gpr(dst_reg, ppc_dst_reg);                     /* x1 = old_value (helper arg1) */
 	emit_load_imm32(RTMP2, (int32_t)load_kind);              /* x2 = load_kind */
 	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_load);
 	emit32(0xD63F0000 | (RTMP4 << 5));                       /* BLR x4 (ea=x0, old=x1, kind=x2) */
