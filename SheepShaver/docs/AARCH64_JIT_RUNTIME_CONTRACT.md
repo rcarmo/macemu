@@ -411,7 +411,7 @@ barrier. Not implemented in the current JIT.
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
 | 3 | Helper calls are semantic barriers | ✅ Guarded load/store and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x28 + RA barrier keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code` and cache invalidation clears patch sites. |
-| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 240/240 opcode harness green. `bcl` LR update fixed (2026-05). Full parity for all simple BO patterns. |
+| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 240/240 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs). `bcl` LR update fixed (2026-05). |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 

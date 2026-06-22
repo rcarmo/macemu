@@ -17,14 +17,26 @@ A JIT change is good if it improves or preserves these workloads.
 ```bash
 cd /workspace/projects/macemu/SheepShaver
 SS_USE_JIT=1 make test-opcodes
+# or directly: bash jit-test/run.sh
 ```
 
 **Pass condition**:
-- All harness vectors produce identical REGDUMP output for interpreter and JIT modes
-- No SIGSEGV during JIT execution of test vectors
-- Compiler test mode: `METRIC pass=N fail=0`
+- Each vector is run in interpreter mode (`SS_USE_JIT=0`) and production-JIT mode
+  (`SS_USE_JIT=1`); the two REGDUMPs must be identical
+- Production-JIT uses the real dispatch loop, so it re-dispatches through branches/loops
+  exactly like the interpreter (the single-block `SS_TEST_JIT` path stops at the first
+  branch terminator and is only used for the trailing single-block precision vectors)
+- `METRIC pass=N fail=0`, `score=100`
 
-**Status**: ✅ Maintained. Run before and after any opcode handler change.
+**Important**: until 2026-06-22 the main loop ran each vector twice in the default
+(JIT) mode and compared the two runs — a JIT-vs-JIT *determinism* check that passed any
+deterministically-wrong codegen. Converting it to interp-vs-production-JIT *equivalence*
+immediately surfaced four masked codegen bugs (nand always returned 0xFFFFFFFF; addme/
+subfme double-counted carry; divw diverged on architecturally-undefined inputs), now
+fixed. Always run this (the real equivalence form) before and after any opcode handler
+or codegen change.
+
+**Status**: ✅ 240/240 interp-vs-production-JIT equivalence.
 
 ---
 
