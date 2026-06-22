@@ -505,6 +505,8 @@ extern void bts_l_rr(RW4 d, RR4 s);
 extern void setcc(W1 d, IMM cc);
 extern void setcc_for_cntzero(RR4 cnt, RR4 data, int size);
 extern void cmov_l_rr(RW4 d, RR4 s, IMM cc);
+extern int jit_value_lock(int r);
+extern void jit_value_unlock(int hr);
 extern void mov_l_rR(W4 d, RR4 s, IMM offset);
 extern void mov_w_rR(W2 d, RR4 s, IMM offset);
 extern void mov_l_Rr(RR4 d, RR4 s, IMM offset);

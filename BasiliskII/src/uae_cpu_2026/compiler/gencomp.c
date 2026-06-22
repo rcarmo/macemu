@@ -1868,9 +1868,11 @@ gen_opcode (unsigned int opcode)
 	    break;
 	 default: /* It goes to memory, not a register */
 	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	    comprintf("\tint __srclk=jit_value_lock(src);\n");
 	    genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
 	    genflags (flag_logical, curi->size, "src", "", "");
 	    genastore ("src", curi->dmode, "dstreg", curi->size, "dst");
+	    comprintf("\tjit_value_unlock(__srclk);\n");
 	    break;
 	}
 	break;

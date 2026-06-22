@@ -448,6 +448,39 @@ void cmov_l_rr(RW4 d, RR4 s, uae_s32 cc)
 	unlock2(d);
 }
 
+/* jit_value_lock / jit_value_unlock: pin a just-fetched source value's host
+   register across a following destination-EA computation so that the dst-EA
+   allocation cannot clobber the live source value. Used by i_MOVE-to-memory:
+   under opt2 register pressure the destination EA (mov_l_rr(dsta,An)+lea) could
+   otherwise be allocated into the SAME host register holding the source value,
+   making the inline store write the destination ADDRESS instead of the value
+   (the self-address table that spun the 0403c19c resource-map compaction).
+   g_jvlock_reg/active are read by writereg() to also defeat its isinreg()
+   fast-path reuse of the pinned register (which would bypass alloc_reg_hinted's
+   lock check via make_exclusive eviction). */
+int g_jvlock_reg=-1;
+int g_jvlock_active=0;
+int jit_value_lock(int r)
+{
+	g_jvlock_active = 1;
+	if (isinreg(r)) {
+		int hr = live.state[r].realreg;
+		setlock(hr);
+		g_jvlock_reg = hr;
+		return hr;
+	}
+	/* Not yet in a register (defensive): materialize and lock it. */
+	int hr = readreg(r);
+	g_jvlock_reg = hr;
+	return hr;
+}
+void jit_value_unlock(int hr)
+{
+	g_jvlock_active = 0;
+	g_jvlock_reg = -1;
+	if (hr >= 0) unlock2(hr);
+}
+
 void mov_l_rR(W4 d, RR4 s, uae_s32 offset)
 {
 	d = writereg(d);

@@ -3586,9 +3586,24 @@ static int readreg_specific(int r, int spec)
  * OUTPUT
  * - hard (physical, x86 here) register allocated to virtual register r
  */
+extern int g_jvlock_reg; extern int g_jvlock_active;
 static int writereg(int r)
 {
     int answer = -1;
+
+    /* If r is stale-associated to the host register currently pinned by
+       jit_value_lock (a move's source value held across the destination-EA
+       computation), the isinreg fast-path below would reuse that register and
+       make_exclusive would EVICT the locked value -- so the store would write
+       the destination ADDRESS instead of the value (the self-address
+       corruption that spun 0403c19c). Drop the stale association first so a
+       fresh, non-conflicting register is allocated. r is a write target, so
+       its current contents are irrelevant. Scoped strictly to the active
+       jit_value_lock pin so normal transient operation locks are unaffected. */
+    if (g_jvlock_active && g_jvlock_reg >= 0 &&
+        isinreg(r) && live.state[r].realreg == g_jvlock_reg) {
+        disassociate(r);
+    }
 
     make_exclusive(r, 0);
     if (isinreg(r)) {
