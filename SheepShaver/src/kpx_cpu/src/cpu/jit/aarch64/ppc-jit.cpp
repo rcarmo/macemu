@@ -25,6 +25,8 @@ extern "C" void sheepshaver_jit_execute_emul_op(void *regs, uint32_t emul_op, ui
 extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32_t selector, uint32_t next_pc);
 extern "C" uint32_t sheepshaver_jit_safe_lwz(uint32_t ea, uint32_t old_value);
 extern "C" void sheepshaver_jit_safe_stw(uint32_t ea, uint32_t value);
+extern "C" uint32_t sheepshaver_jit_safe_load(uint32_t ea, uint32_t old_value, uint32_t load_kind);
+extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t store_kind);
 /* Frame buffer base/size helpers (sheepshaver_glue.cpp) for the D-form load/store
  * valid-check: the framebuffer is 1:1-mapped guest memory (VMBaseDiff==0) like RAM/ROM. */
 extern "C" uint32_t sheepshaver_jit_fb_base(void);
@@ -699,11 +701,21 @@ static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kin
 	int valid_count = 0;
 	uint32_t *done = NULL;
 	uint32_t access_size = (load_kind == 1) ? 1 : (load_kind == 4 ? 4 : 2);
-	/* Invalid load: mirror SheepShaver's active SIGSEGV skip behavior for
-	 * EMULATED_PPC by leaving the destination register unchanged. */
+	/* dst holds the current (stale) value; this is also arg1 (old_value) for the helper. */
 	emit_load_gpr(dst_reg, ppc_dst_reg);
 	emit_direct_access_valid_check(ea_reg, access_size, true, false, valid_locs, &valid_count);
-	done = jit_code_ptr; emit32(0); /* B done */
+	/* INVALID fast-path branch: EA is outside the statically-enumerated 1:1 regions.
+	 * Instead of silently leaving the stale destination (which skipped real loads of
+	 * dynamically-mapped CFM arenas -> FATAL-0x39 stale-CTR bctrl), call the safe helper:
+	 * it reads genuinely-mapped guest memory like the interpreter (mincore-probed) and
+	 * leaves the old value only for truly-unmapped MMIO. Load-bearing blocks run with RA
+	 * disabled (block_allows_register_allocation rejects guest-memory opcodes), so guest
+	 * state lives in RSTATE(x20, callee-saved) and the BLR cannot corrupt it. */
+	emit_load_imm32(RTMP2, (int32_t)load_kind);              /* x2 = load_kind */
+	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_load);
+	emit32(0xD63F0000 | (RTMP4 << 5));                       /* BLR x4 (ea=x0, old=x1, kind=x2) */
+	if (dst_reg != RTMP0) a64_mov_reg(dst_reg, RTMP0);       /* result -> dst */
+	done = jit_code_ptr; emit32(0); /* B done (skip the inline LDR) */
 	for (int i = 0; i < valid_count; i++)
 		patch_cond_to_here(valid_locs[i], 3);
 	switch (load_kind) {
@@ -721,7 +733,13 @@ static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_k
 	uint32_t *done = NULL;
 	uint32_t access_size = (store_kind == 1) ? 1 : (store_kind == 4 ? 4 : 2);
 	emit_direct_access_valid_check(ea_reg, access_size, false, true, valid_locs, &valid_count);
-	done = jit_code_ptr; emit32(0); /* B done for invalid */
+	/* INVALID fast-path branch: route to the safe helper (see load above) so stores into
+	 * dynamically-mapped guest arenas are committed like the interpreter; truly-unmapped
+	 * MMIO is still dropped. ea=x0(ea_reg), value=x1(val_reg), kind=x2. */
+	emit_load_imm32(RTMP2, (int32_t)store_kind);            /* x2 = store_kind */
+	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_store);
+	emit32(0xD63F0000 | (RTMP4 << 5));                      /* BLR x4 */
+	done = jit_code_ptr; emit32(0); /* B done (skip the inline STR) */
 	for (int i = 0; i < valid_count; i++)
 		patch_cond_to_here(valid_locs[i], 3);
 	switch (store_kind) {

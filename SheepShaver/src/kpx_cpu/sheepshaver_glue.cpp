@@ -825,6 +825,30 @@ extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector_an
 		ppc_cpu->pc() += 4;                 /* else fall through to pc+4 */
 }
 
+/* Runtime check: is the host page backing guest EA actually mapped? In REAL/DIRECT
+ * addressing the guest address is a 1:1 host pointer, so mincore() on the page tells us
+ * whether it is backed (mapped) or not. Used as a fallback for the JIT load/store slow
+ * path so dynamically-mapped guest arenas (CFM fragment containers above ROM) are read
+ * like the interpreter, while genuinely-unmapped MMIO is still skipped. Small
+ * direct-mapped cache keeps the hot CFM region from doing a syscall per access. */
+static bool sheepshaver_jit_page_mapped(uint32 ea)
+{
+	static uint32 psize = 0;
+	if (!psize) psize = (uint32)getpagesize();
+	uint32 page = ea & ~(psize - 1);
+	static uint32 cache[2048];
+	static bool cinit = false;
+	if (!cinit) { for (int i = 0; i < 2048; i++) cache[i] = 0xffffffffu; cinit = true; }
+	uint32 slot = (page / psize) & 2047;
+	if (cache[slot] == page) return true;
+	unsigned char v = 0;
+	if (mincore((void *)(uintptr_t)Mac2HostAddr(page), psize, &v) == 0) {
+		cache[slot] = page;
+		return true;
+	}
+	return false;
+}
+
 static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
 {
 	if (ea + 3 < ea)
@@ -869,16 +893,61 @@ static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
 
 extern "C" uint32 sheepshaver_jit_safe_lwz(uint32 ea, uint32 old_value)
 {
-	if (!sheepshaver_jit_word_access_valid(ea, false))
-		return old_value;
+	if (!sheepshaver_jit_word_access_valid(ea, false)) {
+		/* Not in the statically-enumerated fast set. The guest also maps large
+		 * regions dynamically (CFM fragment containers / import TVectors live in
+		 * an anonymous rw arena above ROM, e.g. 0x1d6xxxxx). Those are genuine,
+		 * 1:1-mapped guest memory the interpreter reads directly; the JIT must too,
+		 * or D-form/indexed loads return the stale destination (the FATAL-0x39 root:
+		 * a skipped lwz of a CFM TVector code pointer left a stale CTR and bctrl
+		 * branched into data). Probe the page: if it is actually mapped, read it like
+		 * the interpreter; if genuinely unmapped (MMIO/NuBus), keep the SIGSEGV-skip
+		 * semantics (leave old value) so we never fault the helper or re-enter. */
+		if (!sheepshaver_jit_page_mapped(ea))
+			return old_value;
+	}
 	return ReadMacInt32(ea);
 }
 
 extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value)
 {
-	if (!sheepshaver_jit_word_access_valid(ea, true))
-		return;
+	if (!sheepshaver_jit_word_access_valid(ea, true)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return;
+	}
 	WriteMacInt32(ea, value);
+}
+
+/* Generic sized variants for the D-form guarded fast-path invalid branch.
+ * load_kind/store_kind: 1=byte, 2=half(zero-ext), 3=half(sign-ext), 4=word.
+ * Same mapped-page semantics as safe_lwz/safe_stw: read/write genuinely mapped
+ * guest memory (incl. dynamically-mapped CFM arenas) like the interpreter; leave
+ * the destination/skip the store for genuinely-unmapped MMIO. */
+extern "C" uint32 sheepshaver_jit_safe_load(uint32 ea, uint32 old_value, uint32 load_kind)
+{
+	if (!sheepshaver_jit_word_access_valid(ea, false)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return old_value;
+	}
+	switch (load_kind) {
+	case 1: return ReadMacInt8(ea);
+	case 2: return ReadMacInt16(ea);
+	case 3: return (uint32)(int32)(int16)ReadMacInt16(ea);
+	default: return ReadMacInt32(ea);
+	}
+}
+
+extern "C" void sheepshaver_jit_safe_store(uint32 ea, uint32 value, uint32 store_kind)
+{
+	if (!sheepshaver_jit_word_access_valid(ea, true)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return;
+	}
+	switch (store_kind) {
+	case 1: WriteMacInt8(ea, value); break;
+	case 2: WriteMacInt16(ea, value); break;
+	default: WriteMacInt32(ea, value); break;
+	}
 }
 
 /* Frame buffer extent for the JIT D-form load/store valid-check (emit_direct_access_valid_check
