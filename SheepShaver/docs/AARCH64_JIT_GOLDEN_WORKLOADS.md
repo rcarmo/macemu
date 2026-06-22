@@ -36,7 +36,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 240/240 interp-vs-production-JIT equivalence.
+**Status**: ✅ 241/241 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, a regression for RA-cache upper-32 canonicalisation after 64-bit host shifts).
 
 ---
 
@@ -195,7 +195,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 240/240 + strict-JIT desktop holds
+    barrier; harness 241/241 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 

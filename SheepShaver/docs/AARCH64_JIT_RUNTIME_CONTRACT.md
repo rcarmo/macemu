@@ -151,7 +151,9 @@ and at every RA barrier (immediately before a guest-memory access).
 
 **Contract**: At every block boundary, and at every guest-memory access within an RA-enabled
 block, all GPRs are architectural. Between those points an RA-enabled block may hold GPRs only
-in x21–x28 (callee-saved, so preserved across the guarded-access helper BLR).
+in x21–x28 (callee-saved, so preserved across the guarded-access helper BLR). Cached 32-bit PPC
+GPR values must be canonical zero-extended in their host X register; all RA scratch/cache moves
+for low GPRs therefore use a W-register move (`a64_mov_w_reg`), not an X move.
 
 ---
 
@@ -294,8 +296,9 @@ barrier-and-helper framework.
 
 **Status**: ✅ IMPLEMENTED (Phase 4b, 2026-04).
 
-The JIT uses a hash + chaining block cache: 8192 buckets with 16384 pool entries.
-Lookup by `uint32_t ppc_pc` before compilation; on hit, execute cached code directly.
+The JIT uses a hash + chaining block cache: 8192 buckets with 16384 pool entries and an
+8 MB production code cache (`ppc_jit_aarch64_init(8192)`). Lookup by `uint32_t ppc_pc`
+before compilation; on hit, execute cached code directly.
 Invalidation: per-PC via `jit_bc_invalidate_pc()`; global flush via `jit_bc_flush()`
 called on cache overflow. **icbi** is handled by `ppc_jit_aarch64_icbi(ea)`: it full-
 flushes only when a live compiled block's guest range `[pc, pc+n_insns*4)` overlaps the
@@ -305,11 +308,12 @@ insert, reset on flush) lets the handler fast-reject the common no-overlap icbi 
 scanning the block pool. This replaced an unconditional full flush on every icbi, which
 measured ~3550 full cache wipes per desktop boot (each wiping a near-empty cache, so the
 working set was recompiled thousands of times) — the dominant host-CPU sink. **isync** is a
-block terminator only (serialization barrier; no cache invalidation). Post-fix a desktop
-boot does ~54 (healthy, cache-full) flushes instead of ~3600.
+block terminator only (serialization barrier; no cache invalidation). The production cache was
+then increased from 4 MB to 8 MB, reducing cache-full flushes during a desktop boot from ~45
+to ~2 while staying far below the 384 MB host-RSS budget.
 
-Previous concern (now resolved): compiled blocks accumulated without reuse; the 4MB
-code cache would fill and all subsequent blocks fell back to the interpreter.
+Previous concern (now resolved): compiled blocks accumulated without reuse; the code cache
+would fill and all subsequent blocks fell back to the interpreter.
 
 ---
 
@@ -411,7 +415,7 @@ barrier. Not implemented in the current JIT.
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
 | 3 | Helper calls are semantic barriers | ✅ Guarded load/store and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x28 + RA barrier keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code` and cache invalidation clears patch sites. |
-| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 240/240 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs). `bcl` LR update fixed (2026-05). |
+| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 241/241 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added `shift_ra_upper_clean` for RA-cache upper-32 canonicalisation). `bcl` LR update fixed (2026-05). |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 

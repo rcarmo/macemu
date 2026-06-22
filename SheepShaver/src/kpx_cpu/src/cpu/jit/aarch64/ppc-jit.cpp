@@ -769,9 +769,9 @@ static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kin
 	 * Instead of silently leaving the stale destination (which skipped real loads of
 	 * dynamically-mapped CFM arenas -> FATAL-0x39 stale-CTR bctrl), call the safe helper:
 	 * it reads genuinely-mapped guest memory like the interpreter (mincore-probed) and
-	 * leaves the old value only for truly-unmapped MMIO. Load-bearing blocks run with RA
-	 * disabled (block_allows_register_allocation rejects guest-memory opcodes), so guest
-	 * state lives in RSTATE(x20, callee-saved) and the BLR cannot corrupt it. */
+	 * leaves the old value only for truly-unmapped MMIO. RA-enabled memory blocks emit a
+	 * flush+reset barrier before every guest-memory instruction, so the register struct is
+	 * authoritative across this helper call; x21-x28 are callee-saved by the AArch64 ABI. */
 	emit_load_gpr(dst_reg, ppc_dst_reg);                     /* x1 = old_value (helper arg1) */
 	emit_load_imm32(RTMP2, (int32_t)load_kind);              /* x2 = load_kind */
 	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_load);
