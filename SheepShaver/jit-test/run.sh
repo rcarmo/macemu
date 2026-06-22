@@ -2,6 +2,13 @@
 # SheepShaver PPC opcode equivalence test harness
 # Phase 1: interpreter determinism validation
 # Phase 2+: interpreter vs JIT comparison
+#
+# Each vector is run in interpreter mode (SS_USE_JIT=0) and production-JIT mode
+# (SS_USE_JIT=1) and their REGDUMPs are compared. Production-JIT mode uses the
+# real dispatch loop, so it re-dispatches through branches/loops exactly like the
+# interpreter (unlike the single-block SS_TEST_JIT path, which stops at the first
+# branch terminator). This makes every vector a genuine interp-vs-JIT codegen
+# equivalence check rather than a JIT-vs-JIT determinism check.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -100,6 +107,8 @@ EOF
         mode_env=(SS_USE_JIT=0)
     elif [ "$mode" = "jit" ]; then
         mode_env=(SS_TEST_JIT=1)
+    elif [ "$mode" = "prodjit" ]; then
+        mode_env=(SS_USE_JIT=1)
     fi
     env SDL_VIDEODRIVER=x11 DISPLAY=:99 HOME="$td" \
       SS_TEST_HEX="$hex" \
@@ -1202,9 +1211,11 @@ for name in "${TEST_ORDER[@]}"; do
     out1="$RUN_DIR/${name}-run1.txt"
     out2="$RUN_DIR/${name}-run2.txt"
 
-    # Run twice for determinism check (Phase 1)
-    run_ppc_test "$name" "$hex" "$out1"
-    run_ppc_test "${name}_r2" "$hex" "$out2"
+    # Interp vs production-JIT equivalence (Phase 2). Production-JIT re-dispatches
+    # through branches/loops like the interpreter, so this is a real codegen
+    # equivalence check across all vectors, not a JIT-vs-JIT determinism check.
+    run_ppc_test "$name" "$hex" "$out1" interp
+    run_ppc_test "${name}_r2" "$hex" "$out2" prodjit
 
     if [ -s "$out1" ] && [ -s "$out2" ]; then
         if diff -q "$out1" "$out2" >/dev/null 2>&1; then
