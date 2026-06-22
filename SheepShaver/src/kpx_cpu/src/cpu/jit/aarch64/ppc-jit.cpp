@@ -1137,21 +1137,22 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rb = (op >> 11) & 0x1F;
 		uint32_t mb = (op >> 6) & 0x1F;
 		uint32_t me = (op >> 1) & 0x1F;
-		emit_load_gpr(RTMP0, rs);
-		emit_load_gpr(RTMP1, rb);
-		/* Rotate left by rB: ROR Wd,Wn,Wm with negated count */
-		emit32(0x4B0003E0 | (RTMP1 << 16) | RTMP1); /* NEG Wd,Wm (32-count) */
-		emit32(0x1AC02C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ROR Wd,Wn,Wm */
+		int s = gpr_in(rs, RTMP0);
+		int shc = gpr_in(rb, RTMP1);
+		int d = gpr_out(ra, RTMP0);
+		/* Rotate left by rB: NEG the count into SCRATCH (never the cached rB), then ROR */
+		emit32(0x4B0003E0 | (shc << 16) | RTMP1); /* NEG RTMP1, shc (32-count) */
+		emit32(0x1AC02C00 | (RTMP1 << 16) | (s << 5) | d); /* ROR d, s, RTMP1 */
 		uint32_t mask = 0;
 		if (mb <= me) { for (uint32_t i = mb; i <= me; i++) mask |= (0x80000000U >> i); }
 		else { for (uint32_t i = 0; i <= me; i++) mask |= (0x80000000U >> i);
 		       for (uint32_t i = mb; i <= 31; i++) mask |= (0x80000000U >> i); }
 		if (mask != 0xFFFFFFFF) {
 			emit_load_imm32(RTMP1, (int32_t)mask);
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
+			emit32(0x0A000000 | (RTMP1 << 16) | (d << 5) | d); /* AND d, d, mask */
 		}
-		emit_store_gpr(RTMP0, ra);
-		if (op & 1) lazy_update_cr0(RTMP0);
+		gpr_out_commit(ra, d);
+		if (op & 1) lazy_update_cr0(d);
 		return true;
 	}
 
@@ -1248,9 +1249,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		{
 			uint32_t crd = (op >> 23) & 0x7;
 			lazy_flush_cr0();
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | 0x1F); /* SUBS WZR,Wn,Wm */
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			emit32(0x6B000000 | (s2 << 16) | (s1 << 5) | 0x1F); /* SUBS WZR,Wn,Wm */
 			/* Build CR field with CSEL: signed LT/GT/EQ */
 			a64_movz(RTMP0, 0, 0);
 			emit_load_imm32(RTMP1, 8); /* LT */
@@ -1335,29 +1336,41 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 		}
 		case 104: /* neg / neg. */
-			emit_load_gpr(RTMP0, ra);
-			emit32(0x4B0003E0 | (RTMP0 << 16) | RTMP0);
-			emit_store_gpr(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s = gpr_in(ra, RTMP0);
+			int d = gpr_out(rd, RTMP0);
+			emit32(0x4B0003E0 | (s << 16) | d); /* NEG d, s = SUB d, WZR, s */
+			gpr_out_commit(rd, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 26: /* cntlzw */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit32(0x5AC01000 | (RTMP0 << 5) | RTMP0); /* CLZ Wd, Wn */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s = gpr_in(PPC_RS(op), RTMP0);
+			int d = gpr_out(ra, RTMP0);
+			emit32(0x5AC01000 | (s << 5) | d); /* CLZ Wd, Wn */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 922: /* extsh */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit32(0x13003C00 | (RTMP0 << 5) | RTMP0); /* SXTH Wd, Wn */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s = gpr_in(PPC_RS(op), RTMP0);
+			int d = gpr_out(ra, RTMP0);
+			emit32(0x13003C00 | (s << 5) | d); /* SXTH Wd, Wn */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 954: /* extsb */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit32(0x13001C00 | (RTMP0 << 5) | RTMP0); /* SXTB Wd, Wn */
-			emit_store_gpr(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s = gpr_in(PPC_RS(op), RTMP0);
+			int d = gpr_out(ra, RTMP0);
+			emit32(0x13001C00 | (s << 5) | d); /* SXTB Wd, Wn */
+			gpr_out_commit(ra, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 747: /* mullwo / mullwo. (OE bit set) */
 			emit_load_gpr(RTMP0, ra);
 			emit_load_gpr(RTMP1, rb);
@@ -1635,9 +1648,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		{
 			uint32_t crd = (op >> 23) & 0x7;
 			lazy_flush_cr0();
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | 0x1F);
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			emit32(0x6B000000 | (s2 << 16) | (s1 << 5) | 0x1F);
 			a64_movz(RTMP2, 0, 0);
 			emit_load_imm32(RTMP0, 8);
 			emit32(0x1A800000 | (RTMP2 << 16) | (0x3 << 12) | (RTMP0 << 5) | RTMP2); /* CC=LT */
@@ -2523,12 +2536,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		uint32_t sh = (op >> 11) & 0x1F;
 		uint32_t mb = (op >> 6) & 0x1F;
 		uint32_t me = (op >> 1) & 0x1F;
-		emit_load_gpr(RTMP0, rs);
-		/* Rotate left by SH: ROR Wd,Wn,#(32-SH) */
+		int s = gpr_in(rs, RTMP0);
+		int d = gpr_out(ra, RTMP0);
+		int cur = s;
+		/* Rotate left by SH: EXTR d,s,s,#(32-SH) (writes d, leaves cached rS intact) */
 		if (sh) {
 			uint32_t ror_amt = (32 - sh) & 0x1F;
-			/* EXTR Wd, Wn, Wn, #ror_amt = rotate right */
-			emit32(0x13800000 | (RTMP0 << 16) | (ror_amt << 10) | (RTMP0 << 5) | RTMP0);
+			emit32(0x13800000 | (s << 16) | (ror_amt << 10) | (s << 5) | d);
+			cur = d;
 		}
 		/* Apply mask MB..ME */
 		uint32_t mask = 0;
@@ -2540,10 +2555,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 		if (mask != 0xFFFFFFFF) {
 			emit_load_imm32(RTMP1, (int32_t)mask);
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND */
+			emit32(0x0A000000 | (RTMP1 << 16) | (cur << 5) | d); /* AND d, cur, mask */
+			cur = d;
 		}
-		emit_store_gpr(RTMP0, ra);
-		if (op & 1) lazy_update_cr0(RTMP0); /* rlwinm. updates CR0 */
+		if (cur != d) emit32(0x2A0003E0 | (cur << 16) | d); /* MOV d, cur (sh==0 && mask==FFFF copy) */
+		gpr_out_commit(ra, d);
+		if (op & 1) lazy_update_cr0(d); /* rlwinm. updates CR0 */
 		return true;
 	}
 
@@ -2619,10 +2636,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		uint32_t crd = (op >> 23) & 0x7;
 		ra = PPC_RA(op); uimm = PPC_UIMM(op);
 		lazy_flush_cr0();
-		emit_load_gpr(RTMP0, ra);
+		int s = gpr_in(ra, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)(uint32_t)uimm);
 		/* Unsigned compare: CMP Wn, Wm */
-		emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | 0x1F);
+		emit32(0x6B000000 | (RTMP1 << 16) | (s << 5) | 0x1F);
 		/* Build CR field from unsigned comparison:
 		   LT = unsigned less (ARM64 CC = carry clear)
 		   GT = unsigned greater (ARM64 CC = carry set AND not zero)
@@ -2656,10 +2673,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		uint32_t crd = (op >> 23) & 0x7;
 		ra = PPC_RA(op); simm = PPC_SIMM(op);
 		lazy_flush_cr0();
-		emit_load_gpr(RTMP0, ra);
+		int s = gpr_in(ra, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		/* Signed compare: CMP Wn, Wm */
-		emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | 0x1F); /* SUBS WZR,Wn,Wm */
+		emit32(0x6B000000 | (RTMP1 << 16) | (s << 5) | 0x1F); /* SUBS WZR,Wn,Wm */
 		/* Build CR field using CSEL: LT/GT/EQ (signed conditions) */
 		a64_movz(RTMP0, 0, 0);
 		emit_load_imm32(RTMP1, 8); /* LT */
