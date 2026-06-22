@@ -1486,27 +1486,24 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			uint32_t rs = PPC_RS(op);
 			emit_load_gpr(RTMP0, rs);
 			emit_load_gpr(RTMP1, rb);
-			/* Save original for CA: RTMP2 = rS */
-			a64_mov_reg(RTMP2, RTMP0);
-			/* PPC sraw: if rB[5]=1 (shift>=32), result=sign-extend, CA=(rS<0) */
-			/* ARM64 ASR with shift>=32 already produces sign-extended result */
-			emit32(0x1AC02800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ASR Wd,Wn,Wm */
-			emit_store_gpr(RTMP0, ra);
-			/* CA = (rS < 0) && (rS != (result << sh)) i.e. bits were shifted out */
-			/* Simplified: CA = (rS < 0) && ((rS ^ (result << sh)) != 0) */
-			/* For variable shift this is complex. Use: CA = (rS < 0) && (result << sh != rS) */
-			/* LSL RTMP0 back by shift amount, compare with original */
-			emit32(0x1AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSL Wd,result,shift */
-			/* If (rS != result<<sh) and (rS < 0), CA=1 */
-			emit32(0x6B000000 | (RTMP2 << 16) | (RTMP0 << 5) | 0x1F); /* CMP result<<sh, rS */
+			/* PPC sraw uses a 6-bit shift (rB&0x3f); shift>=32 -> result = full sign-extend.
+			 * 32-bit ARM ASR masks the amount to 5 bits (wrong for 32..63, e.g. returning
+			 * 0xFFFFFFFF mis-shifted). Sign-extend rS to 64-bit and arithmetic-shift in 64-bit:
+			 * 32..63 then naturally yields all-sign in the low word. */
+			emit32(0x93407C00 | (RTMP0 << 5) | RTMP0); /* SXTW Xd,Wn: sign-extend rS to 64-bit */
+			a64_mov_reg(RTMP2, RTMP0); /* RTMP2 = sign-extended rS (for CA) */
+			emit32(0x9AC02800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ASRV Xd,Xn,Xm (64-bit) */
+			emit_store_gpr(RTMP0, ra); /* low 32 bits = result */
+			/* CA = (rS<0) && (any 1-bit shifted out) = sign(rS) && ((result<<sh) != sext(rS)),
+			 * reconstructed+compared in 64-bit so shift>=32 is handled correctly. */
+			emit32(0x9AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSLV Xd,result,sh (64-bit) */
+			emit32(0xEB000000 | (RTMP2 << 16) | (RTMP0 << 5) | 0x1F); /* CMP Xn(recon),Xm(sext rS) (64-bit) */
 			a64_movz(RTMP0, 0, 0);
 			emit_load_imm32(RTMP1, 1);
-			emit32(0x1A800000 | (RTMP0 << 16) | (0x1 << 12) | (RTMP1 << 5) | RTMP0); /* CSEL 1 if NE */
-			/* AND with sign of original rS */
-			emit32(0x53010000 | (RTMP2 << 5) | RTMP2 | (31 << 10) | (31 << 16)); /* UBFX bit31 */
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* AND */
-			/* Write CA byte */
-			emit32(0x39000000 | (PPCR_XER_CA << 10) | (RSTATE << 5) | RTMP0); /* STRB */
+			emit32(0x1A800000 | (RTMP0 << 16) | (0x1 << 12) | (RTMP1 << 5) | RTMP0); /* CSEL RTMP0 = NE ? 1 : 0 */
+			emit32(0x53010000 | (RTMP2 << 5) | RTMP2 | (31 << 10) | (31 << 16)); /* UBFX RTMP2,RTMP2,#31,#1 (sign bit) */
+			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* AND: CA &= sign(rS) */
+			emit32(0x39000000 | (PPCR_XER_CA << 10) | (RSTATE << 5) | RTMP0); /* STRB CA */
 			if (op & 1) { emit_load_gpr(RTMP0, ra); lazy_update_cr0(RTMP0); }
 			return true;
 		}
