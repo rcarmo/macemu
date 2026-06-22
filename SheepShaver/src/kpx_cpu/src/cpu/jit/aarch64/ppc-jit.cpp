@@ -4229,7 +4229,13 @@ extern "C" void ppc_jit_aarch64_icbi(uint32_t ea)
 
 void ppc_jit_aarch64_invalidate_pc(uint32_t pc)
 {
-	jit_bc_invalidate_pc(pc);
+	(void)pc;
+	/* Per-PC cache unlinking is not sufficient once direct chains have been
+	 * back-patched: an older block may still contain a B to the invalidated
+	 * block's chain_code and would bypass the cache lookup entirely. This API is
+	 * used only for containment/corrupt-block eviction, so correctness wins over
+	 * preserving the rest of the cache: flush all code and chain patch sites. */
+	ppc_jit_aarch64_flush();
 }
 
 static bool opcode_may_touch_guest_memory(uint32_t op) {
@@ -4311,8 +4317,10 @@ bool ppc_jit_aarch64_compile(
 			out->complete     = cached->complete;
 			return true;
 		}
-		jit_bc_invalidate_pc(pc);
-		/* stale/corrupt entry (code outside cache): drop it and recompile fresh */
+		/* Stale/corrupt cache invariant: a direct predecessor may already have been
+		 * patched to this entry's chain_code, so a per-PC unlink would not be enough. */
+		ppc_jit_aarch64_flush();
+		/* stale/corrupt entry: drop it and recompile fresh from a clean cache */
 	}
 
 	if (!jit_cache_wp || jit_cache_wp >= jit_cache_end - 2048) {
