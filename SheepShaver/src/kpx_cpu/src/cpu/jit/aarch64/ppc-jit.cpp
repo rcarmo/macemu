@@ -2256,8 +2256,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			a64_mov_reg(RTMP0, RSTATE);
 			emit_load_imm32(RTMP2, rd);
 			emit_load_imm32(RTMP3, nb);
+			ra_flush_all();
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_lswi);
 			emit32(0xD63F0000 | (RTMP4 << 5));
+			ra_reset();
 			return true;
 		}
 		case 725: /* stswi rS,rA,NB */
@@ -2269,8 +2271,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			a64_mov_reg(RTMP0, RSTATE);
 			emit_load_imm32(RTMP2, PPC_RS(op));
 			emit_load_imm32(RTMP3, nb);
+			ra_flush_all();
 			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_stswi);
 			emit32(0xD63F0000 | (RTMP4 << 5));
+			ra_reset();
 			return true;
 		}
 		case 533: /* lswx rD,rA,rB — runtime byte count from XER */
@@ -2295,6 +2299,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		/* === 64-bit G5/PPC970 XO31 instructions === */
 
 		case 27: /* sld rA,rS,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, PPC_RS(op));
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x9AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSL Xd,Xn,Xm */
@@ -2303,6 +2308,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 539: /* srd rA,rS,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, PPC_RS(op));
 			emit_load_gpr(RTMP1, rb);
 			emit32(0x9AC02400 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSR Xd,Xn,Xm */
@@ -2319,6 +2325,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return false;
 
 		case 58: /* cntlzd rA,rS */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, PPC_RS(op));
 			emit32(0xDAC01000 | (RTMP0 << 5) | RTMP0); /* CLZ Xd,Xn */
 			emit_store_gpr(RTMP0, ra);
@@ -2327,6 +2334,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 986: /* extsw rA,rS — sign-extend word to doubleword */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr(RTMP0, PPC_RS(op));
 			emit32(0x93407C00 | (RTMP0 << 5) | RTMP0); /* SXTW Xd,Wn */
 			emit_store_gpr64(RTMP0, ra);
@@ -2334,6 +2342,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 233: /* mulld rD,rA,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, ra);
 			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9B007C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* MUL Xd,Xn,Xm */
@@ -2342,6 +2351,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 9: /* mulhdu rD,rA,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, ra);
 			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9BC07C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UMULH Xd,Xn,Xm */
@@ -2350,6 +2360,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 73: /* mulhd rD,rA,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, ra);
 			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9B407C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SMULH Xd,Xn,Xm */
@@ -2358,6 +2369,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 457: /* divdu rD,rA,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, ra);
 			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9AC00800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UDIV Xd,Xn,Xm */
@@ -2366,6 +2378,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return true;
 
 		case 489: /* divd rD,rA,rB */
+			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 			emit_load_gpr64(RTMP0, ra);
 			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
 			emit32(0x9AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SDIV Xd,Xn,Xm */
@@ -3159,13 +3172,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 260: /* vslb — EXCLUDED: hardcoded encoding is SRSHL, not logical USHL */
 		case 324: /* vslh — EXCLUDED: hardcoded encoding is SRSHL, not logical USHL */
 		case 388: /* vslw — EXCLUDED: hardcoded encoding is SRSHL, not logical USHL */
-		case 772: /* vsrb — EXCLUDED: hardcoded encoding is NEG+SRSHL, not logical right shift */
-		case 836: /* vsrh — EXCLUDED: hardcoded encoding is NEG+SRSHL, not logical right shift */
-		case 900: /* vsrw — EXCLUDED: hardcoded encoding is NEG+SRSHL, not logical right shift */
+		case 516: /* vsrb — EXCLUDED: hardcoded encoding is SSHL, not logical right shift */
+		case 580: /* vsrh — EXCLUDED: hardcoded encoding is NEG+SSHL, not logical right shift */
+		case 644: /* vsrw — EXCLUDED: hardcoded encoding is NEG+SSHL, not logical right shift */
+		case 772: /* vsrab — EXCLUDED until arithmetic-shift signedness/count semantics are explicitly proven */
+		case 836: /* vsrah — EXCLUDED until arithmetic-shift signedness/count semantics are explicitly proven */
+		case 900: /* vsraw — EXCLUDED until arithmetic-shift signedness/count semantics are explicitly proven */
 			return false;
-		case 516: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E204400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrab SSHL.16B (arith) */
-		case 580: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E60B800|(1<<5)|1); emit32(0x4E604400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrah */
-		case 644: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA0B800|(1<<5)|1); emit32(0x4EA04400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsraw */
 		case 4:   /* vrlb — EXCLUDED: rotate-left was mapped to shift */
 		case 68:  /* vrlh — EXCLUDED: rotate-left was mapped to shift */
 		case 132: /* vrlw — EXCLUDED: rotate-left was mapped to shift */
@@ -3210,7 +3223,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 396: /* vmrglw — EXCLUDED: hardcoded encoding is URECPE, not ZIP2 */
 			return false;
 
-		case 846: /* vcfsx — EXCLUDED: UIMM scale is ignored and encoding direction needs proof */
+		case 846: /* vupkhpx — EXCLUDED: pixel unpack expands 1/5/5/5 fields, not just zero-extend */
 		case 910: /* vcfux — EXCLUDED: UIMM scale is ignored; hardcoded word disassembles as FCVTAU */
 		case 970: /* vctsxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
 		case 906: /* vctuxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
@@ -3227,8 +3240,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 520: /* vmulesb — EXCLUDED until exact even-lane SMULL2 encoding is verified */
 		case 584: /* vmulesh — EXCLUDED until exact even-lane SMULL2 encoding is verified */
 			return false;
-		case 14: emit_load_vr(0,vb); emit32(0x0E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuhum UZP1.8H (narrow) */
-		case 78: emit_load_vr(0,vb); emit32(0x0E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuwum UZP1.4S */
+		case 14: /* vpkuhum — EXCLUDED: current native path ignores vA and only narrows vB */
+		case 78: /* vpkuwum — EXCLUDED: current native path ignores vA and only narrows vB */
+			return false;
 		case 270: /* vpkshus — EXCLUDED: saturating pack needs exact signedness/lane order and VSCR.SAT */
 		case 334: /* vpkswus — EXCLUDED: saturating pack needs exact signedness/lane order and VSCR.SAT */
 		case 398: /* vpkshss — EXCLUDED: hardcoded encoding/comment mismatch; VSCR.SAT not updated */
@@ -3236,10 +3250,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 142: /* vpkuhus — EXCLUDED: saturating pack needs exact unsigned semantics and VSCR.SAT */
 		case 206: /* vpkuwus — EXCLUDED: saturating pack needs exact unsigned semantics and VSCR.SAT */
 			return false;
-		case 814:  /* vupkhsb — EXCLUDED: hardcoded encoding is XTN, not signed unpack/widen */
-		case 878:  /* vupkhsh — EXCLUDED: hardcoded encoding is XTN, not signed unpack/widen */
-		case 942:  /* vupklsb — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
-		case 1006: /* vupklsh — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
+		case 526: /* vupkhsb — EXCLUDED: hardcoded encoding is XTN, not signed unpack/widen */
+		case 590: /* vupkhsh — EXCLUDED: hardcoded encoding is XTN, not signed unpack/widen */
+		case 654: /* vupklsb — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
+		case 718: /* vupklsh — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
 			return false;
 		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E010000|(sh<<11)); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
 		case 1036: /* vsl — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
@@ -3250,14 +3264,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return false;
 		case 782: /* vpkpx — EXCLUDED: approximate narrow is not exact pixel pack semantics */
 			return false;
-		case 974: /* vupkhpx — unpack high pixel (widen) */
-			emit_load_vr(0, vb);
-			emit32(0x2F10A400 | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
-		case 1038: /* vupklpx — unpack low pixel */
-			emit_load_vr(0, vb);
-			emit32(0x6F10A400 | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
+		case 974: /* vupklpx — EXCLUDED: pixel unpack expands 1/5/5/5 fields, not just zero-extend */
+			return false;
 		case 1928: /* vsum4ubs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
 		case 1672: /* vsum4sbs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
 		case 1608: /* vsum4shs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
@@ -3414,8 +3422,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		else a64_mov_reg(RTMP1, RTMP0);
 		a64_mov_reg(RTMP0, RSTATE);
 		emit_load_imm32(RTMP2, rd);
+		ra_flush_all();
 		emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_lmw);
 		emit32(0xD63F0000 | (RTMP4 << 5));
+		ra_reset();
 		return true;
 
 	case 47: /* stmw rS,d(rA) — store multiple words */
@@ -3425,8 +3435,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		else a64_mov_reg(RTMP1, RTMP0);
 		a64_mov_reg(RTMP0, RSTATE);
 		emit_load_imm32(RTMP2, rd);
+		ra_flush_all();
 		emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_stmw);
 		emit32(0xD63F0000 | (RTMP4 << 5));
+		ra_reset();
 		return true;
 
 
@@ -3659,6 +3671,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 	case 30: /* rld* — 64-bit rotate/shift family */
 	{
+		if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
 		uint32_t rs = PPC_RS(op);
 		ra = PPC_RA(op);
 		uint32_t sub = (op >> 1) & 0xF; /* bits 27-30 determine sub-instruction */
