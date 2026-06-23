@@ -1941,23 +1941,26 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			/* ra==0: use 0 as base; ra==rd: update gets overwritten by load (PPC undefined but harmless) */
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0); /* preserve EA across helper; x29 is callee-saved */
 			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 1, rd);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 247: /* stbux rS,rA,rB */
 			emit_load_gpr(RTMP1, PPC_RS(op));
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0);
 			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 1);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			return true;
 		case 311: /* lhzux rD,rA,rB */
 			/* ra==0: use 0 as base; ra==rd: update gets overwritten by load (PPC undefined but harmless) */
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0);
 			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 2, rd);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 439: /* sthux rS,rA,rB */
@@ -1965,23 +1968,26 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x5AC00400 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0);
 			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 2);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			return true;
 		case 375: /* lhaux rD,rA,rB */
 			/* ra==0: use 0 as base; ra==rd: update gets overwritten by load (PPC undefined but harmless) */
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0);
 			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 3, rd);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 55: /* lwzux rD,rA,rB */
 			/* ra==0: use 0 as base; ra==rd: update gets overwritten by load (PPC undefined but harmless) */
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0);
 			emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4, rd);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			emit_store_gpr(RTMP1, rd);
 			return true;
 		case 183: /* stwux rS,rA,rB */
@@ -1989,8 +1995,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
+			a64_mov_reg(A64_FP, RTMP0);
 			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 4);
+			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			return true;
 		case 790: /* lhbrx rD,rA,rB (byte-reversed = native order on LE) */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
@@ -2587,8 +2594,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_gpr(RTMP0, ra);
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* effective addr */
-		emit_store_gpr(RTMP0, ra); /* update rA */
+		a64_mov_reg(A64_FP, RTMP0); /* preserve EA across helper; x29 is callee-saved */
 		emit_guarded_load_zero_invalid(RTMP0, RTMP1, 4, rd);
+		emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 		emit_store_gpr(RTMP1, rd);
 		return true;
 
@@ -2599,8 +2607,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_gpr(RTMP0, ra);
 		emit_load_imm32(RTMP2, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* effective addr */
-		emit_store_gpr(RTMP0, ra); /* update rA */
+		a64_mov_reg(A64_FP, RTMP0); /* preserve EA across helper; x29 is callee-saved */
 		emit_guarded_store_noop_invalid(RTMP0, RTMP1, 4);
+		emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 		return true;
 
 
