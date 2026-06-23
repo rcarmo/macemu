@@ -340,6 +340,9 @@ outside the statically-enumerated 1:1-mapped regions, and for atomic reservation
   on video mode switches and `SheepShaver/src/SDL` is shared via the BasiliskII SDL symlink.
 - `sheepshaver_jit_lwarx` / `sheepshaver_jit_stwcx` — real reservation semantics for atomic
   acquire/retry loops.
+- `sheepshaver_jit_get_tb_ticks` — exact emulated PPC timebase source for `mftb/mftbu`, using the
+  same `GetTicks_usec() * TimebaseSpeed / 1_000_000` `muldiv64` formula as the interpreter. The JIT
+  uses the low word for TBL and high word for TBU; it no longer reads host `CNTVCT_EL0` directly.
 
 These helpers follow the AArch64 ABI, so callee-saved x19–x29 (RSTATE, RCR0, the RA cache, and saved
 x29/A64_FP when used as a temporary EA scratch) survive the BLR. They may, however, re-enter the
@@ -426,7 +429,7 @@ barrier. Not implemented in the current JIT.
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
-| 3 | Helper calls are semantic barriers | ✅ Guarded load/store and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x28 + RA barrier keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
+| 3 | Helper calls are semantic barriers | ✅ Guarded load/store, timebase, and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x29 + RA barrier / no guest-state mutation keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code`; containment/corrupt-entry invalidation is a full flush because per-PC unlinking cannot unpatch already-emitted direct branches. |
 | 5 | Interpreter and JIT builds agree on shared semantics | ✅ 272/272 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added RA-width, string/multiple, SPR/FPSCR/AltiVec, addis/lis, vsel, AltiVec FP compare, vperm control-mask, bcctr CTR-decrement, fres delegation, AltiVec vector-sum delegation, AltiVec average/saturating add-sub delegation, AltiVec merge delegation, AltiVec multiply even/odd delegation, AltiVec conversion delegation, AltiVec shift/rotate delegation, and AltiVec saturating pack delegation regressions). `bcl` LR update fixed (2026-05). |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
