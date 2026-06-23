@@ -1790,9 +1790,13 @@ static int		align_loops = 32;	// Align the start of loops
 static int		align_jumps = 32;	// Align the start of jumps
 static int		optcount[10] = {
 #ifdef UAE
-    4,		// How often a block has to be executed before it is translated
+    0,		// Translate immediately: optlev-0 interpreter warm-up (exec_nostats)
+    		// is itself an interpreter fallback and froze the slot-ROM bfextu
+    		// blit self-loop at 0402e8d0. 0 = no whole-block interpretation.
 #else
-    10,		// How often a block has to be executed before it is translated
+    0,		// Translate immediately (was 10). The optlev-0 interpreter warm-up
+    		// (exec_nostats) is an interpreter fallback the 100%-JIT goal forbids,
+    		// and its self-loop re-entry froze the 0402e8d0 slot-ROM bfextu blit.
 #endif
     0,		// How often to use naive translation
     0, 0, 0, 0,
