@@ -2322,109 +2322,27 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 
 
-		/* === 64-bit G5/PPC970 XO31 instructions === */
-
-		case 27: /* sld rA,rS,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x9AC02000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSL Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 539: /* srd rA,rS,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, PPC_RS(op));
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x9AC02400 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* LSR Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 794: /* srad rA,rS,rB — EXCLUDED: CA semantics not yet exact */
-		case 826: /* sradi rA,rS,SH — EXCLUDED: CA semantics not yet exact */
-			/* These algebraic doubleword shifts must set XER.CA when negative bits are
-			 * shifted out. The old native handlers forced CA=0 (a known simplification),
-			 * which is observably wrong for code that reads XER/record forms. Delegate to
-			 * the interpreter until exact shifted-out-bit logic is implemented. */
-			return false;
-
-		case 58: /* cntlzd rA,rS */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, PPC_RS(op));
-			emit32(0xDAC01000 | (RTMP0 << 5) | RTMP0); /* CLZ Xd,Xn */
-			emit_store_gpr(RTMP0, ra);
-			a64_str_w_imm(31, RSTATE, PPCR_GPR_HI(ra));
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 986: /* extsw rA,rS — sign-extend word to doubleword */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr(RTMP0, PPC_RS(op));
-			emit32(0x93407C00 | (RTMP0 << 5) | RTMP0); /* SXTW Xd,Wn */
-			emit_store_gpr64(RTMP0, ra);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 233: /* mulld rD,rA,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
-			emit32(0x9B007C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* MUL Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 9: /* mulhdu rD,rA,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
-			emit32(0x9BC07C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UMULH Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 73: /* mulhd rD,rA,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
-			emit32(0x9B407C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SMULH Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 457: /* divdu rD,rA,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
-			emit32(0x9AC00800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UDIV Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		case 489: /* divd rD,rA,rB */
-			if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-			emit_load_gpr64(RTMP0, ra);
-			emit_load_gpr64_tmp(RTMP1, rb, RTMP2); /* don't clobber RTMP0 operand */
-			emit32(0x9AC00C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SDIV Xd,Xn,Xm */
-			emit_store_gpr64(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
-			return true;
-
-		/* 64-bit load/store indexed — EXCLUDED: raw memory paths need guarded 64-bit helpers */
+		/* 64-bit G5/PPC970 XO31 instructions — EXCLUDED for SheepShaver's
+		 * current 32-bit PPC CPU profile. These opcodes are not decoded by
+		 * the interpreter table; executing them natively would wrongly run
+		 * out-of-ISA instructions instead of taking the illegal-op path. */
+		case 27:  /* sld */
+		case 539: /* srd */
+		case 794: /* srad */
+		case 826: /* sradi */
+		case 58:  /* cntlzd */
+		case 986: /* extsw */
+		case 233: /* mulld */
+		case 9:   /* mulhdu */
+		case 73:  /* mulhd */
+		case 457: /* divdu */
+		case 489: /* divd */
 		case 21:  /* ldx */
 		case 53:  /* ldux */
 		case 149: /* stdx */
 		case 181: /* stdux */
-			return false;
-
-		case 84:  /* ldarx rD,rA,rB — EXCLUDED: reservation semantics not implemented */
-		case 214: /* stdcx. rS,rA,rB — EXCLUDED: reservation semantics not implemented */
-			/* The old native handlers repeated the 32-bit lwarx/stwcx. bug class: ldarx was
-			 * a plain load and stdcx. always succeeded. Guest atomic acquire/retry loops need
-			 * real reserve_valid/reserve_addr checks (and 64-bit store-on-success) before
-			 * these can be compiled safely. Delegate until exact helpers exist. */
+		case 84:  /* ldarx */
+		case 214: /* stdcx. */
 			return false;
 
 		case 4: /* tw — trap word */
@@ -3705,124 +3623,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		return true;
 
-	case 30: /* rld* — 64-bit rotate/shift family */
-	{
-		if (op & 1) return false; /* Rc requires 64-bit CR0 materialization */
-		uint32_t rs = PPC_RS(op);
-		ra = PPC_RA(op);
-		uint32_t sub = (op >> 1) & 0xF; /* bits 27-30 determine sub-instruction */
-		/* For immediate variants (sub 0-7) the sub-opcode occupies bits 27-29 (3 bits)
-		 * while bit 30 is SH[5].  Without normalisation, rldicl/rldicr/rldic/rldimi
-		 * with sh>=32 (SH[5]=1) would have sub=1/3/5/7 instead of 0/2/4/6, causing
-		 * the wrong handler to execute.  Strip the SH[5] bit by halving sub. */
-		if (sub < 8) sub >>= 1;
-		bool rc = op & 1;
-		/* Load 64-bit source */
-		emit_load_gpr64(RTMP0, rs);
-		switch (sub) {
-		case 0: /* rldicl — rotate left doubleword then clear left */
-		case 1: /* rldicr — rotate left doubleword then clear right */
-		case 2: /* rldic  — rotate left doubleword then clear (both sides) */
-		case 3: /* rldimi — rotate left doubleword then mask insert */
-		{
-			uint32_t sh = ((op >> 11) & 0x1F) | ((op & 2) << 4); /* 6-bit shift: sh[0:4] | sh[5] */
-			uint32_t mb_or_me = ((op >> 6) & 0x1F) | (op & 0x20); /* 6-bit mask field */
-			/* ROL Xd,Xn,#sh = ROR Xd,Xn,#(64-sh) */
-			if (sh > 0 && sh < 64)
-				emit32(0x93C00000 | (RTMP0 << 16) | (((64 - sh) & 63) << 10) | (RTMP0 << 5) | RTMP0);
-			/* Apply mask:
-			 * rldicl (sub 0): clear left mb bits  — LSL mb; LSR mb
-			 * rldicr (sub 1): clear right (63-me) bits — LSR (63-me); LSL (63-me)
-			 * rldic  (sub 2): clear left mb AND clear right sh bits
-			 * rldimi (sub 3): insert into RA with mask bits mb..(63-sh) */
-			if (sub == 3) {
-				/* rldimi: RA = (ROTL64(RS,sh) & mask) | (RA & ~mask)
-				 * mask = ARM bits sh..(63-mb): computed at JIT compile time.
-				 * Uses MOVZ/MOVK to load 64-bit mask, then AND + BIC + ORR. */
-				int start_bit = (int)sh;
-				int stop_bit  = 63 - (int)mb_or_me;
-				uint64_t mask;
-				if (start_bit <= stop_bit) {
-					int nbits = stop_bit - start_bit + 1;
-					mask = (nbits >= 64) ? ~UINT64_C(0)
-					      : ((UINT64_C(1) << nbits) - 1) << start_bit;
-				} else {
-					/* Wrapping: bits 0..stop_bit and start_bit..63 */
-					mask = ((UINT64_C(1) << (stop_bit + 1)) - 1) |
-					       ~((UINT64_C(1) << start_bit) - 1);
-				}
-				emit_load_imm64(RTMP1, mask);
-				/* RTMP0 = rotated & mask */
-				emit32(0x8A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* AND Xd,Xn,Xm */
-				/* Load full 64-bit RA without clobbering RTMP0: RTMP1 can be reused,
-				 * and the mask is reloaded before BIC. */
-				emit_load_gpr64_tmp(RTMP2, ra, RTMP1);
-				emit_load_imm64(RTMP1, mask);
-				/* RTMP2 = RA & ~mask */
-				emit32(0x8A200000 | (RTMP1 << 16) | (RTMP2 << 5) | RTMP2); /* BIC Xd,Xn,Xm */
-				/* RTMP0 = merged result */
-				emit32(0xAA000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* ORR Xd,Xn,Xm */
-			}
-			/* rldicl (sub 0): clear top mb_or_me bits */
-			if (sub == 0) {
-				if (mb_or_me > 0 && mb_or_me < 64) {
-					emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
-					emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
-				}
-			/* rldicr (sub 1): clear bottom (63-me) bits */
-			} else if (sub == 1) {
-				uint32_t clrr = 63 - mb_or_me;
-				if (clrr > 0 && clrr < 64) {
-					emit_lsr64_imm(RTMP0, RTMP0, clrr);
-					emit_lsl64_imm(RTMP0, RTMP0, clrr);
-				}
-			/* rldic (sub 2): clear top mb bits AND clear bottom sh bits */
-			} else if (sub == 2) {
-				if (mb_or_me > 0 && mb_or_me < 64) {
-					emit_lsl64_imm(RTMP0, RTMP0, mb_or_me);
-					emit_lsr64_imm(RTMP0, RTMP0, mb_or_me);
-				}
-				if (sh > 0 && sh < 64) {
-					emit_lsr64_imm(RTMP0, RTMP0, sh);
-					emit_lsl64_imm(RTMP0, RTMP0, sh);
-				}
-			}
-			/* sub 3 (rldimi): mask-insert already done above, RTMP0 holds final result */
-			emit_store_gpr64(RTMP0, ra);
-			if (rc) lazy_update_cr0(RTMP0); /* uses low 32 bits for CR0 */
-			return true;
-		}
-		case 8: /* rldcl — rotate left doubleword then clear left (register shift) */
-		case 9: /* rldcr — rotate left doubleword then clear right (register shift) */
-		{
-			uint32_t rb = (op >> 11) & 0x1F; /* RB = shift register */
-			uint32_t mb = ((op >> 6) & 0x1F) | (op & 0x20); /* 6-bit mask field */
-			emit_load_gpr(RTMP1, rb);
-			/* ROL Xd,Xn,Xm: ARM64 has RORV; ROL by sh = ROR by (64-sh)
-			 * NEG RTMP2, RTMP1  (gives -sh; RORV uses low 6 bits so -sh ≡ 64-sh mod 64) */
-			emit32(0xCB0003E0 | (RTMP1 << 16) | RTMP2); /* SUB Xd,XZR,Xn = NEG */
-			emit32(0x9AC02C00 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* RORV Xd,Xn,Xm */
-			/* Apply mask: clear left mb bits (rldcl) or clear right (63-me) bits (rldcr) */
-			if (sub == 8) { /* rldcl: clear top mb bits */
-				if (mb > 0 && mb < 64) {
-					emit_lsl64_imm(RTMP0, RTMP0, mb);
-					emit_lsr64_imm(RTMP0, RTMP0, mb);
-				}
-			} else { /* rldcr: clear bottom (63-me) bits */
-				uint32_t clrr = 63 - mb;
-				if (clrr > 0 && clrr < 64) {
-					emit_lsr64_imm(RTMP0, RTMP0, clrr);
-					emit_lsl64_imm(RTMP0, RTMP0, clrr);
-				}
-			}
-			emit_store_gpr64(RTMP0, ra);
-			if (rc) lazy_update_cr0(RTMP0);
-			return true;
-		}
-		default:
-			return false;
-		}
-	}
+	case 30: /* rld* — EXCLUDED: 64-bit G5/PPC970 rotate/shift family is out-of-ISA for the 32-bit PPC profile */
+		return false;
 
 	case 58: /* ld/ldu/lwa — EXCLUDED: raw 64-bit memory path needs guarded helpers */
 		return false;

@@ -474,6 +474,11 @@ TEST_ORDER+=(fp_fctiw_nearest)
 TESTS[fp64_fctid_delegated]="3C603FF8 90610100 38600000 90610104 C8210100 FC200E5C D8210108 80A10108 80C1010C"
 TEST_ORDER+=(fp64_fctid_delegated)
 
+# PPC64/G5 GPR opcodes are out-of-ISA for SheepShaver's current 32-bit PPC target.
+# extsw r5,r3 with r3=0x80000000 must follow the interpreter illegal/ignoreillegal path and leave r5 unchanged.
+TESTS[ppc64_extsw_delegated]="3C608000 7C6507B4"
+TEST_ORDER+=(ppc64_extsw_delegated)
+
 # fres: old native path emitted undefined AArch64 0x1e20f800 and only approximate semantics.
 # Delegate until exact FPSCR/estimate semantics are implemented. 2.0 -> exact interpreter 0.5.
 TESTS[fp_fres_delegate_exact]="3C604000 90610100 38600000 90610104 C8210100 FC000830 D8010108 80A10108 80C1010C"
