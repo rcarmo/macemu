@@ -1096,6 +1096,12 @@ TEST_ORDER+=(vec_vexptefp_excluded)
 # vlogefp v2,v0 with v0=2.0f; old FRECPE native would produce reciprocal-ish bits, not interp.
 TESTS[vec_vlogefp_excluded]="3C804000 90810600 90810604 90810608 9081060C 38600600 7C0118CE 10400344 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vlogefp_excluded)
+
+# Vector reciprocal/rsqrt estimates are delegated: interpreter uses exact 1/x and 1/sqrt(x).
+TESTS[vec_vrefp_delegated]="3C804000 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040010A 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vrefp_delegated)
+TESTS[vec_vrsqrtefp_delegated]="3C804080 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040014A 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vrsqrtefp_delegated)
 # vslo/vsro should not pass the source through unchanged.
 TESTS[vec_vslo_excluded]="10050718 10230718 10400A98 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vslo_excluded)
