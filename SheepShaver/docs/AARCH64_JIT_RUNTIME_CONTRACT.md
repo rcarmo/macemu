@@ -335,7 +335,9 @@ outside the statically-enumerated 1:1-mapped regions, and for atomic reservation
   access-size-aware: byte/half/word checks use the actual access size, zero-page store rejection
   is overlap-based, and direct valid ranges are represented by start+size/count arithmetic rather
   than wrapping 32-bit end-exclusive endpoints. This covers highmem
-  `[0xffff0000, 0x1_0000_0000)` and ordinary RAM/ROM/framebuffer ranges.
+  `[0xffff0000, 0x1_0000_0000)` and ordinary RAM/ROM ranges. Framebuffer D-form accesses are
+  intentionally helper-routed instead of direct-inlined because `screen_base`/`cur_mode` can change
+  on video mode switches and `SheepShaver/src/SDL` is shared via the BasiliskII SDL symlink.
 - `sheepshaver_jit_lwarx` / `sheepshaver_jit_stwcx` — real reservation semantics for atomic
   acquire/retry loops.
 
