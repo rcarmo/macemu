@@ -3327,8 +3327,30 @@ gen_opcode (unsigned int opcode)
      case i_BFCHG:
      case i_BFCLR:
      case i_BFSET:
-	/* Rare bitfield ops — keep as interpreter fallback until required. */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* Native via helper (jit_op_bftst/bfchg/bfclr/bfset). Sets flags in
+	   regflags (and RMW the field for chg/clr/set), so end the block. */
+	isjump;
+	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
+	if (curi->dmode == Dreg) {
+	    comprintf("\t{ int ea_enc = scratchie++;\n");
+	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
+	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
+	} else {
+	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
+	}
+	comprintf("\tflush(1);\n");
+	switch (curi->mnemo) {
+	 case i_BFCHG: comprintf("\tcall_helper((uintptr)jit_op_bfchg);\n"); break;
+	 case i_BFCLR: comprintf("\tcall_helper((uintptr)jit_op_bfclr);\n"); break;
+	 case i_BFSET: comprintf("\tcall_helper((uintptr)jit_op_bfset);\n"); break;
+	 default:      comprintf("\tcall_helper((uintptr)jit_op_bftst);\n"); break;
+	}
+#else
 	failure;
+#endif
 	break;
 
      case i_BFEXTU:

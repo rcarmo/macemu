@@ -2017,6 +2017,60 @@ extern "C" void jit_op_bfexts(void)
     regs.regs[(ext >> 12) & 7] = (uae_u32)res;
 }
 
+/* --- BFTST/BFCHG/BFCLR/BFSET shared helper ---
+ * Byte-exact mirror of the interpreter (gencpu.c i_BFTST/BFCHG/BFCLR/BFSET):
+ * same get_bitfield/put_bitfield + bdata[] idiom and the same Dn rotate.
+ * op: 0=TST (no write), 1=CHG, 2=CLR, 3=SET.
+ * jit_exception = extension word; scratchregs[0] = memory EA, or reg number
+ * + 0x80000000 for a Dn destination. */
+static inline void jit_bf_rmw(int op)
+{
+    const uae_u32 ext = regs.jit_exception;
+    const uae_u32 ea_info = regs.scratchregs[0];
+    uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
+    const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
+    const int is_dreg = (ea_info & 0x80000000u) != 0;
+    const int dreg = ea_info & 7;
+    uae_u32 bdata[2];
+    uae_u32 dsta = 0;
+    uae_u32 tmp;
+
+    if (is_dreg) {
+        uae_u32 dv = regs.regs[dreg];
+        offset &= 0x1f;
+        tmp = (dv << offset) | (offset ? (dv >> (32 - offset)) : 0);
+        bdata[0] = tmp & ((1u << (32 - width)) - 1);
+    } else {
+        dsta = ea_info + (offset >> 3);
+        tmp = get_bitfield(dsta, bdata, offset, width);
+    }
+
+    SET_NFLG(((uae_s32)tmp) < 0 ? 1 : 0);
+    tmp >>= (32 - width);
+    SET_ZFLG(tmp == 0);
+    SET_VFLG(0);
+    SET_CFLG(0);
+
+    switch (op) {
+    case 1: tmp = tmp ^ (0xffffffffu >> (32 - width)); break; /* BFCHG */
+    case 2: tmp = 0; break;                                   /* BFCLR */
+    case 3: tmp = 0xffffffffu >> (32 - width); break;         /* BFSET */
+    default: return;                                          /* BFTST: flags only */
+    }
+
+    if (is_dreg) {
+        tmp = bdata[0] | (tmp << (32 - width));
+        regs.regs[dreg] = (tmp >> offset) | (offset ? (tmp << (32 - offset)) : 0);
+    } else {
+        put_bitfield(dsta, bdata, tmp, offset, width);
+    }
+}
+
+extern "C" void jit_op_bftst(void) { jit_bf_rmw(0); }
+extern "C" void jit_op_bfchg(void) { jit_bf_rmw(1); }
+extern "C" void jit_op_bfclr(void) { jit_bf_rmw(2); }
+extern "C" void jit_op_bfset(void) { jit_bf_rmw(3); }
+
 /* --- BFINS helper --- */
 extern "C" void jit_op_bfins(void)
 {
