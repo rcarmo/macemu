@@ -3264,14 +3264,15 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 354: /* vexptefp — EXCLUDED: FRECPE approximation is not PPC vexptefp semantics */
 		case 418: /* vlogefp — EXCLUDED: FRECPE approximation is not PPC vlogefp semantics */
 			return false;
-		case 8: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E209C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmuloub UMULL.8H (odd bytes) */
-		case 72: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E60A000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmulouh UMULL.4S */
-		case 264: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E20A000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmuleub UMULL2.8H */
-		case 328: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E60A000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmuleuh UMULL2.4S */
-		case 776: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E209C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmulosb SMULL.8H */
-		case 840: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E60C000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmulosh SMULL.4S */
-		case 520: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E20C000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmulesb SMULL2.8H */
-		case 584: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E60C000|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmulesh SMULL2.4S */
+		case 8:   /* vmuloub — EXCLUDED: hardcoded encoding is narrow MUL, not odd-lane UMULL */
+		case 72:  /* vmulouh — EXCLUDED: hardcoded encoding is SMLSL-like, not odd-lane UMULL */
+		case 264: /* vmuleub — EXCLUDED: hardcoded encoding is SMLSL-like, not even-lane UMULL2 */
+		case 328: /* vmuleuh — EXCLUDED: hardcoded encoding is SMLSL-like, not even-lane UMULL2 */
+		case 776: /* vmulosb — EXCLUDED: hardcoded encoding is narrow MUL, not odd-lane SMULL */
+		case 840: /* vmulosh — EXCLUDED until exact odd-lane SMULL encoding is verified */
+		case 520: /* vmulesb — EXCLUDED until exact even-lane SMULL2 encoding is verified */
+		case 584: /* vmulesh — EXCLUDED until exact even-lane SMULL2 encoding is verified */
+			return false;
 		case 14: emit_load_vr(0,vb); emit32(0x0E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuhum UZP1.8H (narrow) */
 		case 78: emit_load_vr(0,vb); emit32(0x0E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuwum UZP1.4S */
 		case 398: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E216800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkshus SQXTUN.8B */
