@@ -36,7 +36,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 254/254 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count `lswi`/`stswi`, `mfmsr_basic`, AltiVec exclusion vectors, `fcmpu_nan_unordered`, `fp_fctiw_nearest`, `vec_vscr_roundtrip`, `fuzz_vrsave_roundtrip`, plus `fuzz_lis_negative_ffff` for addis/lis signed-shift UB and `vec_vsel_mask_allones` for vsel operand order).
+**Status**: ✅ 256/256 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count `lswi`/`stswi`, `mfmsr_basic`, AltiVec exclusion vectors, `fcmpu_nan_unordered`, `fp_fctiw_nearest`, `vec_vscr_roundtrip`, `fuzz_vrsave_roundtrip`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, and AltiVec FP compare mappings `vec_vcmpgefp_eq`/`vec_vcmpbfp_bounded`).
 
 ---
 
@@ -195,7 +195,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 254/254 + strict-JIT desktop holds
+    barrier; harness 256/256 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
