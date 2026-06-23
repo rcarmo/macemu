@@ -591,9 +591,15 @@ STATIC_INLINE void compemu_raw_jmp(uintptr t)
 STATIC_INLINE void compemu_raw_jmp_pc_tag(void)
 {
 	uintptr idx = (uintptr)&regs.pc_p - (uintptr)&regs;
-	LDRH_wXi(REG_WORK1, R_REGSTRUCT, idx);
-	/* Clear bit 0 to ensure even cacheline index (handler slot, not bi slot) */
-	UBFX_xxii(REG_WORK1, REG_WORK1, 1, 15);
+	/* Load enough of pc_p to cover the full cacheline index. cacheline(x) =
+	   ((x>>1) & (TAGMASK>>1)) << 1; with TAGMASK=0x3ffff that is bits [1:17]
+	   (17 bits), so a 16-bit LDRH is NOT enough -- load 32 bits. Must match
+	   the C-side cacheline() in compemu.h or chained dispatch goes to the
+	   wrong cache_tags slot. */
+	LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	/* Extract cacheline = ((pc_p>>1) & (TAGMASK>>1)) << 1. TAGMASK=0x3ffff ->
+	   TAGMASK>>1 = 0x1ffff (17 bits). Clear bit 0 (handler slot, not bi slot). */
+	UBFX_xxii(REG_WORK1, REG_WORK1, 1, 17);
 	LSL_xxi(REG_WORK1, REG_WORK1, 1);
 	idx = (uintptr)&regs.cache_tags - (uintptr)&regs;
 	LDR_xXi(REG_WORK2, R_REGSTRUCT, idx);
@@ -722,9 +728,11 @@ LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 	}
 #endif
 #endif
-	UBFIZ_xxii(rr_pc, rr_pc, 0, 16);  // apply TAGMASK (bottom 16 bits)
-	/* Clear bit 0 to ensure even cacheline index (handler slot, not bi slot) */
-	UBFX_xxii(rr_pc, rr_pc, 1, 15);
+	UBFIZ_xxii(rr_pc, rr_pc, 0, 18);  // mask to TAGMASK width (0x3ffff = 18 bits)
+	/* Clear bit 0 to ensure even cacheline index (handler slot, not bi slot).
+	   cacheline(x)=((x>>1)&(TAGMASK>>1))<<1; TAGMASK>>1=0x1ffff -> 17 bits.
+	   MUST match the C-side cacheline() in compemu.h (TAGMASK 0x3ffff). */
+	UBFX_xxii(rr_pc, rr_pc, 1, 17);
 	LSL_xxi(rr_pc, rr_pc, 1);
 	uintptr offs = (uintptr)(&regs.cache_tags) - (uintptr)&regs;
 	LDR_xXi(REG_WORK1, R_REGSTRUCT, offs);
