@@ -3257,10 +3257,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 396: /* vmrglw — EXCLUDED: hardcoded encoding is URECPE, not ZIP2 */
 			return false;
 
-		case 846: { emit_load_vr(0,vb); emit32(0x4E21C800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vcfsx SCVTF.4S */
-		case 910: { emit_load_vr(0,vb); emit32(0x6E21C800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vcfux UCVTF.4S */
-		case 970: { emit_load_vr(0,vb); emit32(0x4EA1B800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vctsxs FCVTZS.4S */
-		case 906: { emit_load_vr(0,vb); emit32(0x6EA1B800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vctuxs FCVTZU.4S */
+		case 846: /* vcfsx — EXCLUDED: UIMM scale is ignored and encoding direction needs proof */
+		case 910: /* vcfux — EXCLUDED: UIMM scale is ignored; hardcoded word disassembles as FCVTAU */
+		case 970: /* vctsxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
+		case 906: /* vctuxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
+			return false;
 		case 354: /* vexptefp — EXCLUDED: FRECPE approximation is not PPC vexptefp semantics */
 		case 418: /* vlogefp — EXCLUDED: FRECPE approximation is not PPC vlogefp semantics */
 			return false;

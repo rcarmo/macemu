@@ -1136,6 +1136,14 @@ TEST_ORDER+=(vec_vmuloub_delegated)
 TESTS[vec_vmuleuh_delegated]="3C800001 60840001 90810600 90810604 90810608 9081060C 3C800002 60840002 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400948 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vmuleuh_delegated)
 
+# AltiVec conversion family is delegated until UIMM scale and VSCR.SAT semantics are exact.
+# vcfsx UIMM=1: signed int 2 -> float 1.0; native no-scale/wrong-direction path diverged.
+TESTS[vec_vcfsx_scale_delegated]="38600002 90610600 90610604 90610608 9061060C 38600600 7C0118CE 10410B4E 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vcfsx_scale_delegated)
+# vctsxs UIMM=1: float 1.0 -> signed int 2.
+TESTS[vec_vctsxs_scale_delegated]="3C803F80 90810600 90810604 90810608 9081060C 38600600 7C0118CE 10410BCA 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vctsxs_scale_delegated)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
