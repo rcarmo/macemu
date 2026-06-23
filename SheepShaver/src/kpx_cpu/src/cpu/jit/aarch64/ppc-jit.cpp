@@ -693,9 +693,8 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 	 * valid/invalid outcome (membership is the union of all ranges), only how many
 	 * comparisons execute before a hit, so this reordering is purely a speed win. */
 	const uint32_t ram_start = RAMBase;
-	const uint32_t ram_end = RAMBase + RAMSize;
-	if (ram_end > ram_start && ram_end >= access_size)
-		emit_branch_if_ea_in_range(ea_reg, ram_start, ram_end - access_size + 1, valid_locs, valid_count);
+	if (RAMSize >= access_size)
+		emit_branch_if_ea_in_range_size(ea_reg, ram_start, RAMSize - access_size + 1, valid_locs, valid_count);
 
 	const uint32_t lowmem_end = 0x3000U >= access_size ? (0x3000U - access_size + 1) : 0;
 	if (lowmem_end)
@@ -703,9 +702,9 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 
 	if (allow_rom) {
 		const uint32_t rom_start = ROMBase;
-		const uint32_t rom_end = ROMBase + 0x500000U;
-		if (rom_end > rom_start && rom_end >= access_size)
-			emit_branch_if_ea_in_range(ea_reg, rom_start, rom_end - access_size + 1, valid_locs, valid_count);
+		const uint32_t rom_size = 0x500000U;
+		if (rom_size >= access_size)
+			emit_branch_if_ea_in_range_size(ea_reg, rom_start, rom_size - access_size + 1, valid_locs, valid_count);
 		}
 
 	const uint32_t sheep_base = (uint32_t)SheepMem::base;
@@ -756,9 +755,8 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 	{
 		const uint32_t fb_start = sheepshaver_jit_fb_base();
 		const uint32_t fb_size  = sheepshaver_jit_fb_size();
-		const uint32_t fb_end   = fb_start + fb_size;
-		if (fb_start != 0 && fb_size != 0 && fb_end > fb_start && fb_end >= access_size)
-			emit_branch_if_ea_in_range(ea_reg, fb_start, fb_end - access_size + 1, valid_locs, valid_count);
+		if (fb_start != 0 && fb_size >= access_size)
+			emit_branch_if_ea_in_range_size(ea_reg, fb_start, fb_size - access_size + 1, valid_locs, valid_count);
 	}
 
 	const uint32_t highmem_valid_starts = (0x10000U >= access_size) ? (0x10000U - access_size + 1) : 0;
