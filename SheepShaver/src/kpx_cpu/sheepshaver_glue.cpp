@@ -844,6 +844,11 @@ extern "C" uint64 sheepshaver_jit_get_tb_ticks(void)
 	return sheepshaver_jit_muldiv64(GetTicks_usec(), TBFreq, 1000000);
 }
 
+extern "C" void sheepshaver_jit_dcbz(uint32 ea)
+{
+	Mac_memset(ea & ~31U, 0, 32);
+}
+
 /* Runtime check: is the host page backing guest EA actually mapped? In REAL/DIRECT
  * addressing the guest address is a 1:1 host pointer, so mincore() on the page tells us
  * whether it is backed (mapped) or not. Used as a fallback for the JIT load/store slow

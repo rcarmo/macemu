@@ -30,6 +30,7 @@ extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t
 extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
 extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
 extern "C" uint64_t sheepshaver_jit_get_tb_ticks(void);
+extern "C" void sheepshaver_jit_dcbz(uint32_t ea);
 /* icbi targeted-invalidate helper: only full-flush the JIT cache when a compiled
  * block actually overlaps the icbi'd 32-byte line (most icbi targets are code being
  * written, not executed, so nothing is compiled there). Defined below near the flush. */
@@ -2104,12 +2105,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		{
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			/* Align to 32 bytes */
-			emit_load_imm32(RTMP1, ~31);
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			/* STP XZR,XZR,[Xn] four times = 32 bytes */
-			emit32(0xA9000000 | (31 << 10) | (RTMP0 << 5) | 31); /* STP XZR,XZR,[Xn,#0] */
-			emit32(0xA9010000 | (31 << 10) | (RTMP0 << 5) | 31); /* STP XZR,XZR,[Xn,#16] */
+			/* Use the same memory-layer primitive as the interpreter instead of raw host stores. */
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_dcbz);
+			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR dcbz(ea=w0) */
 			return true;
 		}
 
