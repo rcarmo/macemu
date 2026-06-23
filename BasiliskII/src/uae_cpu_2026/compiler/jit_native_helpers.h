@@ -46,6 +46,8 @@ void jit_op_chk(void);
 void jit_op_tas(void);
 void jit_op_bfffo(void);
 void jit_op_bfins(void);
+void jit_op_bfextu(void);
+void jit_op_bfexts(void);
 
 /* Rotate/shift */
 void jit_op_roxl(void);

@@ -1955,6 +1955,68 @@ extern "C" void jit_op_bfffo(void)
     regs.regs[(ext >> 12) & 7] = (uae_u32)offset;
 }
 
+/* --- BFEXTU helper --- */
+extern "C" void jit_op_bfextu(void)
+{
+    /* Bit Field Extract Unsigned. Mirrors the interpreter (gencpu.c i_BFEXTU).
+     * jit_exception = extension word; scratchregs[0] = memory EA, or reg
+     * number + 0x80000000 for a Dn source. Result -> Dn=(ext>>12)&7. */
+    const uae_u32 ext = regs.jit_exception;
+    const uae_u32 ea_info = regs.scratchregs[0];
+    uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
+    const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
+    uae_u32 tmp;
+
+    if (ea_info & 0x80000000u) {
+        const int src_reg = ea_info & 7;
+        offset &= 0x1f;
+        const uae_u32 src = regs.regs[src_reg];
+        tmp = offset ? ((src << offset) | (src >> (32 - offset))) : src;
+    } else {
+        uae_u32 bdata[2];
+        uae_u32 addr = ea_info + (offset >> 3);
+        tmp = get_bitfield(addr, bdata, offset, width);
+    }
+
+    SET_NFLG(((uae_s32)tmp) < 0 ? 1 : 0);
+    tmp >>= (32 - width);
+    SET_ZFLG(tmp == 0);
+    SET_VFLG(0);
+    SET_CFLG(0);
+    regs.regs[(ext >> 12) & 7] = tmp;
+}
+
+/* --- BFEXTS helper --- */
+extern "C" void jit_op_bfexts(void)
+{
+    /* Bit Field Extract Signed. As BFEXTU but the result is sign-extended
+     * (arithmetic shift). N flag is the field MSB (before the shift), Z is on
+     * the final sign-extended result, matching the interpreter. */
+    const uae_u32 ext = regs.jit_exception;
+    const uae_u32 ea_info = regs.scratchregs[0];
+    uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
+    const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
+    uae_u32 tmp;
+
+    if (ea_info & 0x80000000u) {
+        const int src_reg = ea_info & 7;
+        offset &= 0x1f;
+        const uae_u32 src = regs.regs[src_reg];
+        tmp = offset ? ((src << offset) | (src >> (32 - offset))) : src;
+    } else {
+        uae_u32 bdata[2];
+        uae_u32 addr = ea_info + (offset >> 3);
+        tmp = get_bitfield(addr, bdata, offset, width);
+    }
+
+    SET_NFLG(((uae_s32)tmp) < 0 ? 1 : 0);
+    uae_s32 res = (uae_s32)tmp >> (32 - width);
+    SET_ZFLG(res == 0);
+    SET_VFLG(0);
+    SET_CFLG(0);
+    regs.regs[(ext >> 12) & 7] = (uae_u32)res;
+}
+
 /* --- BFINS helper --- */
 extern "C" void jit_op_bfins(void)
 {
