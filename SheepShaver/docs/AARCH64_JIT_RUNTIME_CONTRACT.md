@@ -190,10 +190,10 @@ In `ppc-cpu.cpp` (`pdi_execute` label):
 
 ```
 1. Check `SS_USE_JIT=0` diagnostic override — if set, goto skip_jit
-2. Resolve PC with `ppc_jit_aarch64_region_for_pc()` to `{host_base, guest_base, region_size}` and call `ppc_jit_aarch64_compile(pc(), host_base, guest_base, region_size, &jblk)`
+2. Resolve PC with `ppc_jit_aarch64_region_for_pc()` to `{host_base, guest_base, region_size}` using uint64 range checks, then call `ppc_jit_aarch64_compile(pc(), host_base, guest_base, region_size, &jblk)`
 3. If compilation failed or `!jblk.complete`: goto `skip_jit` (interpreter handles it)
 4. Call `fn(regs_ptr())` — executes the compiled block
-5. Validate PC: if `jit_pc` is outside RAM/ROM range, log, invalidate the block, and fall back
+5. Validate PC with uint64 range checks: if `jit_pc` is outside mapped RAM/ROM/SheepMem ranges, log, invalidate the block, and fall back
 6. Check spcflags (interrupts, cache invalidation)
 7. Fast-dispatch to the next JIT block if already complete and cached; otherwise continue via the interpreter block cache
 ```
