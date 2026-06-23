@@ -1086,11 +1086,11 @@ TESTS[vec_vcmpequw_dot_cr6]="10050718 10250718 10400C86 7CA00026"
 TEST_ORDER+=(vec_vcmpequw_dot_cr6)
 
 # vcmpgefp equality must be true (all ones). Old native code used FCMGT and returned false.
-TESTS[vec_vcmpgefp_eq]="3C603F80 90610600 90610604 90610608 9061060C 90610610 90610614 90610618 9061061C 38600600 7C0118CE 38600610 7C2118CE 10400B8C 38600620 7C4119CE 80A10620 80C10624"
+TESTS[vec_vcmpgefp_eq]="3C603F80 90610600 90610604 90610608 9061060C 90610610 90610614 90610618 9061061C 38600600 7C0118CE 38600610 7C2118CE 104009C6 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vcmpgefp_eq)
 
 # vcmpbfp is a special bounded compare, not FCMGE. a=2,b=1 -> bit31 set, bit30 clear.
-TESTS[vec_vcmpbfp_bounded]="3C604000 90610600 90610604 90610608 9061060C 3C603F80 90610610 90610614 90610618 9061061C 38600600 7C0118CE 38600610 7C2118CE 10400F8C 38600620 7C4119CE 80A10620 80C10624"
+TESTS[vec_vcmpbfp_bounded]="3C604000 90610600 90610604 90610608 9061060C 3C603F80 90610610 90610614 90610618 9061061C 38600600 7C0118CE 38600610 7C2118CE 10400BC6 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vcmpbfp_bounded)
 
 TESTS[vec_vxor_self]="10070718 100004C4 38600600 7C0119CE 80A10600 80C10604"
@@ -1106,13 +1106,13 @@ TEST_ORDER+=(vec_vscr_roundtrip)
 
 # Wrong-function/pass-through AltiVec exclusions. These should run via interpreter
 # until exact native semantics exist; the former native mappings were not merely
-# low-precision estimates: vexptefp/vlogefp used reciprocal estimate (wrong function),
-# and vslo/vsro were pass-throughs (wrong function).
-# vexptefp v2,v0 with v0=1.0f; old FRECPE native would produce reciprocal-ish bits, not interp.
-TESTS[vec_vexptefp_excluded]="3C803F80 90810600 90810604 90810608 9081060C 38600600 7C0118CE 104002C4 7C4119CE 80A10600 80C10604"
+# wrong-function native paths: vexptefp/vlogefp used FRINT rounding,
+# vsl used a byte extract, and vslo/vsro need exact octet-shift semantics.
+# vexptefp v2,v0 with v0=1.0f; old native FRINTN rounded instead of computing the interpreter value.
+TESTS[vec_vexptefp_excluded]="3C803F80 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040018A 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vexptefp_excluded)
-# vlogefp v2,v0 with v0=2.0f; old FRECPE native would produce reciprocal-ish bits, not interp.
-TESTS[vec_vlogefp_excluded]="3C804000 90810600 90810604 90810608 9081060C 38600600 7C0118CE 10400344 7C4119CE 80A10600 80C10604"
+# vlogefp v2,v0 with v0=2.0f; old native FRINTZ rounded instead of computing the interpreter value.
+TESTS[vec_vlogefp_excluded]="3C804000 90810600 90810604 90810608 9081060C 38600600 7C0118CE 104001CA 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vlogefp_excluded)
 
 # Vector reciprocal/rsqrt estimates are delegated: interpreter uses exact 1/x and 1/sqrt(x).
@@ -1120,10 +1120,12 @@ TESTS[vec_vrefp_delegated]="3C804000 90810600 90810604 90810608 9081060C 3860060
 TEST_ORDER+=(vec_vrefp_delegated)
 TESTS[vec_vrsqrtefp_delegated]="3C804080 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040014A 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vrsqrtefp_delegated)
-# vslo/vsro should not pass the source through unchanged.
-TESTS[vec_vslo_excluded]="10050718 10230718 10400A98 38600600 7C4119CE 80A10600 80C10604"
+# vsl/vslo/vsro should not compile to byte-extract/pass-through approximations.
+TESTS[vec_vsl_excluded]="10050718 10230718 104009C4 38600600 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vsl_excluded)
+TESTS[vec_vslo_excluded]="10050718 10230718 10400C0C 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vslo_excluded)
-TESTS[vec_vsro_excluded]="10050718 10230718 10400B18 38600600 7C4119CE 80A10600 80C10604"
+TESTS[vec_vsro_excluded]="10050718 10230718 10400C4C 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vsro_excluded)
 
 # vsel mask all ones must select vB (0x55555555), not vA (0xaaaaaaaa).
@@ -1140,15 +1142,15 @@ TESTS[vec_vsumuhm_delegated]="10070718 10230718 10400826 38600600 7C4119CE 80A10
 TEST_ORDER+=(vec_vsumuhm_delegated)
 
 # Remaining AltiVec VX vector-sum helpers are delegated until exact sum/VSCR.SAT semantics exist.
-TESTS[vec_vsum4ubs_delegated]="10070718 10230718 10400F88 38600600 7C4119CE 80A10600 80C10604"
+TESTS[vec_vsum4ubs_delegated]="10070718 10230718 10400E08 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vsum4ubs_delegated)
 
 # AltiVec average/saturating add-sub family is delegated until exact encodings and VSCR.SAT exist.
 # vavgub: 0x00 and 0x02 should rounded-average to 0x01; old native encoding was SMAXP-like.
-TESTS[vec_vavgub_delegated]="10070718 38800202 64840202 90810610 90810614 90810618 9081061C 38600610 7C2118CE 10400D02 38600620 7C4119CE 80A10620 80C10624"
+TESTS[vec_vavgub_delegated]="10070718 38800202 64840202 90810610 90810614 90810618 9081061C 38600610 7C2118CE 10400C02 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vavgub_delegated)
 # vaddubs: 0xff + 0x01 saturates and sets VSCR.SAT; old native encoding was UABA and no VSCR update.
-TESTS[vec_vaddubs_delegated]="3880FFFF 6484FFFF 90810600 90810604 90810608 9081060C 38800101 64840101 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400B00 38600620 7C4119CE 80A10620 80C10624"
+TESTS[vec_vaddubs_delegated]="3880FFFF 6484FFFF 90810600 90810604 90810608 9081060C 38800101 64840101 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400A00 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vaddubs_delegated)
 
 # AltiVec merge high/low family is delegated: old native encodings were unrelated FP/convert ops.
@@ -1161,12 +1163,12 @@ TEST_ORDER+=(vec_vmrglw_delegated)
 # not widened even/odd multiply operations.
 TESTS[vec_vmuloub_delegated]="3880FFFF 6484FFFF 90810600 90810604 90810608 9081060C 38800202 64840202 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400808 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vmuloub_delegated)
-TESTS[vec_vmuleuh_delegated]="3C800001 60840001 90810600 90810604 90810608 9081060C 3C800002 60840002 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400948 38600620 7C4119CE 80A10620 80C10624"
+TESTS[vec_vmuleuh_delegated]="3C800001 60840001 90810600 90810604 90810608 9081060C 3C800002 60840002 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400A48 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vmuleuh_delegated)
 
 # AltiVec conversion family is delegated until UIMM scale and VSCR.SAT semantics are exact.
 # vcfsx UIMM=1: signed int 2 -> float 1.0; native no-scale/wrong-direction path diverged.
-TESTS[vec_vcfsx_scale_delegated]="38600002 90610600 90610604 90610608 9061060C 38600600 7C0118CE 10410B4E 38600620 7C4119CE 80A10620 80C10624"
+TESTS[vec_vcfsx_scale_delegated]="38600002 90610600 90610604 90610608 9061060C 38600600 7C0118CE 10410B4A 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vcfsx_scale_delegated)
 # vctsxs UIMM=1: float 1.0 -> signed int 2.
 TESTS[vec_vctsxs_scale_delegated]="3C803F80 90810600 90810604 90810608 9081060C 38600600 7C0118CE 10410BCA 38600620 7C4119CE 80A10620 80C10624"

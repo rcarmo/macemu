@@ -3147,8 +3147,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 266: /* vrefp — EXCLUDED: hardware reciprocal estimate is not interpreter exact 1/x */
 		case 330: /* vrsqrtefp — EXCLUDED: hardware rsqrt estimate is not interpreter exact 1/sqrt(x) */
 			return false;
-		case 394: emit_load_vr(0,vb); emit32(0x4E218800|(0<<5)|0); emit_store_vr(0,vd); return true;
-		case 458: emit_load_vr(0,vb); emit32(0x4EA19800|(0<<5)|0); emit_store_vr(0,vd); return true;
+		case 394: /* vexptefp — EXCLUDED: native FRINTN is the wrong function */
+		case 458: /* vlogefp — EXCLUDED: native FRINTZ is the wrong function */
+			return false;
 		case 6: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E208C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
 		case 70: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E608C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
 		case 134: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA08C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
@@ -3197,23 +3198,24 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 518: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E203400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgtub CMHI.16B (unsigned) */
 		case 582: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E603400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgtuh */
 		case 646: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA03400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgtuw */
-		case 1282: /* vavgub — EXCLUDED: hardcoded encoding disassembles as SMAXP, not rounded average */
-		case 1346: /* vavguh — EXCLUDED: hardcoded encoding disassembles as SMAXP, not rounded average */
-		case 1410: /* vavguw — EXCLUDED: hardcoded encoding disassembles as SMAXP, not rounded average */
-		case 1794: /* vavgsb — EXCLUDED until signed average encoding/lane order is verified */
-		case 1858: /* vavgsh — EXCLUDED until signed average encoding/lane order is verified */
-		case 1922: /* vavgsw — EXCLUDED until signed average encoding/lane order is verified */
-		case 768:  /* vaddubs — EXCLUDED: hardcoded encoding is UABA and VSCR.SAT is not updated */
-		case 832:  /* vadduhs — EXCLUDED: hardcoded encoding is UABA and VSCR.SAT is not updated */
-		case 896:  /* vadduws — EXCLUDED: hardcoded encoding is UABA and VSCR.SAT is not updated */
-		case 1792: /* vsububs — EXCLUDED: native path does not update VSCR.SAT */
-		case 1856: /* vsubuhs — EXCLUDED: native path does not update VSCR.SAT */
-		case 1920: /* vsubuws — EXCLUDED: native path does not update VSCR.SAT */
-		case 512:  /* vaddsbs — EXCLUDED: hardcoded encoding is SABA and VSCR.SAT is not updated */
-		case 576:  /* vaddshs — EXCLUDED: hardcoded encoding is SABA and VSCR.SAT is not updated */
-		case 640:  /* vaddsws — EXCLUDED: hardcoded encoding is SABA and VSCR.SAT is not updated */
-		case 1536: /* vsubsbs — EXCLUDED: native path does not update VSCR.SAT */
-		case 1600: /* vsubshs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1026: /* vavgub — EXCLUDED: rounded-average semantics not proven native */
+		case 1090: /* vavguh — EXCLUDED: rounded-average semantics not proven native */
+		case 1154: /* vavguw — EXCLUDED: rounded-average semantics not proven native */
+		case 1282: /* vavgsb — EXCLUDED until signed average encoding/lane order is verified */
+		case 1346: /* vavgsh — EXCLUDED until signed average encoding/lane order is verified */
+		case 1410: /* vavgsw — EXCLUDED until signed average encoding/lane order is verified */
+		case 512:  /* vaddubs — EXCLUDED: native path does not update VSCR.SAT */
+		case 576:  /* vadduhs — EXCLUDED: native path does not update VSCR.SAT */
+		case 640:  /* vadduws — EXCLUDED: native path does not update VSCR.SAT */
+		case 768:  /* vaddsbs — EXCLUDED: native path does not update VSCR.SAT */
+		case 832:  /* vaddshs — EXCLUDED: native path does not update VSCR.SAT */
+		case 896:  /* vaddsws — EXCLUDED: native path does not update VSCR.SAT */
+		case 1536: /* vsububs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1600: /* vsubuhs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1664: /* vsubuws — EXCLUDED: native path does not update VSCR.SAT */
+		case 1792: /* vsubsbs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1856: /* vsubshs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1920: /* vsubsws — EXCLUDED: native path does not update VSCR.SAT */
 			return false;
 		case 12:  /* vmrghb — EXCLUDED: hardcoded encoding is FMAXNM, not ZIP1 */
 		case 76:  /* vmrghh — EXCLUDED: hardcoded encoding is FMAXNM, not ZIP1 */
@@ -3223,22 +3225,20 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 396: /* vmrglw — EXCLUDED: hardcoded encoding is URECPE, not ZIP2 */
 			return false;
 
+		case 778: /* vcfux — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
+		case 842: /* vcfsx — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
 		case 846: /* vupkhpx — EXCLUDED: pixel unpack expands 1/5/5/5 fields, not just zero-extend */
-		case 910: /* vcfux — EXCLUDED: UIMM scale is ignored; hardcoded word disassembles as FCVTAU */
-		case 970: /* vctsxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
 		case 906: /* vctuxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
-			return false;
-		case 354: /* vexptefp — EXCLUDED: FRECPE approximation is not PPC vexptefp semantics */
-		case 418: /* vlogefp — EXCLUDED: FRECPE approximation is not PPC vlogefp semantics */
+		case 970: /* vctsxs — EXCLUDED: UIMM scale/VSCR.SAT semantics not implemented */
 			return false;
 		case 8:   /* vmuloub — EXCLUDED: hardcoded encoding is narrow MUL, not odd-lane UMULL */
 		case 72:  /* vmulouh — EXCLUDED: hardcoded encoding is SMLSL-like, not odd-lane UMULL */
-		case 264: /* vmuleub — EXCLUDED: hardcoded encoding is SMLSL-like, not even-lane UMULL2 */
-		case 328: /* vmuleuh — EXCLUDED: hardcoded encoding is SMLSL-like, not even-lane UMULL2 */
-		case 776: /* vmulosb — EXCLUDED: hardcoded encoding is narrow MUL, not odd-lane SMULL */
-		case 840: /* vmulosh — EXCLUDED until exact odd-lane SMULL encoding is verified */
-		case 520: /* vmulesb — EXCLUDED until exact even-lane SMULL2 encoding is verified */
-		case 584: /* vmulesh — EXCLUDED until exact even-lane SMULL2 encoding is verified */
+		case 264: /* vmulosb — EXCLUDED: hardcoded encoding is SMLSL-like, not odd-lane SMULL */
+		case 328: /* vmulosh — EXCLUDED until exact odd-lane SMULL encoding is verified */
+		case 520: /* vmuleub — EXCLUDED until exact even-lane UMULL2 encoding is verified */
+		case 584: /* vmuleuh — EXCLUDED until exact even-lane UMULL2 encoding is verified */
+		case 776: /* vmulesb — EXCLUDED: hardcoded encoding is narrow MUL, not even-lane SMULL2 */
+		case 840: /* vmulesh — EXCLUDED until exact even-lane SMULL2 encoding is verified */
 			return false;
 		case 14: /* vpkuhum — EXCLUDED: current native path ignores vA and only narrows vB */
 		case 78: /* vpkuwum — EXCLUDED: current native path ignores vA and only narrows vB */
@@ -3255,9 +3255,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 654: /* vupklsb — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
 		case 718: /* vupklsh — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
 			return false;
-		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E010000|(sh<<11)); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
-		case 1036: /* vsl — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
-		case 1100: /* vsr — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
+		case 452:  /* vsl — EXCLUDED: whole-vector bit shift was mapped to byte extract */
+		case 708:  /* vsr — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
+		case 1036: /* vslo — EXCLUDED: octet shift needs exact byte-count semantics */
+		case 1100: /* vsro — EXCLUDED: octet shift needs exact byte-count semantics */
 			return false;
 		case 1604: /* mtvscr — EXCLUDED: must update architectural VSCR */
 		case 1540: /* mfvscr — EXCLUDED: must read architectural VSCR */
@@ -3266,14 +3267,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return false;
 		case 974: /* vupklpx — EXCLUDED: pixel unpack expands 1/5/5/5 fields, not just zero-extend */
 			return false;
-		case 1928: /* vsum4ubs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
-		case 1672: /* vsum4sbs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1544: /* vsum4ubs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
 		case 1608: /* vsum4shs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
-		case 1800: /* vsum2sws — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
-		case 1932: /* vsumsws — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
-			return false;
-		case 1356: /* vslo — EXCLUDED: pass-through is not exact octet-shift semantics */
-		case 1420: /* vsro — EXCLUDED: pass-through is not exact octet-shift semantics */
+		case 1672: /* vsum2sws — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1800: /* vsum4sbs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1928: /* vsumsws — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
 			return false;
 		default: break;
 		}

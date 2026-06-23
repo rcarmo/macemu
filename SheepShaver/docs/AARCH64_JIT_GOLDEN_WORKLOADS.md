@@ -36,7 +36,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 285/285 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count and runtime-count string/multiple coverage, `mfmsr_basic`, SPR/FPSCR/FPU delegation vectors, PPC64 Rc delegation coverage, AltiVec exclusion/delegation vectors, corrected logical `vec_vsrb_delegated`, relabelled `vec_vsrab_delegated`, `vec_vcmpequw_dot_cr6`, `vec_vpkuhum_delegated`, `vec_vpkuwum_delegated`, `vec_vupkhsb_delegated`, `vec_vupklpx_delegated`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, AltiVec FP compare mappings, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
+**Status**: ✅ 286/286 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count and runtime-count string/multiple coverage, `mfmsr_basic`, SPR/FPSCR/FPU delegation vectors, PPC64 Rc delegation coverage, AltiVec exclusion/delegation vectors, corrected logical `vec_vsrb_delegated`, relabelled `vec_vsrab_delegated`, corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro`/`vcmpgefp`/`vcmpbfp`/`vsum4ubs`/`vavgub`/`vaddubs`/`vmuleuh`/`vcfsx`, `vec_vcmpequw_dot_cr6`, `vec_vpkuhum_delegated`, `vec_vpkuwum_delegated`, `vec_vupkhsb_delegated`, `vec_vupklpx_delegated`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
 
 ---
 
@@ -195,7 +195,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 285/285 + strict-JIT desktop holds
+    barrier; harness 286/286 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
