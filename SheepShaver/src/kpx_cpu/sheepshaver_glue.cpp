@@ -829,24 +829,20 @@ extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector_an
  * addressing the guest address is a 1:1 host pointer, so mincore() on the page tells us
  * whether it is backed (mapped) or not. Used as a fallback for the JIT load/store slow
  * path so dynamically-mapped guest arenas (CFM fragment containers above ROM) are read
- * like the interpreter, while genuinely-unmapped MMIO is still skipped. Small
- * direct-mapped cache keeps the hot CFM region from doing a syscall per access. */
+ * like the interpreter, while genuinely-unmapped MMIO is still skipped.
+ *
+ * Do not cache positive mincore() results here: guest/host mappings can be released or
+ * repurposed independently of JIT code-cache flushes, and stale positives would make the
+ * helpers read/write an unmapped or different page instead of preserving SIGSEGV-skip
+ * semantics for genuinely-unmapped MMIO. This is a guarded slow path, so correctness wins
+ * over avoiding the syscall. */
 static bool sheepshaver_jit_page_mapped(uint32 ea)
 {
 	static uint32 psize = 0;
 	if (!psize) psize = (uint32)getpagesize();
 	uint32 page = ea & ~(psize - 1);
-	static uint32 cache[2048];
-	static bool cinit = false;
-	if (!cinit) { for (int i = 0; i < 2048; i++) cache[i] = 0xffffffffu; cinit = true; }
-	uint32 slot = (page / psize) & 2047;
-	if (cache[slot] == page) return true;
 	unsigned char v = 0;
-	if (mincore((void *)(uintptr_t)Mac2HostAddr(page), psize, &v) == 0) {
-		cache[slot] = page;
-		return true;
-	}
-	return false;
+	return mincore((void *)(uintptr_t)Mac2HostAddr(page), psize, &v) == 0;
 }
 
 static inline bool sheepshaver_jit_range_contains(uint32 ea, uint32 size, uint32 start, uint64 bytes)
