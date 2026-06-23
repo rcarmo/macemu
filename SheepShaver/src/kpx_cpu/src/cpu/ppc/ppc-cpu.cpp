@@ -52,27 +52,31 @@ extern uint8 *ROMBaseHost;
 extern uint32 ROMEnd;
 #include "cpu/jit/aarch64/ppc-jit.h"
 
-static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **base, size_t *size)
+static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **host_base, uint32 *guest_base, size_t *size)
 {
 	uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
 	if (pc >= ram_start && pc + 4 >= pc && pc + 4 <= ram_start + RAMSize) {
-		*base = RAMBaseHost;
+		*host_base = RAMBaseHost;
+		*guest_base = ram_start;
 		*size = RAMSize;
 		return true;
 	}
-	if (pc >= ROMBase && pc + 4 >= pc && pc + 4 <= ROMBase + 0x500000) {
-		*base = ROMBaseHost;
+	if (pc >= ROMBase && pc + 4 >= pc && (uint64)pc + 4 <= (uint64)ROMBase + 0x500000) {
+		*host_base = ROMBaseHost;
+		*guest_base = ROMBase;
 		*size = 0x500000;
 		return true;
 	}
 #ifdef SHEEPSHAVER
 	if (pc >= SheepMem::Base() && pc + 4 >= pc && pc + 4 <= SheepMem::End()) {
-		*base = (const uint8 *)(uintptr_t)SheepMem::Base();
+		*host_base = (const uint8 *)(uintptr_t)SheepMem::Base();
+		*guest_base = SheepMem::Base();
 		*size = SheepMem::End() - SheepMem::Base();
 		return true;
 	}
 #endif
-	*base = NULL;
+	*host_base = NULL;
+	*guest_base = 0;
 	*size = 0;
 	return false;
 }
@@ -746,9 +750,10 @@ void powerpc_cpu::execute(uint32 entry)
 				if (!jit_init_done) { ppc_jit_aarch64_init(8192); jit_init_done = true; } /* 8MB JIT code cache */
 				ppc_jit_block jblk;
 				const uint8 *jit_region_base = NULL;
+				uint32 jit_region_guest_base = 0;
 				size_t jit_region_size = 0;
-				bool jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
-				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk);
+				bool jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_guest_base, &jit_region_size);
+				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_guest_base, jit_region_size, &jblk);
 				/* GATE 2 removed: partial native blocks are safe. The direct compiler
 				 * emits an epilogue that stores the first uncompiled PPC PC before
 				 * returning, so executing a supported prefix is more faithful than
@@ -863,8 +868,8 @@ void powerpc_cpu::execute(uint32 entry)
 					 * JIT loop without touching the interpreter block cache.
 					 * This eliminates my_block_cache.find() + pdi_execute overhead for
 					 * hot block-to-block transitions where both blocks are JIT-compiled. */
-					jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_size);
-					if (jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_size, &jblk)) {
+					jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_guest_base, &jit_region_size);
+					if (jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_guest_base, jit_region_size, &jblk)) {
 						for (int spc_iter = 0; !spcflags().empty() && spc_iter < 4; spc_iter++)
 							if (!check_spcflags()) goto return_site;
 						fn = (ppc_jit_entry_fn)(void*)jblk.code;

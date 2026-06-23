@@ -29,8 +29,9 @@ void ppc_jit_aarch64_invalidate_pc(uint32_t pc);
 
 bool ppc_jit_aarch64_compile(
 	uint32_t pc,
-	const uint8_t *ram,
-	size_t ramsize,
+	const uint8_t *host_base,
+	uint32_t guest_base,
+	size_t region_size,
 	ppc_jit_block *out
 );
 

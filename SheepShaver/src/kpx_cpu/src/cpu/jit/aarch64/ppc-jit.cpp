@@ -4198,12 +4198,13 @@ static bool opcode_may_touch_guest_memory(uint32_t op) {
  * register struct is authoritative across the access (helper/MMIO/fault paths read and
  * may modify guest state via RSTATE). Internal conditional branches remain disqualifying
  * until per-label/per-fault RA state is implemented. */
-static bool block_allows_register_allocation(uint32_t pc, const uint8_t *ram, size_t ramsize) {
+static bool block_allows_register_allocation(uint32_t pc, const uint8_t *host_base, uint32_t guest_base, size_t region_size) {
 	uint32_t cur_pc = pc;
+	const uint64_t guest_end = (uint64_t)guest_base + region_size;
 	for (int i = 0; i < 512; i++, cur_pc += 4) {
-		if (cur_pc < (uint32_t)(uintptr_t)ram || cur_pc >= (uint32_t)(uintptr_t)ram + ramsize)
+		if (cur_pc < guest_base || (uint64_t)cur_pc + 4 > guest_end)
 			break;
-		const uint8_t *p = ram + (cur_pc - (uint32_t)(uintptr_t)ram);
+		const uint8_t *p = host_base + (cur_pc - guest_base);
 		uint32_t op = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
 		              ((uint32_t)p[2] << 8) | p[3];
 		if (op == 0x00000000 || op == 0x4E800020) break;
@@ -4225,8 +4226,9 @@ static bool block_allows_register_allocation(uint32_t pc, const uint8_t *ram, si
 
 bool ppc_jit_aarch64_compile(
 	uint32_t pc,
-	const uint8_t *ram,
-	size_t ramsize,
+	const uint8_t *host_base,
+	uint32_t guest_base,
+	size_t region_size,
 	ppc_jit_block *out)
 {
 	/* Block address cache lookup — return cached block without recompiling.
@@ -4295,11 +4297,11 @@ bool ppc_jit_aarch64_compile(
 	lazy_cr0_valid = false;
 	lazy_cr0_reg = -1;
 	ra_reset();
-	ra_enabled = block_allows_register_allocation(pc, ram, ramsize);
+	ra_enabled = block_allows_register_allocation(pc, host_base, guest_base, region_size);
+	const uint64_t guest_end = (uint64_t)guest_base + region_size;
 
 	for (int i = 0; i < 512; i++) {
-		if (cur_pc < (uint32_t)(uintptr_t)ram ||
-		    cur_pc >= (uint32_t)(uintptr_t)ram + ramsize)
+		if (cur_pc < guest_base || (uint64_t)cur_pc + 4 > guest_end)
 			break;
 
 		/* Per-instruction overflow guard: never let a block's emitted code cross
@@ -4314,7 +4316,7 @@ bool ppc_jit_aarch64_compile(
 			break;
 		}
 
-		const uint8_t *p = ram + (cur_pc - (uint32_t)(uintptr_t)ram);
+		const uint8_t *p = host_base + (cur_pc - guest_base);
 		uint32_t op = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
 		              ((uint32_t)p[2] << 8) | p[3];
 
@@ -4439,8 +4441,8 @@ bool ppc_jit_aarch64_compile(
 		
 		if (!complete) {
 			/* Record the opcode that caused the failure */
-			if (cur_pc >= (uint32_t)(uintptr_t)ram && cur_pc < (uint32_t)(uintptr_t)ram + ramsize) {
-				const uint8_t *fail_p = ram + (cur_pc - (uint32_t)(uintptr_t)ram);
+			if (cur_pc >= guest_base && (uint64_t)cur_pc + 4 <= (uint64_t)guest_base + region_size) {
+				const uint8_t *fail_p = host_base + (cur_pc - guest_base);
 				uint32_t fail_op = ((uint32_t)fail_p[0] << 24) | ((uint32_t)fail_p[1] << 16) |
 				                   ((uint32_t)fail_p[2] << 8) | fail_p[3];
 				uint32_t fail_opc = fail_op >> 26;

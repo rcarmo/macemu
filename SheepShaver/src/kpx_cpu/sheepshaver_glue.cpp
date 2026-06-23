@@ -1374,7 +1374,7 @@ bool ss_run_opcode_test(void)
 		if (use_jit && *use_jit && strcmp(use_jit, "0") != 0) {
 			if (ppc_jit_aarch64_init(1024)) {
 				ppc_jit_block jblk;
-				if (ppc_jit_aarch64_compile(test_addr, test_ram, test_ram_size, &jblk)) {
+				if (ppc_jit_aarch64_compile(test_addr, test_ram, RAMBase, test_ram_size, &jblk)) {
 					fprintf(stderr, "SS_TEST_JIT: compiled %d PPC insns -> %zu bytes native (complete=%d)\n",
 						jblk.n_insns, jblk.code_size, jblk.complete);
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void *)jblk.code;
