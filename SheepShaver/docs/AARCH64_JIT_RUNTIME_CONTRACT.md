@@ -329,7 +329,10 @@ outside the statically-enumerated 1:1-mapped regions, and for atomic reservation
   D-form/indexed load/store. The fast path inlines the access when the EA is in a known-mapped
   region (`emit_direct_access_valid_check`); otherwise the helper mincore-probes the page and
   reads/writes genuinely-mapped guest memory via Read/WriteMacInt like the interpreter, leaving
-  the old value only for truly-unmapped MMIO.
+  the old value only for truly-unmapped MMIO. Both the inline valid-check and the helpers are
+  access-size-aware: byte/half/word checks use the actual access size, zero-page store rejection
+  is overlap-based, and highmem `[0xffff0000, 0x1_0000_0000)` is represented with size/range
+  arithmetic so byte accesses at the top of the 32-bit address space do not wrap the end point.
 - `sheepshaver_jit_lwarx` / `sheepshaver_jit_stwcx` — real reservation semantics for atomic
   acquire/retry loops.
 
