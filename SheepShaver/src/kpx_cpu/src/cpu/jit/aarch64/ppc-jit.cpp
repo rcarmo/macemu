@@ -3205,18 +3205,20 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 514: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E206C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vminub UMIN.16B */
 		case 578: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E606C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vminuh UMIN.8H */
 		case 642: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA06C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vminuw UMIN.4S */
-		case 260: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vslb USHL.16B */
-		case 324: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E605400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vslh USHL.8H */
-		case 388: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA05400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vslw USHL.4S */
-		case 772: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E20B800|(1<<5)|1); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrb NEG+USHL.16B */
-		case 836: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E60B800|(1<<5)|1); emit32(0x4E605400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrh */
-		case 900: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA0B800|(1<<5)|1); emit32(0x4EA05400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrw */
+		case 260: /* vslb — EXCLUDED: hardcoded encoding is SRSHL, not logical USHL */
+		case 324: /* vslh — EXCLUDED: hardcoded encoding is SRSHL, not logical USHL */
+		case 388: /* vslw — EXCLUDED: hardcoded encoding is SRSHL, not logical USHL */
+		case 772: /* vsrb — EXCLUDED: hardcoded encoding is NEG+SRSHL, not logical right shift */
+		case 836: /* vsrh — EXCLUDED: hardcoded encoding is NEG+SRSHL, not logical right shift */
+		case 900: /* vsrw — EXCLUDED: hardcoded encoding is NEG+SRSHL, not logical right shift */
+			return false;
 		case 516: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E204400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrab SSHL.16B (arith) */
 		case 580: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E60B800|(1<<5)|1); emit32(0x4E604400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsrah */
 		case 644: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA0B800|(1<<5)|1); emit32(0x4EA04400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsraw */
-		case 4: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlb USHL.16B (rotate=shift by variable amount) */
-		case 68: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E605400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlh USHL.8H */
-		case 132: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA05400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrlw USHL.4S */
+		case 4:   /* vrlb — EXCLUDED: rotate-left was mapped to shift */
+		case 68:  /* vrlh — EXCLUDED: rotate-left was mapped to shift */
+		case 132: /* vrlw — EXCLUDED: rotate-left was mapped to shift */
+			return false;
 		case 524: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E010400|((idx*2+1)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltb DUP.16B */
 		case 588: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E020400|((idx*4+2)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vsplth DUP.8H */
 		case 652: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E040400|((idx*8+4)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltw DUP.4S */
@@ -3287,8 +3289,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 942: emit_load_vr(0,vb); emit32(0x4E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsb SXTL2.8H */
 		case 1006: emit_load_vr(0,vb); emit32(0x4E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsh SXTL2.4S */
 		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E010000|(sh<<11)); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
-		case 1036: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsl SSHL.16B (shift left by register) */
-		case 1100: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E20B800|(1<<5)|1); emit32(0x6E205400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsr NEG+USHL.16B (negate shift, then shift left = right shift) */
+		case 1036: /* vsl — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
+		case 1100: /* vsr — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
+			return false;
 		case 1604: /* mtvscr — EXCLUDED: must update architectural VSCR */
 		case 1540: /* mfvscr — EXCLUDED: must read architectural VSCR */
 			return false;

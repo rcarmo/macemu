@@ -1144,6 +1144,14 @@ TEST_ORDER+=(vec_vcfsx_scale_delegated)
 TESTS[vec_vctsxs_scale_delegated]="3C803F80 90810600 90810604 90810608 9081060C 38600600 7C0118CE 10410BCA 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vctsxs_scale_delegated)
 
+# AltiVec rotate/logical/whole-vector shifts are delegated until exact shift semantics exist.
+# vrlb: 0x81 rol 1 -> 0x03; old native logical shift produced 0x02.
+TESTS[vec_vrlb_delegated]="38808181 64848181 90810600 90810604 90810608 9081060C 38800101 64840101 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400804 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vrlb_delegated)
+# vsrb: 0x80 >> 1 logical -> 0x40; old native SRSHL-like path sign/round shifted.
+TESTS[vec_vsrb_delegated]="38808080 64848080 90810600 90810604 90810608 9081060C 38800101 64840101 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400B04 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vsrb_delegated)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
