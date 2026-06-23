@@ -333,8 +333,9 @@ outside the statically-enumerated 1:1-mapped regions, and for atomic reservation
   cached, because guest/host mappings can change independently of JIT cache flushes. Both the inline
   valid-check and the helpers are
   access-size-aware: byte/half/word checks use the actual access size, zero-page store rejection
-  is overlap-based, and highmem `[0xffff0000, 0x1_0000_0000)` is represented with size/range
-  arithmetic so byte accesses at the top of the 32-bit address space do not wrap the end point.
+  is overlap-based, and direct valid ranges are represented by start+size/count arithmetic rather
+  than wrapping 32-bit end-exclusive endpoints. This covers highmem
+  `[0xffff0000, 0x1_0000_0000)` and ordinary RAM/ROM/framebuffer ranges.
 - `sheepshaver_jit_lwarx` / `sheepshaver_jit_stwcx` — real reservation semantics for atomic
   acquire/retry loops.
 
