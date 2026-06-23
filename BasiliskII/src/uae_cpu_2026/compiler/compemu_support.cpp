@@ -496,6 +496,41 @@ void m68k_do_compile_execute(void)
 #endif
 		((compiled_handler)(pushall_call_handler))();
 		_dc++;
+		/* Two-run path differential recorder (CONT.86): non-perturbing ring of the
+		   last N block dispatches with key registers; dumped once when guest pc
+		   reaches B2_PATH_RING_TARGET. Used to follow the deterministic data/path
+		   divergence into the NuBus slot scanner (the chain is RESOLVED post-5d5090ca,
+		   so this finds the first divergent register/branch). Ring write only -> no
+		   per-dispatch fprintf, deterministic (tick-timing ruled out for this bug). */
+		{
+			static int pr_init = -1;
+			static uae_u32 pr_target = 0;
+			if (pr_init < 0) { const char* e = getenv("B2_PATH_RING_TARGET"); pr_target = (e && *e) ? (uae_u32)strtoul(e, 0, 0) : 0; pr_init = 0; }
+			if (pr_target) {
+				static struct { uae_u32 pc, a0, a1, a2, d0, d7; } pr_ring[8192];
+				static unsigned long pr_idx = 0;
+				static int pr_dumped = 0;
+				uae_u32 _gpc = m68k_getpc();
+				unsigned slot = (unsigned)(pr_idx & 8191);
+				pr_ring[slot].pc = _gpc;
+				pr_ring[slot].a0 = regs.regs[8];
+				pr_ring[slot].a1 = regs.regs[9];
+				pr_ring[slot].a2 = regs.regs[10];
+				pr_ring[slot].d0 = regs.regs[0];
+				pr_ring[slot].d7 = regs.regs[7];
+				pr_idx++;
+				if (_gpc == pr_target && !pr_dumped) {
+					pr_dumped = 1;
+					unsigned long start = (pr_idx > 8192) ? pr_idx - 8192 : 0;
+					for (unsigned long i = start; i < pr_idx; i++) {
+						unsigned s = (unsigned)(i & 8191);
+						fprintf(stderr, "PATHRING %lu pc=%08x a0=%08x a1=%08x a2=%08x d0=%08x d7=%08x\n",
+							i - start, pr_ring[s].pc, pr_ring[s].a0, pr_ring[s].a1, pr_ring[s].a2, pr_ring[s].d0, pr_ring[s].d7);
+					}
+					fflush(stderr);
+				}
+			}
+		}
 		if (jit_diag) {
 			static unsigned long dc_log = 0;
 			static uae_u32 prev_dc_pc = 0xffffffff;
