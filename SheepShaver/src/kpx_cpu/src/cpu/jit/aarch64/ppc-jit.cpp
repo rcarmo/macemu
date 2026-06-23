@@ -29,6 +29,7 @@ extern "C" uint32_t sheepshaver_jit_safe_load(uint32_t ea, uint32_t old_value, u
 extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t store_kind);
 extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
 extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
+extern "C" uint64_t sheepshaver_jit_get_tb_ticks(void);
 /* icbi targeted-invalidate helper: only full-flush the JIT cache when a compiled
  * block actually overlaps the icbi'd 32-byte line (most icbi targets are code being
  * written, not executed, so nothing is compiled there). Defined below near the flush. */
@@ -1928,9 +1929,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 371: /* mftb/mftbu rD — move from time base */
 		{
 			uint32_t tbr = ((op >> 16) & 0x1F) | ((op >> 6) & 0x3E0);
-			/* Read ARM64 CNTVCT_EL0 as a monotonic substitute for PPC TB.
-			 * TBR 268 is TBL (low 32), TBR 269 is TBU (high 32). */
-			emit32(0xD53BE040 | RTMP0); /* MRS Xt, CNTVCT_EL0 */
+			if (tbr != 268 && tbr != 269) return false;
+			/* Match interpreter get_tb_ticks(): GetTicks_usec() scaled by TimebaseSpeed.
+			 * Raw CNTVCT_EL0 has host-specific frequency/epoch and diverges from the
+			 * emulated PPC timebase. TBR 268 is TBL (low 32), TBR 269 is TBU (high 32). */
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_get_tb_ticks);
+			emit32(0xD63F0000 | (RTMP4 << 5)); /* BLR x4 -> X0 ticks */
 			if (tbr == 269)
 				emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* LSR Xd,Xn,#32 */
 			emit_store_gpr(RTMP0, rd);

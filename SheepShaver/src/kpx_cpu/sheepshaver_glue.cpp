@@ -825,6 +825,25 @@ extern "C" void sheepshaver_jit_execute_native_op(void *regs, uint32 selector_an
 		ppc_cpu->pc() += 4;                 /* else fall through to pc+4 */
 }
 
+static uint64 sheepshaver_jit_muldiv64(uint64 a, uint32 b, uint32 c)
+{
+	union {
+		uint64 ll;
+		struct { uint32 low, high; } l;
+	} res;
+	uint64 rl = (uint64)(uint32)a * b;
+	uint64 rh = (a >> 32) * b + (rl >> 32);
+	res.l.high = rh / c;
+	res.l.low = (((rh % c) << 32) + (rl & 0xffffffff)) / c;
+	return res.ll;
+}
+
+extern "C" uint64 sheepshaver_jit_get_tb_ticks(void)
+{
+	const uint32 TBFreq = (uint32)TimebaseSpeed;
+	return sheepshaver_jit_muldiv64(GetTicks_usec(), TBFreq, 1000000);
+}
+
 /* Runtime check: is the host page backing guest EA actually mapped? In REAL/DIRECT
  * addressing the guest address is a 1:1 host pointer, so mincore() on the page tells us
  * whether it is backed (mapped) or not. Used as a fallback for the JIT load/store slow
