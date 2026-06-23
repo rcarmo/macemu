@@ -3575,68 +3575,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
-		case 583: /* mffs frD — move from FPSCR */
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			emit32(0x9E670000 | (RTMP0 << 5) | 0); /* FMOV Dd, Xn */
-			emit_store_fpr(0, frd);
-			return true;
-
-		case 711: /* mtfsfi crfD,IMM — set FPSCR field to 4-bit immediate */
-		{
-			uint32_t crfD = (op >> 23) & 0x7;
-			uint32_t imm = (op >> 12) & 0xF;
-			uint32_t shift = (7 - crfD) * 4;
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			emit_load_imm32(RTMP1, ~(0xF << shift));
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* clear field */
-			emit_load_imm32(RTMP1, imm << shift);
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* set field */
-			a64_str_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			if (crfD == 7) emit_sync_fpscr_rounding(); /* field 7 contains RN */
-			return true;
-		}
-
-		case 70: /* mtfsb0 crbD — clear FPSCR bit */
-		{
-			uint32_t crbD = (op >> 21) & 0x1F;
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			emit_load_imm32(RTMP1, ~(1u << (31 - crbD)));
-			emit32(0x0A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			a64_str_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			if (crbD >= 30) emit_sync_fpscr_rounding(); /* RN bits */
-			return true;
-		}
-
-		case 38: /* mtfsb1 crbD — set FPSCR bit */
-		{
-			uint32_t crbD = (op >> 21) & 0x1F;
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			emit_load_imm32(RTMP1, 1u << (31 - crbD));
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			a64_str_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			if (crbD >= 30) emit_sync_fpscr_rounding();
-			return true;
-		}
-
-		case 134: /* mtfsf FM,frB — move to FPSCR fields */
-		{
-			uint32_t fm = (op >> 17) & 0xFF;
-			emit_load_fpr(0, frb);
-			emit32(0x9E660000 | (0 << 5) | RTMP0); /* FMOV Xn, Dd */
-			/* Build mask from FM (each bit enables a 4-bit field) */
-			uint32_t mask = 0;
-			for (int i = 0; i < 8; i++)
-				if (fm & (1 << (7 - i))) mask |= (0xF << ((7 - i) * 4));
-			a64_ldr_w_imm(RTMP1, RSTATE, PPCR_FPSCR);
-			emit_load_imm32(RTMP2, ~mask);
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); /* clear target fields */
-			emit_load_imm32(RTMP2, mask);
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); /* mask source */
-			emit32(0x2A000000 | (RTMP0 << 16) | (RTMP1 << 5) | RTMP1); /* merge */
-			a64_str_w_imm(RTMP1, RSTATE, PPCR_FPSCR);
-			if (fm & 1) emit_sync_fpscr_rounding(); /* field 7 (RN) modified */
-			return true;
-		}
+		case 583: /* mffs — EXCLUDED: Rc/CR1 and FPSCR move semantics need helper */
+		case 711: /* mtfsfi — EXCLUDED: FPSCR summary/CR1/RN semantics not exact */
+		case 70:  /* mtfsb0 — EXCLUDED: record_fpscr/CR1 semantics not exact */
+		case 38:  /* mtfsb1 — EXCLUDED: record_fpscr/CR1 semantics not exact */
+		case 134: /* mtfsf — EXCLUDED: FPSCR field-mask/summary/CR1 semantics not exact */
+		case 64:  /* mcrfs — EXCLUDED: copied FPSCR exception bits must be cleared */
+			return false;
+		
 
 		case 23: /* fsel frD,frA,frC,frB — if frA >= 0 then frC else frB */
 			emit_load_fpr(0, fra);
@@ -3648,28 +3594,6 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x1E600C00 | (2 << 16) | (0xA << 12) | (1 << 5) | 0); /* FCSEL D0,D1,D2,GE */
 			emit_store_fpr(0, frd);
 			return true;
-		
-		case 64: /* mcrfs crD,crS — move from FPSCR field to CR field */
-		{
-			uint32_t crd_f = (op >> 23) & 0x7;
-			uint32_t crs_f = (op >> 18) & 0x7;
-			/* Read FPSCR field and write to CR field */
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_FPSCR);
-			uint32_t src_sh = (7 - crs_f) * 4;
-			uint32_t dst_sh = (7 - crd_f) * 4;
-			a64_mov_reg(RTMP1, RTMP0);
-			if (src_sh) { emit_load_imm32(RTMP2, src_sh); emit32(0x1AC02400 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); }
-			emit_load_imm32(RTMP2, 0xF);
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1);
-			if (dst_sh) { emit_load_imm32(RTMP2, dst_sh); emit32(0x1AC02000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1); }
-			lazy_flush_cr0();
-			a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CR);
-			emit_load_imm32(RTMP2, ~(0xFU << dst_sh));
-			emit32(0x0A000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-			emit32(0x2A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			a64_str_w_imm(RTMP0, RSTATE, PPCR_CR);
-			return true;
-		}
 
 		case 26: /* frsqrte frD,frB — reciprocal square root estimate */
 			emit_load_fpr(0, frb);

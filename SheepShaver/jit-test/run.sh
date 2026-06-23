@@ -793,6 +793,12 @@ TEST_ORDER+=(fp_fsel)
 TESTS[fp_mffs]="FC00048E D8010100"
 TEST_ORDER+=(fp_mffs)
 
+# FPSCR move/write family is delegated until CR1/FPSCR-summary semantics are exact.
+TESTS[fp_mffs_dot_delegated]="FC00048F 7CA00026"
+TEST_ORDER+=(fp_mffs_dot_delegated)
+TESTS[fp_mtfsfi_delegated]="FF80010C FC00048E D8010100"
+TEST_ORDER+=(fp_mtfsfi_delegated)
+
 # --- Indexed load/store ---
 # stwx: li r3,0xDEAD; li r4,0; stwx r3,r1,r4; lwzx r5,r1,r4
 TESTS[stwx_basic]="3860dead 38800000 7C61212E 7CA1202E"
