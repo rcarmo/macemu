@@ -3249,12 +3249,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 1536: /* vsubsbs — EXCLUDED: native path does not update VSCR.SAT */
 		case 1600: /* vsubshs — EXCLUDED: native path does not update VSCR.SAT */
 			return false;
-		case 12: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E20C400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrghb ZIP1.16B */
-		case 76: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E60C400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrghh ZIP1.8H */
-		case 140: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA0C400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrghw ZIP1.4S */
-		case 268: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E20C800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrglb ZIP2.16B */
-		case 332: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E60C800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrglh ZIP2.8H */
-		case 396: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA0C800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrglw ZIP2.4S */
+		case 12:  /* vmrghb — EXCLUDED: hardcoded encoding is FMAXNM, not ZIP1 */
+		case 76:  /* vmrghh — EXCLUDED: hardcoded encoding is FMAXNM, not ZIP1 */
+		case 140: /* vmrghw — EXCLUDED: hardcoded encoding is FMINNM, not ZIP1 */
+		case 268: /* vmrglb — EXCLUDED: hardcoded encoding is FCVTAS, not ZIP2 */
+		case 332: /* vmrglh — EXCLUDED: hardcoded encoding is FCVTAS, not ZIP2 */
+		case 396: /* vmrglw — EXCLUDED: hardcoded encoding is URECPE, not ZIP2 */
+			return false;
 
 		case 846: { emit_load_vr(0,vb); emit32(0x4E21C800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vcfsx SCVTF.4S */
 		case 910: { emit_load_vr(0,vb); emit32(0x6E21C800|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vcfux UCVTF.4S */
