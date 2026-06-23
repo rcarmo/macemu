@@ -1999,11 +1999,19 @@ int m68k_do_specialties(void)
 		// Block was compiled
 		SPCFLAGS_CLEAR( SPCFLAG_JIT_END_COMPILE );
 
-		// Retain the request to get out of compiled code until
-		// we reached the toplevel execution, i.e. the one that
-		// can compile then run compiled code. This also means
-		// we processed all (nested) EmulOps
-		if ((m68k_execute_depth == 0) && SPCFLAGS_TEST( SPCFLAG_JIT_EXEC_RETURN ))
+		// Clear the "get out of compiled code" request at ANY nesting depth.
+		// SPCFLAG_JIT_EXEC_RETURN is set by flush_icache_hard() to bail out of
+		// now-invalid compiled code so it can be recompiled. The original code
+		// only cleared it at toplevel (depth==0) on the assumption that nested
+		// EmulOp execution could not recompile -- but m68k_do_compile_execute()
+		// recompiles via execute_normal at any depth. Retaining the flag during
+		// nested execution (depth>0) diverted EVERY compiled-block dispatch to
+		// do_nothing() forever (infinite spin, e.g. the slot-ROM 04087926 path
+		// after a cache flush mid-nested-call). The freed cache_tags already
+		// route the next dispatch through execute_normal, so clearing here lets
+		// the nested level recompile and continue; the toplevel likewise
+		// recompiles its own freed blocks on its next dispatch.
+		if (SPCFLAGS_TEST( SPCFLAG_JIT_EXEC_RETURN ))
 			SPCFLAGS_CLEAR( SPCFLAG_JIT_EXEC_RETURN );
 	}
 #endif
