@@ -162,15 +162,16 @@ for low GPRs therefore use a W-register move (`a64_mov_w_reg`), not an X move.
 ### Block compiler entry (`ppc_jit_aarch64_compile`)
 
 **Preconditions**:
-- `pc` is a valid PPC address within `[ram, ram + ramsize)`
-- `ram` and `ramsize` are consistent with the current MAC RAM mapping
+- `pc` is a valid PPC address within `[guest_base, guest_base + region_size)`
+- `host_base`, `guest_base`, and `region_size` describe the same mapped guest code region; instruction
+  fetches use `host_base + (pc - guest_base)`, never an implicit host-pointer-as-guest-base assumption
 - JIT cache has space (`jit_cache_wp < jit_cache_end - 2048`); the 2048-word (8KB) margin
   guarantees a fresh block compiles before the per-instruction overflow guard trips (large
   blocks: guarded load/store sequences, unrolled string ops)
 
 **What the compiler does**:
 1. Emits prologue (callee-save, x20 = regs ptr)
-2. Fetches PPC instructions from `ram[pc - (uint32_t)(uintptr_t)ram]`
+2. Fetches PPC instructions from `host_base[pc - guest_base]`
 3. For each instruction, calls `compile_one(op, cur_pc)`
 4. If `compile_one` fails: emits `emit_epilogue_with_pc(cur_pc)`, marks `complete = false`, stops
 5. If block terminator hit: emits terminator epilogue, stops
@@ -189,7 +190,7 @@ In `ppc-cpu.cpp` (`pdi_execute` label):
 
 ```
 1. Check `SS_USE_JIT=0` diagnostic override — if set, goto skip_jit
-2. Call ppc_jit_aarch64_compile(pc(), RAMBaseHost, RAMSize, &jblk)
+2. Resolve PC with `ppc_jit_aarch64_region_for_pc()` to `{host_base, guest_base, region_size}` and call `ppc_jit_aarch64_compile(pc(), host_base, guest_base, region_size, &jblk)`
 3. If compilation failed or `!jblk.complete`: goto `skip_jit` (interpreter handles it)
 4. Call `fn(regs_ptr())` — executes the compiled block
 5. Validate PC: if `jit_pc` is outside RAM/ROM range, log, invalidate the block, and fall back
