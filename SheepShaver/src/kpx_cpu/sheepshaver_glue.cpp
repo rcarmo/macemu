@@ -1079,6 +1079,45 @@ extern "C" void sheepshaver_jit_fp_store(powerpc_registers *r, uint32 ea, uint32
 		vm_write_memory_4(ea, sheepshaver_jit_fp_store_single_convert(r->fpr[fpr].j));
 }
 
+extern "C" void sheepshaver_jit_lmw(powerpc_registers *r, uint32 ea, uint32 rd)
+{
+	if (!r || rd >= 32) return;
+	for (uint32 i = rd; i < 32; i++, ea += 4)
+		r->gpr[i] = sheepshaver_jit_safe_lwz(ea, r->gpr[i]);
+}
+
+extern "C" void sheepshaver_jit_stmw(powerpc_registers *r, uint32 ea, uint32 rs)
+{
+	if (!r || rs >= 32) return;
+	for (uint32 i = rs; i < 32; i++, ea += 4)
+		sheepshaver_jit_safe_stw(ea, r->gpr[i]);
+}
+
+extern "C" void sheepshaver_jit_lswi(powerpc_registers *r, uint32 ea, uint32 rd, uint32 nb)
+{
+	if (!r || rd >= 32) return;
+	if (nb == 0) nb = 32;
+	for (uint32 i = 0; i < nb; i++) {
+		uint32 reg = (rd + (i >> 2)) & 31;
+		uint32 sh = (3 - (i & 3)) * 8;
+		uint32 old_byte = (r->gpr[reg] >> sh) & 0xff;
+		uint32 byte = sheepshaver_jit_safe_load(ea + i, old_byte, 1) & 0xff;
+		if ((i & 3) == 0) r->gpr[reg] = byte << 24;
+		else r->gpr[reg] = (r->gpr[reg] & ~(0xffu << sh)) | (byte << sh);
+	}
+}
+
+extern "C" void sheepshaver_jit_stswi(powerpc_registers *r, uint32 ea, uint32 rs, uint32 nb)
+{
+	if (!r || rs >= 32) return;
+	if (nb == 0) nb = 32;
+	for (uint32 i = 0; i < nb; i++) {
+		uint32 reg = (rs + (i >> 2)) & 31;
+		uint32 sh = (3 - (i & 3)) * 8;
+		sheepshaver_jit_safe_store(ea + i, (r->gpr[reg] >> sh) & 0xff, 1);
+	}
+}
+
 /* Frame buffer extent for the JIT D-form load/store valid-check (emit_direct_access_valid_check
  * in ppc-jit.cpp). SheepShaver-owned: screen_base + current video mode size. 0 = not configured. */
 extern "C" uint32 sheepshaver_jit_fb_base(void) { return screen_base; }

@@ -31,6 +31,10 @@ extern "C" uint32_t sheepshaver_jit_safe_load_reversed(uint32_t ea, uint32_t old
 extern "C" void sheepshaver_jit_safe_store_reversed(uint32_t ea, uint32_t value, uint32_t access_size);
 extern "C" void sheepshaver_jit_fp_load(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
 extern "C" void sheepshaver_jit_fp_store(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
+extern "C" void sheepshaver_jit_lmw(void *regs, uint32_t ea, uint32_t rd);
+extern "C" void sheepshaver_jit_stmw(void *regs, uint32_t ea, uint32_t rs);
+extern "C" void sheepshaver_jit_lswi(void *regs, uint32_t ea, uint32_t rd, uint32_t nb);
+extern "C" void sheepshaver_jit_stswi(void *regs, uint32_t ea, uint32_t rs, uint32_t nb);
 extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
 extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
 extern "C" uint64_t sheepshaver_jit_get_tb_ticks(void);
@@ -2247,58 +2251,26 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		{
 			uint32_t nb_field = rb;
 			uint32_t nb = nb_field == 0 ? 32 : nb_field;
-			if (ra == 0) { a64_movz(RTMP0, 0, 0); }
-			else { emit_load_gpr(RTMP0, ra); }
-			uint32_t r = rd;
-			uint32_t bytes_done = 0;
-			while (bytes_done < nb) {
-				if (nb - bytes_done >= 4) {
-					emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-					emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-					a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
-					if (bytes_done + 4 < nb) emit32(0x11001000 | (RTMP0 << 5) | RTMP0);
-					bytes_done += 4;
-				} else {
-					a64_movz(RTMP1, 0, 0);
-					for (uint32_t b = 0; b < nb - bytes_done; b++) {
-						emit32(0x38401400 | (RTMP0 << 5) | RTMP2);
-						uint32_t sh = (3 - b) * 8;
-						if (sh) { emit_load_imm32(3, sh); emit32(0x1AC02000 | (3 << 16) | (RTMP2 << 5) | RTMP2); }
-						emit32(0x2A000000 | (RTMP2 << 16) | (RTMP1 << 5) | RTMP1);
-					}
-					a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
-					bytes_done = nb;
-				}
-				r = (r + 1) & 31;
-			}
+			if (ra == 0) a64_movz(RTMP1, 0, 0);
+			else emit_load_gpr(RTMP1, ra);
+			a64_mov_reg(RTMP0, RSTATE);
+			emit_load_imm32(RTMP2, rd);
+			emit_load_imm32(RTMP3, nb);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_lswi);
+			emit32(0xD63F0000 | (RTMP4 << 5));
 			return true;
 		}
 		case 725: /* stswi rS,rA,NB */
 		{
 			uint32_t nb_field = rb;
 			uint32_t nb = nb_field == 0 ? 32 : nb_field;
-			if (ra == 0) { a64_movz(RTMP0, 0, 0); }
-			else { emit_load_gpr(RTMP0, ra); }
-			uint32_t r = PPC_RS(op);
-			uint32_t bytes_done = 0;
-			while (bytes_done < nb) {
-				if (nb - bytes_done >= 4) {
-					a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
-					emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-					emit32(0xB8004400 | (RTMP0 << 5) | RTMP1);
-					bytes_done += 4;
-				} else {
-					a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
-					for (uint32_t b = 0; b < nb - bytes_done; b++) {
-						a64_mov_reg(RTMP2, RTMP1);
-						uint32_t sh = (3 - b) * 8;
-						if (sh) { emit_load_imm32(3, sh); emit32(0x1AC02400 | (3 << 16) | (RTMP2 << 5) | RTMP2); }
-						emit32(0x38001400 | (RTMP0 << 5) | RTMP2);
-					}
-					bytes_done = nb;
-				}
-				r = (r + 1) & 31;
-			}
+			if (ra == 0) a64_movz(RTMP1, 0, 0);
+			else emit_load_gpr(RTMP1, ra);
+			a64_mov_reg(RTMP0, RSTATE);
+			emit_load_imm32(RTMP2, PPC_RS(op));
+			emit_load_imm32(RTMP3, nb);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_stswi);
+			emit32(0xD63F0000 | (RTMP4 << 5));
 			return true;
 		}
 		case 533: /* lswx rD,rA,rB — runtime byte count from XER */
@@ -3435,32 +3407,27 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		return true;
 
 	case 46: /* lmw rD,d(rA) — load multiple words */
-	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
-		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		for (uint32_t r = rd; r < 32; r++) {
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
-			a64_str_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
-			if (r < 31) emit32(0x11001000 | (RTMP0 << 5) | RTMP0); /* ADD Wn, Wn, #4 */
-		}
+		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP1); }
+		else a64_mov_reg(RTMP1, RTMP0);
+		a64_mov_reg(RTMP0, RSTATE);
+		emit_load_imm32(RTMP2, rd);
+		emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_lmw);
+		emit32(0xD63F0000 | (RTMP4 << 5));
 		return true;
-	}
 
 	case 47: /* stmw rS,d(rA) — store multiple words */
-	{
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
-		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		for (uint32_t r = rd; r < 32; r++) {
-			a64_ldr_w_imm(RTMP1, RSTATE, PPCR_GPR(r));
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1); /* STR Wt, [Xn] */
-			if (r < 31) emit32(0x11001000 | (RTMP0 << 5) | RTMP0); /* ADD +4 */
-		}
+		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP1); }
+		else a64_mov_reg(RTMP1, RTMP0);
+		a64_mov_reg(RTMP0, RSTATE);
+		emit_load_imm32(RTMP2, rd);
+		emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_stmw);
+		emit32(0xD63F0000 | (RTMP4 << 5));
 		return true;
-	}
+
 
 	case 48: /* lfs frD,d(rA) — load float single */
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
