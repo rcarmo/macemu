@@ -3342,12 +3342,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 33: /* vmhraddshs — EXCLUDED: approximation is not exact rounded saturated semantics */
 			return false;
 		case 34: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmladduhm MUL+ADD */
-		case 36: /* vmsumubm — EXCLUDED: current MUL+ADD approximation is not exact vector sum semantics */
+		case 36: /* vmsumubm — EXCLUDED: native sequence is approximate/wrong vector-sum semantics */
+		case 37: /* vmsummbm — EXCLUDED: native sequence is approximate/wrong vector-sum semantics */
+		case 38: /* vmsumuhm — EXCLUDED: old native sequence emitted undefined AArch64 for this XO */
+		case 39: /* vmsumuhs — EXCLUDED: saturated vector sum must update VSCR.SAT exactly */
+		case 40: /* vmsumshm — EXCLUDED: native sequence is approximate/wrong vector-sum semantics */
+		case 41: /* vmsumshs — EXCLUDED: saturated vector sum must update VSCR.SAT exactly */
 			return false;
-		case 37: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumshm */
-		case 38: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E609C00|(1<<16)|(0<<5)|0); emit32(0x6E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumshs */
-		case 40: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E209C00|(1<<16)|(0<<5)|0); emit32(0x6E208400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumubm */
-		case 41: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmsumuhm */
 		default: return false;
 		}
 	}

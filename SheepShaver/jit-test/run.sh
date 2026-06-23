@@ -1110,6 +1110,11 @@ TEST_ORDER+=(vec_vsel_mask_allones)
 TESTS[vec_vperm_control_mask]="3C80AAAA 6084AAAA 90810600 90810604 90810608 9081060C 3C805555 60845555 90810610 90810614 90810618 9081061C 3C802020 60842020 90810620 90810624 90810628 9081062C 38600600 7C0118CE 38600610 7C2118CE 38600620 7C4118CE 106008AB 38600630 7C6119CE 80A10630 80C10634"
 TEST_ORDER+=(vec_vperm_control_mask)
 
+# AltiVec vector-sum family is delegated: old native low-XO 38 emitted undefined AArch64
+# 0x6e619c00 and neighbouring sum handlers were approximate/missing VSCR.SAT.
+TESTS[vec_vsumuhm_delegated]="10070718 10230718 10400826 38600600 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vsumuhm_delegated)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
