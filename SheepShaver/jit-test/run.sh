@@ -1135,6 +1135,10 @@ TEST_ORDER+=(vec_vperm_control_mask)
 TESTS[vec_vsumuhm_delegated]="10070718 10230718 10400826 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vsumuhm_delegated)
 
+# Remaining AltiVec VX vector-sum helpers are delegated until exact sum/VSCR.SAT semantics exist.
+TESTS[vec_vsum4ubs_delegated]="10070718 10230718 10400F88 38600600 7C4119CE 80A10600 80C10604"
+TEST_ORDER+=(vec_vsum4ubs_delegated)
+
 # AltiVec average/saturating add-sub family is delegated until exact encodings and VSCR.SAT exist.
 # vavgub: 0x00 and 0x02 should rounded-average to 0x01; old native encoding was SMAXP-like.
 TESTS[vec_vavgub_delegated]="10070718 38800202 64840202 90810610 90810614 90810618 9081061C 38600610 7C2118CE 10400D02 38600620 7C4119CE 80A10620 80C10624"

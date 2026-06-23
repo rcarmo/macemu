@@ -3285,34 +3285,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_load_vr(0, vb);
 			emit32(0x6F10A400 | (0 << 5) | 0);
 			emit_store_vr(0, vd); return true;
-		case 1928: /* vsum4ubs */
-			emit_load_vr(0, va); emit_load_vr(1, vb);
-			emit32(0x6E202800 | (0 << 5) | 0);
-			emit32(0x6E602800 | (0 << 5) | 0);
-			emit32(0x4EA08400 | (1 << 16) | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
-		case 1672: /* vsum4sbs */
-			emit_load_vr(0, va); emit_load_vr(1, vb);
-			emit32(0x4E202800 | (0 << 5) | 0);
-			emit32(0x4E602800 | (0 << 5) | 0);
-			emit32(0x4EA08400 | (1 << 16) | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
-		case 1608: /* vsum4shs */
-			emit_load_vr(0, va); emit_load_vr(1, vb);
-			emit32(0x4E602800 | (0 << 5) | 0);
-			emit32(0x4EA08400 | (1 << 16) | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
-		case 1800: /* vsum2sws */
-			emit_load_vr(0, va); emit_load_vr(1, vb);
-			emit32(0x4EA02800 | (0 << 5) | 0);
-			emit32(0x0EA12800 | (0 << 5) | 0);
-			emit32(0x4EA08400 | (1 << 16) | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
-		case 1932: /* vsumsws — sum all words */
-			emit_load_vr(0, va); emit_load_vr(1, vb);
-			emit32(0x4EB1B800 | (0 << 5) | 0);
-			emit32(0x4EA08400 | (1 << 16) | (0 << 5) | 0);
-			emit_store_vr(0, vd); return true;
+		case 1928: /* vsum4ubs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1672: /* vsum4sbs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1608: /* vsum4shs — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1800: /* vsum2sws — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+		case 1932: /* vsumsws — EXCLUDED: vector sum exactness/VSCR.SAT not implemented */
+			return false;
 		case 1356: /* vslo — EXCLUDED: pass-through is not exact octet-shift semantics */
 		case 1420: /* vsro — EXCLUDED: pass-through is not exact octet-shift semantics */
 			return false;
