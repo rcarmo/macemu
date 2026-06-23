@@ -3278,12 +3278,13 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return false;
 		case 14: emit_load_vr(0,vb); emit32(0x0E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuhum UZP1.8H (narrow) */
 		case 78: emit_load_vr(0,vb); emit32(0x0E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuwum UZP1.4S */
-		case 398: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E216800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkshus SQXTUN.8B */
-		case 462: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E616800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkswus SQXTUN.4H */
-		case 270: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E214800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkshss SQXTN.8B */
-		case 334: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E614800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkswss SQXTN.4H */
-		case 142: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x2E212800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuhus UQXTN.8B */
-		case 206: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x2E612800|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vpkuwus UQXTN.4H */
+		case 270: /* vpkshus — EXCLUDED: saturating pack needs exact signedness/lane order and VSCR.SAT */
+		case 334: /* vpkswus — EXCLUDED: saturating pack needs exact signedness/lane order and VSCR.SAT */
+		case 398: /* vpkshss — EXCLUDED: hardcoded encoding/comment mismatch; VSCR.SAT not updated */
+		case 462: /* vpkswss — EXCLUDED: hardcoded encoding/comment mismatch; VSCR.SAT not updated */
+		case 142: /* vpkuhus — EXCLUDED: saturating pack needs exact unsigned semantics and VSCR.SAT */
+		case 206: /* vpkuwus — EXCLUDED: saturating pack needs exact unsigned semantics and VSCR.SAT */
+			return false;
 		case 814: emit_load_vr(0,vb); emit32(0x0E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupkhsb SXTL.8H (unpack high signed byte) */
 		case 878: emit_load_vr(0,vb); emit32(0x0E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupkhsh SXTL.4S */
 		case 942: emit_load_vr(0,vb); emit32(0x4E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsb SXTL2.8H */
