@@ -480,6 +480,10 @@ TEST_ORDER+=(fp_neg)
 TESTS[fp_abs]="3C60C000 90610100 38600000 90610104 C8210100 FC200210 D8210108"
 TEST_ORDER+=(fp_abs)
 
+# FP Rc/dot forms are delegated until CR1/FPSCR side effects are exact.
+TESTS[fp_fneg_dot_delegated]="3C604000 90610100 38600000 90610104 C8210100 FC2000D1 7CA00026"
+TEST_ORDER+=(fp_fneg_dot_delegated)
+
 # --- Branch ---
 # bl +8; nop; mfspr r5,LR → r5 should equal address of nop
 # bl = 0x48000009 (LK=1, +8 bytes)... actually bl offset must be from current insn

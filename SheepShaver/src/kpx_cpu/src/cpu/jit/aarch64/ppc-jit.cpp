@@ -3514,6 +3514,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 	case 63: /* double-precision FP ops */
 	{
+		if (op & 1)
+			return false; /* Rc/dot forms must update CR1 exactly */
 		uint32_t xo10 = (op >> 1) & 0x3FF;
 		uint32_t xo5 = (op >> 1) & 0x1F;
 		uint32_t frd = PPC_RD(op);
@@ -3832,6 +3834,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 	case 59: /* single-precision FP ops */
 	{
+		if (op & 1)
+			return false; /* Rc/dot forms must update CR1 exactly */
 		uint32_t xo5 = (op >> 1) & 0x1F;
 		uint32_t frd = PPC_RD(op);
 		uint32_t fra = PPC_RA(op);
