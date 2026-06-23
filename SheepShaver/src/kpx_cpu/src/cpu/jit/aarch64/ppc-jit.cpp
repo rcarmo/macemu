@@ -2401,44 +2401,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			if (op & 1) lazy_update_cr0(RTMP0);
 			return true;
 
-		/* 64-bit load/store indexed */
-		case 21: /* ldx rD,rA,rB */
-			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
-			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt,[Xn] */
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt */
-			emit_store_gpr64(RTMP1, rd);
-			return true;
-
-		case 53: /* ldux rD,rA,rB */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit_store_gpr64(RTMP1, rd);
-			return true;
-
-		case 149: /* stdx rS,rA,rB */
-			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
-			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* save EA before 64-bit load clobbers RTMP0 */
-			emit_load_gpr64(RTMP1, PPC_RS(op));
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
-			return true;
-
-		case 181: /* stdux rS,rA,rB */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* save EA before 64-bit load clobbers RTMP0 */
-			emit_load_gpr64(RTMP1, PPC_RS(op));
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0xF9000000 | (RTMP2 << 5) | RTMP1);
-			return true;
+		/* 64-bit load/store indexed — EXCLUDED: raw memory paths need guarded 64-bit helpers */
+		case 21:  /* ldx */
+		case 53:  /* ldux */
+		case 149: /* stdx */
+		case 181: /* stdux */
+			return false;
 
 		case 84:  /* ldarx rD,rA,rB — EXCLUDED: reservation semantics not implemented */
 		case 214: /* stdcx. rS,rA,rB — EXCLUDED: reservation semantics not implemented */
@@ -3928,77 +3896,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 	}
 
-	case 58: /* ld/ldu/lwa — 64-bit load doubleword */
-	{
-		rd = PPC_RD(op);
-		ra = PPC_RA(op);
-		int32_t ds = (int16_t)(op & 0xFFFC); /* sign-extended 14-bit offset * 4 */
-		uint32_t sub = op & 3;
-		emit_load_ea_base(ra);
-		if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		if (sub == 2) {
-			/* lwa — load word algebraic (sign-extend 32→64) */
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV Wt, Wt (byte-swap) */
-			emit_store_gpr(RTMP1, rd);
-			/* Sign extend to hi: ASR Wt, Wt, #31 */
-			emit32(0x131F7C00 | (RTMP1 << 5) | RTMP2); /* ASR Wd, Wn, #31 */
-			a64_str_w_imm(RTMP2, RSTATE, PPCR_GPR_HI(rd));
-		} else {
-			/* ld — load doubleword */
-			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt, [Xn] */
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap 64-bit) */
-			emit_store_gpr64(RTMP1, rd);
-			if (sub == 1 && ra != 0) { /* ldu: update rA */
-				emit_load_ea_base(ra);
-				if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-				emit_store_gpr(RTMP0, ra);
-			}
-		}
-		return true;
-	}
+	case 58: /* ld/ldu/lwa — EXCLUDED: raw 64-bit memory path needs guarded helpers */
+		return false;
 
-	case 62: /* std/stdu — 64-bit store doubleword */
-	{
-		uint32_t rs = PPC_RS(op);
-		ra = PPC_RA(op);
-		int32_t ds = (int16_t)(op & 0xFFFC);
-		uint32_t sub = op & 3;
-		emit_load_ea_base(ra);
-		if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		/* Preserve EA: emit_load_gpr64(RTMP1, rs) uses RTMP0 as scratch for the high word. */
-		emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* MOV RTMP2, RTMP0 */
-		emit_load_gpr64(RTMP1, rs);
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xt, Xt (byte-swap) */
-		emit32(0xF9000000 | (RTMP2 << 5) | RTMP1); /* STR Xt, [Xn] */
-		if (sub == 1 && ra != 0) { /* stdu: update rA */
-			emit_load_ea_base(ra);
-			if (ds) { emit_load_imm32(RTMP1, ds); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit_store_gpr(RTMP0, ra);
-		}
-		return true;
-	}
+	case 62: /* std/stdu — EXCLUDED: raw 64-bit memory path needs guarded helpers */
+		return false;
 
-	case 56: /* lq — load quadword (128-bit, pair of 64-bit) */
-	{
-		rd = PPC_RD(op) & ~1; /* must be even register */
-		ra = PPC_RA(op);
-		int32_t dq = (int16_t)(op & 0xFFF0); /* sign-extended 12-bit offset * 16 */
-		emit_load_ea_base(ra);
-		if (dq) { emit_load_imm32(RTMP1, dq); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		/* Load first doubleword → GPR[rd] */
-		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt, [Xn] */
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV64 */
-		/* Save EA to RTMP2 before emit_store_gpr64 clobbers RTMP0 via LSR */
-		emit32(0xAA000000 | (RTMP0 << 16) | (31 << 5) | RTMP2); /* MOV RTMP2, RTMP0 */
-		emit_store_gpr64(RTMP1, rd);
-		/* Load second doubleword → GPR[rd+1]: use saved EA in RTMP2 */
-		emit32(0x91002000 | (RTMP2 << 5) | RTMP2); /* ADD RTMP2, RTMP2, #8 */
-		emit32(0xF9400000 | (RTMP2 << 5) | RTMP1);
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-		emit_store_gpr64(RTMP1, rd + 1);
-		return true;
-	}
+	case 56: /* lq — EXCLUDED: raw paired 64-bit memory path needs guarded helpers */
+		return false;
 
 	case 59: /* single-precision FP ops */
 	{
