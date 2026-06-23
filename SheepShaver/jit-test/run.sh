@@ -397,6 +397,10 @@ TEST_ORDER+=(crxor_cror)
 TESTS[fp_add]="3C604000 90610100 38600000 90610104 C8210100 FC200890 FC211028 D8210108"
 TEST_ORDER+=(fp_add)
 
+# FP arithmetic is delegated until FPSCR/FPRF side effects are exact.
+TESTS[fp_fadd_fpscr_delegated]="3C604000 90610100 38600000 90610104 C8010100 C8210100 FC20082A FC00048E D8010108 80A10108 80C1010C"
+TEST_ORDER+=(fp_fadd_fpscr_delegated)
+
 # --- Load/store indexed ---
 # lwzx: li r3,0xBEEF; stw r3,0(r1); li r4,0; lwzx r5,r1,r4
 # lwzx = 0x7C00002E | (5<<21)|(1<<16)|(4<<11)

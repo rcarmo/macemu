@@ -3518,6 +3518,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return false; /* Rc/dot forms must update CR1 exactly */
 		uint32_t xo10 = (op >> 1) & 0x3FF;
 		uint32_t xo5 = (op >> 1) & 0x1F;
+		/* These forms update FPSCR/FPRF/exception state in the interpreter; delegate
+		 * until exact native side effects are implemented. */
+		if (xo10 == 12 || xo10 == 15 || xo10 == 22 || xo10 == 26)
+			return false; /* frsp/fctiwz/fsqrt/frsqrte */
+		if (xo5 == 18 || xo5 == 20 || xo5 == 21 || xo5 == 25 || xo5 == 28 || xo5 == 29 || xo5 == 30 || xo5 == 31)
+			return false; /* fadd/fsub/fmul/fdiv/fmadd/fmsub/fnmadd/fnmsub */
 		uint32_t frd = PPC_RD(op);
 		uint32_t fra = PPC_RA(op);
 		uint32_t frb = (op >> 11) & 0x1F;
@@ -3837,6 +3843,10 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		if (op & 1)
 			return false; /* Rc/dot forms must update CR1 exactly */
 		uint32_t xo5 = (op >> 1) & 0x1F;
+		/* Single-precision arithmetic and sqrt update FPSCR/FPRF in the interpreter;
+		 * delegate until exact native side effects are implemented. */
+		if (xo5 == 18 || xo5 == 20 || xo5 == 21 || xo5 == 22 || xo5 == 25 || xo5 == 28 || xo5 == 29 || xo5 == 30 || xo5 == 31)
+			return false;
 		uint32_t frd = PPC_RD(op);
 		uint32_t fra = PPC_RA(op);
 		uint32_t frb = (op >> 11) & 0x1F;
