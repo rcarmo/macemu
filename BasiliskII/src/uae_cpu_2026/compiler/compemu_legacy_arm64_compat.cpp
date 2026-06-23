@@ -647,7 +647,7 @@ void do_nothing(void)
 	countdown = 10000000;
 	if (quit_program > 0)
 		return;
-	{
+	if (jit_diag_enabled()) {
 		static unsigned long dn_count = 0;
 		dn_count++;
 		if (dn_count <= 20 || dn_count % 50000 == 0) {
