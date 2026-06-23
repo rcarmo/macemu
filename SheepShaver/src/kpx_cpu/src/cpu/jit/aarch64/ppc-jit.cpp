@@ -744,20 +744,11 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 			emit_branch_if_ea_in_range(ea_reg, kd2_start, kd2_end - access_size + 1, valid_locs, valid_count);
 	}
 
-	/* Frame buffer (the_buffer @ screen_base, the_buffer_size bytes): 1:1-mapped guest
-	 * memory like RAM/ROM/KERNEL_DATA, but was NOT covered here, so the D-form
-	 * guarded load/store SKIPPED framebuffer accesses (load left the stale rd, store
-	 * dropped) -> QuickDraw/video reads of the framebuffer got the old register value.
-	 * Shadow-interp verify pinned this: JIT D-form lwz of 0x186xxxxx returned the old
-	 * register while the interpreter read correctly. screen_base/the_buffer_size are
-	 * runtime globals; only add the range once the framebuffer is allocated
-	 * (screen_base != 0) so we never emit a bogus [0, size) low-memory range. */
-	{
-		const uint32_t fb_start = sheepshaver_jit_fb_base();
-		const uint32_t fb_size  = sheepshaver_jit_fb_size();
-		if (fb_start != 0 && fb_size >= access_size)
-			emit_branch_if_ea_in_range_size(ea_reg, fb_start, fb_size - access_size + 1, valid_locs, valid_count);
-	}
+	/* Framebuffer accesses intentionally do NOT use an inline direct-valid range.
+	 * screen_base/cur_mode/rowBytes can change during video mode switches, while compiled
+	 * blocks bake valid-check constants permanently. Let framebuffer D-form accesses take
+	 * the safe_load/safe_store slow path instead; the helper consults the current framebuffer
+	 * extent at runtime and still uses direct Read/WriteMacInt for genuinely mapped video RAM. */
 
 	const uint32_t highmem_valid_starts = (0x10000U >= access_size) ? (0x10000U - access_size + 1) : 0;
 	if (highmem_valid_starts)
