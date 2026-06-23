@@ -213,7 +213,10 @@ static void jit_bc_insert(uint32_t pc, uint32_t *code, uint32_t *chain_code, boo
 	}
 	/* New entry — allocate from pool */
 	if (jit_bc_pool_next >= JIT_BC_POOL) {
-		/* Pool exhausted — flush everything and start fresh */
+		/* Pool exhausted — flush metadata AND generated code. Metadata-only flush is
+		 * unsafe with direct chaining: old code can still branch to old code, but the
+		 * block table/span no longer knows those guest PC ranges for icbi invalidation. */
+		jit_cache_wp = (uint32_t *)jit_cache_base;
 		jit_bc_flush();
 	}
 	idx = jit_bc_pool_next++;
