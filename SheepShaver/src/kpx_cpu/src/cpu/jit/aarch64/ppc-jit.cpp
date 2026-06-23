@@ -2922,6 +2922,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			uint32_t bo = (op >> 21) & 0x1F;
 			uint32_t bi = (op >> 16) & 0x1F;
 			bool lk = op & 1;
+			if (!(bo & 0x04))
+				return false; /* interpreter decrements/tests CTR for these BO forms; target is CTR too */
 			if ((bo & 0x14) == 0x14) { /* unconditional bctr */
 				if (lk) { emit_load_imm32(RTMP0, (int32_t)(pc + 4)); a64_str_w_imm(RTMP0, RSTATE, PPCR_LR); }
 				a64_ldr_w_imm(RTMP0, RSTATE, PPCR_CTR);

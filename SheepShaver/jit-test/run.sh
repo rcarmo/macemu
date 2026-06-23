@@ -908,6 +908,10 @@ TEST_ORDER+=(fuzz_bctr_taken)
 # bctrl must branch through CTR and update LR to the instruction after bctrl.
 TESTS[fuzz_bctrl_link_return]="7FE802A6 48000005 7CA802A6 38A50020 7CA903A6 4E800421 7CE802A6 7FE803A6 38603333 48000010 7CC802A6 38802222 4E800020"
 TEST_ORDER+=(fuzz_bctrl_link_return)
+# bcctr with BO requesting CTR decrement/test: interpreter decrements CTR even though CTR is also
+# the target register. With CTR=1 and branch-if-CTR-nonzero, final CTR=0 and branch is not taken.
+TESTS[fuzz_bcctr_ctr_decrement_not_taken]="38600001 7C6903A6 4E000420 38A00055 7CC902A6"
+TEST_ORDER+=(fuzz_bcctr_ctr_decrement_not_taken)
 # Full mtcr with the exact late-path CR shape should directly drive bgtctr/bgtlr on CR1.
 TESTS[fuzz_mtcr_bgtctr_taken]="7FE802A6 3DA08480 61AD0044 7DAFF120 48000005 7CA802A6 38A5001C 7CA903A6 4D850420 38601111 7FE803A6 4800000C 38602222 7FE803A6"
 TEST_ORDER+=(fuzz_mtcr_bgtctr_taken)
