@@ -52,23 +52,30 @@ extern uint8 *ROMBaseHost;
 extern uint32 ROMEnd;
 #include "cpu/jit/aarch64/ppc-jit.h"
 
+static inline bool ppc_jit_contains32(uint32 pc, uint32 base, uint64 size, uint32 access_size = 4)
+{
+	uint64 p = pc;
+	uint64 b = base;
+	return p >= b && p + access_size >= p && p + access_size <= b + size;
+}
+
 static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **host_base, uint32 *guest_base, size_t *size)
 {
 	uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
-	if (pc >= ram_start && pc + 4 >= pc && pc + 4 <= ram_start + RAMSize) {
+	if (ppc_jit_contains32(pc, ram_start, RAMSize)) {
 		*host_base = RAMBaseHost;
 		*guest_base = ram_start;
 		*size = RAMSize;
 		return true;
 	}
-	if (pc >= ROMBase && pc + 4 >= pc && (uint64)pc + 4 <= (uint64)ROMBase + 0x500000) {
+	if (ppc_jit_contains32(pc, ROMBase, 0x500000)) {
 		*host_base = ROMBaseHost;
 		*guest_base = ROMBase;
 		*size = 0x500000;
 		return true;
 	}
 #ifdef SHEEPSHAVER
-	if (pc >= SheepMem::Base() && pc + 4 >= pc && pc + 4 <= SheepMem::End()) {
+	if (ppc_jit_contains32(pc, SheepMem::Base(), (uint64)SheepMem::End() - SheepMem::Base())) {
 		*host_base = (const uint8 *)(uintptr_t)SheepMem::Base();
 		*guest_base = SheepMem::Base();
 		*size = SheepMem::End() - SheepMem::Base();
@@ -779,14 +786,10 @@ void powerpc_cpu::execute(uint32 entry)
 					 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md */
 					uint32 jit_pc = pc();
 					uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
-					uint32 ram_end = ram_start + RAMSize;
-					uint32 mapped_end = ROMEnd ? ROMEnd : ((uint32)ROMBase + 0x500000);
-					if (mapped_end < ram_end)
-						mapped_end = ram_end;
-					bool jit_pc_mapped = (jit_pc >= ram_start && jit_pc < mapped_end) ||
-					                     (jit_pc >= (uint32)ROMBase && jit_pc < (uint32)ROMBase + 0x500000) ||
+					bool jit_pc_mapped = ppc_jit_contains32(jit_pc, ram_start, RAMSize, 1) ||
+					                     ppc_jit_contains32(jit_pc, ROMBase, ROMEnd ? ((uint64)ROMEnd - ROMBase) : 0x500000, 1) ||
 #ifdef SHEEPSHAVER
-					                     (jit_pc >= SheepMem::Base() && jit_pc < SheepMem::End()) ||
+					                     ppc_jit_contains32(jit_pc, SheepMem::Base(), (uint64)SheepMem::End() - SheepMem::Base(), 1) ||
 #endif
 					                     false;
 					if (!jit_pc_mapped) {
