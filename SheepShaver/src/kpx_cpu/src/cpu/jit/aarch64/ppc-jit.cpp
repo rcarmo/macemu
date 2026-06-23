@@ -4075,12 +4075,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit32(0x1F608000 | (1 << 16) | (2 << 10) | (0 << 5) | 0);
 			emit32(0x1E624000 | (0 << 5) | 0); emit32(0x1E22C000 | (0 << 5) | 0);
 			emit_store_fpr(0, frd); return true;
-		case 24: /* fres frD,frB — reciprocal estimate */
-			emit_load_fpr(0, frb);
-			emit32(0x1E624000 | (0 << 5) | 0); /* FCVT Sd,Dd */
-			emit32(0x1E20F800 | (0 << 5) | 0); /* FRECPE Sd,Sn */
-			emit32(0x1E22C000 | (0 << 5) | 0); /* FCVT Dd,Sd */
-			emit_store_fpr(0, frd); return true;
+		case 24: /* fres frD,frB — EXCLUDED: old native path emitted undefined AArch64 and only approximate semantics */
+			return false;
 
 		case 22: /* fsqrts frD,frB — floating-point square root (single) */
 			emit_load_fpr(0, frb);

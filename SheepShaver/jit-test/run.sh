@@ -465,6 +465,11 @@ TEST_ORDER+=(extsb_positive)
 TESTS[fp_fctiw_nearest]="3C603FF8 90610100 38600000 90610104 C8210100 FC00081C D8010108 80A10108 80C1010C"
 TEST_ORDER+=(fp_fctiw_nearest)
 
+# fres: old native path emitted undefined AArch64 0x1e20f800 and only approximate semantics.
+# Delegate until exact FPSCR/estimate semantics are implemented. 2.0 -> exact interpreter 0.5.
+TESTS[fp_fres_delegate_exact]="3C604000 90610100 38600000 90610104 C8210100 FC000830 D8010108 80A10108 80C1010C"
+TEST_ORDER+=(fp_fres_delegate_exact)
+
 # --- FP operations ---
 # fneg: store 2.0 as double, negate it, check sign
 # 2.0 double = 0x40000000_00000000
