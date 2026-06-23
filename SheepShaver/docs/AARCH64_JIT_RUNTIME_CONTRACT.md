@@ -424,7 +424,8 @@ state is materialized. Examples: add, sub, or, and, ld/st, compare, branch.
 
 The opcode terminates the block. The interpreter handles it. This is the correct and safe
 pattern for all unimplemented or barrier-worthy classes. Examples: EMUL_OP (opcode 6),
-unimplemented AltiVec, unimplemented FPU families.
+unimplemented/excluded AltiVec families, unimplemented FPU families, and PPC64 memory handlers that
+still lack exact guarded 64-bit helper coverage.
 
 ### Category C: (Not yet present) Helper dispatch
 
