@@ -657,12 +657,11 @@ static void patch_cond_to_here(uint32_t *loc, uint8_t cond) {
 	patch_bcond(loc, cond, jit_code_ptr);
 }
 
-static void emit_branch_if_ea_in_range(int ea_reg, uint32_t start, uint32_t end_exclusive, uint32_t **valid_locs, int *valid_count) {
-	if (end_exclusive <= start)
+static void emit_branch_if_ea_in_range_size(int ea_reg, uint32_t start, uint32_t size, uint32_t **valid_locs, int *valid_count) {
+	if (size == 0)
 		return;
-	const uint32_t size = end_exclusive - start;
 	/* Unsigned range membership in a single compare:
-	 *     (ea - start) <u size   <=>   ea in [start, end_exclusive)
+	 *     (ea - start) <u size   <=>   ea in [start, start+size)
 	 * If ea < start the subtraction wraps to a large unsigned value >= size, so the
 	 * branch is not taken (correctly out of range). This replaces the previous
 	 * two-compare/two-branch form (CMP ea,start / B.LO skip / CMP ea,end / B.LO valid),
@@ -680,6 +679,12 @@ static void emit_branch_if_ea_in_range(int ea_reg, uint32_t start, uint32_t end_
 	emit_load_imm32(RTMP4, (int32_t)size);
 	emit32(0x6B000000 | (RTMP4 << 16) | (cmp_reg << 5) | 31); /* CMP Wcmp,Wsize */
 	valid_locs[(*valid_count)++] = jit_code_ptr; emit32(0); /* B.LO valid */
+}
+
+static void emit_branch_if_ea_in_range(int ea_reg, uint32_t start, uint32_t end_exclusive, uint32_t **valid_locs, int *valid_count) {
+	if (end_exclusive <= start)
+		return;
+	emit_branch_if_ea_in_range_size(ea_reg, start, end_exclusive - start, valid_locs, valid_count);
 }
 
 static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, bool allow_rom, bool store, uint32_t **valid_locs, int *valid_count) {
@@ -756,8 +761,9 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 			emit_branch_if_ea_in_range(ea_reg, fb_start, fb_end - access_size + 1, valid_locs, valid_count);
 	}
 
-	if (0xFFFFFFFFU >= access_size - 1)
-		emit_branch_if_ea_in_range(ea_reg, 0xFFFF0000U, 0xFFFFFFFFU - access_size + 2, valid_locs, valid_count);
+	const uint32_t highmem_valid_starts = (0x10000U >= access_size) ? (0x10000U - access_size + 1) : 0;
+	if (highmem_valid_starts)
+		emit_branch_if_ea_in_range_size(ea_reg, 0xFFFF0000U, highmem_valid_starts, valid_locs, valid_count);
 }
 
 static void emit_guarded_load_zero_invalid(int ea_reg, int dst_reg, int load_kind, int ppc_dst_reg) {

@@ -849,19 +849,33 @@ static bool sheepshaver_jit_page_mapped(uint32 ea)
 	return false;
 }
 
-static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
+static inline bool sheepshaver_jit_range_contains(uint32 ea, uint32 size, uint32 start, uint64 bytes)
 {
-	if (ea + 3 < ea)
+	if (size == 0)
 		return false;
-	if (ea < 0x3000)
+	uint64 a = ea;
+	uint64 s = start;
+	return a >= s && a + size <= s + bytes;
+}
+
+static inline bool sheepshaver_jit_access_valid(uint32 ea, uint32 size, bool store)
+{
+	if (size == 0 || (uint64)ea + size > 0x100000000ULL)
+		return false;
+	if ((uint64)ea + size <= 0x3000ULL)
 		return true;
-	if (ea >= RAMBase && ea + 4 <= RAMBase + RAMSize)
+	if (sheepshaver_jit_range_contains(ea, size, RAMBase, RAMSize))
 		return true;
-	if (!store && ea >= ROMBase && ea + 4 <= ROMBase + ROM_AREA_SIZE)
+	if (!store && sheepshaver_jit_range_contains(ea, size, ROMBase, ROM_AREA_SIZE))
 		return true;
-	if (ea >= SheepMem::Base() && ea + 4 <= SheepMem::End()) {
-		if (store && ea >= SheepMem::ZeroPage() && ea < SheepMem::ZeroPage() + SheepMem::PageSize())
-			return false;
+	if (sheepshaver_jit_range_contains(ea, size, SheepMem::Base(), (uint64)SheepMem::End() - SheepMem::Base())) {
+		if (store) {
+			uint64 zp = SheepMem::ZeroPage();
+			uint64 ze = zp + SheepMem::PageSize();
+			uint64 a = ea;
+			if (a < ze && a + size > zp)
+				return false;
+		}
 		return true;
 	}
 	/* KERNEL_DATA areas (0x68ffe000 and alias 0x5fffe000, KERNEL_AREA_SIZE each):
@@ -870,9 +884,9 @@ static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
 	 * stwx/lwzx through this helper silently dropped KERNEL_DATA stores (and loads
 	 * returned old), e.g. the nanokernel's stwx copy loop into 0x68ffe910+ — leaving
 	 * r30/r31 = 0 and flipping a downstream branch. Mirror the D-form coverage here. */
-	if (ea >= (uint32)KERNEL_DATA_BASE && ea + 4 <= (uint32)KERNEL_DATA_BASE + KERNEL_AREA_SIZE)
+	if (sheepshaver_jit_range_contains(ea, size, (uint32)KERNEL_DATA_BASE, KERNEL_AREA_SIZE))
 		return true;
-	if (ea >= (uint32)KERNEL_DATA2_BASE && ea + 4 <= (uint32)KERNEL_DATA2_BASE + KERNEL_AREA_SIZE)
+	if (sheepshaver_jit_range_contains(ea, size, (uint32)KERNEL_DATA2_BASE, KERNEL_AREA_SIZE))
 		return true;
 	/* Frame buffer (the_buffer @ screen_base, current-mode size): valid mapped guest
 	 * memory but was NOT in this set, so safe_lwz returned the stale old_value (and
@@ -883,12 +897,17 @@ static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
 	{
 		uint32 fbsz = (cur_mode >= 0 && cur_mode < 64)
 		            ? (uint32)VModes[cur_mode].viRowBytes * (uint32)VModes[cur_mode].viYsize : 0;
-		if (screen_base && fbsz && ea >= screen_base && ea + 4 <= screen_base + fbsz)
+		if (screen_base && fbsz && sheepshaver_jit_range_contains(ea, size, screen_base, fbsz))
 			return true;
 	}
-	if (ea >= 0xffff0000U)
+	if (sheepshaver_jit_range_contains(ea, size, 0xffff0000U, 0x10000ULL))
 		return true;
 	return false;
+}
+
+static inline bool sheepshaver_jit_word_access_valid(uint32 ea, bool store)
+{
+	return sheepshaver_jit_access_valid(ea, 4, store);
 }
 
 extern "C" uint32 sheepshaver_jit_safe_lwz(uint32 ea, uint32 old_value)
@@ -936,7 +955,8 @@ extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value)
  * the destination/skip the store for genuinely-unmapped MMIO. */
 extern "C" uint32 sheepshaver_jit_safe_load(uint32 ea, uint32 old_value, uint32 load_kind)
 {
-	if (!sheepshaver_jit_word_access_valid(ea, false)) {
+	uint32 size = (load_kind == 1) ? 1 : ((load_kind == 2 || load_kind == 3) ? 2 : 4);
+	if (!sheepshaver_jit_access_valid(ea, size, false)) {
 		if (!sheepshaver_jit_page_mapped(ea))
 			return old_value;
 	}
@@ -953,7 +973,7 @@ extern "C" void sheepshaver_jit_safe_store(uint32 ea, uint32 value, uint32 store
 	uint32 size = (store_kind == 1) ? 1 : (store_kind == 2 ? 2 : 4);
 	if (sheepshaver_jit_overlaps_zero_page(ea, size))
 		return;
-	if (!sheepshaver_jit_word_access_valid(ea, true)) {
+	if (!sheepshaver_jit_access_valid(ea, size, true)) {
 		if (!sheepshaver_jit_page_mapped(ea))
 			return;
 	}
