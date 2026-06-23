@@ -36,7 +36,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 291/291 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count and runtime-count string/multiple coverage, `mfmsr_basic`, SPR/FPSCR/FPU delegation vectors, PPC64 Rc delegation coverage, AltiVec exclusion/delegation vectors, corrected logical `vec_vsrb_delegated`, relabelled `vec_vsrab_delegated`, corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro`/`vcmpgefp`/`vcmpbfp`/`vsum4ubs`/`vavgub`/`vaddubs`/`vmuleuh`/`vcfsx`, AltiVec FP edge vectors for signed-zero/NaN/fused cases, `vec_vcmpequw_dot_cr6`, `vec_vpkuhum_delegated`, `vec_vpkuwum_delegated`, `vec_vupkhsb_delegated`, `vec_vupklpx_delegated`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
+**Status**: ✅ 299/299 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count and runtime-count string/multiple coverage, `mfmsr_basic`, SPR/FPSCR/FPU delegation vectors, PPC64 Rc/delegation coverage, AltiVec exclusion/delegation vectors, corrected logical `vec_vsrb_delegated`, relabelled `vec_vsrab_delegated`, corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro`/`vcmpgefp`/`vcmpbfp`/`vsum4ubs`/`vavgub`/`vaddubs`/`vmuleuh`/`vcfsx`, AltiVec FP edge vectors for signed-zero/NaN/fused cases, PPC64/G5 FP illegal-op delegation (`fctid`), AltiVec FP rounding delegation (`vrfi*`), `vmladduhm` delegation, mixed-lane `vperm`/`vsplt` coverage, `vec_vcmpequw_dot_cr6`, `vec_vpkuhum_delegated`, `vec_vpkuwum_delegated`, `vec_vupkhsb_delegated`, `vec_vupklpx_delegated`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
 
 ---
 
@@ -74,10 +74,13 @@ make run-jit-tmux TMUX_SESSION=ss-boot-jit PREFS_DIR=/tmp/ss-boot-jit VNC_PORT=5
 
 **Status**: ✅ Under strict JIT (`SS_USE_JIT=1`) the emulator boots through ROM init, extension
 loading and Finder launch to a **holding desktop** (Finder menu bar + Apple menu navigable) with
-**zero interpreter fallbacks** and GATE3=0 (no bad-selector dispatch). Verified repeatedly via
-VNC snapshot. Residual: a cosmetic QuickDraw text-blit divergence (“black blocks” behind dialog
-text) remains under investigation; it does not affect boot stability or desktop hold. Wall-clock
-performance is not yet benchmarked (pending an authorized spot run).
+GATE3=0 (no bad-selector dispatch) and no crash markers. Latest gated run after the 299-vector
+fix batch captured VNC screenshots at 125/140/155s and held alive; JIT counters reported
+`blocks=100000 complete=89360 (89.4%)`, `hit=519213 miss=10640 (98.0% coverage)`, and one
+8 MB code-cache flush. Remaining misses are explicit interpreter-delegation/barrier paths, not
+bad-selector or crash fallbacks. Residual: a cosmetic QuickDraw text-blit divergence (“black
+blocks” behind dialog text) remains under investigation; it does not affect boot stability or
+desktop hold. Wall-clock performance is not yet benchmarked (pending an authorized spot run).
 
 ---
 
@@ -195,7 +198,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 291/291 + strict-JIT desktop holds
+    barrier; harness 299/299 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 

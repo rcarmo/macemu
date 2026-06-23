@@ -1745,97 +1745,114 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		case 8: /* subfc rD,rA,rB (rD = rB - rA, set CA) */
 		case 520: /* subfco / subfco. */
-			emit_load_gpr(RTMP0, rb);
-			emit_load_gpr(RTMP1, ra);
-			emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUBS */
-			emit_store_gpr(RTMP0, rd);
+		{
+			int s1 = gpr_in(rb, RTMP0); /* minuend */
+			int s2 = gpr_in(ra, RTMP1); /* subtrahend */
+			int d  = gpr_out(rd, RTMP0);
+			emit32(0x6B000000 | (s2 << 16) | (s1 << 5) | d); /* SUBS */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
 			if (xo == 520) emit_write_xer_ov_so_from_overflow();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 136: /* subfe rD,rA,rB (rD = ~rA + rB + CA) */
 		case 648: /* subfeo / subfeo. */
-			emit_load_gpr(RTMP0, ra);
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN (NOT rA) */
-			emit_load_gpr(RTMP1, rb);
+		{
+			int s_ra = gpr_in(ra, RTMP0);
+			int s_rb = gpr_in(rb, RTMP1);
+			int d    = gpr_out(rd, RTMP0);
+			int inv  = (d == s_rb) ? RTMP4 : d; /* preserve rB if rd==rb */
+			emit32(0x2A2003E0 | (s_ra << 16) | inv); /* MVN (NOT rA) */
 			emit_read_xer_ca(RTMP2);
 			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
-			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS ~rA+rB+CA */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x3A000000 | (s_rb << 16) | (inv << 5) | d); /* ADCS ~rA+rB+CA */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
 			if (xo == 648) emit_write_xer_ov_so_from_overflow();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 10: /* addc rD,rA,rB (set CA) */
 		case 522: /* addco / addco. */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS */
-			emit_store_gpr(RTMP0, rd);
+		{
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(rd, RTMP0);
+			emit32(0x2B000000 | (s2 << 16) | (s1 << 5) | d); /* ADDS */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
 			if (xo == 522) emit_write_xer_ov_so_from_overflow();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 138: /* adde rD,rA,rB (rD = rA + rB + CA) */
 		case 650: /* addeo / addeo. */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
+		{
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(rd, RTMP0);
 			emit_read_xer_ca(RTMP2);
 			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
-			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS rA+rB+CA */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x3A000000 | (s2 << 16) | (s1 << 5) | d); /* ADCS rA+rB+CA */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
 			if (xo == 650) emit_write_xer_ov_so_from_overflow();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 234: /* addme rD,rA (rD = rA + CA - 1, set CA) */
 		{
 			/* rA + 0xFFFFFFFF + CA. Mirror adde: preset ARM C = XER.CA, then a SINGLE
 			 * ADCS so the carry is counted exactly once (the old ADDS+ADCS chain
 			 * double-counted the first add's carry -> wrong result and wrong CA). */
-			emit_load_gpr(RTMP0, ra);
+			int s = gpr_in(ra, RTMP0);
+			int d = gpr_out(rd, RTMP0);
 			emit_load_imm32(RTMP1, -1); /* 0xFFFFFFFF */
 			emit_read_xer_ca(RTMP2);
 			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
-			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS Wd = rA + 0xFFFFFFFF + CA */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x3A000000 | (RTMP1 << 16) | (s << 5) | d); /* ADCS Wd = rA + 0xFFFFFFFF + CA */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
 		}
 		case 202: /* addze rD,rA (rD = rA + CA, set CA) */
 		{
-			emit_load_gpr(RTMP0, ra);
+			int s = gpr_in(ra, RTMP0);
+			int d = gpr_out(rd, RTMP0);
 			emit_read_xer_ca(RTMP1); /* RTMP1 = CA (0 or 1) */
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS Wd, rA, CA */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x2B000000 | (RTMP1 << 16) | (s << 5) | d); /* ADDS Wd, rA, CA */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
 		}
 		case 232: /* subfme rD,rA (rD = ~rA + CA - 1, set CA) */
 		{
 			/* ~rA + 0xFFFFFFFF + CA. Same single-ADCS pattern as addme. */
-			emit_load_gpr(RTMP0, ra);
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN Wd, Wn = ~rA */
+			int s = gpr_in(ra, RTMP0);
+			int d = gpr_out(rd, RTMP0);
+			emit32(0x2A2003E0 | (s << 16) | d); /* MVN Wd, Wn = ~rA */
 			emit_load_imm32(RTMP1, -1); /* 0xFFFFFFFF */
 			emit_read_xer_ca(RTMP2);
 			emit32(0x7100001F | (1 << 10) | (RTMP2 << 5)); /* CMP Wca,#1: ARM C = XER.CA */
-			emit32(0x3A000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADCS Wd = ~rA + 0xFFFFFFFF + CA */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x3A000000 | (RTMP1 << 16) | (d << 5) | d); /* ADCS Wd = ~rA + 0xFFFFFFFF + CA */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
 		}
 		case 200: /* subfze rD,rA (rD = ~rA + CA, set CA) */
 		{
-			emit_load_gpr(RTMP0, ra);
-			emit32(0x2A2003E0 | (RTMP0 << 16) | RTMP0); /* MVN = ~rA */
+			int s = gpr_in(ra, RTMP0);
+			int d = gpr_out(rd, RTMP0);
+			emit32(0x2A2003E0 | (s << 16) | d); /* MVN = ~rA */
 			emit_read_xer_ca(RTMP1);
-			emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS Wd, ~rA, CA */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x2B000000 | (RTMP1 << 16) | (d << 5) | d); /* ADDS Wd, ~rA, CA */
+			gpr_out_commit(rd, d);
 			emit_write_xer_ca_from_carry();
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
 		}
 		case 476: /* nand rA,rS,rB  (rA = ~(rS & rB)) */
@@ -1893,35 +1910,44 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		}
 		case 459: /* divwu rD,rA,rB (unsigned divide) */
 		case 971: /* divwuo / divwuo. */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
+		{
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(rd, RTMP0);
 			/* The ARM64 UDIV result for divisor zero is architecturally zero; PPC
 			 * leaves the result undefined for divide overflow, so only XER.OV/SO
 			 * need to be made architecturally visible for the OE form. */
-			emit_cmp_w_imm(RTMP1, 0);
+			emit_cmp_w_imm(s2, 0);
 			emit32(0x1A9F17E0 | RTMP2); /* CSET RTMP2, EQ (divisor zero) */
-			emit32(0x1AC00800 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UDIV Wd,Wn,Wm */
-			emit_store_gpr(RTMP0, rd);
+			emit32(0x1AC00800 | (s2 << 16) | (s1 << 5) | d); /* UDIV Wd,Wn,Wm */
+			gpr_out_commit(rd, d);
 			if (xo == 971) emit_write_xer_ov_so_from_reg(RTMP2);
-			if (op & 1) lazy_update_cr0(RTMP0);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 75: /* mulhw rD,rA,rB (high word of signed multiply) */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
+		{
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(rd, RTMP0);
 			/* SMULL Xd, Wn, Wm then LSR Xd, Xd, #32 (sign already encoded in 64-bit product) */
-			emit32(0x9B207C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SMULL */
-			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* LSR Xd, Xn, #32 */
-			emit_store_gpr(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
+			emit32(0x9B207C00 | (s2 << 16) | (s1 << 5) | d); /* SMULL */
+			emit32(0xD360FC00 | (d << 5) | d); /* LSR Xd, Xn, #32 */
+			gpr_out_commit(rd, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 11: /* mulhwu rD,rA,rB (high word of unsigned multiply) */
-			emit_load_gpr(RTMP0, ra);
-			emit_load_gpr(RTMP1, rb);
-			emit32(0x9BA07C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* UMULL */
-			emit32(0xD360FC00 | (RTMP0 << 5) | RTMP0); /* LSR Xd, Xn, #32 */
-			emit_store_gpr(RTMP0, rd);
-			if (op & 1) lazy_update_cr0(RTMP0);
+		{
+			int s1 = gpr_in(ra, RTMP0);
+			int s2 = gpr_in(rb, RTMP1);
+			int d  = gpr_out(rd, RTMP0);
+			emit32(0x9BA07C00 | (s2 << 16) | (s1 << 5) | d); /* UMULL */
+			emit32(0xD360FC00 | (d << 5) | d); /* LSR Xd, Xn, #32 */
+			gpr_out_commit(rd, d);
+			if (op & 1) lazy_update_cr0(d);
 			return true;
+		}
 		case 87: /* lbzx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
@@ -2474,14 +2500,17 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		return true;
 
 	case 12: /* addic rD,rA,SIMM (sets XER[CA]) */
+	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_gpr(RTMP0, ra);
+		int s = gpr_in(ra, RTMP0);
+		int d = gpr_out(rd, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		/* ADDS Wd, Wn, Wm (sets NZCV — we use C for carry-out) */
-		emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-		emit_store_gpr(RTMP0, rd);
+		emit32(0x2B000000 | (RTMP1 << 16) | (s << 5) | d);
+		gpr_out_commit(rd, d);
 		emit_write_xer_ca_from_carry();
 		return true;
+	}
 
 	case 21: /* rlwinm rA,rS,SH,MB,ME */
 	{
@@ -2577,14 +2606,17 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 
 	case 8: /* subfic rD,rA,SIMM (rD = SIMM - rA, set CA) */
+	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_imm32(RTMP0, (int32_t)simm);
-		emit_load_gpr(RTMP1, ra);
+		int s = gpr_in(ra, RTMP1);
+		int d = gpr_out(rd, RTMP0);
 		/* ARM64 SUBS: Wd = SIMM - rA, sets C = !borrow = (SIMM >= rA unsigned) = PPC CA */
-		emit32(0x6B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* SUBS Wd, SIMM, rA */
-		emit_store_gpr(RTMP0, rd);
+		emit32(0x6B000000 | (s << 16) | (RTMP0 << 5) | d); /* SUBS Wd, SIMM, rA */
+		gpr_out_commit(rd, d);
 		emit_write_xer_ca_from_carry();
 		return true;
+	}
 
 
 	case 10: /* cmpli (cmplwi) crD,rA,UIMM */
@@ -3184,11 +3216,22 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 68:  /* vrlh — EXCLUDED: rotate-left was mapped to shift */
 		case 132: /* vrlw — EXCLUDED: rotate-left was mapped to shift */
 			return false;
-		case 524: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E010400|((idx*2+1)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltb DUP.16B */
-		case 588: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E020400|((idx*4+2)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vsplth DUP.8H */
-		case 652: { uint32_t idx=va; emit_load_vr(0,vb); emit32(0x4E040400|((idx*8+4)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltw DUP.4S */
-		case 522: emit_load_vr(0,vb); emit32(0x4EA18800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrfip FRINTP */
-		case 586: emit_load_vr(0,vb); emit32(0x4E219800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vrfim FRINTM */
+		case 524: {
+			static const uint8_t lane_map[16] = { 3,2,1,0, 7,6,5,4, 11,10,9,8, 15,14,13,12 };
+			uint32_t idx = lane_map[va & 15]; /* source is V16QIm/ev_mixed */
+			emit_load_vr(0,vb); emit32(0x4E010400|((idx*2+1)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
+		} /* vspltb DUP.16B */
+		case 588: {
+			static const uint8_t lane_map[8] = { 1,0,3,2,5,4,7,6 };
+			uint32_t idx = lane_map[va & 7]; /* source is V8HIm/ev_mixed */
+			emit_load_vr(0,vb); emit32(0x4E020400|((idx*4+2)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
+		} /* vsplth DUP.8H */
+		case 652: { uint32_t idx=va & 3; emit_load_vr(0,vb); emit32(0x4E040400|((idx*8+4)<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; } /* vspltw DUP.4S */
+		case 522: /* vrfin — EXCLUDED: native case used +inf rounding, not nearest */
+		case 586: /* vrfiz — EXCLUDED: native case used -inf rounding, not toward zero */
+		case 650: /* vrfip — EXCLUDED until exact rounding/FPCR semantics are proven */
+		case 714: /* vrfim — EXCLUDED until exact rounding/FPCR semantics are proven */
+			return false;
 		case 966: /* vcmpbfp — EXCLUDED: bounded-FP compare semantics not implemented */
 			return false;
 		case 454: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E20E400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgefp FCMGE */
@@ -3278,10 +3321,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		switch (vao) {
 		case 46: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E21CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
 		case 47: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4EA1CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
-		case 43: /* vperm — mask control bytes to PPC's 0..31 selector range before TBL */
+		case 43: /* vperm — mask control bytes and map PPC architectural lanes to internal lanes before TBL */
 			emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc);
 			emit32(0x4F00E7E3); /* MOVI v3.16b,#0x1f */
 			emit32(0x4E231C42); /* AND v2.16b,v2.16b,v3.16b */
+			emit32(0x4F00E463); /* MOVI v3.16b,#0x03 */
+			emit32(0x6E231C42); /* EOR v2.16b,v2.16b,v3.16b (ev_mixed byte map: n -> n^3) */
 			emit32(0x4E002000|(2<<16)|(0<<5)|0); /* TBL v0.16b,{v0-v1},v2 */
 			emit_store_vr(0,vd); return true;
 		case 42: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E601C00|(0<<16)|(1<<5)|2); emit_store_vr(2,vd); return true; /* vsel: BSL mask=vc, true=vb, false=va */
@@ -3289,7 +3334,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 32: /* vmhaddshs — EXCLUDED: FMLA approximation is not exact saturated halfword semantics */
 		case 33: /* vmhraddshs — EXCLUDED: approximation is not exact rounded saturated semantics */
 			return false;
-		case 34: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E609C00|(1<<16)|(0<<5)|0); emit32(0x4E608400|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmladduhm MUL+ADD */
+		case 34: /* vmladduhm — EXCLUDED: native operand order used vA*vC+vB, interpreter is vA*vB+vC */
+			return false;
 		case 36: /* vmsumubm — EXCLUDED: native sequence is approximate/wrong vector-sum semantics */
 		case 37: /* vmsummbm — EXCLUDED: native sequence is approximate/wrong vector-sum semantics */
 		case 38: /* vmsumuhm — EXCLUDED: old native sequence emitted undefined AArch64 for this XO */
@@ -3302,22 +3348,28 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	}
 
 	case 7: /* mulli rD,rA,SIMM */
+	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_gpr(RTMP0, ra);
+		int s = gpr_in(ra, RTMP0);
+		int d = gpr_out(rd, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)simm);
-		emit32(0x1B007C00 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* MUL Wd,Wn,Wm */
-		emit_store_gpr(RTMP0, rd);
+		emit32(0x1B007C00 | (RTMP1 << 16) | (s << 5) | d); /* MUL Wd,Wn,Wm */
+		gpr_out_commit(rd, d);
 		return true;
+	}
 
 	case 13: /* addic. rD,rA,SIMM (sets XER[CA] + CR0) */
+	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_gpr(RTMP0, ra);
+		int s = gpr_in(ra, RTMP0);
+		int d = gpr_out(rd, RTMP0);
 		emit_load_imm32(RTMP1, (int32_t)simm);
-		emit32(0x2B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); /* ADDS */
-		emit_store_gpr(RTMP0, rd);
+		emit32(0x2B000000 | (RTMP1 << 16) | (s << 5) | d); /* ADDS */
+		gpr_out_commit(rd, d);
 		emit_write_xer_ca_from_carry();
-		lazy_update_cr0(RTMP0);
+		lazy_update_cr0(d);
 		return true;
+	}
 
 	case 35: /* lbzu rD,d(rA) */
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
@@ -3637,28 +3689,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
-		/* 64-bit FP conversions (G5/PPC970) */
-		case 814: /* fctid frD,frB — FP to 64-bit integer (round per FPSCR) */
-			emit_load_fpr(0, frb);
-			emit32(0x9E700000 | (0 << 5) | RTMP0); /* FCVTNS Xd, Dn (round to nearest) */
-			/* Store as 64-bit integer in FPR slot (PPC stores int result in FPR) */
-			emit32(0x9E670000 | (RTMP0 << 5) | 0); /* FMOV Dd, Xn */
-			emit_store_fpr(0, frd);
-			return true;
-
-		case 815: /* fctidz frD,frB — FP to 64-bit integer (round toward zero) */
-			emit_load_fpr(0, frb);
-			emit32(0x9E780000 | (0 << 5) | RTMP0); /* FCVTZS Xd, Dn */
-			emit32(0x9E670000 | (RTMP0 << 5) | 0); /* FMOV Dd, Xn */
-			emit_store_fpr(0, frd);
-			return true;
-
-		case 846: /* fcfid frD,frB — 64-bit integer to FP */
-			emit_load_fpr(0, frb);
-			emit32(0x9E660000 | (0 << 5) | RTMP0); /* FMOV Xn, Dd */
-			emit32(0x9E620000 | (RTMP0 << 5) | 0); /* SCVTF Dd, Xn */
-			emit_store_fpr(0, frd);
-			return true;
+		/* 64-bit FP conversions (G5/PPC970) — EXCLUDED for SheepShaver's
+		 * current 32-bit PPC CPU profile. These opcodes are not decoded by
+		 * the interpreter table; executing them natively would wrongly run
+		 * out-of-ISA instructions instead of taking the illegal-op path. */
+		case 814: /* fctid frD,frB */
+		case 815: /* fctidz frD,frB */
+		case 846: /* fcfid frD,frB */
+			return false;
 
 		default:
 			return false;

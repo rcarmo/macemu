@@ -469,6 +469,11 @@ TEST_ORDER+=(extsb_positive)
 TESTS[fp_fctiw_nearest]="3C603FF8 90610100 38600000 90610104 C8210100 FC00081C D8010108 80A10108 80C1010C"
 TEST_ORDER+=(fp_fctiw_nearest)
 
+# PPC64/G5 FP conversion opcodes are not in the interpreter decode table; native JIT must not execute them behind the interpreter's back.
+# fctid f1,f1 with f1=1.5 should behave like interpreter fallback/ignoreillegal (FPR unchanged) until interpreter semantics exist.
+TESTS[fp64_fctid_delegated]="3C603FF8 90610100 38600000 90610104 C8210100 FC200E5C D8210108 80A10108 80C1010C"
+TEST_ORDER+=(fp64_fctid_delegated)
+
 # fres: old native path emitted undefined AArch64 0x1e20f800 and only approximate semantics.
 # Delegate until exact FPSCR/estimate semantics are implemented. 2.0 -> exact interpreter 0.5.
 TESTS[fp_fres_delegate_exact]="3C604000 90610100 38600000 90610104 C8210100 FC000830 D8010108 80A10108 80C1010C"
@@ -1133,6 +1138,17 @@ TESTS[vec_vrefp_delegated]="3C804000 90810600 90810604 90810608 9081060C 3860060
 TEST_ORDER+=(vec_vrefp_delegated)
 TESTS[vec_vrsqrtefp_delegated]="3C804080 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040014A 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vrsqrtefp_delegated)
+
+# AltiVec FP rounding instructions are delegated until native rounding/FPCR semantics are exact.
+# -1.5 distinguishes nearest/toward-zero/+inf/-inf and catches stale XO/native mapping errors.
+TESTS[vec_vrfin_delegated]="3C80BFC0 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040020A 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vrfin_delegated)
+TESTS[vec_vrfiz_delegated]="3C80BFC0 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040024A 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vrfiz_delegated)
+TESTS[vec_vrfip_delegated]="3C80BFC0 90810600 90810604 90810608 9081060C 38600600 7C0118CE 1040028A 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vrfip_delegated)
+TESTS[vec_vrfim_delegated]="3C80BFC0 90810600 90810604 90810608 9081060C 38600600 7C0118CE 104002CA 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vrfim_delegated)
 # vsl/vslo/vsro should not compile to byte-extract/pass-through approximations.
 TESTS[vec_vsl_excluded]="10050718 10230718 104009C4 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vsl_excluded)
@@ -1148,6 +1164,16 @@ TEST_ORDER+=(vec_vsel_mask_allones)
 # vperm masks control bytes with 0x1f. Control byte 0x20 aliases selector 0; raw A64 TBL would return zero.
 TESTS[vec_vperm_control_mask]="3C80AAAA 6084AAAA 90810600 90810604 90810608 9081060C 3C805555 60845555 90810610 90810614 90810618 9081061C 3C802020 60842020 90810620 90810624 90810628 9081062C 38600600 7C0118CE 38600610 7C2118CE 38600620 7C4118CE 106008AB 38600630 7C6119CE 80A10630 80C10634"
 TEST_ORDER+=(vec_vperm_control_mask)
+
+# vperm control bytes are architectural element indices; on little-endian internal VR lanes use ev_mixed.
+# A=00..0f and control=0 should select architectural byte 0 (00), not internal raw lane 0 (03).
+TESTS[vec_vperm_mixed_lane]="38600000 90610600 3C600405 60630607 90610604 3C600809 60630A0B 90610608 3C600C0D 60630E0F 9061060C 38600600 7C0118CE 104210C4 106008AB 38600630 7C6119CE 80A10630 80C10634"
+TEST_ORDER+=(vec_vperm_mixed_lane)
+
+# vspltb/vsplth source operands use ev_mixed lane numbering on little-endian hosts.
+# Source bytes 00..0f: element 0 is byte 00 / halfword 0001, not internal lane byte 03 / halfword 0203.
+TESTS[vec_vsplt_mixed_lane]="38600000 90610600 3C600405 60630607 90610604 3C600809 60630A0B 90610608 3C600C0D 60630E0F 9061060C 38600600 7C0118CE 1040020C 38600620 7C4119CE 80A10620 1040024C 38600630 7C4119CE 80C10630"
+TEST_ORDER+=(vec_vsplt_mixed_lane)
 
 # AltiVec vector-sum family is delegated: old native low-XO 38 emitted undefined AArch64
 # 0x6e619c00 and neighbouring sum handlers were approximate/missing VSCR.SAT.
@@ -1176,6 +1202,10 @@ TEST_ORDER+=(vec_vmrglw_delegated)
 # not widened even/odd multiply operations.
 TESTS[vec_vmuloub_delegated]="3880FFFF 6484FFFF 90810600 90810604 90810608 9081060C 38800202 64840202 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400808 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vmuloub_delegated)
+
+# vmladduhm: interpreter computes vA*vB+vC. Old native path used vA*vC+vB.
+TESTS[vec_vmladduhm_delegated]="38800002 64840002 90810600 90810604 90810608 9081060C 38800003 64840003 90810610 90810614 90810618 9081061C 38800005 64840005 90810620 90810624 90810628 9081062C 38600600 7C0118CE 38600610 7C2118CE 38600620 7C4118CE 104008A2 38600630 7C4119CE 80A10630 80C10634"
+TEST_ORDER+=(vec_vmladduhm_delegated)
 TESTS[vec_vmuleuh_delegated]="3C800001 60840001 90810600 90810604 90810608 9081060C 3C800002 60840002 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400A48 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vmuleuh_delegated)
 

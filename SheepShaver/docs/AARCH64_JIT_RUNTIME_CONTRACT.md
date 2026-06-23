@@ -429,8 +429,9 @@ state is materialized. Examples: add, sub, or, and, ld/st, compare, branch.
 
 The opcode terminates the block. The interpreter handles it. This is the correct and safe
 pattern for all unimplemented or barrier-worthy classes. Examples: EMUL_OP (opcode 6),
-unimplemented/excluded AltiVec families, unimplemented FPU families, and PPC64 memory handlers that
-still lack exact guarded 64-bit helper coverage.
+unimplemented/excluded AltiVec families, unimplemented FPU families, out-of-ISA PPC64/G5-only
+opcodes under the current 32-bit PPC CPU profile, and PPC64 memory handlers that still lack exact
+guarded 64-bit helper coverage.
 
 ### Category C: (Not yet present) Helper dispatch
 
@@ -447,7 +448,7 @@ barrier. Not implemented in the current JIT.
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
 | 3 | Helper calls are semantic barriers | ✅ Guarded load/store, FP memory, fixed-count string/multiple, byte-reversed memory, dcbz, timebase, and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x29 + RA barrier / direct FPR/GPR-slot updates keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code`; containment/corrupt-entry invalidation is a full flush because per-PC unlinking cannot unpatch already-emitted direct branches. |
-| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 291/291 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added RA-width, string/multiple, SPR/FPSCR/AltiVec, addis/lis, vsel, AltiVec FP compare and FP edge vectors, vperm control-mask, bcctr CTR-decrement, fres/vector-estimate delegation, FPSCR move/write delegation, FP Rc/FPSCR-producing-op delegation, AltiVec vector-sum delegation, AltiVec average/saturating add-sub delegation, AltiVec merge/multiply/conversion/shift delegation, AltiVec signed/pixel unpack and pack delegation, PPC64 Rc delegation, CR6 dotted-vector coverage, and corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro` plus related false-coverage vectors). `bcl` LR update fixed (2026-05). |
+| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 299/299 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added RA-width, string/multiple, SPR/FPSCR/AltiVec, addis/lis, vsel, AltiVec FP compare and FP edge vectors, vperm control-mask, bcctr CTR-decrement, fres/vector-estimate delegation, FPSCR move/write delegation, FP Rc/FPSCR-producing-op delegation, AltiVec vector-sum delegation, AltiVec average/saturating add-sub delegation, AltiVec merge/multiply/conversion/shift delegation, AltiVec signed/pixel unpack and pack delegation, PPC64 Rc delegation, PPC64/G5 FP illegal-op delegation, AltiVec FP rounding and `vmladduhm` delegation, mixed-lane `vperm`/`vsplt` coverage, CR6 dotted-vector coverage, and corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro` plus related false-coverage vectors). `bcl` LR update fixed (2026-05). |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 
