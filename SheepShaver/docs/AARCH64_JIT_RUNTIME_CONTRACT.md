@@ -353,6 +353,9 @@ outside the statically-enumerated 1:1-mapped regions, and for atomic reservation
   and indexed/update variants. They update/read FPR slots directly, use the same size-aware
   validity/page-mapped checks, preserve FPRs on unmapped loads, skip invalid stores, and use the
   interpreter's single<->double conversion logic.
+- `sheepshaver_jit_lmw/stmw/lswi/stswi` — helper-routed fixed-count string/multiple memory operations
+  using existing safe load/store primitives. Runtime-count `lswx/stswx` remain on their proven inline
+  generators until a guarded runtime-count helper is validated.
 
 These helpers follow the AArch64 ABI, so callee-saved x19–x29 (RSTATE, RCR0, the RA cache, and saved
 x29/A64_FP when used as a temporary EA scratch) survive the BLR. They may, however, re-enter the
@@ -440,7 +443,7 @@ barrier. Not implemented in the current JIT.
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
-| 3 | Helper calls are semantic barriers | ✅ Guarded load/store, FP memory, byte-reversed memory, dcbz, timebase, and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x29 + RA barrier / direct FPR-slot updates keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
+| 3 | Helper calls are semantic barriers | ✅ Guarded load/store, FP memory, fixed-count string/multiple, byte-reversed memory, dcbz, timebase, and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x29 + RA barrier / direct FPR/GPR-slot updates keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code`; containment/corrupt-entry invalidation is a full flush because per-PC unlinking cannot unpatch already-emitted direct branches. |
 | 5 | Interpreter and JIT builds agree on shared semantics | ✅ 279/279 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added RA-width, string/multiple, SPR/FPSCR/AltiVec, addis/lis, vsel, AltiVec FP compare, vperm control-mask, bcctr CTR-decrement, fres/vector-estimate delegation, FPSCR move/write delegation, FP Rc/FPSCR-producing-op delegation, AltiVec vector-sum delegation, AltiVec average/saturating add-sub delegation, AltiVec merge delegation, AltiVec multiply even/odd delegation, AltiVec conversion delegation, AltiVec shift/rotate delegation, AltiVec remaining VX vector-sum delegation, and AltiVec saturating pack delegation regressions). `bcl` LR update fixed (2026-05). |
 | 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
