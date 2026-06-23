@@ -1031,6 +1031,54 @@ extern "C" void sheepshaver_jit_safe_store_reversed(uint32 ea, uint32 value, uin
 		vm_write_memory_4_reversed(ea, value);
 }
 
+static uint64 sheepshaver_jit_fp_load_single_convert(uint32 v)
+{
+	union { uint32 i; float f; double d; uint64 j; } x;
+	x.i = v;
+	x.d = (double)x.f;
+	return x.j;
+}
+
+static uint32 sheepshaver_jit_fp_store_single_convert(uint64 v)
+{
+	int exp = (v >> 52) & 0x7ff;
+	if (exp < 874 || exp > 896)
+		return (uint32)(((v >> 32) & 0xc0000000) | ((v >> 29) & 0x3fffffff));
+	union { uint32 i; float f; double d; uint64 j; } x;
+	x.j = v;
+	x.f = (float)x.d;
+	return x.i;
+}
+
+extern "C" void sheepshaver_jit_fp_load(powerpc_registers *r, uint32 ea, uint32 fpr, uint32 is_double)
+{
+	if (!r || fpr >= 32)
+		return;
+	uint32 size = is_double ? 8 : 4;
+	if (!sheepshaver_jit_access_valid(ea, size, false)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return;
+	}
+	r->fpr[fpr].j = is_double ? vm_read_memory_8(ea) : sheepshaver_jit_fp_load_single_convert(vm_read_memory_4(ea));
+}
+
+extern "C" void sheepshaver_jit_fp_store(powerpc_registers *r, uint32 ea, uint32 fpr, uint32 is_double)
+{
+	if (!r || fpr >= 32)
+		return;
+	uint32 size = is_double ? 8 : 4;
+	if (sheepshaver_jit_overlaps_zero_page(ea, size))
+		return;
+	if (!sheepshaver_jit_access_valid(ea, size, true)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return;
+	}
+	if (is_double)
+		vm_write_memory_8(ea, r->fpr[fpr].j);
+	else
+		vm_write_memory_4(ea, sheepshaver_jit_fp_store_single_convert(r->fpr[fpr].j));
+}
+
 /* Frame buffer extent for the JIT D-form load/store valid-check (emit_direct_access_valid_check
  * in ppc-jit.cpp). SheepShaver-owned: screen_base + current video mode size. 0 = not configured. */
 extern "C" uint32 sheepshaver_jit_fb_base(void) { return screen_base; }

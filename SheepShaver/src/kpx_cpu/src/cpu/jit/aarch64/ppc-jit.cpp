@@ -29,6 +29,8 @@ extern "C" uint32_t sheepshaver_jit_safe_load(uint32_t ea, uint32_t old_value, u
 extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t store_kind);
 extern "C" uint32_t sheepshaver_jit_safe_load_reversed(uint32_t ea, uint32_t old_value, uint32_t access_size);
 extern "C" void sheepshaver_jit_safe_store_reversed(uint32_t ea, uint32_t value, uint32_t access_size);
+extern "C" void sheepshaver_jit_fp_load(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
+extern "C" void sheepshaver_jit_fp_store(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
 extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
 extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
 extern "C" uint64_t sheepshaver_jit_get_tb_ticks(void);
@@ -813,6 +815,24 @@ static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_k
 	case 4: emit32(0xB9000000 | (ea_reg << 5) | val_reg); break; /* STR */
 	}
 	patch_bcond(done, 14, jit_code_ptr);
+}
+
+static void emit_call_fp_load_helper(int ea_reg, uint32_t fpr, bool is_double) {
+	if (ea_reg != RTMP1) a64_mov_reg(RTMP1, ea_reg); /* x1 = EA */
+	a64_mov_reg(RTMP0, RSTATE);                      /* x0 = regs */
+	emit_load_imm32(RTMP2, (int32_t)fpr);             /* x2 = FPR index */
+	emit_load_imm32(RTMP3, is_double ? 1 : 0);        /* x3 = is_double */
+	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_fp_load);
+	emit32(0xD63F0000 | (RTMP4 << 5));
+}
+
+static void emit_call_fp_store_helper(int ea_reg, uint32_t fpr, bool is_double) {
+	if (ea_reg != RTMP1) a64_mov_reg(RTMP1, ea_reg); /* x1 = EA */
+	a64_mov_reg(RTMP0, RSTATE);                      /* x0 = regs */
+	emit_load_imm32(RTMP2, (int32_t)fpr);             /* x2 = FPR index */
+	emit_load_imm32(RTMP3, is_double ? 1 : 0);        /* x3 = is_double */
+	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_fp_store);
+	emit32(0xD63F0000 | (RTMP4 << 5));
 }
 
 static void emit_lsl_w_imm(int rd, int rn, uint32_t sh) {
@@ -2044,74 +2064,50 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 535: /* lfsx frD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-			emit32(0x1E270000 | (RTMP1 << 5) | 0);
-			emit32(0x1E22C000 | (0 << 5) | 0);
-			emit_store_fpr(0, rd);
+			emit_call_fp_load_helper(RTMP0, rd, false);
 			return true;
 		case 567: /* lfsux frD,rA,rB */
 			emit_load_ea_base(ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-			emit32(0x1E270000 | (RTMP1 << 5) | 0);
-			emit32(0x1E22C000 | (0 << 5) | 0);
-			emit_store_fpr(0, rd);
+			a64_mov_reg(A64_FP, RTMP0);
+			emit_call_fp_load_helper(RTMP0, rd, false);
+			emit_store_gpr(A64_FP, ra);
 			return true;
 		case 599: /* lfdx frD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0x9E670000 | (RTMP1 << 5) | 0);
-			emit_store_fpr(0, rd);
+			emit_call_fp_load_helper(RTMP0, rd, true);
 			return true;
 		case 631: /* lfdux frD,rA,rB */
 			emit_load_ea_base(ra); emit_load_gpr(RTMP1, rb);
 			emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-			emit32(0x9E670000 | (RTMP1 << 5) | 0);
-			emit_store_fpr(0, rd);
+			a64_mov_reg(A64_FP, RTMP0);
+			emit_call_fp_load_helper(RTMP0, rd, true);
+			emit_store_gpr(A64_FP, ra);
 			return true;
 		case 663: /* stfsx frS,rA,rB */
-			emit_load_fpr(0, PPC_RS(op));
-			emit32(0x1E624000 | (0 << 5) | 0);
-			emit32(0x1E260000 | (0 << 5) | RTMP1);
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+			emit_call_fp_store_helper(RTMP0, PPC_RS(op), false);
 			return true;
 		case 695: /* stfsux frS,rA,rB */
-			emit_load_fpr(0, PPC_RS(op));
-			emit32(0x1E624000 | (0 << 5) | 0);
-			emit32(0x1E260000 | (0 << 5) | RTMP1);
-			emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+			a64_mov_reg(A64_FP, RTMP0);
+			emit_call_fp_store_helper(RTMP0, PPC_RS(op), false);
+			emit_store_gpr(A64_FP, ra);
 			return true;
 		case 727: /* stfdx frS,rA,rB */
-			emit_load_fpr(0, PPC_RS(op));
-			emit32(0x9E660000 | (0 << 5) | RTMP1);
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+			emit_call_fp_store_helper(RTMP0, PPC_RS(op), true);
 			return true;
 		case 759: /* stfdux frS,rA,rB */
-			emit_load_fpr(0, PPC_RS(op));
-			emit32(0x9E660000 | (0 << 5) | RTMP1);
-			emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 			emit_load_gpr(RTMP0, ra); emit_load_gpr(RTMP2, rb);
 			emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-			emit_store_gpr(RTMP0, ra);
-			emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+			a64_mov_reg(A64_FP, RTMP0);
+			emit_call_fp_store_helper(RTMP0, PPC_RS(op), true);
+			emit_store_gpr(A64_FP, ra);
 			return true;
 		case 1014: /* dcbz rA,rB — zero cache line (32 bytes) */
 		{
@@ -3456,12 +3452,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_ea_base(ra);
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-		emit_store_gpr(RTMP0, ra);
-		emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
-		emit32(0x1E270000 | (RTMP1 << 5) | 0);
-		emit32(0x1E22C000 | (0 << 5) | 0);
-		emit_store_fpr(0, rd);
+		a64_mov_reg(A64_FP, RTMP0);
+		emit_call_fp_load_helper(RTMP0, rd, false);
+		emit_store_gpr(A64_FP, ra);
 		return true;
 
 	case 51: /* lfdu frD,d(rA) */
@@ -3469,36 +3462,29 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		emit_load_ea_base(ra);
 		emit_load_imm32(RTMP1, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0);
-		emit_store_gpr(RTMP0, ra);
-		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1);
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
-		emit32(0x9E670000 | (RTMP1 << 5) | 0);
-		emit_store_fpr(0, rd);
+		a64_mov_reg(A64_FP, RTMP0);
+		emit_call_fp_load_helper(RTMP0, rd, true);
+		emit_store_gpr(A64_FP, ra);
 		return true;
 
 	case 53: /* stfsu frS,d(rA) */
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_fpr(0, rd);
-		emit32(0x1E624000 | (0 << 5) | 0);
-		emit32(0x1E260000 | (0 << 5) | RTMP1);
-		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1);
 		emit_load_gpr(RTMP0, ra);
 		emit_load_imm32(RTMP2, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-		emit_store_gpr(RTMP0, ra);
-		emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+		a64_mov_reg(A64_FP, RTMP0);
+		emit_call_fp_store_helper(RTMP0, rd, false);
+		emit_store_gpr(A64_FP, ra);
 		return true;
 
 	case 55: /* stfdu frS,d(rA) */
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_fpr(0, rd);
-		emit32(0x9E660000 | (0 << 5) | RTMP1);
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1);
 		emit_load_gpr(RTMP0, ra);
 		emit_load_imm32(RTMP2, (int32_t)simm);
 		emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0);
-		emit_store_gpr(RTMP0, ra);
-		emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+		a64_mov_reg(A64_FP, RTMP0);
+		emit_call_fp_store_helper(RTMP0, rd, true);
+		emit_store_gpr(A64_FP, ra);
 		return true;
 
 	case 46: /* lmw rD,d(rA) — load multiple words */
@@ -3533,53 +3519,28 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		/* Load 32-bit float, byte-swap, convert to double */
-		emit32(0xB9400000 | (RTMP0 << 5) | RTMP1); /* LDR Wt, [Xn] */
-		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV Wd */
-		/* Move int to float reg: FMOV Sd, Wn */
-		emit32(0x1E270000 | (RTMP1 << 5) | 0); /* FMOV S0, Wn */
-		/* Convert single to double: FCVT Dd, Sd */
-		emit32(0x1E22C000 | (0 << 5) | 0); /* FCVT D0, S0 */
-		emit_store_fpr(0, rd);
+		emit_call_fp_load_helper(RTMP0, rd, false);
 		return true;
 
 	case 50: /* lfd frD,d(rA) — load float double */
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP1, (int32_t)simm); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-		/* Load 64-bit, byte-swap */
-		emit32(0xF9400000 | (RTMP0 << 5) | RTMP1); /* LDR Xt, [Xn] (64-bit) */
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xd, Xn (64-bit byte-swap) */
-		/* Move to FP reg: FMOV Dd, Xn */
-		emit32(0x9E670000 | (RTMP1 << 5) | 0); /* FMOV D0, Xn */
-		emit_store_fpr(0, rd);
+		emit_call_fp_load_helper(RTMP0, rd, true);
 		return true;
 
 	case 52: /* stfs frS,d(rA) — store float single */
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_fpr(0, rd);
-		/* Convert double to single: FCVT Sd, Dd */
-		emit32(0x1E624000 | (0 << 5) | 0);
-		/* Move float to int: FMOV Wn, Sd */
-		emit32(0x1E260000 | (0 << 5) | RTMP1);
-		/* Byte-swap and store */
-		emit32(0x5AC00800 | (RTMP1 << 5) | RTMP1); /* REV */
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-		emit32(0xB9000000 | (RTMP0 << 5) | RTMP1); /* STR Wt, [Xn] */
+		emit_call_fp_store_helper(RTMP0, rd, false);
 		return true;
 
 	case 54: /* stfd frS,d(rA) — store float double */
 		rd = PPC_RS(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
-		emit_load_fpr(0, rd);
-		/* Move FP to int: FMOV Xn, Dd */
-		emit32(0x9E660000 | (0 << 5) | RTMP1);
-		/* Byte-swap 64-bit */
-		emit32(0xDAC00C00 | (RTMP1 << 5) | RTMP1); /* REV Xd, Xn */
 		emit_load_ea_base(ra);
 		if (simm) { emit_load_imm32(RTMP2, (int32_t)simm); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-		/* STR Xt, [Xn] (64-bit store) */
-		emit32(0xF9000000 | (RTMP0 << 5) | RTMP1);
+		emit_call_fp_store_helper(RTMP0, rd, true);
 		return true;
 
 	case 63: /* double-precision FP ops */
