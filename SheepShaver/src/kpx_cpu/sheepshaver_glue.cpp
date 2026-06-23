@@ -1004,6 +1004,33 @@ extern "C" void sheepshaver_jit_safe_store(uint32 ea, uint32 value, uint32 store
 	}
 }
 
+extern "C" uint32 sheepshaver_jit_safe_load_reversed(uint32 ea, uint32 old_value, uint32 access_size)
+{
+	if (access_size != 2 && access_size != 4)
+		return old_value;
+	if (!sheepshaver_jit_access_valid(ea, access_size, false)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return old_value;
+	}
+	return access_size == 2 ? vm_read_memory_2_reversed(ea) : vm_read_memory_4_reversed(ea);
+}
+
+extern "C" void sheepshaver_jit_safe_store_reversed(uint32 ea, uint32 value, uint32 access_size)
+{
+	if (access_size != 2 && access_size != 4)
+		return;
+	if (sheepshaver_jit_overlaps_zero_page(ea, access_size))
+		return;
+	if (!sheepshaver_jit_access_valid(ea, access_size, true)) {
+		if (!sheepshaver_jit_page_mapped(ea))
+			return;
+	}
+	if (access_size == 2)
+		vm_write_memory_2_reversed(ea, value);
+	else
+		vm_write_memory_4_reversed(ea, value);
+}
+
 /* Frame buffer extent for the JIT D-form load/store valid-check (emit_direct_access_valid_check
  * in ppc-jit.cpp). SheepShaver-owned: screen_base + current video mode size. 0 = not configured. */
 extern "C" uint32 sheepshaver_jit_fb_base(void) { return screen_base; }

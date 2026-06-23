@@ -27,6 +27,8 @@ extern "C" uint32_t sheepshaver_jit_safe_lwz(uint32_t ea, uint32_t old_value);
 extern "C" void sheepshaver_jit_safe_stw(uint32_t ea, uint32_t value);
 extern "C" uint32_t sheepshaver_jit_safe_load(uint32_t ea, uint32_t old_value, uint32_t load_kind);
 extern "C" void sheepshaver_jit_safe_store(uint32_t ea, uint32_t value, uint32_t store_kind);
+extern "C" uint32_t sheepshaver_jit_safe_load_reversed(uint32_t ea, uint32_t old_value, uint32_t access_size);
+extern "C" void sheepshaver_jit_safe_store_reversed(uint32_t ea, uint32_t value, uint32_t access_size);
 extern "C" uint32_t sheepshaver_jit_lwarx(void *regs, uint32_t ea);
 extern "C" uint32_t sheepshaver_jit_stwcx(void *regs, uint32_t ea, uint32_t value);
 extern "C" uint64_t sheepshaver_jit_get_tb_ticks(void);
@@ -2004,29 +2006,39 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_guarded_store_noop_invalid(RTMP0, RTMP1, 4);
 			emit_store_gpr(A64_FP, ra); /* update rA after memory access */
 			return true;
-		case 790: /* lhbrx rD,rA,rB (byte-reversed = native order on LE) */
+		case 790: /* lhbrx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x79400000 | (RTMP0 << 5) | RTMP1); /* LDRH (native LE = byte-reversed for PPC) */
-			emit_store_gpr(RTMP1, rd);
+			emit_load_gpr(RTMP1, rd);
+			emit_load_imm32(RTMP2, 2);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_load_reversed);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			emit_store_gpr(RTMP0, rd);
 			return true;
 		case 918: /* sthbrx rS,rA,rB */
 			emit_load_gpr(RTMP1, PPC_RS(op));
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0x79000000 | (RTMP0 << 5) | RTMP1);
+			emit_load_imm32(RTMP2, 2);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_store_reversed);
+			emit32(0xD63F0000 | (RTMP4 << 5));
 			return true;
-		case 534: /* lwbrx rD,rA,rB (byte-reversed = native order on LE) */
+		case 534: /* lwbrx rD,rA,rB */
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP1, rb); emit32(0x0B000000 | (RTMP1 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xB9400000 | (RTMP0 << 5) | RTMP1);
-			emit_store_gpr(RTMP1, rd);
+			emit_load_gpr(RTMP1, rd);
+			emit_load_imm32(RTMP2, 4);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_load_reversed);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			emit_store_gpr(RTMP0, rd);
 			return true;
 		case 662: /* stwbrx rS,rA,rB */
 			emit_load_gpr(RTMP1, PPC_RS(op));
 			emit_load_gpr(RTMP0, ra == 0 ? rb : ra);
 			if (ra != 0) { emit_load_gpr(RTMP2, rb); emit32(0x0B000000 | (RTMP2 << 16) | (RTMP0 << 5) | RTMP0); }
-			emit32(0xB9000000 | (RTMP0 << 5) | RTMP1);
+			emit_load_imm32(RTMP2, 4);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_store_reversed);
+			emit32(0xD63F0000 | (RTMP4 << 5));
 			return true;
 
 		case 535: /* lfsx frD,rA,rB */
