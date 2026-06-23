@@ -1085,6 +1085,10 @@ TEST_ORDER+=(vec_vslo_excluded)
 TESTS[vec_vsro_excluded]="10050718 10230718 10400B18 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vsro_excluded)
 
+# vsel mask all ones must select vB (0x55555555), not vA (0xaaaaaaaa).
+TESTS[vec_vsel_mask_allones]="3C80AAAA 6084AAAA 90810600 90810604 90810608 9081060C 3C805555 60845555 90810610 90810614 90810618 9081061C 3880FFFF 90810620 90810624 90810628 9081062C 38600600 7C0118CE 38600610 7C2118CE 38600620 7C4118CE 106008AA 38600630 7C6119CE 80A10630 80C10634"
+TEST_ORDER+=(vec_vsel_mask_allones)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
@@ -1107,6 +1111,9 @@ TEST_ORDER+=(fuzz_addi_max)
 # addis overflow
 TESTS[fuzz_addis_max]="3C607FFF 38638000"
 TEST_ORDER+=(fuzz_addis_max)
+# lis negative immediate must materialize bitwise high half without signed-shift UB: 0xffff0000
+TESTS[fuzz_lis_negative_ffff]="3C60FFFF"
+TEST_ORDER+=(fuzz_lis_negative_ffff)
 # mulli overflow: 0x7FFF * 0x7FFF
 TESTS[fuzz_mulli_max]="38607FFF 1CA37FFF"
 TEST_ORDER+=(fuzz_mulli_max)

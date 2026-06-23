@@ -706,8 +706,8 @@ static void emit_direct_access_valid_check(int ea_reg, uint32_t access_size, boo
 		if (store) {
 			const uint32_t zp_start = (uint32_t)SheepMem::zero_page;
 			const uint32_t zp_end = zp_start + SheepMem::page_size;
-			if (zp_start > sheep_base)
-				emit_branch_if_ea_in_range(ea_reg, sheep_base, zp_start, valid_locs, valid_count);
+			if (zp_start > sheep_base && zp_start >= access_size)
+				emit_branch_if_ea_in_range(ea_reg, sheep_base, zp_start - access_size + 1, valid_locs, valid_count);
 			if (zp_end < sheep_end)
 				emit_branch_if_ea_in_range(ea_reg, zp_end, sheep_end - access_size + 1, valid_locs, valid_count);
 		} else {
@@ -1118,13 +1118,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 	case 15: /* addis / lis */
 	{
 		rd = PPC_RD(op); ra = PPC_RA(op); simm = PPC_SIMM(op);
+		int32_t shifted_simm = (int32_t)((uint32_t)(uint16_t)simm << 16);
 		if (ra == 0) {
 			int d = gpr_out(rd, RTMP0);
-			emit_load_imm32(d, (int32_t)simm << 16);
+			emit_load_imm32(d, shifted_simm);
 			gpr_out_commit(rd, d);
 		} else {
 			int s = gpr_in(ra, RTMP0);
-			emit_load_imm32(RTMP1, (int32_t)simm << 16);
+			emit_load_imm32(RTMP1, shifted_simm);
 			int d = gpr_out(rd, RTMP0);
 			emit32(0x0B000000 | (RTMP1 << 16) | (s << 5) | d);
 			gpr_out_commit(rd, d);
@@ -3324,7 +3325,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 46: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E21CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
 		case 47: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4EA1CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
 		case 43: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E002000|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
-		case 42: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E601C00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
+		case 42: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E601C00|(0<<16)|(1<<5)|2); emit_store_vr(2,vd); return true; /* vsel: BSL mask=vc, true=vb, false=va */
 
 		case 32: /* vmhaddshs — EXCLUDED: FMLA approximation is not exact saturated halfword semantics */
 		case 33: /* vmhraddshs — EXCLUDED: approximation is not exact rounded saturated semantics */
@@ -4307,11 +4308,10 @@ bool ppc_jit_aarch64_compile(
 			break;
 
 		/* Per-instruction overflow guard: never let a block's emitted code cross
-		 * jit_cache_end. A single PPC instruction can expand to a few KB (unrolled
-		 * string ops, guarded load/store). If we are within 1024 words (4KB) of the
-		 * end and have already compiled something, terminate the block here with a
-		 * clean epilogue; the remainder recompiles fresh after the next flush. */
-		if (n_compiled > 0 && jit_code_ptr >= jit_cache_end - 1024) {
+		 * jit_cache_end. A single PPC instruction can expand to several KB: the
+		 * runtime-count lswx generator emits >1024 words in the worst case, so use
+		 * the same 2048-word (8KB) margin as the fresh-block cache-full pre-check. */
+		if (n_compiled > 0 && jit_code_ptr >= jit_cache_end - 2048) {
 			lazy_flush_cr0();
 			emit_epilogue_with_pc(cur_pc);
 			emitted_exit = true;

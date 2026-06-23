@@ -909,8 +909,19 @@ extern "C" uint32 sheepshaver_jit_safe_lwz(uint32 ea, uint32 old_value)
 	return ReadMacInt32(ea);
 }
 
+static inline bool sheepshaver_jit_overlaps_zero_page(uint32 ea, uint32 size)
+{
+	uint32 zp = SheepMem::ZeroPage();
+	uint32 ze = zp + SheepMem::PageSize();
+	if (size == 0 || ea + size < ea)
+		return true; /* wrap/invalid: never write */
+	return ea < ze && ea + size > zp;
+}
+
 extern "C" void sheepshaver_jit_safe_stw(uint32 ea, uint32 value)
 {
+	if (sheepshaver_jit_overlaps_zero_page(ea, 4))
+		return;
 	if (!sheepshaver_jit_word_access_valid(ea, true)) {
 		if (!sheepshaver_jit_page_mapped(ea))
 			return;
@@ -939,6 +950,9 @@ extern "C" uint32 sheepshaver_jit_safe_load(uint32 ea, uint32 old_value, uint32 
 
 extern "C" void sheepshaver_jit_safe_store(uint32 ea, uint32 value, uint32 store_kind)
 {
+	uint32 size = (store_kind == 1) ? 1 : (store_kind == 2 ? 2 : 4);
+	if (sheepshaver_jit_overlaps_zero_page(ea, size))
+		return;
 	if (!sheepshaver_jit_word_access_valid(ea, true)) {
 		if (!sheepshaver_jit_page_mapped(ea))
 			return;
