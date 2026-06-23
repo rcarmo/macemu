@@ -458,8 +458,15 @@ void m68k_do_compile_execute(void)
 {
 	if (!ensure_aarch64_jit_runtime_ready())
 		jit_abort("ARM64 JIT dispatcher stubs were not initialized before compiled execution");
-	fprintf(stderr, "JIT_ENTRY pc=%08x spc=%08x a7=%08x\n", m68k_getpc(), (unsigned)regs.spcflags, regs.regs[15]);
-	fflush(stderr);
+	static int jit_diag = -1;
+	if (jit_diag < 0) {
+		const char *de = getenv("B2_JIT_DIAG");
+		jit_diag = (de && de[0] && de[0] != '0') ? 1 : 0;
+	}
+	if (jit_diag) {
+		fprintf(stderr, "JIT_ENTRY pc=%08x spc=%08x a7=%08x\n", m68k_getpc(), (unsigned)regs.spcflags, regs.regs[15]);
+		fflush(stderr);
+	}
 	static unsigned long _dc = 0;
 #if defined(CPU_AARCH64)
 	extern bool tick_inhibit;
@@ -489,7 +496,7 @@ void m68k_do_compile_execute(void)
 #endif
 		((compiled_handler)(pushall_call_handler))();
 		_dc++;
-		{
+		if (jit_diag) {
 			static unsigned long dc_log = 0;
 			static uae_u32 prev_dc_pc = 0xffffffff;
 			static uae_u32 prev_dc_sr = 0;
