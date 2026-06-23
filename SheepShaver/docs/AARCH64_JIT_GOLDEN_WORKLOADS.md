@@ -36,7 +36,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 276/276 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count `lswi`/`stswi`, `mfmsr_basic`, AltiVec exclusion vectors, `fcmpu_nan_unordered`, `fp_fctiw_nearest`, `fp_fres_delegate_exact`, `fp_mffs_dot_delegated`, `fp_mtfsfi_delegated`, `vec_vrefp_delegated`, `vec_vrsqrtefp_delegated`, `vec_vsumuhm_delegated`, `vec_vavgub_delegated`, `vec_vaddubs_delegated`, `vec_vmrghb_delegated`, `vec_vmrglw_delegated`, `vec_vmuloub_delegated`, `vec_vmuleuh_delegated`, `vec_vcfsx_scale_delegated`, `vec_vctsxs_scale_delegated`, `vec_vrlb_delegated`, `vec_vsrb_delegated`, `vec_vpkshus_delegated`, `vec_vpkuhus_delegated`, `vec_vscr_roundtrip`, `fuzz_vrsave_roundtrip`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, AltiVec FP compare mappings, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
+**Status**: ✅ 277/277 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count `lswi`/`stswi`, `mfmsr_basic`, AltiVec exclusion vectors, `fcmpu_nan_unordered`, `fp_fctiw_nearest`, `fp_fres_delegate_exact`, `fp_mffs_dot_delegated`, `fp_mtfsfi_delegated`, `fp_fneg_dot_delegated`, `vec_vrefp_delegated`, `vec_vrsqrtefp_delegated`, `vec_vsumuhm_delegated`, `vec_vavgub_delegated`, `vec_vaddubs_delegated`, `vec_vmrghb_delegated`, `vec_vmrglw_delegated`, `vec_vmuloub_delegated`, `vec_vmuleuh_delegated`, `vec_vcfsx_scale_delegated`, `vec_vctsxs_scale_delegated`, `vec_vrlb_delegated`, `vec_vsrb_delegated`, `vec_vpkshus_delegated`, `vec_vpkuhus_delegated`, `vec_vscr_roundtrip`, `fuzz_vrsave_roundtrip`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, AltiVec FP compare mappings, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
 
 ---
 
@@ -195,7 +195,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 276/276 + strict-JIT desktop holds
+    barrier; harness 277/277 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
