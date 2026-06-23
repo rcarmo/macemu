@@ -3236,10 +3236,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 142: /* vpkuhus — EXCLUDED: saturating pack needs exact unsigned semantics and VSCR.SAT */
 		case 206: /* vpkuwus — EXCLUDED: saturating pack needs exact unsigned semantics and VSCR.SAT */
 			return false;
-		case 814: emit_load_vr(0,vb); emit32(0x0E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupkhsb SXTL.8H (unpack high signed byte) */
-		case 878: emit_load_vr(0,vb); emit32(0x0E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupkhsh SXTL.4S */
-		case 942: emit_load_vr(0,vb); emit32(0x4E212800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsb SXTL2.8H */
-		case 1006: emit_load_vr(0,vb); emit32(0x4E612800|(0<<5)|0); emit_store_vr(0,vd); return true; /* vupklsh SXTL2.4S */
+		case 814:  /* vupkhsb — EXCLUDED: hardcoded encoding is XTN, not signed unpack/widen */
+		case 878:  /* vupkhsh — EXCLUDED: hardcoded encoding is XTN, not signed unpack/widen */
+		case 942:  /* vupklsb — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
+		case 1006: /* vupklsh — EXCLUDED: hardcoded encoding is XTN2, not signed unpack/widen */
+			return false;
 		case 452: { uint32_t sh=(op>>6)&0xF; emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E010000|(sh<<11)); emit_store_vr(0,vd); return true; } /* vsldoi EXT.16B */
 		case 1036: /* vsl — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */
 		case 1100: /* vsr — EXCLUDED: whole-vector bit shift was mapped to per-byte shift */

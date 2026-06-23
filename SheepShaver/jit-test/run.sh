@@ -1182,6 +1182,10 @@ TEST_ORDER+=(vec_vpkshus_delegated)
 TESTS[vec_vpkuhus_delegated]="3880FFFF 6484FFFF 90810600 90810604 90810608 9081060C 38800001 64840001 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 1040088E 38600620 7C4119CE 80A10620 80C10624"
 TEST_ORDER+=(vec_vpkuhus_delegated)
 
+# AltiVec unpack signed byte/halfword family is delegated: old native encodings were XTN/XTN2 narrowing.
+TESTS[vec_vupkhsb_delegated]="3880807F 648401FE 90810600 90810604 90810608 9081060C 38800203 64840405 90810610 38600600 7C0118CE 1040062E 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vupkhsb_delegated)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
