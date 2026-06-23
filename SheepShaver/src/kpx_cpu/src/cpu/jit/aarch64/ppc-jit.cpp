@@ -3325,7 +3325,12 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		switch (vao) {
 		case 46: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4E21CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
 		case 47: emit_load_vr(0,va); emit_load_vr(1,vc); emit_load_vr(2,vb); emit32(0x4EA1CC00|(1<<16)|(0<<5)|2); emit_store_vr(2,vd); return true;
-		case 43: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x4E002000|(2<<16)|(0<<5)|0); emit_store_vr(0,vd); return true;
+		case 43: /* vperm — mask control bytes to PPC's 0..31 selector range before TBL */
+			emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc);
+			emit32(0x4F00E7E3); /* MOVI v3.16b,#0x1f */
+			emit32(0x4E231C42); /* AND v2.16b,v2.16b,v3.16b */
+			emit32(0x4E002000|(2<<16)|(0<<5)|0); /* TBL v0.16b,{v0-v1},v2 */
+			emit_store_vr(0,vd); return true;
 		case 42: emit_load_vr(0,va); emit_load_vr(1,vb); emit_load_vr(2,vc); emit32(0x6E601C00|(0<<16)|(1<<5)|2); emit_store_vr(2,vd); return true; /* vsel: BSL mask=vc, true=vb, false=va */
 
 		case 32: /* vmhaddshs — EXCLUDED: FMLA approximation is not exact saturated halfword semantics */
