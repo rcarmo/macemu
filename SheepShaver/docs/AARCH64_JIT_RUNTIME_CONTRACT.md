@@ -341,12 +341,14 @@ outside the statically-enumerated 1:1-mapped regions, and for atomic reservation
 - `sheepshaver_jit_lwarx` / `sheepshaver_jit_stwcx` — real reservation semantics for atomic
   acquire/retry loops.
 
-These helpers follow the AArch64 ABI, so callee-saved x19–x28 (RSTATE, RCR0, and the RA cache)
-survive the BLR. They may, however, re-enter the emulator (MMIO handlers) and read — or modify —
-guest GPRs via RSTATE. The **RA barrier** (flush-all-dirty + reset before each guest-memory
-access) exists precisely to keep the register struct authoritative across these calls, so the
-helper and any re-entry observe coherent guest state. Each helper call is otherwise a localized
-operation, not a full block barrier: the block continues after it.
+These helpers follow the AArch64 ABI, so callee-saved x19–x29 (RSTATE, RCR0, the RA cache, and saved
+x29/A64_FP when used as a temporary EA scratch) survive the BLR. They may, however, re-enter the
+emulator (MMIO handlers) and read — or modify — guest GPRs via RSTATE. The **RA barrier**
+(flush-all-dirty + reset before each guest-memory access) exists precisely to keep the register
+struct authoritative across these calls, so the helper and any re-entry observe coherent guest state.
+Each helper call is otherwise a localized operation, not a full block barrier: the block continues
+after it. For guarded scalar update-form load/store instructions, generated code preserves EA in
+x29 across the helper and writes rA after the memory operation, matching interpreter ordering.
 
 Any further helpers must be classified as H1 (exact + mandatory barrier) unless explicitly proven
 to be H2 (continuation allowed after proof of state consistency — as the guarded-access helpers
