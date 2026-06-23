@@ -3231,23 +3231,24 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		case 518: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E203400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgtub CMHI.16B (unsigned) */
 		case 582: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E603400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgtuh */
 		case 646: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA03400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vcmpgtuw */
-		case 1282: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E20A400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vavgub URHADD.16B */
-		case 1346: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E60A400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vavguh */
-		case 1410: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA0A400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vavguw */
-		case 1794: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E201400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vavgsb SRHADD.16B */
-		case 1858: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0E601400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vavgsh */
-		case 1922: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x0EA01400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vavgsw */
-		case 768: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E207C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vaddubs UQADD.16B (saturating) */
-		case 832: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E607C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vadduhs UQADD.8H */
-		case 896: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA07C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vadduws UQADD.4S */
-		case 1792: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E202C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsububs UQSUB.16B */
-		case 1856: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6E602C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsubuhs UQSUB.8H */
-		case 1920: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x6EA02C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsubuws UQSUB.4S */
-		case 512: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E207C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vaddsbs SQADD.16B */
-		case 576: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E607C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vaddshs SQADD.8H */
-		case 640: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA07C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vaddsws SQADD.4S */
-		case 1536: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E202C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsubsbs SQSUB.16B */
-		case 1600: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E602C00|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vsubshs SQSUB.8H */
+		case 1282: /* vavgub — EXCLUDED: hardcoded encoding disassembles as SMAXP, not rounded average */
+		case 1346: /* vavguh — EXCLUDED: hardcoded encoding disassembles as SMAXP, not rounded average */
+		case 1410: /* vavguw — EXCLUDED: hardcoded encoding disassembles as SMAXP, not rounded average */
+		case 1794: /* vavgsb — EXCLUDED until signed average encoding/lane order is verified */
+		case 1858: /* vavgsh — EXCLUDED until signed average encoding/lane order is verified */
+		case 1922: /* vavgsw — EXCLUDED until signed average encoding/lane order is verified */
+		case 768:  /* vaddubs — EXCLUDED: hardcoded encoding is UABA and VSCR.SAT is not updated */
+		case 832:  /* vadduhs — EXCLUDED: hardcoded encoding is UABA and VSCR.SAT is not updated */
+		case 896:  /* vadduws — EXCLUDED: hardcoded encoding is UABA and VSCR.SAT is not updated */
+		case 1792: /* vsububs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1856: /* vsubuhs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1920: /* vsubuws — EXCLUDED: native path does not update VSCR.SAT */
+		case 512:  /* vaddsbs — EXCLUDED: hardcoded encoding is SABA and VSCR.SAT is not updated */
+		case 576:  /* vaddshs — EXCLUDED: hardcoded encoding is SABA and VSCR.SAT is not updated */
+		case 640:  /* vaddsws — EXCLUDED: hardcoded encoding is SABA and VSCR.SAT is not updated */
+		case 1536: /* vsubsbs — EXCLUDED: native path does not update VSCR.SAT */
+		case 1600: /* vsubshs — EXCLUDED: native path does not update VSCR.SAT */
+			return false;
 		case 12: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E20C400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrghb ZIP1.16B */
 		case 76: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4E60C400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrghh ZIP1.8H */
 		case 140: emit_load_vr(0,va); emit_load_vr(1,vb); emit32(0x4EA0C400|(1<<16)|(0<<5)|0); emit_store_vr(0,vd); return true; /* vmrghw ZIP1.4S */

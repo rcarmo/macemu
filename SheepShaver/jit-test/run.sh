@@ -1115,6 +1115,14 @@ TEST_ORDER+=(vec_vperm_control_mask)
 TESTS[vec_vsumuhm_delegated]="10070718 10230718 10400826 38600600 7C4119CE 80A10600 80C10604"
 TEST_ORDER+=(vec_vsumuhm_delegated)
 
+# AltiVec average/saturating add-sub family is delegated until exact encodings and VSCR.SAT exist.
+# vavgub: 0x00 and 0x02 should rounded-average to 0x01; old native encoding was SMAXP-like.
+TESTS[vec_vavgub_delegated]="10070718 38800202 64840202 90810610 90810614 90810618 9081061C 38600610 7C2118CE 10400D02 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vavgub_delegated)
+# vaddubs: 0xff + 0x01 saturates and sets VSCR.SAT; old native encoding was UABA and no VSCR update.
+TESTS[vec_vaddubs_delegated]="3880FFFF 6484FFFF 90810600 90810604 90810608 9081060C 38800101 64840101 90810610 90810614 90810618 9081061C 38600600 7C0118CE 38600610 7C2118CE 10400B00 38600620 7C4119CE 80A10620 80C10624"
+TEST_ORDER+=(vec_vaddubs_delegated)
+
 
 # --- FP load/store coverage ---
 # lfs/stfs round-trip: store 2.0 as single, load back
