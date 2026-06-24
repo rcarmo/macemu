@@ -1150,6 +1150,15 @@ extern "C" void sheepshaver_jit_mtfsf(powerpc_registers *r, uint32 fm, uint32 fr
 		sheepshaver_jit_record_cr1(r);
 }
 
+extern "C" void sheepshaver_jit_mffs(powerpc_registers *r, uint32 frd, uint32 rc)
+{
+	if (!r || frd >= 32)
+		return;
+	r->fpr[frd].j = r->fpscr;
+	if (rc)
+		sheepshaver_jit_record_cr1(r);
+}
+
 extern "C" void sheepshaver_jit_lmw(powerpc_registers *r, uint32 ea, uint32 rd)
 {
 	if (!r || rd >= 32) return;

@@ -819,6 +819,9 @@ TEST_ORDER+=(fp_mtfsfi_delegated)
 # mtfsf has an exact helper: write RN bits via f31, then expose FPSCR with mffs.
 TESTS[fp_mtfsf_helper]="3C600000 90610100 38600003 90610104 CBE10100 FDFEFD8E FC00048E D8010108 80A10108 80C1010C"
 TEST_ORDER+=(fp_mtfsf_helper)
+# mffs helper: write FPSCR with mtfsf, move it to f2 via mffs, and expose CR1 via Rc/mfcr.
+TESTS[fp_mffs_helper]="3C600000 90610100 38600003 90610104 CBE10100 FDFEFD8E FC40048F D8410108 80A10108 80C1010C 7CE00026"
+TEST_ORDER+=(fp_mffs_helper)
 
 # --- Indexed load/store ---
 # stwx: li r3,0xDEAD; li r4,0; stwx r3,r1,r4; lwzx r5,r1,r4
