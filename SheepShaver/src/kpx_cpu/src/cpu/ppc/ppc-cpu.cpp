@@ -1048,8 +1048,12 @@ void powerpc_cpu::execute(uint32 entry)
 					}
 				}
 
-				if ((bi->pc != pc()) && ((bi = my_block_cache.find(pc())) == NULL))
-					break;
+				if (bi->pc != pc()) {
+					bi = my_block_cache.find(pc());
+					if (bi == NULL)
+						break;
+					goto pdi_execute;
+				}
 			}
 		}
 #else
