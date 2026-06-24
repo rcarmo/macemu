@@ -176,6 +176,87 @@ static void ppc_jit_hist_record_exec_normal(uint32 pc, uint32 opcode, uint32 ins
 	ppc_jit_hist_report(false);
 }
 
+struct ppc_jit_native_hist_entry {
+	uint32 pc;
+	uint32 opcode;
+	uint64 blocks;
+	uint64 insns;
+};
+
+static const uint32 PPC_JIT_NATIVE_HIST_SIZE = 4096;
+static ppc_jit_native_hist_entry ppc_jit_native_hist[PPC_JIT_NATIVE_HIST_SIZE];
+static uint64 ppc_jit_native_hist_total_blocks = 0;
+static uint64 ppc_jit_native_hist_total_insns = 0;
+static uint64 ppc_jit_native_hist_next_report = 10000000ULL;
+
+static bool ppc_jit_native_hist_enabled(void)
+{
+	static const char *env = getenv("SS_JIT_NATIVE_HIST");
+	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+}
+
+static void ppc_jit_native_hist_report(bool force)
+{
+	if (!ppc_jit_native_hist_enabled()) return;
+	if (!force && ppc_jit_native_hist_total_blocks < ppc_jit_native_hist_next_report) return;
+	while (ppc_jit_native_hist_next_report <= ppc_jit_native_hist_total_blocks)
+		ppc_jit_native_hist_next_report += 10000000ULL;
+	fprintf(stderr,
+		"PPC-JIT-A64-NATIVEHIST: native_total_blocks=%llu native_total_insns=%llu top_by_insns:\n",
+		(unsigned long long)ppc_jit_native_hist_total_blocks,
+		(unsigned long long)ppc_jit_native_hist_total_insns);
+	int selected[20];
+	for (int i = 0; i < 20; i++) selected[i] = -1;
+	for (int rank = 0; rank < 20; rank++) {
+		int best = -1;
+		for (uint32 i = 0; i < PPC_JIT_NATIVE_HIST_SIZE; i++) {
+			if (ppc_jit_native_hist[i].blocks == 0) continue;
+			bool used = false;
+			for (int j = 0; j < rank; j++) if (selected[j] == (int)i) { used = true; break; }
+			if (used) continue;
+			if (best < 0 || ppc_jit_native_hist[i].insns > ppc_jit_native_hist[best].insns)
+				best = (int)i;
+		}
+		if (best < 0) break;
+		selected[rank] = best;
+		uint32 opcode = ppc_jit_native_hist[best].opcode;
+		uint32 opc = opcode >> 26;
+		uint32 xo = (opcode >> 1) & 0x3ff;
+		double pct = ppc_jit_native_hist_total_insns ?
+			(double)ppc_jit_native_hist[best].insns * 100.0 / (double)ppc_jit_native_hist_total_insns : 0.0;
+		fprintf(stderr,
+			"PPC-JIT-A64-NATIVEHIST: rank=%d pc=0x%08x opcode=0x%08x opc=%u xo=%u blocks=%llu insns=%llu insn_pct=%.6f\n",
+			rank + 1,
+			ppc_jit_native_hist[best].pc,
+			opcode,
+			opc,
+			xo,
+			(unsigned long long)ppc_jit_native_hist[best].blocks,
+			(unsigned long long)ppc_jit_native_hist[best].insns,
+			pct);
+	}
+}
+
+static void ppc_jit_native_hist_record(uint32 pc, uint32 opcode, uint32 insns)
+{
+	if (!ppc_jit_native_hist_enabled() || insns == 0) return;
+	ppc_jit_native_hist_total_blocks++;
+	ppc_jit_native_hist_total_insns += insns;
+	uint32 h = ((pc >> 2) ^ opcode ^ (opcode >> 16)) & (PPC_JIT_NATIVE_HIST_SIZE - 1);
+	for (uint32 probe = 0; probe < PPC_JIT_NATIVE_HIST_SIZE; probe++) {
+		uint32 idx = (h + probe) & (PPC_JIT_NATIVE_HIST_SIZE - 1);
+		if (ppc_jit_native_hist[idx].blocks == 0 ||
+		    (ppc_jit_native_hist[idx].pc == pc && ppc_jit_native_hist[idx].opcode == opcode)) {
+			ppc_jit_native_hist[idx].pc = pc;
+			ppc_jit_native_hist[idx].opcode = opcode;
+			ppc_jit_native_hist[idx].blocks++;
+			ppc_jit_native_hist[idx].insns += insns;
+			break;
+		}
+	}
+	ppc_jit_native_hist_report(false);
+}
+
 static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **host_base, uint32 *guest_base, size_t *size)
 {
 	uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
@@ -895,6 +976,7 @@ void powerpc_cpu::execute(uint32 entry)
 						if (jblk.n_insns > 0) ppc_jit_ratio_native_insns_known += (uint64)jblk.n_insns;
 						ppc_jit_ratio_report(false);
 					}
+					if (jblk.n_insns > 0) ppc_jit_native_hist_record(jblk.ppc_start_pc, vm_read_memory_4(jblk.ppc_start_pc), (uint32)jblk.n_insns);
 					fn((void*)regs_ptr());
 				  pdi_jit_post:
 					/* GATE 3: PC range check.
@@ -1004,6 +1086,7 @@ void powerpc_cpu::execute(uint32 entry)
 							if (jblk.n_insns > 0) ppc_jit_ratio_native_insns_known += (uint64)jblk.n_insns;
 							ppc_jit_ratio_report(false);
 						}
+						if (jblk.n_insns > 0) ppc_jit_native_hist_record(jblk.ppc_start_pc, vm_read_memory_4(jblk.ppc_start_pc), (uint32)jblk.n_insns);
 						fn((void*)regs_ptr());
 						goto pdi_jit_post;
 					}
@@ -1095,6 +1178,7 @@ void powerpc_cpu::execute(uint32 entry)
 #if defined(__aarch64__) && defined(USE_AARCH64_JIT)
 	ppc_jit_ratio_report(true);
 	ppc_jit_hist_report(true);
+	ppc_jit_native_hist_report(true);
 #endif
 	// Tell upper level we invalidated cache?
 	if (invalidated_cache)
