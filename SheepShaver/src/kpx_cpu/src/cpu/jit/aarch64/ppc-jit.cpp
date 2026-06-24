@@ -3888,7 +3888,7 @@ bool ppc_jit_aarch64_compile(
 			out->code_size    = 0; /* not tracked for cached entries */
 			out->ppc_start_pc = pc;
 			out->ppc_end_pc   = pc; /* not tracked for cached entries */
-			out->n_insns      = 0; /* not tracked for cached entries */
+			out->n_insns      = cached->n_insns;
 			out->complete     = cached->complete;
 			return true;
 		}

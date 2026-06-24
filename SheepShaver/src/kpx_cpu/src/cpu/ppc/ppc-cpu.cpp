@@ -59,6 +59,42 @@ static inline bool ppc_jit_contains32(uint32 pc, uint32 base, uint64 size, uint3
 	return p >= b && p + access_size >= p && p + access_size <= b + size;
 }
 
+static uint64 ppc_jit_ratio_native_dispatches = 0;
+static uint64 ppc_jit_ratio_native_insns_known = 0;
+static uint64 ppc_jit_ratio_exec_normal_blocks = 0;
+static uint64 ppc_jit_ratio_exec_normal_insns = 0;
+static uint64 ppc_jit_ratio_skip_jit_entries = 0;
+static uint64 ppc_jit_ratio_gate3_entries = 0;
+static uint64 ppc_jit_ratio_next_report = 1000;
+
+static bool ppc_jit_ratio_enabled(void)
+{
+	static const char *env = getenv("SS_JIT_RATIO");
+	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+}
+
+static void ppc_jit_ratio_report(bool force)
+{
+	if (!ppc_jit_ratio_enabled()) return;
+	uint64 total_blocks = ppc_jit_ratio_native_dispatches + ppc_jit_ratio_exec_normal_blocks;
+	if (!force && total_blocks < ppc_jit_ratio_next_report) return;
+	while (ppc_jit_ratio_next_report <= total_blocks)
+		ppc_jit_ratio_next_report += 1000;
+	uint64 total_known_insns = ppc_jit_ratio_native_insns_known + ppc_jit_ratio_exec_normal_insns;
+	fprintf(stderr,
+		"PPC-JIT-A64-RATIO: native_dispatch=%llu exec_normal_blocks=%llu native_dispatch_pct=%.6f "
+		"native_insns_known=%llu exec_normal_insns=%llu native_known_insn_pct=%.6f "
+		"skip_jit=%llu gate3=%llu\n",
+		(unsigned long long)ppc_jit_ratio_native_dispatches,
+		(unsigned long long)ppc_jit_ratio_exec_normal_blocks,
+		total_blocks ? (double)ppc_jit_ratio_native_dispatches * 100.0 / (double)total_blocks : 0.0,
+		(unsigned long long)ppc_jit_ratio_native_insns_known,
+		(unsigned long long)ppc_jit_ratio_exec_normal_insns,
+		total_known_insns ? (double)ppc_jit_ratio_native_insns_known * 100.0 / (double)total_known_insns : 0.0,
+		(unsigned long long)ppc_jit_ratio_skip_jit_entries,
+		(unsigned long long)ppc_jit_ratio_gate3_entries);
+}
+
 static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **host_base, uint32 *guest_base, size_t *size)
 {
 	uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
@@ -773,6 +809,11 @@ void powerpc_cpu::execute(uint32 entry)
 					for (int spc_iter = 0; !spcflags().empty() && spc_iter < 4; spc_iter++)
 						if (!check_spcflags()) goto return_site;
 					ppc_jit_entry_fn fn = (ppc_jit_entry_fn)(void*)jblk.code;
+					if (ppc_jit_ratio_enabled()) {
+						ppc_jit_ratio_native_dispatches++;
+						if (jblk.n_insns > 0) ppc_jit_ratio_native_insns_known += (uint64)jblk.n_insns;
+						ppc_jit_ratio_report(false);
+					}
 					fn((void*)regs_ptr());
 				  pdi_jit_post:
 					/* GATE 3: PC range check.
@@ -793,6 +834,7 @@ void powerpc_cpu::execute(uint32 entry)
 #endif
 					                     false;
 					if (!jit_pc_mapped) {
+						if (ppc_jit_ratio_enabled()) ppc_jit_ratio_gate3_entries++;
 						fprintf(stderr, "PPC-JIT-A64: GATE3: out-of-range PC 0x%08x after block at 0x%08x — handing to interpreter\n",
 						        jit_pc, jblk.ppc_start_pc);
 						/* Reset to block entry so interpreter starts from a known-good PC */
@@ -876,6 +918,11 @@ void powerpc_cpu::execute(uint32 entry)
 						for (int spc_iter = 0; !spcflags().empty() && spc_iter < 4; spc_iter++)
 							if (!check_spcflags()) goto return_site;
 						fn = (ppc_jit_entry_fn)(void*)jblk.code;
+						if (ppc_jit_ratio_enabled()) {
+							ppc_jit_ratio_native_dispatches++;
+							if (jblk.n_insns > 0) ppc_jit_ratio_native_insns_known += (uint64)jblk.n_insns;
+							ppc_jit_ratio_report(false);
+						}
 						fn((void*)regs_ptr());
 						goto pdi_jit_post;
 					}
@@ -886,7 +933,13 @@ void powerpc_cpu::execute(uint32 entry)
 			}
 #endif
 		  skip_jit:
+			if (ppc_jit_ratio_enabled()) ppc_jit_ratio_skip_jit_entries++;
 			for (;;) {
+				if (ppc_jit_ratio_enabled()) {
+					ppc_jit_ratio_exec_normal_blocks++;
+					ppc_jit_ratio_exec_normal_insns += (uint64)bi->size;
+					ppc_jit_ratio_report(false);
+				}
 				const int r = bi->size % 4;
 				di = bi->di + r;
 				int n = (bi->size + 3) / 4;
@@ -938,6 +991,10 @@ void powerpc_cpu::execute(uint32 entry)
 #else
 		assert(ii->execute.ptr() != 0);
 #endif
+		if (ppc_jit_ratio_enabled()) {
+			ppc_jit_ratio_exec_normal_insns++;
+			ppc_jit_ratio_report(false);
+		}
 		ii->execute(this, opcode);
 #if PPC_EXECUTE_DUMP_STATE
 		if (dump_state)
@@ -947,6 +1004,9 @@ void powerpc_cpu::execute(uint32 entry)
 			goto return_site;
 	}
   return_site:
+#if defined(__aarch64__) && defined(USE_AARCH64_JIT)
+	ppc_jit_ratio_report(true);
+#endif
 	// Tell upper level we invalidated cache?
 	if (invalidated_cache)
 		spcflags().set(SPCFLAG_JIT_EXEC_RETURN);
