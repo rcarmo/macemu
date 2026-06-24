@@ -31,6 +31,7 @@ extern "C" uint32_t sheepshaver_jit_safe_load_reversed(uint32_t ea, uint32_t old
 extern "C" void sheepshaver_jit_safe_store_reversed(uint32_t ea, uint32_t value, uint32_t access_size);
 extern "C" void sheepshaver_jit_fp_load(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
 extern "C" void sheepshaver_jit_fp_store(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
+extern "C" void sheepshaver_jit_mtfsf(void *regs, uint32_t fm, uint32_t frb, uint32_t rc);
 extern "C" void sheepshaver_jit_lmw(void *regs, uint32_t ea, uint32_t rd);
 extern "C" void sheepshaver_jit_stmw(void *regs, uint32_t ea, uint32_t rs);
 extern "C" void sheepshaver_jit_lswi(void *regs, uint32_t ea, uint32_t rd, uint32_t nb);
@@ -3509,11 +3510,23 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
+		case 711: /* mtfsf FM,frB — helper implements interpreter FPSCR field/summary/RN/CR1 semantics */
+		{
+			uint32_t fm = (op >> 17) & 0xff;
+			uint32_t rc = op & 1;
+			a64_mov_reg(RTMP0, RSTATE);
+			emit_load_imm32(RTMP1, (int32_t)fm);
+			emit_load_imm32(RTMP2, (int32_t)frb);
+			emit_load_imm32(RTMP3, (int32_t)rc);
+			emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_mtfsf);
+			emit32(0xD63F0000 | (RTMP4 << 5));
+			return true;
+		}
+
 		case 583: /* mffs — EXCLUDED: Rc/CR1 and FPSCR move semantics need helper */
-		case 711: /* mtfsfi — EXCLUDED: FPSCR summary/CR1/RN semantics not exact */
 		case 70:  /* mtfsb0 — EXCLUDED: record_fpscr/CR1 semantics not exact */
 		case 38:  /* mtfsb1 — EXCLUDED: record_fpscr/CR1 semantics not exact */
-		case 134: /* mtfsf — EXCLUDED: FPSCR field-mask/summary/CR1 semantics not exact */
+		case 134: /* mtfsfi — EXCLUDED: FPSCR field/summary/CR1/RN semantics not exact */
 		case 64:  /* mcrfs — EXCLUDED: copied FPSCR exception bits must be cleared */
 			return false;
 		

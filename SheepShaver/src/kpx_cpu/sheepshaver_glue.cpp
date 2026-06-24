@@ -1079,6 +1079,77 @@ extern "C" void sheepshaver_jit_fp_store(powerpc_registers *r, uint32 ea, uint32
 		vm_write_memory_4(ea, sheepshaver_jit_fp_store_single_convert(r->fpr[fpr].j));
 }
 
+static inline int sheepshaver_jit_ppc_to_native_rounding_mode(int round)
+{
+	switch (round) {
+	case 0: return FE_TONEAREST;
+	case 1: return FE_TOWARDZERO;
+	case 2: return FE_UPWARD;
+	case 3: return FE_DOWNWARD;
+	}
+	return FE_TONEAREST;
+}
+
+static inline uint32 sheepshaver_jit_field2mask(uint32 f)
+{
+	uint32 mask = 0;
+	if (f & 0x01) mask |= 0x0000000f;
+	if (f & 0x02) mask |= 0x000000f0;
+	if (f & 0x04) mask |= 0x00000f00;
+	if (f & 0x08) mask |= 0x0000f000;
+	if (f & 0x10) mask |= 0x000f0000;
+	if (f & 0x20) mask |= 0x00f00000;
+	if (f & 0x40) mask |= 0x0f000000;
+	if (f & 0x80) mask |= 0xf0000000;
+	return mask;
+}
+
+static inline void sheepshaver_jit_record_cr1(powerpc_registers *r)
+{
+	r->cr.set((r->cr.get() & ~0x0f000000U) | ((r->fpscr >> 4) & 0x0f000000U));
+}
+
+static inline void sheepshaver_jit_record_fpscr(powerpc_registers *r, uint32 exceptions)
+{
+#if PPC_ENABLE_FPU_EXCEPTIONS
+	r->fpscr &= ~(FPSCR_VX_field::mask() | FPSCR_FEX_field::mask());
+	if (exceptions)
+		r->fpscr |= FPSCR_FX_field::mask() | exceptions;
+	if (r->fpscr & (FPSCR_VXSNAN_field::mask() | FPSCR_VXISI_field::mask() |
+	              FPSCR_VXIDI_field::mask() | FPSCR_VXZDZ_field::mask() |
+	              FPSCR_VXIMZ_field::mask() | FPSCR_VXVC_field::mask() |
+	              FPSCR_VXSOFT_field::mask() | FPSCR_VXSQRT_field::mask() |
+	              FPSCR_VXCVI_field::mask()))
+		r->fpscr |= FPSCR_VX_field::mask();
+	if (((r->fpscr & FPSCR_VX_field::mask()) && (r->fpscr & FPSCR_VE_field::mask())) ||
+	    ((r->fpscr & FPSCR_OX_field::mask()) && (r->fpscr & FPSCR_OE_field::mask())) ||
+	    ((r->fpscr & FPSCR_UX_field::mask()) && (r->fpscr & FPSCR_UE_field::mask())) ||
+	    ((r->fpscr & FPSCR_ZX_field::mask()) && (r->fpscr & FPSCR_ZE_field::mask())) ||
+	    ((r->fpscr & FPSCR_XX_field::mask()) && (r->fpscr & FPSCR_XE_field::mask())))
+		r->fpscr |= FPSCR_FEX_field::mask();
+#else
+	(void)r;
+	(void)exceptions;
+#endif
+}
+
+extern "C" void sheepshaver_jit_mtfsf(powerpc_registers *r, uint32 fm, uint32 frb, uint32 rc)
+{
+	if (!r || frb >= 32)
+		return;
+	uint32 m = sheepshaver_jit_field2mask(fm & 0xff);
+	if ((fm & 0x80) == 0)
+		m &= ~FPSCR_FX_field::mask();
+	uint32 exceptions = (uint32)r->fpr[frb].j & m;
+	exceptions &= ~(FPSCR_FEX_field::mask() | FPSCR_VX_field::mask());
+	r->fpscr = (r->fpscr & ~m) | exceptions;
+	sheepshaver_jit_record_fpscr(r, 0);
+	if (m & FPSCR_RN_field::mask())
+		fesetround(sheepshaver_jit_ppc_to_native_rounding_mode(FPSCR_RN_field::extract(r->fpscr)));
+	if (rc)
+		sheepshaver_jit_record_cr1(r);
+}
+
 extern "C" void sheepshaver_jit_lmw(powerpc_registers *r, uint32 ea, uint32 rd)
 {
 	if (!r || rd >= 32) return;
