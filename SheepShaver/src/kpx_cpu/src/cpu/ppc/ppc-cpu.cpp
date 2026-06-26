@@ -257,6 +257,124 @@ static void ppc_jit_native_hist_record(uint32 pc, uint32 opcode, uint32 insns)
 	ppc_jit_native_hist_report(false);
 }
 
+static bool ppc_jit_skip_hist_enabled(void)
+{
+	static const char *env = getenv("SS_JIT_SKIP_HIST");
+	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+}
+
+static bool ppc_jit_skip_log_enabled(void)
+{
+	static const char *env = getenv("SS_JIT_SKIP_LOG");
+	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+}
+
+enum ppc_jit_skip_reason {
+	PPC_JIT_SKIP_NONE = 0,
+	PPC_JIT_SKIP_DISABLED,
+	PPC_JIT_SKIP_REGION,
+	PPC_JIT_SKIP_COMPILE_FALSE,
+	PPC_JIT_SKIP_GATE3
+};
+
+static const char *ppc_jit_skip_reason_name(int reason)
+{
+	switch (reason) {
+	case PPC_JIT_SKIP_DISABLED: return "disabled";
+	case PPC_JIT_SKIP_REGION: return "region";
+	case PPC_JIT_SKIP_COMPILE_FALSE: return "compile_false";
+	case PPC_JIT_SKIP_GATE3: return "gate3";
+	default: return "unknown";
+	}
+}
+
+struct ppc_jit_skip_hist_entry {
+	uint32 pc;
+	uint32 opcode;
+	uint32 reason;
+	uint64 count;
+};
+
+static const uint32 PPC_JIT_SKIP_HIST_SIZE = 1024;
+static ppc_jit_skip_hist_entry ppc_jit_skip_hist[PPC_JIT_SKIP_HIST_SIZE];
+static uint64 ppc_jit_skip_hist_total = 0;
+static uint64 ppc_jit_skip_hist_next_report = 64;
+static uint64 ppc_jit_skip_hist_last_report_total = 0;
+
+static void ppc_jit_skip_hist_report(bool force)
+{
+	if (!ppc_jit_skip_hist_enabled()) return;
+	if (!force && ppc_jit_skip_hist_total < ppc_jit_skip_hist_next_report) return;
+	if (force && ppc_jit_skip_hist_total == ppc_jit_skip_hist_last_report_total) return;
+	while (ppc_jit_skip_hist_next_report <= ppc_jit_skip_hist_total)
+		ppc_jit_skip_hist_next_report += 64;
+	ppc_jit_skip_hist_last_report_total = ppc_jit_skip_hist_total;
+	fprintf(stderr,
+		"PPC-JIT-A64-SKIPHIST: total=%llu top_by_count:\n",
+		(unsigned long long)ppc_jit_skip_hist_total);
+	int selected[32];
+	for (int i = 0; i < 32; i++) selected[i] = -1;
+	for (int rank = 0; rank < 32; rank++) {
+		int best = -1;
+		for (uint32 i = 0; i < PPC_JIT_SKIP_HIST_SIZE; i++) {
+			if (ppc_jit_skip_hist[i].count == 0) continue;
+			bool used = false;
+			for (int j = 0; j < rank; j++) if (selected[j] == (int)i) { used = true; break; }
+			if (used) continue;
+			if (best < 0 || ppc_jit_skip_hist[i].count > ppc_jit_skip_hist[best].count)
+				best = (int)i;
+		}
+		if (best < 0) break;
+		selected[rank] = best;
+		uint32 opcode = ppc_jit_skip_hist[best].opcode;
+		uint32 opc = opcode >> 26;
+		uint32 xo = (opcode >> 1) & 0x3ff;
+		double pct = ppc_jit_skip_hist_total ?
+			(double)ppc_jit_skip_hist[best].count * 100.0 / (double)ppc_jit_skip_hist_total : 0.0;
+		fprintf(stderr,
+			"PPC-JIT-A64-SKIPHIST: rank=%d pc=0x%08x opcode=0x%08x opc=%u xo=%u reason=%s count=%llu pct=%.6f\n",
+			rank + 1,
+			ppc_jit_skip_hist[best].pc,
+			opcode,
+			opc,
+			xo,
+			ppc_jit_skip_reason_name(ppc_jit_skip_hist[best].reason),
+			(unsigned long long)ppc_jit_skip_hist[best].count,
+			pct);
+	}
+}
+
+static void ppc_jit_skip_hist_record(uint32 pc, uint32 opcode, int reason)
+{
+	if (reason == PPC_JIT_SKIP_NONE) return;
+	if (!ppc_jit_skip_hist_enabled() && !ppc_jit_skip_log_enabled()) return;
+	ppc_jit_skip_hist_total++;
+	if (ppc_jit_skip_log_enabled()) {
+		fprintf(stderr,
+			"PPC-JIT-A64-SKIP: seq=%llu pc=0x%08x opcode=0x%08x opc=%u xo=%u reason=%s\n",
+			(unsigned long long)ppc_jit_skip_hist_total,
+			pc,
+			opcode,
+			opcode >> 26,
+			(opcode >> 1) & 0x3ff,
+			ppc_jit_skip_reason_name(reason));
+	}
+	if (!ppc_jit_skip_hist_enabled()) return;
+	uint32 h = ((pc >> 2) ^ opcode ^ (opcode >> 16) ^ (uint32)reason) & (PPC_JIT_SKIP_HIST_SIZE - 1);
+	for (uint32 probe = 0; probe < PPC_JIT_SKIP_HIST_SIZE; probe++) {
+		uint32 idx = (h + probe) & (PPC_JIT_SKIP_HIST_SIZE - 1);
+		if (ppc_jit_skip_hist[idx].count == 0 ||
+		    (ppc_jit_skip_hist[idx].pc == pc && ppc_jit_skip_hist[idx].opcode == opcode && ppc_jit_skip_hist[idx].reason == (uint32)reason)) {
+			ppc_jit_skip_hist[idx].pc = pc;
+			ppc_jit_skip_hist[idx].opcode = opcode;
+			ppc_jit_skip_hist[idx].reason = (uint32)reason;
+			ppc_jit_skip_hist[idx].count++;
+			break;
+		}
+	}
+	ppc_jit_skip_hist_report(false);
+}
+
 static bool ppc_jit_aarch64_region_for_pc(uint32 pc, const uint8 **host_base, uint32 *guest_base, size_t *size)
 {
 	uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
@@ -931,7 +1049,11 @@ void powerpc_cpu::execute(uint32 entry)
 
 			// Execute all cached blocks
 		  pdi_execute:
+			;
 #if defined(__aarch64__) && defined(USE_AARCH64_JIT)
+			int jit_skip_reason = PPC_JIT_SKIP_NONE;
+			uint32 jit_skip_pc = pc();
+			uint32 jit_skip_opcode = 0;
 			/* AArch64 direct-codegen JIT: try to execute block natively.
 			 *
 			 * Gates in this block — see SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md:
@@ -951,14 +1073,26 @@ void powerpc_cpu::execute(uint32 entry)
 				static bool jit_init_done = false;
 				static const char *jit_env = getenv("SS_USE_JIT");
 				static bool jit_enabled = !(jit_env && jit_env[0] == '0' && jit_env[1] == '\0');
-				if (!jit_enabled) goto skip_jit; /* GATE 1: SS_USE_JIT=0 diagnostic override */
+				if (!jit_enabled) {
+					jit_skip_reason = PPC_JIT_SKIP_DISABLED;
+					jit_skip_pc = pc();
+					jit_skip_opcode = vm_read_memory_4(jit_skip_pc);
+					goto skip_jit;
+				} /* GATE 1: SS_USE_JIT=0 diagnostic override */
 				if (!jit_init_done) { ppc_jit_aarch64_init(8192); jit_init_done = true; } /* 8MB JIT code cache */
 				ppc_jit_block jblk;
 				const uint8 *jit_region_base = NULL;
 				uint32 jit_region_guest_base = 0;
 				size_t jit_region_size = 0;
-				bool jit_region_ok = ppc_jit_aarch64_region_for_pc(pc(), &jit_region_base, &jit_region_guest_base, &jit_region_size);
-				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(pc(), jit_region_base, jit_region_guest_base, jit_region_size, &jblk);
+				jit_skip_pc = pc();
+				bool jit_region_ok = ppc_jit_aarch64_region_for_pc(jit_skip_pc, &jit_region_base, &jit_region_guest_base, &jit_region_size);
+				if (jit_region_ok)
+					jit_skip_opcode = vm_read_memory_4(jit_skip_pc);
+				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(jit_skip_pc, jit_region_base, jit_region_guest_base, jit_region_size, &jblk);
+				if (!jit_region_ok)
+					jit_skip_reason = PPC_JIT_SKIP_REGION;
+				else if (!jit_compiled)
+					jit_skip_reason = PPC_JIT_SKIP_COMPILE_FALSE;
 				/* GATE 2 removed: partial native blocks are safe. The direct compiler
 				 * emits an epilogue that stores the first uncompiled PPC PC before
 				 * returning, so executing a supported prefix is more faithful than
@@ -997,6 +1131,9 @@ void powerpc_cpu::execute(uint32 entry)
 #endif
 					                     false;
 					if (!jit_pc_mapped) {
+						jit_skip_reason = PPC_JIT_SKIP_GATE3;
+						jit_skip_pc = jblk.ppc_start_pc;
+						jit_skip_opcode = vm_read_memory_4(jit_skip_pc);
 						if (ppc_jit_ratio_enabled()) ppc_jit_ratio_gate3_entries++;
 						fprintf(stderr, "PPC-JIT-A64: GATE3: out-of-range PC 0x%08x after block at 0x%08x — handing to interpreter\n",
 						        jit_pc, jblk.ppc_start_pc);
@@ -1097,6 +1234,7 @@ void powerpc_cpu::execute(uint32 entry)
 			}
 #endif
 		  skip_jit:
+			ppc_jit_skip_hist_record(jit_skip_pc, jit_skip_opcode, jit_skip_reason);
 			if (ppc_jit_ratio_enabled()) ppc_jit_ratio_skip_jit_entries++;
 			for (;;) {
 				if (ppc_jit_ratio_enabled()) {
@@ -1179,6 +1317,7 @@ void powerpc_cpu::execute(uint32 entry)
 	ppc_jit_ratio_report(true);
 	ppc_jit_hist_report(true);
 	ppc_jit_native_hist_report(true);
+	ppc_jit_skip_hist_report(true);
 #endif
 	// Tell upper level we invalidated cache?
 	if (invalidated_cache)
