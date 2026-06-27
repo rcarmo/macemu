@@ -1195,6 +1195,25 @@ jit_pctrace_done:
 			maxrun_limit = env_maxrun;
 		}
 		for (;;) {
+			/* CONT.109 cont15 (port of d759ea08 to active execute_normal):
+			   non-perturbing block-split probe. When B2_FORCE_BLOCK_BREAK_BEFORE=<guest pc>
+			   matches the current guest PC and the block already has at least one insn,
+			   end the block here so the next dispatch starts at the target PC. Pairs
+			   with PATHRING (B2_PATH_RING_TARGET) to capture live D0/A* at the target
+			   boundary without altering codegen semantics inside the following block. */
+			{
+				static int bb_init = -1;
+				static uae_u32 bb_target = 0;
+				if (bb_init < 0) {
+					const char* e = getenv("B2_FORCE_BLOCK_BREAK_BEFORE");
+					bb_target = (e && *e) ? (uae_u32)strtoul(e, 0, 0) : 0;
+					bb_init = 0;
+				}
+				if (bb_target && blocklen > 0 && m68k_getpc() == bb_target) {
+					compile_block(pc_hist, blocklen, total_cycles);
+					return;
+				}
+			}
 			pc_hist[blocklen++].location = (uae_u16 *)regs.pc_p;
 			uae_u32 opcode = GET_OPCODE;
 			(*cpufunctbl[opcode])(opcode);

@@ -507,7 +507,7 @@ void m68k_do_compile_execute(void)
 			static uae_u32 pr_target = 0;
 			if (pr_init < 0) { const char* e = getenv("B2_PATH_RING_TARGET"); pr_target = (e && *e) ? (uae_u32)strtoul(e, 0, 0) : 0; pr_init = 0; }
 			if (pr_target) {
-				static struct { uae_u32 pc, a0, a1, a2, a6, d0, d3, d7; } pr_ring[8192];
+				static struct { uae_u32 pc, a0, a1, a2, a6, d0, d1, d3, d5, d7; } pr_ring[8192];
 				static unsigned long pr_idx = 0;
 				static int pr_dumped = 0;
 				uae_u32 _gpc = m68k_getpc();
@@ -518,7 +518,9 @@ void m68k_do_compile_execute(void)
 				pr_ring[slot].a2 = regs.regs[10];
 				pr_ring[slot].a6 = regs.regs[14];
 				pr_ring[slot].d0 = regs.regs[0];
+				pr_ring[slot].d1 = regs.regs[1];
 				pr_ring[slot].d3 = regs.regs[3];
+				pr_ring[slot].d5 = regs.regs[5];
 				pr_ring[slot].d7 = regs.regs[7];
 				pr_idx++;
 				if (_gpc == pr_target && !pr_dumped) {
@@ -526,8 +528,8 @@ void m68k_do_compile_execute(void)
 					unsigned long start = (pr_idx > 8192) ? pr_idx - 8192 : 0;
 					for (unsigned long i = start; i < pr_idx; i++) {
 						unsigned s = (unsigned)(i & 8191);
-						fprintf(stderr, "PATHRING %lu pc=%08x a0=%08x a1=%08x a2=%08x a6=%08x d0=%08x d3=%08x d7=%08x\n",
-							i - start, pr_ring[s].pc, pr_ring[s].a0, pr_ring[s].a1, pr_ring[s].a2, pr_ring[s].a6, pr_ring[s].d0, pr_ring[s].d3, pr_ring[s].d7);
+						fprintf(stderr, "PATHRING %lu pc=%08x a0=%08x a1=%08x a2=%08x a6=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x\n",
+							i - start, pr_ring[s].pc, pr_ring[s].a0, pr_ring[s].a1, pr_ring[s].a2, pr_ring[s].a6, pr_ring[s].d0, pr_ring[s].d1, pr_ring[s].d3, pr_ring[s].d5, pr_ring[s].d7);
 					}
 					fflush(stderr);
 				}
