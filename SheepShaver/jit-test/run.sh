@@ -413,6 +413,10 @@ TEST_ORDER+=(fp_add)
 TESTS[fp_fadd_fpscr_helper]="3C604000 90610100 38600000 90610104 C8010100 C8210100 FC20082A FC00048E D8010108 80A10108 80C1010C"
 TEST_ORDER+=(fp_fadd_fpscr_helper)
 NO_SKIP_TESTS[fp_fadd_fpscr_helper]=1
+# fdiv now uses the same exact FP helper family; expose result and FPSCR via mffs.
+TESTS[fp_fdiv_fpscr_helper]="3C604010 90610100 38600000 90610104 3C604000 90610108 38600000 9061010C C8210100 C8010108 FC210024 FC00048E D8210110 D8010118 80A10110 80C10114 80E10118 8101011C"
+TEST_ORDER+=(fp_fdiv_fpscr_helper)
+NO_SKIP_TESTS[fp_fdiv_fpscr_helper]=1
 
 # --- Load/store indexed ---
 # lwzx: li r3,0xBEEF; stw r3,0(r1); li r4,0; lwzx r5,r1,r4

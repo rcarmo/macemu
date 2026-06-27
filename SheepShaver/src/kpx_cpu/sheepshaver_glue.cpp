@@ -1228,7 +1228,7 @@ extern "C" void sheepshaver_jit_fp_op(powerpc_registers *r, uint32 opcode)
 #endif
 		return;
 	}
-	if (xo5 == 20 || xo5 == 21) { /* fsub/fadd frD,frA,frB */
+	if (xo5 == 18 || xo5 == 20 || xo5 == 21) { /* fdiv/fsub/fadd frD,frA,frB */
 		uint32 frd = frD_field::extract(opcode);
 		uint32 fra = frA_field::extract(opcode);
 		uint32 frb = frB_field::extract(opcode);
@@ -1236,12 +1236,20 @@ extern "C" void sheepshaver_jit_fp_op(powerpc_registers *r, uint32 opcode)
 		double b = r->fpr[frb].d;
 		fesetround(sheepshaver_jit_ppc_to_native_rounding_mode(FPSCR_RN_field::extract(r->fpscr)));
 #if PPC_ENABLE_FPU_EXCEPTIONS
-		uint32 exceptions = sheepshaver_jit_fp_invalid_binary(
-			FPSCR_VXSNAN_field::mask() | FPSCR_VXISI_field::mask(), a, b, xo5 == 20);
+		uint32 exceptions;
+		if (xo5 == 18) {
+			exceptions = sheepshaver_jit_fp_invalid_binary(
+				FPSCR_VXSNAN_field::mask() | FPSCR_VXIDI_field::mask() | FPSCR_VXZDZ_field::mask(), a, b, false);
+			if (isfinite(a) && a != 0 && b == 0)
+				exceptions = FPSCR_ZX_field::mask();
+		} else {
+			exceptions = sheepshaver_jit_fp_invalid_binary(
+				FPSCR_VXSNAN_field::mask() | FPSCR_VXISI_field::mask(), a, b, xo5 == 20);
+		}
 		feclearexcept(FE_ALL_EXCEPT);
 		febarrier();
 #endif
-		double d = (xo5 == 21) ? (a + b) : (a - b);
+		double d = (xo5 == 21) ? (a + b) : ((xo5 == 20) ? (a - b) : (a / b));
 #if PPC_ENABLE_FPU_EXCEPTIONS
 		febarrier();
 		int raised = fetestexcept(FE_ALL_EXCEPT);

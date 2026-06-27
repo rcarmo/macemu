@@ -3460,8 +3460,8 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		 * cold-boot skip_jit surface. */
 		if (xo10 == 12 || xo10 == 15 || xo10 == 22 || xo10 == 26)
 			return false; /* frsp/fctiwz/fsqrt/frsqrte */
-		if (xo5 == 18 || xo5 == 25 || xo5 == 28 || xo5 == 29 || xo5 == 30 || xo5 == 31)
-			return false; /* fmul/fdiv/fmadd/fmsub/fnmadd/fnmsub */
+		if (xo5 == 25 || xo5 == 28 || xo5 == 29 || xo5 == 30 || xo5 == 31)
+			return false; /* fmul/fmadd/fmsub/fnmadd/fnmsub */
 		uint32_t frd = PPC_RD(op);
 		uint32_t fra = PPC_RA(op);
 		uint32_t frb = (op >> 11) & 0x1F;
@@ -3582,6 +3582,7 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 		switch (xo5) {
 		case 21: /* fadd frD,frA,frB — exact helper updates FPRF/FPSCR */
 		case 20: /* fsub frD,frA,frB — exact helper updates FPRF/FPSCR */
+		case 18: /* fdiv frD,frA,frB — exact helper updates FPRF/FPSCR/exceptions */
 			emit_call_fp_op_helper(op);
 			return true;
 
@@ -3592,12 +3593,6 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
-		case 18: /* fdiv frD,frA,frB */
-			emit_load_fpr(0, fra);
-			emit_load_fpr(1, frb);
-			emit32(0x1E601800 | (1 << 16) | (0 << 5) | 0); /* FDIV Dd, Dn, Dm */
-			emit_store_fpr(0, frd);
-			return true;
 
 		case 29: /* fmadd frD,frA,frC,frB = frA*frC+frB */
 			emit_load_fpr(0, fra);
