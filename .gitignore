@@ -42,3 +42,8 @@ SheepShaver/rom-harness/rom-harness
 SheepShaver/rom-harness/rom-harness
 SheepShaver/rom-harness/*.o
 *.log
+
+# basilisk JIT diagnostic scaffolding (workspace-local probes, not product code)
+/bin/boot-probe-gdb.sh
+/bin/wp-probe.sh
+/bin/wp-producer.sh
