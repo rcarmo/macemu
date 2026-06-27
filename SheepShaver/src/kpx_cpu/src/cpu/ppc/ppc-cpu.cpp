@@ -41,6 +41,16 @@
 #define PPC_AARCH64_DIRECT_JIT 0
 #endif
 
+static bool ppc_aarch64_reentrant_direct_jit_enabled(void)
+{
+#if PPC_AARCH64_DIRECT_JIT
+	static const char *env = getenv("SS_JIT_REENTRANT_DIRECT");
+	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+#else
+	return false;
+#endif
+}
+
 #if ENABLE_MON
 #include "mon.h"
 #include "mon_disass.h"
@@ -952,7 +962,7 @@ void powerpc_cpu::execute(uint32 entry)
 #endif
 	execute_depth++;
 #if PPC_DECODE_CACHE || PPC_ENABLE_JIT
-	if (execute_depth == 1 || ((PPC_ENABLE_JIT || PPC_AARCH64_DIRECT_JIT) && PPC_REENTRANT_JIT)) {
+	if (execute_depth == 1 || ((PPC_ENABLE_JIT || ppc_aarch64_reentrant_direct_jit_enabled()) && PPC_REENTRANT_JIT)) {
 #if PPC_ENABLE_JIT
 		if (use_jit) {
 			block_info *bi = my_block_cache.find(pc());
