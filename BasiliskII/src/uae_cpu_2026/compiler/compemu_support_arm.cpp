@@ -6500,6 +6500,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     LOAD_U64(REG_PC_TMP, (uintptr)pc_hist[i].location);
                     compemu_raw_endblock_pc_inreg(REG_PC_TMP, scaled_cycles(i * 4 * CYCLE_UNIT));
                     forced_interpreter_barrier = true;
+                    if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) { fprintf(stderr, "LOGBREAK site=MOVEM_split block=%08x i=%d/%d op_pc=%08x opcode=%04x\n", (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode); fflush(stderr); }
                     break;
                 }
 #endif
@@ -6515,6 +6516,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         (unsigned)opcode);
                     compemu_raw_exec_nostats((uintptr)pc_hist[i].location);
                     forced_interpreter_barrier = true;
+                    if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) { fprintf(stderr, "LOGBREAK site=exact_nostats block=%08x i=%d/%d op_pc=%08x opcode=%04x\n", (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode); fflush(stderr); }
                     break;
                 }
 
@@ -6679,6 +6681,16 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);
                         compemu_raw_endblock_pc_inreg(REG_PC_TMP, retired_cycles);
                         forced_interpreter_barrier = true;
+                        if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) {
+                            uae_u32 prev_pc = (i > 0) ? (uae_u32)get_virtual_address((uae_u8*)pc_hist[i-1].location) : 0;
+                            uae_u16 prev_op = (i > 0) ? (uae_u16)*(uae_u16*)pc_hist[i-1].location : 0;
+                            uae_u32 next_pc = (i + 1 < blocklen) ? (uae_u32)get_virtual_address((uae_u8*)pc_hist[i+1].location) : 0;
+                            uae_u16 next_op = (i + 1 < blocklen) ? (uae_u16)*(uae_u16*)pc_hist[i+1].location : 0;
+                            fprintf(stderr, "LOGBREAK site=force_runtime_endblock block=%08x i=%d/%d op_pc=%08x opcode=%04x prev_pc=%08x prev_op=%04x trace_next_pc=%08x trace_next_op=%04x\n",
+                                (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode,
+                                (unsigned)prev_pc, (unsigned)prev_op, (unsigned)next_pc, (unsigned)next_op);
+                            fflush(stderr);
+                        }
                         break;
                     }
 #if defined(CPU_AARCH64)
@@ -6705,6 +6717,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);
                         compemu_raw_endblock_pc_inreg(REG_PC_TMP, retired_cycles);
                         forced_interpreter_barrier = true;
+                        if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) { fprintf(stderr, "LOGBREAK site=jit_force_pc_endblock block=%08x i=%d/%d op_pc=%08x opcode=%04x\n", (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode); fflush(stderr); }
                         break;
                         }
                     }
@@ -6739,6 +6752,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                             compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);
                             compemu_raw_endblock_pc_inreg(REG_PC_TMP, retired_cycles);
                             forced_interpreter_barrier = true;
+                            if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) { fprintf(stderr, "LOGBREAK site=is_dbcc_cond block=%08x i=%d/%d op_pc=%08x opcode=%04x\n", (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode); fflush(stderr); }
                             break;
                         }
                     }
@@ -6947,6 +6961,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                             (unsigned)opcode);
                         compemu_raw_exec_nostats((uintptr)pc_hist[i].location);
                         forced_interpreter_barrier = true;
+                        if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) { fprintf(stderr, "LOGBREAK site=failure_path block=%08x i=%d/%d op_pc=%08x opcode=%04x\n", (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode); fflush(stderr); }
                         break;
                     }
                     if (was_comp) {
@@ -7035,6 +7050,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                             compemu_raw_execute_normal_cycles((uintptr)&regs.pc_p, retired_cycles);
                         }
                         forced_interpreter_barrier = true;
+                        if (getenv("B2_LOG_BREAK") && block_m68k_pc == 0x04037090) { fprintf(stderr, "LOGBREAK site=late_emit block=%08x i=%d/%d op_pc=%08x opcode=%04x\n", (unsigned)block_m68k_pc, i, blocklen, (unsigned)op_m68k_pc, (unsigned)opcode); fflush(stderr); }
                         break;
                     }
                     if (jit_end_block_on_fallback_env()) {
