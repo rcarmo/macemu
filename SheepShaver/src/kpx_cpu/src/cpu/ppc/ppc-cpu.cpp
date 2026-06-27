@@ -35,6 +35,12 @@
 #include "cpu/jit/dyngen-exec.h"
 #endif
 
+#if defined(__aarch64__) && defined(USE_AARCH64_JIT)
+#define PPC_AARCH64_DIRECT_JIT 1
+#else
+#define PPC_AARCH64_DIRECT_JIT 0
+#endif
+
 #if ENABLE_MON
 #include "mon.h"
 #include "mon_disass.h"
@@ -946,7 +952,7 @@ void powerpc_cpu::execute(uint32 entry)
 #endif
 	execute_depth++;
 #if PPC_DECODE_CACHE || PPC_ENABLE_JIT
-	if (execute_depth == 1 || (PPC_ENABLE_JIT && PPC_REENTRANT_JIT)) {
+	if (execute_depth == 1 || ((PPC_ENABLE_JIT || PPC_AARCH64_DIRECT_JIT) && PPC_REENTRANT_JIT)) {
 #if PPC_ENABLE_JIT
 		if (use_jit) {
 			block_info *bi = my_block_cache.find(pc());
