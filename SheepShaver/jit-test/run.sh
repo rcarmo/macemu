@@ -85,6 +85,7 @@ run_ppc_test() {
     local hex="$2"   # space-separated 32-bit PPC hex words
     local outfile="$3"
     local mode="${4:-default}" # default, interp, or jit
+    local no_skip="${5:-0}" # when 1, prodjit must not emit PPC-JIT-A64-SKIP
 
     local td="$RUN_DIR/test-${name}"
     mkdir -p "$td"
@@ -110,6 +111,9 @@ EOF
     elif [ "$mode" = "prodjit" ]; then
         mode_env=(SS_USE_JIT=1)
     fi
+    if [ "$no_skip" = "1" ]; then
+        mode_env+=(SS_JIT_SKIP_LOG=1)
+    fi
     env SDL_VIDEODRIVER=x11 DISPLAY=:99 HOME="$td" \
       SS_TEST_HEX="$hex" \
       SS_TEST_DUMP=1 \
@@ -119,6 +123,12 @@ EOF
 
     # Extract REGDUMP line
     grep "^REGDUMP:" "$td/emu.log" > "$outfile" 2>/dev/null || true
+    if [ "$no_skip" = "1" ] && grep "^PPC-JIT-A64-SKIP:" "$td/emu.log" 2>/dev/null | grep -qv "opcode=0x00000000"; then
+        local skip_count
+        skip_count=$(grep "^PPC-JIT-A64-SKIP:" "$td/emu.log" 2>/dev/null | grep -vc "opcode=0x00000000" || true)
+        echo "SKIPFAIL: ${skip_count} production-JIT fallback(s)" >> "$outfile"
+        grep "^PPC-JIT-A64-SKIP:" "$td/emu.log" | grep -v "opcode=0x00000000" | head -5 >> "$outfile" 2>/dev/null || true
+    fi
 }
 
 # ---- Test vectors ------------------------------------------------------------
@@ -126,6 +136,7 @@ EOF
 # Each vector ends implicitly with blr (appended by the harness in C)
 
 declare -A TESTS
+declare -A NO_SKIP_TESTS
 declare -a TEST_ORDER
 
 # --- Integer ALU ---
@@ -397,9 +408,11 @@ TEST_ORDER+=(crxor_cror)
 TESTS[fp_add]="3C604000 90610100 38600000 90610104 C8210100 FC200890 FC211028 D8210108"
 TEST_ORDER+=(fp_add)
 
-# FP arithmetic is delegated until FPSCR/FPRF side effects are exact.
-TESTS[fp_fadd_fpscr_delegated]="3C604000 90610100 38600000 90610104 C8010100 C8210100 FC20082A FC00048E D8010108 80A10108 80C1010C"
-TEST_ORDER+=(fp_fadd_fpscr_delegated)
+# fadd now uses an exact helper: result plus FPSCR.FPRF must match interpreter,
+# and production JIT must not silently fall back for this vector.
+TESTS[fp_fadd_fpscr_helper]="3C604000 90610100 38600000 90610104 C8010100 C8210100 FC20082A FC00048E D8010108 80A10108 80C1010C"
+TEST_ORDER+=(fp_fadd_fpscr_helper)
+NO_SKIP_TESTS[fp_fadd_fpscr_helper]=1
 
 # --- Load/store indexed ---
 # lwzx: li r3,0xBEEF; stw r3,0(r1); li r4,0; lwzx r5,r1,r4
@@ -567,14 +580,17 @@ TESTS[xori_basic]="386000ff 686500F0"
 TEST_ORDER+=(xori_basic)
 
 # --- FP compare ---
-# Store 1.0 and 2.0, compare: fcmpu cr0,f0,f1 → CR0.LT
+# Store 1.0 and 2.0, compare: fcmpu cr0,f0,f1 → CR0.LT. The exact helper
+# must update CR/FPSCR.FPCC without production-JIT fallback.
 TESTS[fcmpu_basic]="3C603F80 90610100 38600000 90610104 C0010100 3C604000 90610108 C021010C C8010100 C8210108 FC000000"
 TEST_ORDER+=(fcmpu_basic)
+NO_SKIP_TESTS[fcmpu_basic]=1
 
-# fcmpu unordered/NaN: interpreter sets FU (CR field bit 0), not LT. The JIT delegates
-# FP compares until unordered/FPSCR semantics are exact. mfcr exposes the CR result.
+# fcmpu unordered/NaN: interpreter sets FU (CR field bit 0), not LT. The exact
+# helper must preserve unordered/FPSCR semantics without falling back.
 TESTS[fcmpu_nan_unordered]="3C607FF8 90610100 38600000 90610104 3C603FF0 90610108 38600000 9061010C C8010100 C8210108 FC000000 7CA00026"
 TEST_ORDER+=(fcmpu_nan_unordered)
+NO_SKIP_TESTS[fcmpu_nan_unordered]=1
 
 # --- FP mul ---
 # Store 3.0 (0x40080000) and 4.0 (0x40100000), multiply → 12.0
@@ -1342,9 +1358,10 @@ TESTS[fuzz_ca_chain3]="3860FFFF 30630001 30630001 30630001 7CA30194"
 TEST_ORDER+=(fuzz_ca_chain3)
 
 # --- FP edge cases ---
-# fsub: 1.0 - 1.0 = 0.0
+# fsub: 1.0 - 1.0 = 0.0. Exact helper must not fall back.
 TESTS[fuzz_fsub_zero]="3C603F80 90610100 38600000 90610104 C0010100 C0210100 FC001028 D0010108 80A10108"
 TEST_ORDER+=(fuzz_fsub_zero)
+NO_SKIP_TESTS[fuzz_fsub_zero]=1
 # fmul: 0.0 * anything = 0.0
 TESTS[fuzz_fmul_zero]="38600000 90610100 90610104 C8010100 3C604000 90610108 90610104 C8210108 FC000072 D8010110 80A10110"
 TEST_ORDER+=(fuzz_fmul_zero)
@@ -1448,7 +1465,7 @@ for name in "${TEST_ORDER[@]}"; do
     # through branches/loops like the interpreter, so this is a real codegen
     # equivalence check across all vectors, not a JIT-vs-JIT determinism check.
     run_ppc_test "$name" "$hex" "$out1" interp
-    run_ppc_test "${name}_r2" "$hex" "$out2" prodjit
+    run_ppc_test "${name}_r2" "$hex" "$out2" prodjit "${NO_SKIP_TESTS[$name]:-0}"
 
     if [ -s "$out1" ] && [ -s "$out2" ]; then
         if diff -q "$out1" "$out2" >/dev/null 2>&1; then

@@ -1133,6 +1133,134 @@ static inline void sheepshaver_jit_record_fpscr(powerpc_registers *r, uint32 exc
 #endif
 }
 
+static inline bool sheepshaver_jit_fp_is_nan(double v)
+{
+	union { double d; uint64 j; } x;
+	x.d = v;
+	return (((x.j & UVAL64(0x7ff0000000000000)) == UVAL64(0x7ff0000000000000)) &&
+	        ((x.j & UVAL64(0x000fffffffffffff)) != 0));
+}
+
+static inline bool sheepshaver_jit_fp_is_qnan(double v)
+{
+	union { double d; uint64 j; } x;
+	x.d = v;
+	return sheepshaver_jit_fp_is_nan(v) && (x.j & UVAL64(0x0008000000000000));
+}
+
+static inline bool sheepshaver_jit_fp_is_snan(double v)
+{
+	return sheepshaver_jit_fp_is_nan(v) && !sheepshaver_jit_fp_is_qnan(v);
+}
+
+static inline void sheepshaver_jit_fp_classify(powerpc_registers *r, double v)
+{
+	uint32 c = r->fpscr & ~FPSCR_FPRF_field::mask();
+	switch (fpclassify(v)) {
+	case FP_NAN:
+		c |= FPSCR_FPRF_FU_field::mask() | FPSCR_FPRF_C_field::mask();
+		break;
+	case FP_ZERO:
+		c |= FPSCR_FPRF_FE_field::mask();
+		if (signbit(v))
+			c |= FPSCR_FPRF_C_field::mask();
+		break;
+	case FP_INFINITE:
+		c |= FPSCR_FPRF_FU_field::mask();
+		/* fall through */
+	case FP_SUBNORMAL:
+		if (fpclassify(v) == FP_SUBNORMAL)
+			c |= FPSCR_FPRF_C_field::mask();
+		/* fall through */
+	case FP_NORMAL:
+		if (v < 0)
+			c |= FPSCR_FPRF_FL_field::mask();
+		else
+			c |= FPSCR_FPRF_FG_field::mask();
+		break;
+	}
+	r->fpscr = c;
+}
+
+#if PPC_ENABLE_FPU_EXCEPTIONS
+static inline uint32 sheepshaver_jit_fp_invalid_binary(uint32 flags, double a, double b, bool negate)
+{
+	uint32 exceptions = 0;
+	if ((flags & FPSCR_VXSNAN_field::mask()) && (sheepshaver_jit_fp_is_snan(a) || sheepshaver_jit_fp_is_snan(b)))
+		exceptions |= FPSCR_VXSNAN_field::mask();
+	if ((flags & FPSCR_VXISI_field::mask()) && isinf(a) && isinf(b)) {
+		if (( negate && (signbit(a) == signbit(b))) ||
+		    (!negate && (signbit(a) != signbit(b))))
+			exceptions |= FPSCR_VXISI_field::mask();
+	}
+	return exceptions;
+}
+#endif
+
+extern "C" void sheepshaver_jit_fp_op(powerpc_registers *r, uint32 opcode)
+{
+	if (!r)
+		return;
+	uint32 xo10 = (opcode >> 1) & 0x3ff;
+	uint32 xo5 = (opcode >> 1) & 0x1f;
+	if (xo10 == 0) { /* fcmpu crD,frA,frB */
+		uint32 fra = frA_field::extract(opcode);
+		uint32 frb = frB_field::extract(opcode);
+		uint32 crfd = crfD_field::extract(opcode);
+		double a = r->fpr[fra].d;
+		double b = r->fpr[frb].d;
+		uint32 c;
+		if (sheepshaver_jit_fp_is_nan(a) || sheepshaver_jit_fp_is_nan(b))
+			c = 1;
+		else if (isless(a, b))
+			c = 8;
+		else if (isgreater(a, b))
+			c = 4;
+		else
+			c = 2;
+		FPSCR_FPCC_field::insert(r->fpscr, c);
+		r->cr.set(crfd, c);
+#if PPC_ENABLE_FPU_EXCEPTIONS
+		uint32 exceptions = 0;
+		if (sheepshaver_jit_fp_is_snan(a) || sheepshaver_jit_fp_is_snan(b))
+			exceptions |= FPSCR_VXSNAN_field::mask();
+		sheepshaver_jit_record_fpscr(r, exceptions);
+#endif
+		return;
+	}
+	if (xo5 == 20 || xo5 == 21) { /* fsub/fadd frD,frA,frB */
+		uint32 frd = frD_field::extract(opcode);
+		uint32 fra = frA_field::extract(opcode);
+		uint32 frb = frB_field::extract(opcode);
+		double a = r->fpr[fra].d;
+		double b = r->fpr[frb].d;
+		fesetround(sheepshaver_jit_ppc_to_native_rounding_mode(FPSCR_RN_field::extract(r->fpscr)));
+#if PPC_ENABLE_FPU_EXCEPTIONS
+		uint32 exceptions = sheepshaver_jit_fp_invalid_binary(
+			FPSCR_VXSNAN_field::mask() | FPSCR_VXISI_field::mask(), a, b, xo5 == 20);
+		feclearexcept(FE_ALL_EXCEPT);
+		febarrier();
+#endif
+		double d = (xo5 == 21) ? (a + b) : (a - b);
+#if PPC_ENABLE_FPU_EXCEPTIONS
+		febarrier();
+		int raised = fetestexcept(FE_ALL_EXCEPT);
+		if (raised & FE_INEXACT)
+			exceptions |= FPSCR_XX_field::mask();
+		if (raised & FE_DIVBYZERO)
+			exceptions |= FPSCR_ZX_field::mask();
+		if (raised & FE_UNDERFLOW)
+			exceptions |= FPSCR_UX_field::mask();
+		if (raised & FE_OVERFLOW)
+			exceptions |= FPSCR_OX_field::mask();
+		sheepshaver_jit_record_fpscr(r, exceptions);
+#endif
+		if (!FPSCR_VE_field::test(r->fpscr))
+			sheepshaver_jit_fp_classify(r, d);
+		r->fpr[frd].d = d;
+	}
+}
+
 extern "C" void sheepshaver_jit_mtfsf(powerpc_registers *r, uint32 fm, uint32 frb, uint32 rc)
 {
 	if (!r || frb >= 32)

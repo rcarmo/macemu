@@ -31,6 +31,7 @@ extern "C" uint32_t sheepshaver_jit_safe_load_reversed(uint32_t ea, uint32_t old
 extern "C" void sheepshaver_jit_safe_store_reversed(uint32_t ea, uint32_t value, uint32_t access_size);
 extern "C" void sheepshaver_jit_fp_load(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
 extern "C" void sheepshaver_jit_fp_store(void *regs, uint32_t ea, uint32_t fpr, uint32_t is_double);
+extern "C" void sheepshaver_jit_fp_op(void *regs, uint32_t opcode);
 extern "C" void sheepshaver_jit_mtfsf(void *regs, uint32_t fm, uint32_t frb, uint32_t rc);
 extern "C" void sheepshaver_jit_mffs(void *regs, uint32_t frd, uint32_t rc);
 extern "C" void sheepshaver_jit_lmw(void *regs, uint32_t ea, uint32_t rd);
@@ -838,6 +839,13 @@ static void emit_call_fp_store_helper(int ea_reg, uint32_t fpr, bool is_double) 
 	emit_load_imm32(RTMP2, (int32_t)fpr);             /* x2 = FPR index */
 	emit_load_imm32(RTMP3, is_double ? 1 : 0);        /* x3 = is_double */
 	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_fp_store);
+	emit32(0xD63F0000 | (RTMP4 << 5));
+}
+
+static void emit_call_fp_op_helper(uint32_t op) {
+	a64_mov_reg(RTMP0, RSTATE);              /* x0 = regs */
+	emit_load_imm32(RTMP1, (int32_t)op);     /* x1 = PPC opcode */
+	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_fp_op);
 	emit32(0xD63F0000 | (RTMP4 << 5));
 }
 
@@ -3446,12 +3454,14 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			return false; /* Rc/dot forms must update CR1 exactly */
 		uint32_t xo10 = (op >> 1) & 0x3FF;
 		uint32_t xo5 = (op >> 1) & 0x1F;
-		/* These forms update FPSCR/FPRF/exception state in the interpreter; delegate
-		 * until exact native side effects are implemented. */
+		/* These forms update FPSCR/FPRF/exception state in the interpreter; keep
+		 * delegating until exact side effects are implemented.  fadd/fsub/fcmpu
+		 * are routed through exact helpers below because they are the complete
+		 * cold-boot skip_jit surface. */
 		if (xo10 == 12 || xo10 == 15 || xo10 == 22 || xo10 == 26)
 			return false; /* frsp/fctiwz/fsqrt/frsqrte */
-		if (xo5 == 18 || xo5 == 20 || xo5 == 21 || xo5 == 25 || xo5 == 28 || xo5 == 29 || xo5 == 30 || xo5 == 31)
-			return false; /* fadd/fsub/fmul/fdiv/fmadd/fmsub/fnmadd/fnmsub */
+		if (xo5 == 18 || xo5 == 25 || xo5 == 28 || xo5 == 29 || xo5 == 30 || xo5 == 31)
+			return false; /* fmul/fdiv/fmadd/fmsub/fnmadd/fnmsub */
 		uint32_t frd = PPC_RD(op);
 		uint32_t fra = PPC_RA(op);
 		uint32_t frb = (op >> 11) & 0x1F;
@@ -3483,12 +3493,11 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 			emit_store_fpr(0, frd);
 			return true;
 
-		case 0:  /* fcmpu crD,frA,frB — EXCLUDED: unordered/FPSCR semantics not exact */
-		case 32: /* fcmpo crD,frA,frB — EXCLUDED: unordered/FPSCR semantics not exact */
-			/* ARM64 FCMP reports unordered as V=1, which the old CSEL sequence treated as LT,
-			 * while the interpreter sets FU (CR field bit 0) and updates FPSCR.FPCC. fcmpo also
-			 * has ordered-compare exception behaviour. Delegate until the full FPCC/exception
-			 * semantics are implemented exactly. */
+		case 0:  /* fcmpu crD,frA,frB — exact helper handles unordered/FPSCR.FPCC */
+			lazy_flush_cr0(); /* helper updates an arbitrary CR field, possibly CR0 */
+			emit_call_fp_op_helper(op);
+			return true;
+		case 32: /* fcmpo crD,frA,frB — ordered-compare exception semantics not exact */
 			return false;
 
 		case 12: /* frsp frD,frB — round to single precision */
@@ -3571,18 +3580,9 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 
 		/* A-form FP ops (5-bit XO) */
 		switch (xo5) {
-		case 21: /* fadd frD,frA,frB */
-			emit_load_fpr(0, fra);
-			emit_load_fpr(1, frb);
-			emit32(0x1E602800 | (1 << 16) | (0 << 5) | 0); /* FADD Dd, Dn, Dm */
-			emit_store_fpr(0, frd);
-			return true;
-
-		case 20: /* fsub frD,frA,frB */
-			emit_load_fpr(0, fra);
-			emit_load_fpr(1, frb);
-			emit32(0x1E603800 | (1 << 16) | (0 << 5) | 0); /* FSUB Dd, Dn, Dm */
-			emit_store_fpr(0, frd);
+		case 21: /* fadd frD,frA,frB — exact helper updates FPRF/FPSCR */
+		case 20: /* fsub frD,frA,frB — exact helper updates FPRF/FPSCR */
+			emit_call_fp_op_helper(op);
 			return true;
 
 		case 25: /* fmul frD,frA,frC */
