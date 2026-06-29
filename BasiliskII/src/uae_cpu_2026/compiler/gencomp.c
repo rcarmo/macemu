@@ -3241,9 +3241,18 @@ gen_opcode (unsigned int opcode)
 #endif
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	{
-	    /* Native inline ARM64 MULL with full flag support */
+	    /* Native inline ARM64 MULL with full flag support.
+	       The table68k entry is "MULL.L  #1,s[!Areg]" — in UAE table
+	       convention the immediate "#1" placeholder for the extra word
+	       is the SOURCE field (curi->smode = imm1) and the actual source
+	       EA from the opcode bits is in the DEST field (curi->dmode).
+	       Use dmode/dstreg here so genamode emits the real EA fetch
+	       (computes A + d16/d8/abs and reads long from memory) instead
+	       of an immediate-word load that mistakes the displacement word
+	       for the multiplicand value. The non-aarch64 path below already
+	       uses curi->dmode correctly. */
 	    comprintf("\tuae_u16 extra=%s;\n", gen_nextiword());
-	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	    genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    comprintf("\tint dl = (extra >> 12) & 7;\n");
 	    comprintf("\tint dh = extra & 7;\n");
 	    comprintf("\tif (extra & 0x0400) {\n");  /* 64-bit result */
