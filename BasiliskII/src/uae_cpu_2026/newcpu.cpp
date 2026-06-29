@@ -936,7 +936,7 @@ void Exception(int nr, uaecptr oldpc)
     static unsigned aline_all_count = 0;
     if (((nr == 0xA || nr == 0xB) && currpc >= 0x04000500 && currpc <= 0x04000508) ||
         (nr == 0xA && currpc == 0x040011e4 && trace_a995_env()) ||
-        (nr == 0xA && getenv("B2_TRACE_ALL_ALINE") && aline_all_count++ < 200)) {
+        (nr == 0xA && getenv("B2_TRACE_ALL_ALINE") && aline_all_count++ < 5000)) {
         fprintf(stderr,
             "ALINE_EXC nr=%d currpc=%08x oldpc=%08x vector=%08x vbr=%08x atab1454=%08x atab1458=%08x sr=%04x intmask=%u spc=%08x d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a7=%08x sp0=%08x sp4=%08x sp8=%08x sp12=%08x sp16=%08x\n",
             nr,
