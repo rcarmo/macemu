@@ -868,29 +868,41 @@ static void jit_verify_post(uae_u32 pc, uae_u32 opcode)
 	const uae_u8 interp_mem_a2 = get_byte(jit_verify_pre_state.mem_a2_addr);
 	const uae_u8 interp_mem_a2_p400 = get_byte(jit_verify_pre_state.mem_a2_p400_addr);
 	bool mismatch = false;
+	bool reg_mismatch = false;
 	for (int ri = 0; ri < 16; ri++) {
 		if (regs.regs[ri] != compiled_post.regs.regs[ri]) {
+			reg_mismatch = true;
 			mismatch = true;
 			break;
 		}
 	}
+	if (interp_mem_a2 != compiled_post.mem_a2_byte ||
+		interp_mem_a2_p400 != compiled_post.mem_a2_p400_byte) {
+		reg_mismatch = true;
+		mismatch = true;
+	}
 	if (regflags.nzcv != compiled_post.flags.nzcv ||
-		regflags.x != compiled_post.flags.x ||
-		interp_mem_a2 != compiled_post.mem_a2_byte ||
-		interp_mem_a2_p400 != compiled_post.mem_a2_p400_byte)
+		regflags.x != compiled_post.flags.x)
 		mismatch = true;
 
-	if (mismatch && jit_verify_log_count < 400) {
+	// Skip flag-only mismatches (lazy flag updates are expected and not bugs).
+	static const bool log_flag_only = getenv("B2_JIT_VERIFY_FLAG_ONLY") != NULL;
+	bool should_log = reg_mismatch || (mismatch && log_flag_only);
+
+	if (should_log && jit_verify_log_count < 400) {
 		fprintf(stderr,
-			"JITVERIFY pc=%08x op=%04x interp:d0=%08x d1=%08x d2=%08x d3=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a5=%08x a6=%08x a7=%08x nzcv=%08x x=%08x m[a2]=%02x m[a2+400]=%02x compiled:d0=%08x d1=%08x d2=%08x d3=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a5=%08x a6=%08x a7=%08x nzcv=%08x x=%08x m[a2]=%02x m[a2+400]=%02x\n",
+			"JITVERIFY pc=%08x op=%04x interp:d0=%08x d1=%08x d2=%08x d3=%08x d4=%08x d5=%08x d6=%08x d7=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a5=%08x a6=%08x a7=%08x nzcv=%08x x=%08x m[a2]=%02x m[a2+400]=%02x compiled:d0=%08x d1=%08x d2=%08x d3=%08x d4=%08x d5=%08x d6=%08x d7=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a5=%08x a6=%08x a7=%08x nzcv=%08x x=%08x m[a2]=%02x m[a2+400]=%02x\n",
 			(unsigned)pc, (unsigned)opcode,
 			(unsigned)regs.regs[0], (unsigned)regs.regs[1], (unsigned)regs.regs[2], (unsigned)regs.regs[3],
+			(unsigned)regs.regs[4], (unsigned)regs.regs[5], (unsigned)regs.regs[6], (unsigned)regs.regs[7],
 			(unsigned)regs.regs[8], (unsigned)regs.regs[9], (unsigned)regs.regs[10], (unsigned)regs.regs[11],
 			(unsigned)regs.regs[12], (unsigned)regs.regs[13], (unsigned)regs.regs[14], (unsigned)regs.regs[15],
 			regflags.nzcv, regflags.x,
 			(unsigned)interp_mem_a2, (unsigned)interp_mem_a2_p400,
 			(unsigned)compiled_post.regs.regs[0], (unsigned)compiled_post.regs.regs[1],
 			(unsigned)compiled_post.regs.regs[2], (unsigned)compiled_post.regs.regs[3],
+			(unsigned)compiled_post.regs.regs[4], (unsigned)compiled_post.regs.regs[5],
+			(unsigned)compiled_post.regs.regs[6], (unsigned)compiled_post.regs.regs[7],
 			(unsigned)compiled_post.regs.regs[8], (unsigned)compiled_post.regs.regs[9],
 			(unsigned)compiled_post.regs.regs[10], (unsigned)compiled_post.regs.regs[11],
 			(unsigned)compiled_post.regs.regs[12], (unsigned)compiled_post.regs.regs[13],
