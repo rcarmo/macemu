@@ -1069,7 +1069,7 @@ extern "C" void jit_describe_native_pc_for_segv(uintptr native_pc)
 extern "C" void jit_describe_native_pc_for_segv(uintptr native_pc) { (void)native_pc; }
 #endif
 
-static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, uae_u32 arg1, uae_u32 arg2, bool has_arg2);
+static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, uae_u32 arg1, uae_u32 arg2, bool has_arg2, bool end_block = true);
 
 static inline bool jit_force_optlev1_opcode(uae_u16 op)
 {
@@ -1852,6 +1852,14 @@ static uintptr taken_pc_p;
 static int     branch_cc;
 static int redo_current_block;
 static bool jit_force_runtime_pc_endblock = false;
+/* Set by jit_emit_runtime_helper_barrier(end_block=false): the helper had a
+   pure data-move side-effect (no control flow / SR mutation / trap). After
+   the C call, host caller-saved regs are clobbered, so the compile-time
+   allocator state must be reset before continuing with the next op — but
+   we do NOT want to terminate the block. The compile loop checks this flag
+   right after the comp handler returns, calls init_comp()+sets was_comp=0,
+   then continues to the next iteration. */
+static bool jit_helper_call_reset_alloc = false;
 
 #ifdef UAE
 int segvcount = 0;
@@ -4160,8 +4168,12 @@ static void op_move_l_d8anxn_absw_comp_ff(uae_u32 opcode)
 static void op_move_l_reg_d16an_comp_ff(uae_u32 opcode)
 {
     uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    /* Pure data move: no control flow, no SR mutation, no trap. Continue the
+       trace after the helper call to keep downstream setup ops (e.g. the
+       m1ec init at 040371de in the Slot-Manager hot path) inside the same
+       compiled block instead of force-splitting the trace at every move. */
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_move_l_reg_d16an,
-        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
+        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false, /*end_block=*/false);
 }
 
 static void op_movea_l_postinc_an_comp_ff(uae_u32 opcode)
@@ -4266,7 +4278,7 @@ static void op_illegal_trap_comp_ff(uae_u32 opcode)
         (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
 }
 
-static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, uae_u32 arg1, uae_u32 arg2, bool has_arg2)
+static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, uae_u32 arg1, uae_u32 arg2, bool has_arg2, bool end_block)
 {
     /* B2 helper barrier contract: flush() materializes lazy registers/flags,
        then rebuild the full PC triple before entering C helper code. Some of
@@ -4286,7 +4298,19 @@ static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, u
     live.state[PC_P].realreg = -1;
     live.state[PC_P].val = 0;
     set_status(PC_P, INMEM);
-    jit_force_runtime_pc_endblock = true;
+    if (end_block) {
+        jit_force_runtime_pc_endblock = true;
+    } else {
+        /* Pure data-move/test helper: no control flow, no SR mutation, no
+           trap. The helper advanced regs.pc by the instruction length and
+           updated memory / regflags as appropriate. Tell the compile loop
+           to reset allocator state and CONTINUE with the next op instead of
+           force-ending the block. Without this, hot Slot-Manager paths split
+           the trace at every move.L Reg,(d16,An), preventing critical setup
+           ops (e.g. 040371de m1ec init) from ever landing in a compiled
+           block. */
+        jit_helper_call_reset_alloc = true;
+    }
 }
 
 static void op_fullsr_orsr_w_comp_ff(uae_u32 opcode)
@@ -6406,6 +6430,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
             taken_pc_p = 0;
             branch_cc = 0; // Only to be initialized. Will be set together with next_pc_p
             jit_force_runtime_pc_endblock = false;
+            jit_helper_call_reset_alloc = false;
             bool forced_interpreter_barrier = false;
 
             comp_pc_p = (uae_u8*)pc_hist[0].location;
@@ -6668,6 +6693,26 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         }
                     }
 #endif
+                    if (jit_helper_call_reset_alloc) {
+                        /* Pure data-move helper called: host caller-saved
+                           regs were clobbered, but no control-flow / SR / trap
+                           effect. Reset the compile-time allocator and treat
+                           the next op like a fresh sub-block start, without
+                           terminating the block. */
+                        init_comp();
+                        was_comp = 0;
+                        jit_helper_call_reset_alloc = false;
+                        if (!(liveflags[i + 1] & FLAG_CZNV)) {
+                            if (optlev > 1 && trace_flagflow_opcode((uae_u16)opcode))
+                                trace_flagflow_log("DROP_AFTER_OP", liveflags[i + 1], prop[cft_map(opcode)].use_flags, prop[cft_map(opcode)].set_flags);
+                            dont_care_flags();
+                        }
+                        /* Skip the rest of the L2 codegen path (jit_force_runtime_pc_endblock,
+                           dynamic-return, DBcc, side-exit, tick injection) — the helper has
+                           already produced architectural state; the next op will re-init
+                           via the !was_comp branch. */
+                        continue;
+                    }
                     if (jit_force_runtime_pc_endblock) {
                         /* Runtime helper barriers can change guest PC/state in
                            ways that require a fresh dispatcher entry. End the
