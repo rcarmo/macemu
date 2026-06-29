@@ -1246,7 +1246,13 @@ static bool patch_rom_32(void)
 	// This code tests d7 bit 17 and probes NuBus slot registers at (a3).
 	// BasiliskII doesn't emulate NuBus hardware; the emulated video uses
 	// the EMUL_OP driver. Change beq.s to bra.s to always skip the probe.
-	if (false && ROMBaseHost[0xba0b0] == 0x67 && ROMBaseHost[0xba0b1] == 0x24) {
+	// Re-enable conditionally via B2_LEGACY_NUBUS_PATCHES env (default OFF).
+	// Only 0xba0b0 (BEQ.S → BRA.S) is safe; 0xb9874 entry-patch causes a
+	// JMP(A6) loop with the modern caller at 0x400246e (A6 stays = caller
+	// after patched return, causing infinite re-entry). The 0xba0b0 patch
+	// alone skips the slot probe BEQ.
+	static const bool nubus_patches_enabled = getenv("B2_LEGACY_NUBUS_PATCHES") && *getenv("B2_LEGACY_NUBUS_PATCHES") && strcmp(getenv("B2_LEGACY_NUBUS_PATCHES"), "0") != 0;
+	if (nubus_patches_enabled && ROMBaseHost[0xba0b0] == 0x67 && ROMBaseHost[0xba0b1] == 0x24) {
 		ROMBaseHost[0xba0b0] = 0x60;	// beq.s → bra.s (always skip)
 		D(bug("Patched NuBus slot probe at 0xba0b0\n"));
 	}
