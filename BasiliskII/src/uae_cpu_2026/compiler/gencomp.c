@@ -3195,8 +3195,23 @@ gen_opcode (unsigned int opcode)
 
      case i_DIVL:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Same table68k convention as MULL: 'DIVL.L  #1,s[!Areg]' — the
+	   '#1' immediate-word placeholder for the extra (dq/dr/signed/64-bit
+	   specifier) is in the SOURCE field (curi->smode = imm1), and the
+	   actual divisor EA from the opcode bits is in the DEST field
+	   (curi->dmode). Order: read extra word first (smode), then the EA
+	   (dmode) so any EA extension words follow in the correct stream
+	   position. Variable names must reflect data flow: 'extra' for the
+	   specifier word, 'src' for the divisor fetched from memory.
+
+	   PRIOR BUG: this path used 'src' for the smode immediate and 'extra'
+	   for the dmode memory — inverted relative to the C code that
+	   extracts dq/dr from 'extra' and passes 'src' as the divisor to
+	   jnf_DIVLx*. Result was: dq/dr derived from a memory-loaded long
+	   instead of the architectural specifier word, and the divisor
+	   passed to the helper was actually the specifier word. */
+	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	comprintf("\tint dq = (extra >> 12) & 7;\n");
 	comprintf("\tint dr = extra & 7;\n");
 	comprintf("\tif (extra & 0x0400) {\n");

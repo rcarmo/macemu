@@ -23667,9 +23667,9 @@ void REGPARAM2 op_4c40_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extra = dstreg;
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = dstreg;
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -23709,13 +23709,13 @@ void REGPARAM2 op_4c50_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = dodgy ? scratchie++ : dstreg + 8;
-	if (dodgy)
-		mov_l_rr(extraa, dstreg + 8);
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = dodgy ? scratchie++ : dstreg + 8;
+	if (dodgy)
+		mov_l_rr(srca, dstreg + 8);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -23755,12 +23755,12 @@ void REGPARAM2 op_4c58_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_rr(extraa, dstreg + 8);
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_rr(srca, dstreg + 8);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	lea_l_brr(dstreg + 8, dstreg + 8, 4);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
@@ -23801,14 +23801,14 @@ void REGPARAM2 op_4c60_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{{	int extraa = dodgy ? scratchie++ : dstreg + 8;
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{{	int srca = dodgy ? scratchie++ : dstreg + 8;
 	lea_l_brr(dstreg + 8, dstreg + 8, -4);
 	if (dodgy)
-		mov_l_rr(extraa, 8 + dstreg);
-{	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+		mov_l_rr(srca, 8 + dstreg);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -23848,13 +23848,13 @@ void REGPARAM2 op_4c68_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_rr(extraa, 8 + dstreg);
-	lea_l_brr(extraa, extraa, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_rr(srca, 8 + dstreg);
+	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -23894,12 +23894,12 @@ void REGPARAM2 op_4c70_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), extraa, scratchie);
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -23934,12 +23934,12 @@ void REGPARAM2 op_4c78_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_ri(extraa, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -23974,12 +23974,12 @@ void REGPARAM2 op_4c79_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_ri(extraa, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -24015,14 +24015,14 @@ void REGPARAM2 op_4c7a_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
-	mov_l_ri(extraa, address + PC16off);
-{	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(srca, address + PC16off);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -24058,15 +24058,15 @@ void REGPARAM2 op_4c7b_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int pctmp = scratchie++;
-	int extraa = scratchie++;
+	int srca = scratchie++;
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 {	mov_l_ri(pctmp,address);
-	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), extraa, scratchie);
-{	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -24101,10 +24101,10 @@ void REGPARAM2 op_4c7c_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int extra = scratchie++;
-	mov_l_ri(extra, comp_get_ilong((m68k_pc_offset+=4)-4));
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = scratchie++;
+	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70504,9 +70504,9 @@ void REGPARAM2 op_4c40_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extra = dstreg;
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = dstreg;
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70538,13 +70538,13 @@ void REGPARAM2 op_4c50_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = dodgy ? scratchie++ : dstreg + 8;
-	if (dodgy)
-		mov_l_rr(extraa, dstreg + 8);
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = dodgy ? scratchie++ : dstreg + 8;
+	if (dodgy)
+		mov_l_rr(srca, dstreg + 8);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70576,12 +70576,12 @@ void REGPARAM2 op_4c58_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_rr(extraa, dstreg + 8);
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_rr(srca, dstreg + 8);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	lea_l_brr(dstreg + 8, dstreg + 8, 4);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
@@ -70614,14 +70614,14 @@ void REGPARAM2 op_4c60_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{{	int extraa = dodgy ? scratchie++ : dstreg + 8;
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{{	int srca = dodgy ? scratchie++ : dstreg + 8;
 	lea_l_brr(dstreg + 8, dstreg + 8, -4);
 	if (dodgy)
-		mov_l_rr(extraa, 8 + dstreg);
-{	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+		mov_l_rr(srca, 8 + dstreg);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70653,13 +70653,13 @@ void REGPARAM2 op_4c68_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_rr(extraa, 8 + dstreg);
-	lea_l_brr(extraa, extraa, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_rr(srca, 8 + dstreg);
+	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70691,12 +70691,12 @@ void REGPARAM2 op_4c70_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), extraa, scratchie);
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70723,12 +70723,12 @@ void REGPARAM2 op_4c78_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_ri(extraa, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70755,12 +70755,12 @@ void REGPARAM2 op_4c79_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
-	mov_l_ri(extraa, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
+	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70788,14 +70788,14 @@ void REGPARAM2 op_4c7a_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int extraa = scratchie++;
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int srca = scratchie++;
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
-	mov_l_ri(extraa, address + PC16off);
-{	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	mov_l_ri(srca, address + PC16off);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70823,15 +70823,15 @@ void REGPARAM2 op_4c7b_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int extra = scratchie++;
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int pctmp = scratchie++;
-	int extraa = scratchie++;
+	int srca = scratchie++;
 	uae_u32 address = start_pc + ((char *)comp_pc_p - (char *)start_pc_p) + m68k_pc_offset;
 {	mov_l_ri(pctmp,address);
-	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), extraa, scratchie);
-{	int extra = scratchie++;
-	readlong(extraa, extra, scratchie);
+	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
+{	int src = scratchie++;
+	readlong(srca, src, scratchie);
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -70858,10 +70858,10 @@ void REGPARAM2 op_4c7c_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
-{	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int extra = scratchie++;
-	mov_l_ri(extra, comp_get_ilong((m68k_pc_offset+=4)-4));
+	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+{	int src = scratchie++;
+	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
