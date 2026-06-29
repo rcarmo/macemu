@@ -6476,6 +6476,19 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                 fprintf(stderr, "\n");
             }
 
+            if (getenv("B2_LOG_BLOCK")) {
+                static uae_u32 target_block_pc = (uae_u32)strtoul(getenv("B2_LOG_BLOCK"), NULL, 0);
+                if (block_m68k_pc == target_block_pc) {
+                    fprintf(stderr, "JIT_BLOCK_LOG block=%08x optlev=%d blocklen=%d pcs=", (unsigned)block_m68k_pc, optlev, blocklen);
+                    for (int bi_i = 0; bi_i < blocklen && bi_i < 96; bi_i++) {
+                        uae_u32 bi_pc = block_m68k_pc + (uae_u32)((uintptr)pc_hist[bi_i].location - (uintptr)pc_hist[0].location);
+                        fprintf(stderr, "%08x:%04x ", (unsigned)bi_pc, (unsigned)DO_GET_OPCODE(pc_hist[bi_i].location));
+                    }
+                    fprintf(stderr, "\n");
+                    fflush(stderr);
+                }
+            }
+
             for (i = 0; i < blocklen && get_target() < MAX_COMPILE_PTR; i++) {
                 may_raise_exception = false;
                 cpuop_func** cputbl;
