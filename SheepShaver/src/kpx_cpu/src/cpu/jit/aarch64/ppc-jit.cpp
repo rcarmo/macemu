@@ -809,7 +809,14 @@ static void emit_guarded_store_noop_invalid(int ea_reg, int val_reg, int store_k
 	emit_direct_access_valid_check(ea_reg, access_size, false, true, valid_locs, &valid_count);
 	/* INVALID fast-path branch: route to the safe helper (see load above) so stores into
 	 * dynamically-mapped guest arenas are committed like the interpreter; truly-unmapped
-	 * MMIO is still dropped. ea=x0(ea_reg), value=x1(val_reg), kind=x2. */
+	 * MMIO is still dropped. D-form store callers pass val_reg byte-swapped for the
+	 * inline host STR/STRH path; the safe helper uses WriteMacInt* and therefore expects
+	 * the original PPC-endian value. Undo the inline-path byte swap only on this slow
+	 * path; valid-range branches below skip these instructions and keep val_reg swapped. */
+	if (store_kind == 4)
+		emit32(0x5AC00800 | (val_reg << 5) | val_reg); /* REV back to PPC value for helper */
+	else if (store_kind == 2)
+		emit32(0x5AC00400 | (val_reg << 5) | val_reg); /* REV16 back to PPC value for helper */
 	emit_load_imm32(RTMP2, (int32_t)store_kind);            /* x2 = store_kind */
 	emit_load_imm64(RTMP4, (uint64_t)(uintptr_t)sheepshaver_jit_safe_store);
 	emit32(0xD63F0000 | (RTMP4 << 5));                      /* BLR x4 */
