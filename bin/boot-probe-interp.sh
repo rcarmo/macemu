@@ -18,9 +18,9 @@ rm -rf "$OUT"; mkdir -p "$OUT/home"
 DISK="$OUT/disk.img"
 cp --reflink=auto "$BASE_DISK" "$DISK"
 
-DNUM=":31"
+DNUM=":32"
 pkill -f "Xvfb $DNUM" 2>/dev/null || true
-rm -f /tmp/.X31-lock /tmp/.X11-unix/X31 2>/dev/null || true
+rm -f /tmp/.X32-lock /tmp/.X11-unix/X32 2>/dev/null || true
 Xvfb "$DNUM" -screen 0 640x480x24 >/dev/null 2>&1 &
 XVFB_PID=$!
 sleep 1
@@ -61,6 +61,15 @@ for t in $(seq 1 "$SECS"); do
   fi
 done
 
+kill -0 "$EMU_PID" 2>/dev/null && {
+  echo "[probe:$TAG] gdb-sampling EMU_PID=$EMU_PID"
+  for i in 1 2 3 4 5; do
+    sudo gdb -p "$EMU_PID" -batch -ex 'set pagination off' \
+      -ex 'printf "PCSAMP pc=%08x d0=%08x d1=%08x d7=%08x a0=%08x a1=%08x a6=%08x a7=%08x sr=%04x\n", ((unsigned long)regs.pc_p - MEMBaseDiff), regs.regs[0], regs.regs[1], regs.regs[7], regs.regs[8], regs.regs[9], regs.regs[14], regs.regs[15], regs.sr' \
+      2>/dev/null | grep PCSAMP
+    sleep 1
+  done
+}
 kill -0 "$EMU_PID" 2>/dev/null && { echo "[probe:$TAG] still running at ${SECS}s (kill)"; kill -9 "$EMU_PID" 2>/dev/null; }
 pkill -9 -f "BasiliskII --config $OUT/prefs" 2>/dev/null || true
 kill -9 "$XVFB_PID" 2>/dev/null || true
