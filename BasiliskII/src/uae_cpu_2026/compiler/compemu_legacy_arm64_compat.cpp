@@ -14,7 +14,6 @@ static inline void legacy_copy_carry_to_flagx(void)
 		CSET_xc(x, NATIVE_CC_CC);
 	else
 		CSET_xc(x, NATIVE_CC_CS);
-	LSL_wwi(x, x, 29);
 	unlock2(x);
 }
 
