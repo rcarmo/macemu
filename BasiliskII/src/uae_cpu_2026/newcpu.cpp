@@ -2209,10 +2209,14 @@ void m68k_do_execute (void)
 	    }
 	    if (ipl_init && pc >= ipl_lo && pc <= ipl_hi && ipl_count < 400) {
 	        ipl_count++;
-	        fprintf(stderr, "INTERP_PCLOG pc=%08x d5=%08x d7=%08x a2=%08x a6=%08x a0=%08x a1=%08x sr=%04x\n",
-	            (unsigned)pc, (unsigned)m68k_dreg(regs,5), (unsigned)m68k_dreg(regs,7),
-	            (unsigned)m68k_areg(regs,2), (unsigned)m68k_areg(regs,6),
-	            (unsigned)m68k_areg(regs,0), (unsigned)m68k_areg(regs,1), (unsigned)regs.sr);
+	        fprintf(stderr, "INTERP_PCLOG pc=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x a0=%08x a1=%08x a2=%08x a6=%08x sr=%04x m20a=%04x m1ec=%04x m1ee=%04x\n",
+	            (unsigned)pc, (unsigned)m68k_dreg(regs,0), (unsigned)m68k_dreg(regs,1),
+	            (unsigned)m68k_dreg(regs,3), (unsigned)m68k_dreg(regs,5), (unsigned)m68k_dreg(regs,7),
+	            (unsigned)m68k_areg(regs,0), (unsigned)m68k_areg(regs,1),
+	            (unsigned)m68k_areg(regs,2), (unsigned)m68k_areg(regs,6), (unsigned)regs.sr,
+	            (unsigned)get_word(m68k_areg(regs,6)-0x20a),
+	            (unsigned)get_word(m68k_areg(regs,6)-0x1ec),
+	            (unsigned)get_word(m68k_areg(regs,6)-0x1ee));
 	    }
 	}
 #ifdef FULL_HISTORY
