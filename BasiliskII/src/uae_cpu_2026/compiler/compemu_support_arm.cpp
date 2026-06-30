@@ -251,6 +251,15 @@ static inline int jit_max_optlev(void)
 static inline bool jit_force_optlev0_block_exact(uae_u32 pc)
 {
 #if defined(CPU_AARCH64)
+	/* Debug knob: disable the hardcoded force-opt0 boot ranges so the
+	   JITVERIFY differential can compile and verify those ops at L2. */
+	{
+		static int no_force = -1;
+		if (no_force < 0)
+			no_force = (getenv("B2_JIT_NO_FORCE_OPT0") && *getenv("B2_JIT_NO_FORCE_OPT0")) ? 1 : 0;
+		if (no_force)
+			return false;
+	}
 	/* Low ROM 04000000-0400ffff: $dd0 I/O polling, timer init, and early
 	   boot sequences that read unmapped hardware registers. */
 	if (pc >= 0x04000000 && pc <= 0x0400ffff)
