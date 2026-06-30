@@ -775,39 +775,18 @@ static void jit_block_verify_run(cpu_history *pc_hist, int blocklen, int total_c
     tick_inhibit = true;
 #endif
 
-    /* Re-run the interpreter block from the true entry state, but stop at the
-       first architectural control-flow boundary.  The native compiler also
-       terminates at Bcc/JMP/RTS-style boundaries; executing the recorded
-       successor trace in the interpreter replay would compare different block
-       shapes instead of the compiled block's own semantics. */
-    int verify_blocklen = blocklen;
-    jit_block_verify_snapshot_restore(&jit_block_verify_entry_state);
-    regs.spcflags = 0;
-    InterruptFlags = 0;
-    for (int i = 0; i < blocklen; i++) {
-        uae_u32 opcode = get_opcode_cft_map((uae_u16)*pc_hist[i].location);
-        (*cpufunctbl[opcode])(opcode);
-        if (i + 1 < blocklen && (table68k[opcode].cflow & fl_end_block)) {
-            verify_blocklen = i + 1;
-            break;
-        }
-    }
-    if (!jit_block_verify_snapshot_capture(&interp)) {
-#if defined(CPU_AARCH64)
-        tick_inhibit = saved_tick_inhibit;
-#endif
-        jit_block_verify_snapshot_restore(&resume);
-        jit_block_verify_snapshot_free(&resume);
-        jit_block_verify_entry_reset();
-        return;
-    }
-
+    /* === HARDENED VERIFIER (ported from @previous, 2026-06-30 alignment note) ===
+       Delta 1: NATIVE-FIRST. Compile the block under the sandbox and run it,
+       capturing its NATURAL stop PC. countdown=-1 forces every block-exit edge
+       to the dispatcher (popall_do_nothing) with regs.pc_p set to the exit
+       target, so the native run is bounded to ONE block (no chain) without an
+       explicit get_handler_for_edge override. */
     jit_block_verify_snapshot_restore(&jit_block_verify_entry_state);
     regs.spcflags = 0;
     InterruptFlags = 0;
     jit_block_verify_compile_active = true;
     jit_block_verify_compile_pc = block_pc;
-    compile_block(pc_hist, verify_blocklen, total_cycles);
+    compile_block(pc_hist, blocklen, total_cycles);
     jit_block_verify_compile_active = false;
     jit_block_verify_compile_pc = 0xffffffffu;
 
@@ -816,10 +795,57 @@ static void jit_block_verify_run(cpu_history *pc_hist, int blocklen, int total_c
     ((jit_compiled_handler)pushall_call_handler)();
     jit_block_verify_reentrant = false;
 
-    if (jit_block_verify_snapshot_capture(&native)) {
-        jit_block_verify_compare(&interp, &native, block_pc, verify_blocklen);
-        jit_block_verify_snapshot_free(&native);
+    if (!jit_block_verify_snapshot_capture(&native)) {
+#if defined(CPU_AARCH64)
+        tick_inhibit = saved_tick_inhibit;
+#endif
+        jit_block_verify_snapshot_restore(&resume);
+        jit_block_verify_snapshot_free(&resume);
+        jit_block_verify_entry_reset();
+        return;
     }
+    const uae_u32 native_stop_pc =
+        (uae_u32)get_virtual_address((uae_u8*)native.regs.pc_p);
+
+    /* Delta 2: INTERP REFERENCE, control-flow-following. Step the real
+       interpreter from the SAME entry state, FOLLOWING actual control flow,
+       until it reaches native's natural stop PC (or a step cap). Replaces the
+       blocklen-static-ops reference (which ignored branches and over-ran). */
+    jit_block_verify_snapshot_restore(&jit_block_verify_entry_state);
+    regs.spcflags = 0;
+    InterruptFlags = 0;
+    {
+        const int maxsteps = blocklen * 16 + 64;
+        int steps = 0;
+        for (;;) {
+            uae_u32 opcode = get_opcode_cft_map((uae_u16)*(uae_u16*)regs.pc_p);
+            (*cpufunctbl[opcode])(opcode);
+            if ((uae_u32)m68k_getpc() == native_stop_pc) break;
+            if (++steps >= maxsteps) break;
+        }
+    }
+    const bool interp_reached_stop = ((uae_u32)m68k_getpc() == native_stop_pc);
+    if (!jit_block_verify_snapshot_capture(&interp)) {
+#if defined(CPU_AARCH64)
+        tick_inhibit = saved_tick_inhibit;
+#endif
+        jit_block_verify_snapshot_restore(&resume);
+        jit_block_verify_snapshot_free(&resume);
+        jit_block_verify_snapshot_free(&native);
+        jit_block_verify_entry_reset();
+        return;
+    }
+
+    /* Delta 3: APPLES-TO-APPLES REACH GUARD. Compare only when the interpreter
+       reference actually stopped at native's stop PC; else emit SKIP-NOREACH
+       (which, when native_stop_pc is a PC interp never visits in the boot, is
+       the phantom-successor / control-flow divergence signal). */
+    if (interp_reached_stop)
+        jit_block_verify_compare(&interp, &native, block_pc, blocklen);
+    else
+        fprintf(stderr, "JITBLOCKVERIFY block=%08x len=%d SKIP-NOREACH interp_pc=%08x native_pc=%08x\n",
+            (unsigned)block_pc, blocklen, (unsigned)m68k_getpc(), (unsigned)native_stop_pc);
+    jit_block_verify_snapshot_free(&native);
 
 #if defined(CPU_AARCH64)
     tick_inhibit = saved_tick_inhibit;
