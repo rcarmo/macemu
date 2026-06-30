@@ -2190,6 +2190,31 @@ void m68k_do_execute (void)
 	    nojit_pc_min = 0xFFFFFFFF;
 	    nojit_pc_max = 0;
 	}
+	/* Dark interp PC-range logger: B2_INTERP_PCLOG=start-end logs pc + key
+	   regs (d5/d7/a2/a6) when the interpreter executes a guest PC in range.
+	   Used as the ground-truth oracle to compare JIT-vs-interp data (d5 slot,
+	   d7 slot-mask, a2 scanner-ptr) through the pre-scanner region. Capped. */
+	{
+	    static int ipl_init = -1;
+	    static uae_u32 ipl_lo = 0, ipl_hi = 0;
+	    static unsigned long ipl_count = 0;
+	    if (ipl_init < 0) {
+	        const char *e = getenv("B2_INTERP_PCLOG");
+	        if (e && *e) {
+	            char *endp = 0; ipl_lo = (uae_u32)strtoul(e, &endp, 0);
+	            if (endp && *endp == '-') ipl_hi = (uae_u32)strtoul(endp+1, 0, 0);
+	            else ipl_hi = ipl_lo;
+	        }
+	        ipl_init = (ipl_lo || ipl_hi) ? 1 : 0;
+	    }
+	    if (ipl_init && pc >= ipl_lo && pc <= ipl_hi && ipl_count < 400) {
+	        ipl_count++;
+	        fprintf(stderr, "INTERP_PCLOG pc=%08x d5=%08x d7=%08x a2=%08x a6=%08x a0=%08x a1=%08x sr=%04x\n",
+	            (unsigned)pc, (unsigned)m68k_dreg(regs,5), (unsigned)m68k_dreg(regs,7),
+	            (unsigned)m68k_areg(regs,2), (unsigned)m68k_areg(regs,6),
+	            (unsigned)m68k_areg(regs,0), (unsigned)m68k_areg(regs,1), (unsigned)regs.sr);
+	    }
+	}
 #ifdef FULL_HISTORY
 #ifdef NEED_TO_DEBUG_BADLY
 	history[lasthist] = regs;
