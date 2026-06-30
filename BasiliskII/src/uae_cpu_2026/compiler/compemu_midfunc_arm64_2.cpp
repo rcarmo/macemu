@@ -4271,30 +4271,35 @@ MIDFUNC(2,jff_LSL_l_reg,(RW4 d, RR4 i))
 
 	INIT_REGS_l(d, i);
 
-	ANDS_ww3f(REG_WORK1, i);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	BEQ_i(0);               // No shift -> X flag unchanged, C cleared
+	/* Branch-free count==0-correct codegen (was: internal BEQ whose count!=0
+	   DUPLICACTE_CARRY did writereg(FLAGX) while the count==0 path did not, leaving
+	   the FLAGX host-reg binding unreconciled at the merge -> wrong X for runtime
+	   count==0 under register pressure). A single 64-bit LSL yields the correct
+	   value for ALL counts 0..63, and carry=bit32 is 0 for count==0 (operand
+	   zero-extended), so C=carry holds for both cases; only X needs the count==0
+	   special-case X=(count==0)?X_old:carry, done with one writereg via CSEL. */
+	AND_ww3f(REG_WORK1, i);                     /* count = i & 0x3f (value only) */
+	MOV_ww(REG_WORK2, d);                       /* zero-extend operand into 64-bit work reg */
+	LSL_xxx(REG_WORK2, REG_WORK2, REG_WORK1);   /* REG_WORK2 = operand << count; bit32 = carry */
 
-	LSL_xxx(d, d, REG_WORK1);
-	TST_ww(d, d);     // NZ correct, VC cleared
+	if (needed_flags & FLAG_X) {
+		UBFX_xxii(REG_WORK3, REG_WORK2, 32, 1); /* carry 0/1 (=0 when count==0) */
+		int x = rmw(FLAGX);                      /* old X (bit-0 convention) */
+		CMP_wi(REG_WORK1, 0);                   /* Z = (count==0) */
+		CSEL_wwwc(x, x, REG_WORK3, NATIVE_CC_EQ); /* X = (count==0) ? X_old : carry */
+		unlock2(x);
+	}
 
-	// Calculate C Flag
-	TBZ_xii(d, 32, 4);
+	MOV_ww(d, REG_WORK2);                       /* result = low 32 bits (zero-extended) */
+	TST_ww(d, d);                               /* NZ from result, C/V cleared */
+
+	/* C flag = carry-out (bit32); 0 for count==0 since operand is zero-extended */
+	TBZ_xii(REG_WORK2, 32, 4);
 	MRS_NZCV_x(REG_WORK4);
 	SET_xxCflag(REG_WORK4, REG_WORK4);
 	MSR_NZCV_x(REG_WORK4);
 
 	flags_carry_inverted = false;
-	DUPLICACTE_CARRY
-
-	// Clean upper 32 bits of d after 64-bit LSL_xxx used for carry extraction
-	MOV_ww(d, d);
-
-	B_i(2);
-
-	// No shift
-	write_jmp_target(branchadd, (uintptr)get_target());
-	TST_ww(d, d);
 
 	EXIT_REGS(d, i);
 }
