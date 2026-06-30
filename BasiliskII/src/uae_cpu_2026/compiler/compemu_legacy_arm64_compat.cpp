@@ -1210,6 +1210,15 @@ jit_pctrace_done:
 					bb_init = 0;
 				}
 				if (bb_target && blocklen > 0 && m68k_getpc() == bb_target) {
+#if defined(CPU_AARCH64)
+					/* Route to the verifier when armed so a break-before can
+					   bisect a target block to the first diverging op. */
+					if (verify_this_block) {
+						uae_u32 _bpc = get_virtual_address((uae_u8*)pc_hist[0].location);
+						jit_block_verify_run(pc_hist, blocklen, total_cycles, _bpc);
+						return;
+					}
+#endif
 					compile_block(pc_hist, blocklen, total_cycles);
 					return;
 				}
