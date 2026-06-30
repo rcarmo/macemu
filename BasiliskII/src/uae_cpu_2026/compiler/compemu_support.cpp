@@ -505,9 +505,21 @@ void m68k_do_compile_execute(void)
 		{
 			static int pr_init = -1;
 			static uae_u32 pr_target = 0;
-			if (pr_init < 0) { const char* e = getenv("B2_PATH_RING_TARGET"); pr_target = (e && *e) ? (uae_u32)strtoul(e, 0, 0) : 0; pr_init = 0; }
+			/* CONT.109 cont-fv (auditor 2026-06-30): bisect-on-the-count. Record the
+			   bfextu-loop framevars (m212/m20a/m1ee/m1ec count + m1e8 dest pointer)
+			   from FIXED guest addresses (a6-relative offsets of the 04037xxx frame,
+			   default a6=0x0200fa3e) at EVERY dispatch, so a single ring dump shows
+			   where the loop count FIRST becomes garbage. Reads are pure get_word/
+			   get_long = non-perturbing (no codegen/flush change). Override the frame
+			   base with B2_FV_A6 if a6 differs in a run. */
+			static uae_u32 pr_fv_a6 = 0;
+			if (pr_init < 0) {
+				const char* e = getenv("B2_PATH_RING_TARGET"); pr_target = (e && *e) ? (uae_u32)strtoul(e, 0, 0) : 0;
+				const char* a = getenv("B2_FV_A6"); pr_fv_a6 = (a && *a) ? (uae_u32)strtoul(a, 0, 0) : 0x0200fa3eUL;
+				pr_init = 0;
+			}
 			if (pr_target) {
-				static struct { uae_u32 pc, a0, a1, a2, a6, d0, d1, d3, d5, d7; } pr_ring[8192];
+				static struct { uae_u32 pc, a0, a1, a2, a6, d0, d1, d3, d5, d7, m1e8; uae_u16 m212, m20a, m1ee, m1ec; } pr_ring[8192];
 				static unsigned long pr_idx = 0;
 				static int pr_dumped = 0;
 				uae_u32 _gpc = m68k_getpc();
@@ -522,14 +534,22 @@ void m68k_do_compile_execute(void)
 				pr_ring[slot].d3 = regs.regs[3];
 				pr_ring[slot].d5 = regs.regs[5];
 				pr_ring[slot].d7 = regs.regs[7];
+				pr_ring[slot].m212 = (uae_u16)get_word(pr_fv_a6 - 0x212);
+				pr_ring[slot].m20a = (uae_u16)get_word(pr_fv_a6 - 0x20a);
+				pr_ring[slot].m1ee = (uae_u16)get_word(pr_fv_a6 - 0x1ee);
+				pr_ring[slot].m1ec = (uae_u16)get_word(pr_fv_a6 - 0x1ec);
+				pr_ring[slot].m1e8 = (uae_u32)get_long(pr_fv_a6 - 0x1e8);
 				pr_idx++;
 				if (_gpc == pr_target && !pr_dumped) {
 					pr_dumped = 1;
+					fprintf(stderr, "PATHRING_FV_BASE a6=%08x m212@%08x m20a@%08x m1ee@%08x m1ec@%08x m1e8@%08x\n",
+						pr_fv_a6, pr_fv_a6 - 0x212, pr_fv_a6 - 0x20a, pr_fv_a6 - 0x1ee, pr_fv_a6 - 0x1ec, pr_fv_a6 - 0x1e8);
 					unsigned long start = (pr_idx > 8192) ? pr_idx - 8192 : 0;
 					for (unsigned long i = start; i < pr_idx; i++) {
 						unsigned s = (unsigned)(i & 8191);
-						fprintf(stderr, "PATHRING %lu pc=%08x a0=%08x a1=%08x a2=%08x a6=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x\n",
-							i - start, pr_ring[s].pc, pr_ring[s].a0, pr_ring[s].a1, pr_ring[s].a2, pr_ring[s].a6, pr_ring[s].d0, pr_ring[s].d1, pr_ring[s].d3, pr_ring[s].d5, pr_ring[s].d7);
+						fprintf(stderr, "PATHRING %lu pc=%08x a0=%08x a1=%08x a2=%08x a6=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x m212=%04x m20a=%04x m1ee=%04x m1ec=%04x m1e8=%08x\n",
+							i - start, pr_ring[s].pc, pr_ring[s].a0, pr_ring[s].a1, pr_ring[s].a2, pr_ring[s].a6, pr_ring[s].d0, pr_ring[s].d1, pr_ring[s].d3, pr_ring[s].d5, pr_ring[s].d7,
+							pr_ring[s].m212, pr_ring[s].m20a, pr_ring[s].m1ee, pr_ring[s].m1ec, pr_ring[s].m1e8);
 					}
 					fflush(stderr);
 				}
