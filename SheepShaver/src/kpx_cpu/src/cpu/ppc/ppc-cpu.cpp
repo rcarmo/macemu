@@ -44,8 +44,11 @@
 static bool ppc_aarch64_reentrant_direct_jit_enabled(void)
 {
 #if PPC_AARCH64_DIRECT_JIT
+	/* AArch64 direct-JIT reentrant execution is the default product path after
+	 * the slow-path store byte-order fix and 3600s opt-in cold-boot hold.  Keep
+	 * SS_JIT_REENTRANT_DIRECT=0 as an emergency/runtime diagnostic opt-out. */
 	static const char *env = getenv("SS_JIT_REENTRANT_DIRECT");
-	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+	return !(env && env[0] == '0' && env[1] == '\0');
 #else
 	return false;
 #endif
