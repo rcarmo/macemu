@@ -260,6 +260,38 @@ static inline bool jit_force_optlev0_block_exact(uae_u32 pc)
 		if (no_force)
 			return false;
 	}
+	/* Scoped unforce (CONT.110 cont31): exclude a SPECIFIC pc range from the
+	   hardcoded force-opt0 boot ranges so the block-link verifier can arm on
+	   just those blocks (they route through execute_normal and compile) while
+	   the rest of the I/O polling stays interpreted. Dark by default. */
+	{
+		static int initialized = 0;
+		static int range_count = 0;
+		static struct { uae_u32 start; uae_u32 end; } ranges[16];
+		if (!initialized) {
+			initialized = 1;
+			const char *env = getenv("B2_JIT_UNFORCE_OPT0_PCS");
+			if (env && *env) {
+				const char *p = env;
+				while (*p && range_count < (int)(sizeof(ranges)/sizeof(ranges[0]))) {
+					while (*p==' '||*p=='\t'||*p=='\n'||*p==',') p++;
+					if (!*p) break;
+					char *endp = NULL;
+					unsigned long start = strtoul(p,&endp,0);
+					unsigned long end = start;
+					if (endp==p) break;
+					p = endp;
+					if (*p=='-') { p++; end = strtoul(p,&endp,0); if (endp==p) end=start; p=endp; }
+					ranges[range_count].start=(uae_u32)start;
+					ranges[range_count].end=(uae_u32)end;
+					range_count++;
+					while (*p && *p!=',') p++;
+				}
+			}
+		}
+		for (int i=0;i<range_count;i++)
+			if (pc>=ranges[i].start && pc<=ranges[i].end) return false;
+	}
 	/* Low ROM 04000000-0400ffff: $dd0 I/O polling, timer init, and early
 	   boot sequences that read unmapped hardware registers. */
 	if (pc >= 0x04000000 && pc <= 0x0400ffff)
@@ -840,9 +872,11 @@ static void jit_block_verify_run(cpu_history *pc_hist, int blocklen, int total_c
        reference actually stopped at native's stop PC; else emit SKIP-NOREACH
        (which, when native_stop_pc is a PC interp never visits in the boot, is
        the phantom-successor / control-flow divergence signal). */
-    if (interp_reached_stop)
+    if (interp_reached_stop) {
+        fprintf(stderr, "JITBLOCKVERIFY block=%08x len=%d REACHED native_stop_pc=%08x interp_stop_pc=%08x\n",
+            (unsigned)block_pc, blocklen, (unsigned)native_stop_pc, (unsigned)m68k_getpc());
         jit_block_verify_compare(&interp, &native, block_pc, blocklen);
-    else
+    } else
         fprintf(stderr, "JITBLOCKVERIFY block=%08x len=%d SKIP-NOREACH interp_pc=%08x native_pc=%08x\n",
             (unsigned)block_pc, blocklen, (unsigned)m68k_getpc(), (unsigned)native_stop_pc);
     jit_block_verify_snapshot_free(&native);
