@@ -2612,6 +2612,24 @@ gen_opcode (unsigned int opcode)
 	if (curi->smode!=immi) {
 		uses_cmov;
 		start_brace();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* cont92: aliasing-immune in-place shift. The old cdata=scratchie
+		   dance (mov_l_rr(cdata,data)/mov_l_ri(cdata,0); cmov; shift cdata;
+		   narrow writeback) corrupts data when the legacy allocator maps the
+		   scratch onto data's host reg (gencomp:2371 hazard). The AArch64
+		   shra/shrl/shll_*_rr primitives (jnf/jff_*_reg) already do the full
+		   M68K semantics in place on data via REG_WORK + BFI/BFXIL (large-count
+		   fill, carry, high bytes preserved), so call them directly on data. */
+		comprintf("\tint tmpcnt = scratchie++;\n");
+		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
+		comprintf("\tand_l_ri(tmpcnt,63);\n");
+		switch(curi->size) {
+		 case sz_byte: comprintf("\tshra_b_rr(data,tmpcnt);\n"); break;
+		 case sz_word: comprintf("\tshra_w_rr(data,tmpcnt);\n"); break;
+		 case sz_long: comprintf("\tshra_l_rr(data,tmpcnt);\n"); break;
+		 default: assert(0);
+		}
+#else
 		comprintf("\tint zero = scratchie++;\n");
 		comprintf("\tint tmpcnt = scratchie++;\n");
 		comprintf("\tint minus1 = scratchie++;\n");
@@ -2650,6 +2668,7 @@ gen_opcode (unsigned int opcode)
 		 	break;
 		 default: assert(0);
 		}
+#endif
 		/* Result of shift is now in data. */
 	}
 	else {
@@ -2706,6 +2725,18 @@ gen_opcode (unsigned int opcode)
 	if (curi->smode!=immi) {
 		uses_cmov;
 		start_brace();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* cont92: aliasing-immune in-place shift (see i_ASR note). */
+		comprintf("\tint tmpcnt=scratchie++;\n");
+		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
+		comprintf("\tand_l_ri(tmpcnt,63);\n");
+		switch(curi->size) {
+		 case sz_byte: comprintf("\tshll_b_rr(data,tmpcnt);\n"); break;
+		 case sz_word: comprintf("\tshll_w_rr(data,tmpcnt);\n"); break;
+		 case sz_long: comprintf("\tshll_l_rr(data,tmpcnt);\n"); break;
+		 default: assert(0);
+		}
+#else
 		comprintf("\tint cdata = scratchie++;\n");
 		comprintf("\tint tmpcnt=scratchie++;\n");
 		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
@@ -2732,6 +2763,7 @@ gen_opcode (unsigned int opcode)
 		 	break;
 		 default: assert(0);
 		}
+#endif
 		/* Result of shift is now in data. */
 	}
 	else {
@@ -2782,6 +2814,18 @@ gen_opcode (unsigned int opcode)
 	if (curi->smode!=immi) {
 		uses_cmov;
 		start_brace();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* cont92: aliasing-immune in-place shift (see i_ASR note). */
+		comprintf("\tint tmpcnt=scratchie++;\n");
+		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
+		comprintf("\tand_l_ri(tmpcnt,63);\n");
+		switch(curi->size) {
+		 case sz_byte: comprintf("\tshrl_b_rr(data,tmpcnt);\n"); break;
+		 case sz_word: comprintf("\tshrl_w_rr(data,tmpcnt);\n"); break;
+		 case sz_long: comprintf("\tshrl_l_rr(data,tmpcnt);\n"); break;
+		 default: assert(0);
+		}
+#else
 		comprintf("\tint cdata = scratchie++;\n");
 		comprintf("\tint tmpcnt=scratchie++;\n");
 		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
@@ -2808,6 +2852,7 @@ gen_opcode (unsigned int opcode)
 		 	break;
 		 default: assert(0);
 		}
+#endif
 		/* Result of shift is now in data. */
 	}
 	else {
@@ -2855,6 +2900,19 @@ gen_opcode (unsigned int opcode)
 	if (curi->smode!=immi) {
 		uses_cmov;
 		start_brace();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* cont92: aliasing-immune in-place shift (see i_ASR note). @previous's
+		   verifier-independent divergent path (MAX_OPTLEV=0 boots) is LSL.L. */
+		comprintf("\tint tmpcnt = scratchie++;\n");
+		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
+		comprintf("\tand_l_ri(tmpcnt,63);\n");
+		switch(curi->size) {
+		 case sz_byte: comprintf("\tshll_b_rr(data,tmpcnt);\n"); break;
+		 case sz_word: comprintf("\tshll_w_rr(data,tmpcnt);\n"); break;
+		 case sz_long: comprintf("\tshll_l_rr(data,tmpcnt);\n"); break;
+		 default: assert(0);
+		}
+#else
 		comprintf("\tint cdata = scratchie++;\n");
 		comprintf("\tint tmpcnt = scratchie++;\n");
 		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
@@ -2881,6 +2939,7 @@ gen_opcode (unsigned int opcode)
 		 	break;
 		 default: assert(0);
 		}
+#endif
 		/* Result of shift is now in data. */
 	}
 	else {

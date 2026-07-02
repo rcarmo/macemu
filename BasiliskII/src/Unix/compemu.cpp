@@ -44590,21 +44590,10 @@ void REGPARAM2 op_e020_0_comp_ff(uae_u32 opcode) /* ASR */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int zero = scratchie++;
-	int tmpcnt = scratchie++;
-	int minus1 = scratchie++;
-	int cdata = minus1;
+{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(zero, 0);
-	mov_l_ri(minus1, -1);
-	test_b_rr(data,data);
-	cmov_l_rr(zero, minus1, NATIVE_CC_MI);
-	test_l_ri(tmpcnt, 0x38);
-	mov_l_rr(cdata,data);
-	cmov_l_rr(cdata, zero, NATIVE_CC_NE);
-	shra_b_rr(cdata,tmpcnt);
-	mov_b_rr(data,cdata);
+	shra_b_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 1);
@@ -44642,15 +44631,10 @@ void REGPARAM2 op_e028_0_comp_ff(uae_u32 opcode) /* LSR */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x38);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shrl_b_rr(cdata,tmpcnt);
-	mov_b_rr(data, cdata);
+	shrl_b_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 1);
@@ -44894,21 +44878,10 @@ void REGPARAM2 op_e060_0_comp_ff(uae_u32 opcode) /* ASR */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int zero = scratchie++;
-	int tmpcnt = scratchie++;
-	int minus1 = scratchie++;
-	int cdata = minus1;
+{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(zero, 0);
-	mov_l_ri(minus1, -1);
-	test_w_rr(data,data);
-	cmov_l_rr(zero, minus1, NATIVE_CC_MI);
-	test_l_ri(tmpcnt, 0x30);
-	mov_l_rr(cdata,data);
-	cmov_l_rr(cdata, zero, NATIVE_CC_NE);
-	shra_w_rr(cdata,tmpcnt);
-	mov_w_rr(data,cdata);
+	shra_w_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 2);
@@ -44946,15 +44919,10 @@ void REGPARAM2 op_e068_0_comp_ff(uae_u32 opcode) /* LSR */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x30);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shrl_w_rr(cdata,tmpcnt);
-	mov_w_rr(data, cdata);
+	shrl_w_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 2);
@@ -45198,21 +45166,10 @@ void REGPARAM2 op_e0a0_0_comp_ff(uae_u32 opcode) /* ASR */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int zero = scratchie++;
-	int tmpcnt = scratchie++;
-	int minus1 = scratchie++;
-	int cdata = minus1;
+{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(zero, 0);
-	mov_l_ri(minus1, -1);
-	test_l_rr(data,data);
-	cmov_l_rr(zero, minus1, NATIVE_CC_MI);
-	test_l_ri(tmpcnt, 0x20);
-	mov_l_rr(cdata,data);
-	cmov_l_rr(cdata, zero, NATIVE_CC_NE);
-	shra_l_rr(cdata,tmpcnt);
-	mov_l_rr(data,cdata);
+	shra_l_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 4);
@@ -45250,15 +45207,10 @@ void REGPARAM2 op_e0a8_0_comp_ff(uae_u32 opcode) /* LSR */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x20);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shrl_l_rr(cdata, tmpcnt);
-	mov_l_rr(data, cdata);
+	shrl_l_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 4);
@@ -45676,15 +45628,10 @@ void REGPARAM2 op_e120_0_comp_ff(uae_u32 opcode) /* ASL */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x38);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_b_rr(cdata,tmpcnt);
-	mov_b_rr(data, cdata);
+	shll_b_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 1);
@@ -45722,15 +45669,10 @@ void REGPARAM2 op_e128_0_comp_ff(uae_u32 opcode) /* LSL */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt = scratchie++;
+{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x38);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_b_rr(cdata,tmpcnt);
-	mov_b_rr(data, cdata);
+	shll_b_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 1);
@@ -45978,15 +45920,10 @@ void REGPARAM2 op_e160_0_comp_ff(uae_u32 opcode) /* ASL */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x30);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_w_rr(cdata,tmpcnt);
-	mov_w_rr(data, cdata);
+	shll_w_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 2);
@@ -46024,15 +45961,10 @@ void REGPARAM2 op_e168_0_comp_ff(uae_u32 opcode) /* LSL */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt = scratchie++;
+{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x30);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_w_rr(cdata,tmpcnt);
-	mov_w_rr(data, cdata);
+	shll_w_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 2);
@@ -46280,15 +46212,10 @@ void REGPARAM2 op_e1a0_0_comp_ff(uae_u32 opcode) /* ASL */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x20);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_l_rr(cdata,tmpcnt);
-	mov_l_rr(data, cdata);
+	shll_l_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 4);
@@ -46326,15 +46253,10 @@ void REGPARAM2 op_e1a8_0_comp_ff(uae_u32 opcode) /* LSL */
 {	int cnt = srcreg;
 {	int data = dstreg;
 {	start_needflags();
-{	int cdata = scratchie++;
-	int tmpcnt = scratchie++;
+{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x20);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_l_rr(cdata,tmpcnt);
-	mov_l_rr(data, cdata);
+	shll_l_rr(data,tmpcnt);
 	live_flags();
 	end_needflags();
 	setcc_for_cntzero(tmpcnt, data, 4);
@@ -90007,21 +89929,10 @@ void REGPARAM2 op_e020_0_comp_nf(uae_u32 opcode) /* ASR */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int zero = scratchie++;
-	int tmpcnt = scratchie++;
-	int minus1 = scratchie++;
-	int cdata = minus1;
+{{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(zero, 0);
-	mov_l_ri(minus1, -1);
-	test_b_rr(data,data);
-	cmov_l_rr(zero, minus1, NATIVE_CC_MI);
-	test_l_ri(tmpcnt, 0x38);
-	mov_l_rr(cdata,data);
-	cmov_l_rr(cdata, zero, NATIVE_CC_NE);
-	shra_b_rr(cdata,tmpcnt);
-	mov_b_rr(data,cdata);
+	shra_b_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_b_rr(dstreg, data);
 }}}}}}
@@ -90054,15 +89965,10 @@ void REGPARAM2 op_e028_0_comp_nf(uae_u32 opcode) /* LSR */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x38);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shrl_b_rr(cdata,tmpcnt);
-	mov_b_rr(data, cdata);
+	shrl_b_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_b_rr(dstreg, data);
 }}}}}}
@@ -90279,21 +90185,10 @@ void REGPARAM2 op_e060_0_comp_nf(uae_u32 opcode) /* ASR */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int zero = scratchie++;
-	int tmpcnt = scratchie++;
-	int minus1 = scratchie++;
-	int cdata = minus1;
+{{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(zero, 0);
-	mov_l_ri(minus1, -1);
-	test_w_rr(data,data);
-	cmov_l_rr(zero, minus1, NATIVE_CC_MI);
-	test_l_ri(tmpcnt, 0x30);
-	mov_l_rr(cdata,data);
-	cmov_l_rr(cdata, zero, NATIVE_CC_NE);
-	shra_w_rr(cdata,tmpcnt);
-	mov_w_rr(data,cdata);
+	shra_w_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_w_rr(dstreg, data);
 }}}}}}
@@ -90326,15 +90221,10 @@ void REGPARAM2 op_e068_0_comp_nf(uae_u32 opcode) /* LSR */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x30);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shrl_w_rr(cdata,tmpcnt);
-	mov_w_rr(data, cdata);
+	shrl_w_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_w_rr(dstreg, data);
 }}}}}}
@@ -90551,21 +90441,10 @@ void REGPARAM2 op_e0a0_0_comp_nf(uae_u32 opcode) /* ASR */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int zero = scratchie++;
-	int tmpcnt = scratchie++;
-	int minus1 = scratchie++;
-	int cdata = minus1;
+{{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(zero, 0);
-	mov_l_ri(minus1, -1);
-	test_l_rr(data,data);
-	cmov_l_rr(zero, minus1, NATIVE_CC_MI);
-	test_l_ri(tmpcnt, 0x20);
-	mov_l_rr(cdata,data);
-	cmov_l_rr(cdata, zero, NATIVE_CC_NE);
-	shra_l_rr(cdata,tmpcnt);
-	mov_l_rr(data,cdata);
+	shra_l_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_l_rr(dstreg, data);
 }}}}}}
@@ -90598,15 +90477,10 @@ void REGPARAM2 op_e0a8_0_comp_nf(uae_u32 opcode) /* LSR */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x20);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shrl_l_rr(cdata, tmpcnt);
-	mov_l_rr(data, cdata);
+	shrl_l_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_l_rr(dstreg, data);
 }}}}}}
@@ -90997,15 +90871,10 @@ void REGPARAM2 op_e120_0_comp_nf(uae_u32 opcode) /* ASL */
     }
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x38);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_b_rr(cdata,tmpcnt);
-	mov_b_rr(data, cdata);
+	shll_b_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_b_rr(dstreg, data);
 }}}}}}
@@ -91038,15 +90907,10 @@ void REGPARAM2 op_e128_0_comp_nf(uae_u32 opcode) /* LSL */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt = scratchie++;
+{{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x38);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_b_rr(cdata,tmpcnt);
-	mov_b_rr(data, cdata);
+	shll_b_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_b_rr(dstreg, data);
 }}}}}}
@@ -91267,15 +91131,10 @@ void REGPARAM2 op_e160_0_comp_nf(uae_u32 opcode) /* ASL */
     }
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x30);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_w_rr(cdata,tmpcnt);
-	mov_w_rr(data, cdata);
+	shll_w_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_w_rr(dstreg, data);
 }}}}}}
@@ -91308,15 +91167,10 @@ void REGPARAM2 op_e168_0_comp_nf(uae_u32 opcode) /* LSL */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt = scratchie++;
+{{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x30);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_w_rr(cdata,tmpcnt);
-	mov_w_rr(data, cdata);
+	shll_w_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_w_rr(dstreg, data);
 }}}}}}
@@ -91537,15 +91391,10 @@ void REGPARAM2 op_e1a0_0_comp_nf(uae_u32 opcode) /* ASL */
     }
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt=scratchie++;
+{{	int tmpcnt=scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x20);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_l_rr(cdata,tmpcnt);
-	mov_l_rr(data, cdata);
+	shll_l_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_l_rr(dstreg, data);
 }}}}}}
@@ -91578,15 +91427,10 @@ void REGPARAM2 op_e1a8_0_comp_nf(uae_u32 opcode) /* LSL */
 {	dont_care_flags();
 {	int cnt = srcreg;
 {	int data = dstreg;
-{{	int cdata = scratchie++;
-	int tmpcnt = scratchie++;
+{{	int tmpcnt = scratchie++;
 	mov_l_rr(tmpcnt,cnt);
 	and_l_ri(tmpcnt,63);
-	mov_l_ri(cdata, 0);
-	test_l_ri(tmpcnt, 0x20);
-	cmov_l_rr(cdata, data, NATIVE_CC_EQ);
-	shll_l_rr(cdata,tmpcnt);
-	mov_l_rr(data, cdata);
+	shll_l_rr(data,tmpcnt);
 	if(dstreg != data)
 		mov_l_rr(dstreg, data);
 }}}}}}
