@@ -2198,6 +2198,7 @@ void m68k_do_execute (void)
 	    static int ipl_init = -1;
 	    static uae_u32 ipl_lo = 0, ipl_hi = 0;
 	    static unsigned long ipl_count = 0;
+	    static unsigned long ipl_cap = 400;
 	    if (ipl_init < 0) {
 	        const char *e = getenv("B2_INTERP_PCLOG");
 	        if (e && *e) {
@@ -2205,9 +2206,11 @@ void m68k_do_execute (void)
 	            if (endp && *endp == '-') ipl_hi = (uae_u32)strtoul(endp+1, 0, 0);
 	            else ipl_hi = ipl_lo;
 	        }
+	        const char *cp = getenv("B2_INTERP_PCLOG_CAP");
+	        if (cp && *cp) ipl_cap = strtoul(cp, 0, 0);
 	        ipl_init = (ipl_lo || ipl_hi) ? 1 : 0;
 	    }
-	    if (ipl_init && pc >= ipl_lo && pc <= ipl_hi && ipl_count < 400) {
+	    if (ipl_init && pc >= ipl_lo && pc <= ipl_hi && ipl_count < ipl_cap) {
 	        ipl_count++;
 	        fprintf(stderr, "INTERP_PCLOG pc=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x a0=%08x a1=%08x a2=%08x a6=%08x sr=%04x m20a=%04x m1ec=%04x m1ee=%04x\n",
 	            (unsigned)pc, (unsigned)m68k_dreg(regs,0), (unsigned)m68k_dreg(regs,1),
