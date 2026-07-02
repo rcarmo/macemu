@@ -2212,11 +2212,25 @@ void m68k_do_execute (void)
 	    }
 	    if (ipl_init && pc >= ipl_lo && pc <= ipl_hi && ipl_count < ipl_cap) {
 	        ipl_count++;
-	        fprintf(stderr, "INTERP_PCLOG pc=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x a0=%08x a1=%08x a2=%08x a6=%08x sr=%04x m20a=%04x m1ec=%04x m1ee=%04x\n",
-	            (unsigned)pc, (unsigned)m68k_dreg(regs,0), (unsigned)m68k_dreg(regs,1),
-	            (unsigned)m68k_dreg(regs,3), (unsigned)m68k_dreg(regs,5), (unsigned)m68k_dreg(regs,7),
+	        MakeSR();
+	        fprintf(stderr, "INTERP_PCLOG pc=%08x d0=%08x d1=%08x d2=%08x d3=%08x d4=%08x d5=%08x d6=%08x d7=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a5=%08x a6=%08x a7=%08x sr=%04x nzcv=%08x x=%08x sp0=%08x sp4=%08x sp8=%08x sp12=%08x sp16=%08x sp20=%08x sp24=%08x m20a=%04x m1ec=%04x m1ee=%04x\n",
+	            (unsigned)pc,
+	            (unsigned)m68k_dreg(regs,0), (unsigned)m68k_dreg(regs,1),
+	            (unsigned)m68k_dreg(regs,2), (unsigned)m68k_dreg(regs,3),
+	            (unsigned)m68k_dreg(regs,4), (unsigned)m68k_dreg(regs,5),
+	            (unsigned)m68k_dreg(regs,6), (unsigned)m68k_dreg(regs,7),
 	            (unsigned)m68k_areg(regs,0), (unsigned)m68k_areg(regs,1),
-	            (unsigned)m68k_areg(regs,2), (unsigned)m68k_areg(regs,6), (unsigned)regs.sr,
+	            (unsigned)m68k_areg(regs,2), (unsigned)m68k_areg(regs,3),
+	            (unsigned)m68k_areg(regs,4), (unsigned)m68k_areg(regs,5),
+	            (unsigned)m68k_areg(regs,6), (unsigned)m68k_areg(regs,7),
+	            (unsigned)regs.sr, (unsigned)regflags.nzcv, (unsigned)regflags.x,
+	            (unsigned)get_long(m68k_areg(regs,7) + 0),
+	            (unsigned)get_long(m68k_areg(regs,7) + 4),
+	            (unsigned)get_long(m68k_areg(regs,7) + 8),
+	            (unsigned)get_long(m68k_areg(regs,7) + 12),
+	            (unsigned)get_long(m68k_areg(regs,7) + 16),
+	            (unsigned)get_long(m68k_areg(regs,7) + 20),
+	            (unsigned)get_long(m68k_areg(regs,7) + 24),
 	            (unsigned)get_word(m68k_areg(regs,6)-0x20a),
 	            (unsigned)get_word(m68k_areg(regs,6)-0x1ec),
 	            (unsigned)get_word(m68k_areg(regs,6)-0x1ee));

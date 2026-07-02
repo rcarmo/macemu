@@ -1169,12 +1169,16 @@ void execute_normal(void)
 				if (pctrace_stack) {
 					uaecptr sp = m68k_areg(regs, 7);
 					fprintf(stderr,
-						"PCTSTACK %08x sm4=%08x s0=%08x s4=%08x s8=%08x\n",
+						"PCTSTACK %08x sm4=%08x s0=%08x s4=%08x s8=%08x s12=%08x s16=%08x s20=%08x s24=%08x\n",
 						pc,
 						(unsigned)get_long(sp - 4),
 						(unsigned)get_long(sp + 0),
 						(unsigned)get_long(sp + 4),
-						(unsigned)get_long(sp + 8));
+						(unsigned)get_long(sp + 8),
+						(unsigned)get_long(sp + 12),
+						(unsigned)get_long(sp + 16),
+						(unsigned)get_long(sp + 20),
+						(unsigned)get_long(sp + 24));
 				}
 				if (pctrace_mem) {
 					uaecptr a0v = m68k_areg(regs, 0);
