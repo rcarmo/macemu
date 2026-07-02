@@ -7150,6 +7150,25 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         compemu_raw_call((uintptr)jit_trace_pc_hit);
                     }
                     compemu_raw_call((uintptr)cputbl[cft_map(opcode)]);
+                    {
+                        /* cont86 FIX: the interpreter-FALLBACK path must re-dispatch at
+                           the LIVE regs.pc_p after ANY control-transfer op (end_block:
+                           branch/jump/return/trap), exactly like exec_nostats. A trace-
+                           FOLLOWED data-dependent control op (rts/jmp(An)/Bcc) otherwise
+                           bakes the compile-time-traced successor and the multi-op block
+                           runs the wrong op (measured: rts@0401b6a2 expected 0401b6d2 vs
+                           live 0401be50). The L2 NATIVE path already handles this via
+                           is_dynamic_return/DBcc/runtime-pc-endblock; this closes the same
+                           gap for the interpreter-fallback dispatch. */
+                        if ((prop[cft_map(opcode)].cflow & fl_end_block) != 0 && i + 1 < blocklen) {
+                            compemu_raw_mov_l_rm(0, (uintptr)specflags);
+                            compemu_raw_maybe_do_nothing(retired_cycles);
+                            compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);
+                            compemu_raw_endblock_pc_inreg(REG_PC_TMP, retired_cycles);
+                            forced_interpreter_barrier = true;
+                            break;
+                        }
+                    }
                     /* Trace interpreter-executed family-d instructions */
                     if (((opcode >> 12) & 0xf) == 0xd && getenv("B2_JIT_TRACE_ADD")) {
                         uae_u32 pc_val = (uae_u32)((uintptr)pc_hist[i].location - (uintptr)ROMBaseHost + ROMBaseMac);
