@@ -800,6 +800,47 @@ static void jit_trace_lowmem400_maybe_dump(unsigned long step, uae_u32 pc)
 	fprintf(stderr, "LOWMEM400_DUMP step=%lu pc=%08x d1=%08x path=%s\n", step, (unsigned)pc, (unsigned)regs.regs[1], dump_path);
 }
 
+/* CONT.110 cont90e: one-shot dump of the QuickDraw pixel-LUT region built by the
+   0403bf00 generator, captured at the consumer entry 0403b0e0 (table complete,
+   runs once). L1-vs-L2 diff of the dump is the arbiter for whether the generator
+   (dbf d4) writes a divergent table (real producer) or dbf d4 is a flush artifact.
+   Gated by B2_LUT_DUMP_PATH; dark otherwise. */
+static void jit_trace_lut_maybe_dump(unsigned long step, uae_u32 pc)
+{
+	static int dumped = 0;
+	static int cfg_init = 0;
+	static char dump_path[512];
+	static uae_u32 trig_pc = 0x0403b0e0;
+	if (!cfg_init) {
+		const char *env = getenv("B2_LUT_DUMP_PATH");
+		dump_path[0] = 0;
+		if (env && *env) {
+			strncpy(dump_path, env, sizeof(dump_path) - 1);
+			dump_path[sizeof(dump_path) - 1] = 0;
+		}
+		const char *penv = getenv("B2_LUT_DUMP_TRIG_PC");
+		if (penv && *penv)
+			trig_pc = (uae_u32)strtoul(penv, NULL, 0);
+		cfg_init = 1;
+	}
+	if (dumped || !dump_path[0])
+		return;
+	if (pc != trig_pc)
+		return;
+	uae_u32 lo = 0xe000, hi = 0x14000;
+	const char *le = getenv("B2_LUT_DUMP_LO"); if (le && *le) lo = (uae_u32)strtoul(le, NULL, 0);
+	const char *he = getenv("B2_LUT_DUMP_HI"); if (he && *he) hi = (uae_u32)strtoul(he, NULL, 0);
+	FILE *f = fopen(dump_path, "wb");
+	if (!f)
+		return;
+	for (uaecptr addr = lo; addr < hi; addr++)
+		fputc((int)get_byte(addr), f);
+	fclose(f);
+	dumped = 1;
+	fprintf(stderr, "LUT_DUMP step=%lu pc=%08x lo=%08x hi=%08x path=%s\n",
+		step, (unsigned)pc, (unsigned)lo, (unsigned)hi, dump_path);
+}
+
 static void jit_trace_table_log(const char *tag, unsigned long step, uae_u32 pc)
 {
 	if (!jit_trace_table_enabled())
@@ -1118,6 +1159,7 @@ void execute_normal(void)
 					(unsigned)regs.sr, regflags.nzcv, regflags.x);
 				jit_trace_table_log("PCTTABLE", current_step, pc);
 				jit_trace_lowmem400_maybe_dump(current_step, pc);
+				jit_trace_lut_maybe_dump(current_step, pc);
 				if (pctrace_stack) {
 					uaecptr sp = m68k_areg(regs, 7);
 					fprintf(stderr,
