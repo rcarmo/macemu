@@ -2423,8 +2423,22 @@ gen_opcode (unsigned int opcode)
 	 case 14:
 	 case 15:
 	    comprintf("\tmov_l_rr(nsrc,src);\n");
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* cont90j: aliasing-immune in-place low-16 decrement. The old
+	       lea_l_brr(scratchie,src,-1)+mov_w_rr(src,scratchie) is BROKEN when
+	       the legacy allocator maps scratchie onto src's host reg (the
+	       gencomp:2371 scratch-vs-dirty-architectural hazard): the full-32
+	       lea then destroys src's high word (0x04000000 -> 0x03ffffff) before
+	       mov_w_rr can preserve it. jnf_SUB_w_imm(src,1) decrements src.W in
+	       place (SUB into REG_WORK1 then BFI low-16 back), preserving the high
+	       word, setting NO flags (preserves the live cc flags), with no scratch
+	       destination to alias. Verifier-proven: block 0401b6d2 d5 diverged
+	       0x03ffffff(native) vs 0x04000000(interp) from identical input. */
+	    comprintf("\tdbcc_dec_w(src);\n");
+#else
 	    comprintf("\tlea_l_brr(scratchie,src,(uae_s32)-1);\n"
 		      "\tmov_w_rr(src,scratchie);\n");
+#endif
 	    comprintf("\tcmov_l_rr(offs,PC_P,%d);\n",
 		      cond_codes[curi->cc]);
 	    comprintf("\tcmov_l_rr(src,nsrc,%d);\n",

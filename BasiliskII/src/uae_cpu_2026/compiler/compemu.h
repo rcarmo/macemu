@@ -488,6 +488,7 @@ extern void test_l_ri(RR4 d, IMM i);
 extern void mov_b_rr(W1 d, RR1 s);
 extern void mov_w_rr(W2 d, RR2 s);
 extern void mov_w_ri(W2 d, IMM i);
+extern void dbcc_dec_w(W2 d);
 extern void zero_extend_8_rr(W4 d, RR1 s);
 extern void zero_extend_16_rr(W4 d, RR2 s);
 extern void sign_extend_8_rr(W4 d, RR1 s);

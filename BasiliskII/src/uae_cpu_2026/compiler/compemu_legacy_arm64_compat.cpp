@@ -121,6 +121,12 @@ void cmp_l(RR4 d, RR4 s) { jff_CMP_l(d, s); }
 void mov_b_rr(W1 d, RR1 s) { if (legacy_needflags_enabled()) jff_MOVE_b(d, s); else jnf_MOVE_b(d, s); }
 void mov_w_rr(W2 d, RR2 s) { if (legacy_needflags_enabled()) jff_MOVE_w(d, s); else jnf_MOVE_w(d, s); }
 void mov_w_ri(W2 d, uae_s32 i) { if (legacy_needflags_enabled()) jff_MOVE_w_imm(d, i); else jnf_MOVE_w_imm(d, i); }
+/* cont90j: no-flags in-place low-16 decrement for the DBcc cc>=2 counter.
+   Always jnf (never touches CCR) so the live compare flags the DBcc condition
+   reads are preserved (the existing sub_w_ri MIDFUNC SETS flags, so it can't
+   be used here); in-place via BFI (high word kept) with no scratch destination
+   = aliasing-immune, unlike the old lea_l_brr(scratchie,src,-1)+mov_w_rr. */
+void dbcc_dec_w(W2 d) { jnf_SUB_w_imm(d, 1); }
 
 void zero_extend_8_rr(W4 d, RR1 s)
 {
