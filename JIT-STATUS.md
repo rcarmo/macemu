@@ -175,7 +175,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 **Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
 **JIT optlev=0:** ✅ Full boot, zero SEGVs
 **JIT optlev=2:** ⚠️ Full-JIT default. The historical `040ba0xx` late-ROM spin is **FIXED (2026-06-22)** — see below. With three fixes (lazy-cache-flush staleness + cache-tag aliasing + dispatcher-diagnostic gating) the all-native boot clears the NuBus/Slot-Manager frontier and the `040026f8` aliasing frontier, and prints video-init markers (`VideoDriverOpen` → `SetEntries` → `SetGamma`). The `0402e8d0` slot-ROM `bfextu` blit freeze is **FIXED (2026-06-23, `8195ebc9`)**: it lived specifically in the **optlev-0 interpreter warm-up** (`exec_nostats`) path — itself an interpreter fallback the goal forbids. `optcount[0]` set `10→0` (translate on first execution, never whole-block-interpret); jit-test `302/302 fail_equiv=0`, boot advances past `0402e8d0` (d5→0). **Fixes (8195ebc9 + 18c78439):** optcount[0]=0 (eliminate optlev-0 interp warm-up; fixes 0402e8d0) and SPCFLAG_JIT_EXEC_RETURN cleared at any nesting depth (fixes the 04087926 nested-flush do_nothing spin). Boot now advances through video init + InitAll + SCSIReset. **Current frontier:** a later post-SCSI `0402e8d0` translated-block freeze. Desktop not yet reached.
-**JIT harness:** ✅ 301/301 vectors pass (score=100) when run on an idle box. Note: the harness spuriously fails (`INFRA missing REGDUMP`) under concurrent shared-box load from timeouts; individual vectors still pass.
+**JIT harness:** ✅ 318/318 vectors pass (score=100) on the current AArch64 harness. Note: the harness can spuriously fail (`INFRA missing REGDUMP`) under concurrent shared-box load from timeouts; individual vectors still pass.
 
 #### `040ba0xx` ROOT CAUSE (2026-06-22) — LAZY translation-cache invalidation reused STALE blocks (FIXED)
 
@@ -201,6 +201,20 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 ### Test Harness (68K)
 
 **301 total vectors, all risky, score=100**
+
+### Recent bug fixes (2026-07)
+
+- **ARM64 scratch-vreg range for generated 5-scratch bit-op handlers** (2026-07-03):
+  generated immediate memory bit-op handlers such as `BTST.B #7,(d8,An,Xn)` can allocate
+  five compiler scratch virtual registers (`S1..S5`). ARM64 had only defined `S1..S3`
+  (`VREGS=22`), so `S4/S5` were out-of-range virtual registers and bypassed the guarded
+  allocator path. Defining `S4/S5` and raising `VREGS/SCRATCH_REGS` routes those temporaries
+  through the normal skip-locked/spill-before-reuse allocator. Verified: `0403c02c`
+  block verifier now reports `mismatch=0`; `jit-test/run.sh` passes `318/318`,
+  `fail_equiv=0`, `risky_fail_equiv=0`. This is a correctness fix, not a boot-through claim:
+  full-JIT still reaches the later bad video/resource state (`SetEntries table=04002478 count=1`),
+  with the remaining divergence re-anchored to a skipped resource/list-copy path around
+  `04016ba8/04016bd6`.
 
 ### Recent bug fixes (2026-06)
 

@@ -197,7 +197,7 @@ extern uae_u32 needed_flags;
 extern uae_u8* comp_pc_p;
 extern void* pushall_call_handler;
 
-#define VREGS 22
+#define VREGS 24
 #define VFREGS 10
 
 #define INMEM 1
@@ -250,7 +250,9 @@ STATIC_INLINE int end_block(uae_u16 opcode)
 #define S1 19
 #define S2 20
 #define S3 21
-#define SCRATCH_REGS 3
+#define S4 22
+#define S5 23
+#define SCRATCH_REGS 5
 
 #define FP_RESULT 8
 #define FS1 9
