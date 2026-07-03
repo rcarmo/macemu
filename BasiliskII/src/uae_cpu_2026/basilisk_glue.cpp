@@ -227,6 +227,35 @@ static bool parse_test_hex_longs_glue(const char *hex, uint32 *out_longs, size_t
 	return n > 0;
 }
 
+static void dump_test_mem_ranges_glue()
+{
+	const char *env = getenv("B2_TEST_MEMDUMP");
+	if (!(env && *env))
+		return;
+	const char *p = env;
+	while (*p) {
+		while (*p == ' ' || *p == '\t' || *p == ',' || *p == ';')
+			p++;
+		if (!*p)
+			break;
+		char *end = NULL;
+		unsigned long addr = strtoul(p, &end, 0);
+		if (end == p)
+			break;
+		p = end;
+		while (*p == ' ' || *p == '\t' || *p == ':' || *p == '+')
+			p++;
+		unsigned long len = strtoul(p, &end, 0);
+		if (end == p || len == 0)
+			break;
+		p = end;
+		fprintf(stderr, "MEMDUMP %08lx:", addr);
+		for (unsigned long i = 0; i < len; i++)
+			fprintf(stderr, " %02x", (unsigned)get_byte((uaecptr)(addr + i)) & 0xff);
+		fprintf(stderr, "\n");
+	}
+}
+
 static bool run_opcode_test_mode_glue()
 {
 	const char *hex = getenv("B2_TEST_HEX");
@@ -351,6 +380,7 @@ static bool run_opcode_test_mode_glue()
 			(unsigned)m68k_areg(regs, 2), (unsigned)m68k_areg(regs, 3),
 			(unsigned)m68k_areg(regs, 4), (unsigned)m68k_areg(regs, 5),
 			(unsigned)m68k_areg(regs, 6), (unsigned)regs.sr);
+		dump_test_mem_ranges_glue();
 	}
 
 	return true;
