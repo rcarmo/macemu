@@ -40077,9 +40077,7 @@ void REGPARAM2 op_c0c0_0_comp_ff(uae_u32 opcode) /* MULU */
 	dont_care_flags();
 {	int src = srcreg;
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40115,9 +40113,7 @@ void REGPARAM2 op_c0d0_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40153,9 +40149,7 @@ void REGPARAM2 op_c0d8_0_comp_ff(uae_u32 opcode) /* MULU */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40192,9 +40186,7 @@ void REGPARAM2 op_c0e0_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40230,9 +40222,7 @@ void REGPARAM2 op_c0e8_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40267,9 +40257,7 @@ void REGPARAM2 op_c0f0_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40299,9 +40287,7 @@ void REGPARAM2 op_c0f8_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40331,9 +40317,7 @@ void REGPARAM2 op_c0f9_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40365,9 +40349,7 @@ void REGPARAM2 op_c0fa_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40400,9 +40382,7 @@ void REGPARAM2 op_c0fb_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -40430,9 +40410,7 @@ void REGPARAM2 op_c0fc_0_comp_ff(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41267,9 +41245,7 @@ void REGPARAM2 op_c1c0_0_comp_ff(uae_u32 opcode) /* MULS */
 	dont_care_flags();
 {	int src = srcreg;
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41305,9 +41281,7 @@ void REGPARAM2 op_c1d0_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41343,9 +41317,7 @@ void REGPARAM2 op_c1d8_0_comp_ff(uae_u32 opcode) /* MULS */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41382,9 +41354,7 @@ void REGPARAM2 op_c1e0_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41420,9 +41390,7 @@ void REGPARAM2 op_c1e8_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41457,9 +41425,7 @@ void REGPARAM2 op_c1f0_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41489,9 +41455,7 @@ void REGPARAM2 op_c1f8_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41521,9 +41485,7 @@ void REGPARAM2 op_c1f9_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41555,9 +41517,7 @@ void REGPARAM2 op_c1fa_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41590,9 +41550,7 @@ void REGPARAM2 op_c1fb_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -41620,9 +41578,7 @@ void REGPARAM2 op_c1fc_0_comp_ff(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	dont_care_flags();
 {	start_needflags();
 	test_l_rr(dst,dst);
@@ -85910,9 +85866,7 @@ void REGPARAM2 op_c0c0_0_comp_nf(uae_u32 opcode) /* MULU */
 	dont_care_flags();
 {	int src = srcreg;
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}
@@ -85943,9 +85897,7 @@ void REGPARAM2 op_c0d0_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -85976,9 +85928,7 @@ void REGPARAM2 op_c0d8_0_comp_nf(uae_u32 opcode) /* MULU */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -86010,9 +85960,7 @@ void REGPARAM2 op_c0e0_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}}
@@ -86043,9 +85991,7 @@ void REGPARAM2 op_c0e8_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -86075,9 +86021,7 @@ void REGPARAM2 op_c0f0_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -86102,9 +86046,7 @@ void REGPARAM2 op_c0f8_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -86129,9 +86071,7 @@ void REGPARAM2 op_c0f9_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -86158,9 +86098,7 @@ void REGPARAM2 op_c0fa_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -86188,9 +86126,7 @@ void REGPARAM2 op_c0fb_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}}
@@ -86213,9 +86149,7 @@ void REGPARAM2 op_c0fc_0_comp_nf(uae_u32 opcode) /* MULU */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
-	zero_extend_16_rr(scratchie,src);
-	zero_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULU(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}
@@ -87066,9 +87000,7 @@ void REGPARAM2 op_c1c0_0_comp_nf(uae_u32 opcode) /* MULS */
 	dont_care_flags();
 {	int src = srcreg;
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}
@@ -87099,9 +87031,7 @@ void REGPARAM2 op_c1d0_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87132,9 +87062,7 @@ void REGPARAM2 op_c1d8_0_comp_nf(uae_u32 opcode) /* MULS */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87166,9 +87094,7 @@ void REGPARAM2 op_c1e0_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}}
@@ -87199,9 +87125,7 @@ void REGPARAM2 op_c1e8_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87231,9 +87155,7 @@ void REGPARAM2 op_c1f0_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87258,9 +87180,7 @@ void REGPARAM2 op_c1f8_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87285,9 +87205,7 @@ void REGPARAM2 op_c1f9_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87314,9 +87232,7 @@ void REGPARAM2 op_c1fa_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}
@@ -87344,9 +87260,7 @@ void REGPARAM2 op_c1fb_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}}}
@@ -87369,9 +87283,7 @@ void REGPARAM2 op_c1fc_0_comp_nf(uae_u32 opcode) /* MULS */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
-	sign_extend_16_rr(scratchie,src);
-	sign_extend_16_rr(dst,dst);
-	imul_32_32(dst,scratchie);
+	jnf_MULS(dst, src);
 	if(dstreg != dst)
 		mov_l_rr(dstreg, dst);
 }}}

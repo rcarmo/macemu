@@ -2543,13 +2543,10 @@ gen_opcode (unsigned int opcode)
 	comprintf("\tdont_care_flags();\n");
 	genamode (curi->smode, "srcreg", sz_word, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", sz_word, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	/* To do 16x16 unsigned multiplication, we actually use
-	   32x32 signed, and zero-extend the registers first.
-	   That solves the problem of MUL needing dedicated registers
-	   on the x86 */
-	comprintf("\tzero_extend_16_rr(scratchie,src);\n"
-		  "\tzero_extend_16_rr(dst,dst);\n"
-		  "\timul_32_32(dst,scratchie);\n");
+	/* AArch64: use the native MULU.W midfunc. It uses REG_WORK for the
+	   widened source instead of the legacy virtual scratchie path, so the
+	   multiply scratch cannot alias a live architectural host register. */
+	comprintf("\tjnf_MULU(dst, src);\n");
 	genflags (flag_logical, sz_long, "dst", "", "");
 	genastore ("dst", curi->dmode, "dstreg", sz_long, "dst");
 	break;
@@ -2561,9 +2558,8 @@ gen_opcode (unsigned int opcode)
 	comprintf("\tdont_care_flags();\n");
 	genamode (curi->smode, "srcreg", sz_word, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", sz_word, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tsign_extend_16_rr(scratchie,src);\n"
-		  "\tsign_extend_16_rr(dst,dst);\n"
-		  "\timul_32_32(dst,scratchie);\n");
+	/* See MULU.W above: avoid the legacy virtual scratchie path. */
+	comprintf("\tjnf_MULS(dst, src);\n");
 	genflags (flag_logical, sz_long, "dst", "", "");
 	genastore ("dst", curi->dmode, "dstreg", sz_long, "dst");
 	break;
