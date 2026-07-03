@@ -1498,8 +1498,33 @@ void m68k_reset (void)
 #endif
 }
 
+static bool b2_test_retdump_enabled(void)
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *env = getenv("B2_TEST_RETDUMP");
+		cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+	}
+	return cached != 0;
+}
+
 void m68k_emulop_return(void)
 {
+	if (b2_test_retdump_enabled()) {
+		MakeSR();
+		fprintf(stderr,
+			"RETDUMP: D0=%08x D1=%08x D2=%08x D3=%08x D4=%08x D5=%08x D6=%08x D7=%08x "
+			"A0=%08x A1=%08x A2=%08x A3=%08x A4=%08x A5=%08x A6=%08x SR=%04x NZCV=%08x X=%08x\n",
+			(unsigned)m68k_dreg(regs, 0), (unsigned)m68k_dreg(regs, 1),
+			(unsigned)m68k_dreg(regs, 2), (unsigned)m68k_dreg(regs, 3),
+			(unsigned)m68k_dreg(regs, 4), (unsigned)m68k_dreg(regs, 5),
+			(unsigned)m68k_dreg(regs, 6), (unsigned)m68k_dreg(regs, 7),
+			(unsigned)m68k_areg(regs, 0), (unsigned)m68k_areg(regs, 1),
+			(unsigned)m68k_areg(regs, 2), (unsigned)m68k_areg(regs, 3),
+			(unsigned)m68k_areg(regs, 4), (unsigned)m68k_areg(regs, 5),
+			(unsigned)m68k_areg(regs, 6), (unsigned)regs.sr,
+			(unsigned)regflags.nzcv, (unsigned)regflags.x);
+	}
 	SPCFLAGS_SET( SPCFLAG_BRK );
 	quit_program = 1;
 }
