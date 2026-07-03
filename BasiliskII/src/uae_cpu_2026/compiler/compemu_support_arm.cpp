@@ -6665,7 +6665,14 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     }
                 }
                 const int retired_cycles = scaled_cycles((i + 1) * 4 * CYCLE_UNIT);
-                if (!needed_flags && currprefs.compnf) {
+                /* The no-flags table is only safe for instructions that do not
+                   architecturally set CCR/X.  A flag-setting op whose flags are
+                   not consumed later in the same traced block still has to leave
+                   correct architectural flags at the block boundary for the next
+                   dispatch/successor block.  Using nfcompfunctbl for CLR/TST/MOVE/
+                   arithmetic etc. drops that result-derived CCR state and caused
+                   the video-init 0401b70e CLR.W -> block-exit mismatch. */
+                if (!needed_flags && currprefs.compnf && !prop[cft_map(opcode)].set_flags) {
 #ifdef NOFLAGS_SUPPORT_GENCOMP
                     cputbl = nfcpufunctbl;
 #else

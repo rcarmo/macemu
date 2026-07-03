@@ -1745,8 +1745,12 @@ gen_opcode (unsigned int opcode)
 	start_brace();
 	comprintf("\tint dst=scratchie++;\n");
 	comprintf("\tmov_l_ri(dst,0);\n");
-	genflags (flag_logical, curi->size, "dst", "", "");
+	/* ARM64 store helpers/addressing may clobber host NZCV. CLR's CCR result
+	   is independent of the destination, so store first and materialise flags
+	   last; otherwise CLR.W/L/B memory forms can leave stale store-clobbered
+	   native flags live into a following Bcc. */
 	genastore ("dst", curi->smode, "srcreg", curi->size, "src");
+	genflags (flag_logical, curi->size, "dst", "", "");
 	break;
 
      case i_NOT:
