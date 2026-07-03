@@ -371,7 +371,7 @@ static bool run_opcode_test_mode_glue()
 		MakeSR();
 		fprintf(stderr,
 			"REGDUMP: D0=%08x D1=%08x D2=%08x D3=%08x D4=%08x D5=%08x D6=%08x D7=%08x "
-			"A0=%08x A1=%08x A2=%08x A3=%08x A4=%08x A5=%08x A6=%08x SR=%04x\n",
+			"A0=%08x A1=%08x A2=%08x A3=%08x A4=%08x A5=%08x A6=%08x A7=%08x SR=%04x\n",
 			(unsigned)m68k_dreg(regs, 0), (unsigned)m68k_dreg(regs, 1),
 			(unsigned)m68k_dreg(regs, 2), (unsigned)m68k_dreg(regs, 3),
 			(unsigned)m68k_dreg(regs, 4), (unsigned)m68k_dreg(regs, 5),
@@ -379,7 +379,7 @@ static bool run_opcode_test_mode_glue()
 			(unsigned)m68k_areg(regs, 0), (unsigned)m68k_areg(regs, 1),
 			(unsigned)m68k_areg(regs, 2), (unsigned)m68k_areg(regs, 3),
 			(unsigned)m68k_areg(regs, 4), (unsigned)m68k_areg(regs, 5),
-			(unsigned)m68k_areg(regs, 6), (unsigned)regs.sr);
+			(unsigned)m68k_areg(regs, 6), (unsigned)m68k_areg(regs, 7), (unsigned)regs.sr);
 		dump_test_mem_ranges_glue();
 	}
 
