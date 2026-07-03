@@ -7060,18 +7060,23 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                             /* Emit side exit for the non-traced branch path.
                                The traced path must skip over the side-exit code;
                                otherwise both outcomes fall through into the
-                               side exit and the branch is effectively forced. */
+                               side exit and the branch is effectively forced.
+
+                               Do not emit raw ARM CC_B_i here: M68K HI/LS are
+                               not identical to ARM HI/LS after our carry
+                               normalisation convention.  Use the same helper
+                               as end-of-block Bcc emission so composite
+                               unsigned conditions (HI/LS) get the required
+                               M68K carry handling. */
                             const int skip_cond = side_cond ^ 1;
-                            uae_u8* patch_skip = (uae_u8*)get_target();
-                            CC_B_i(skip_cond, 0); /* patched below: skip side exit */
+                            compemu_raw_jcc_l_oponly(skip_cond);
+                            uae_u32* patch_skip = (uae_u32*)get_target() - 1;
                             /* Side exit: load PC and endblock */
                             LOAD_U64(REG_PC_TMP, side_exit_pc); /* load into x1 for endblock */
                             compemu_raw_endblock_pc_inreg(REG_PC_TMP,
                                 scaled_cycles((i + 1) * 4 * CYCLE_UNIT));
                             /* Patch skip branch to the traced-path continuation */
-                            int goff = (int)((uae_u8*)get_target() - patch_skip) / 4;
-                            *(uae_u32*)patch_skip = 0x54000000u
-                                | ((goff & 0x7ffff) << 5) | (skip_cond & 0xf);
+                            write_jmp_target(patch_skip, (uintptr)get_target());
                             /* Restore register allocator for traced path */
                             live = saved_live;
                         }
