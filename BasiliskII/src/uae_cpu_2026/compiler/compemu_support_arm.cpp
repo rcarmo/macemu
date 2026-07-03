@@ -3680,9 +3680,70 @@ static int readreg_specific(int r, int spec)
  * - hard (physical, x86 here) register allocated to virtual register r
  */
 extern int g_jvlock_reg; extern int g_jvlock_active;
+static int b2_force_scratch_alias_vreg(void)
+{
+    static int cached = -2;
+    if (cached != -2)
+        return cached;
+    cached = -1;
+    const char *env = getenv("B2_FORCE_SCRATCH_ALIAS_VREG");
+    if (env && *env) {
+        char *end = NULL;
+        long v = strtol(env, &end, 0);
+        if (end != env && v >= 0 && v < 16)
+            cached = (int)v;
+    }
+    return cached;
+}
+
+static int b2_force_scratch_target_vreg(void)
+{
+    static int cached = -2;
+    if (cached != -2)
+        return cached;
+    cached = -1;
+    const char *env = getenv("B2_FORCE_SCRATCH_VREG");
+    if (env && *env) {
+        char *end = NULL;
+        long v = strtol(env, &end, 0);
+        if (end != env && v >= S1)
+            cached = (int)v;
+    }
+    return cached;
+}
+
 static int writereg(int r)
 {
     int answer = -1;
+
+#if defined(CPU_AARCH64)
+    if (r >= S1 && (b2_force_scratch_target_vreg() < 0 || r == b2_force_scratch_target_vreg())) {
+        int pin_vreg = b2_force_scratch_alias_vreg();
+        if (pin_vreg >= 0 && isinreg(pin_vreg)) {
+            int pin_host = live.state[pin_vreg].realreg;
+            if (pin_host >= 0 && pin_host < N_REGS && !live.nat[pin_host].locked) {
+                if (isinreg(r) && live.state[r].realreg != pin_host)
+                    disassociate(r);
+                if (!isinreg(r)) {
+                    live.state[r].realreg = pin_host;
+                    live.state[r].realind = live.nat[pin_host].nholds;
+                    live.nat[pin_host].holds[live.nat[pin_host].nholds++] = r;
+                }
+                live.nat[pin_host].locked++;
+                live.nat[pin_host].touched = touchcnt++;
+                live.state[r].val = 0;
+                set_status(r, DIRTY);
+                fprintf(stderr, "REGPRESSURE_PIN_HIT scratch_vreg=%d pin_vreg=%d host=%d pc=%08x\n",
+                    r, pin_vreg, pin_host, get_virtual_address(comp_pc_p));
+                return pin_host;
+            }
+            fprintf(stderr, "REGPRESSURE_PIN_SKIP scratch_vreg=%d pin_vreg=%d host=%d locked=%d pc=%08x\n",
+                r, pin_vreg, pin_host,
+                (pin_host >= 0 && pin_host < N_REGS) ? live.nat[pin_host].locked : -1,
+                get_virtual_address(comp_pc_p));
+        }
+    }
+#endif
 
     /* If r is stale-associated to the host register currently pinned by
        jit_value_lock (a move's source value held across the destination-EA
@@ -6256,6 +6317,23 @@ static inline unsigned int get_opcode_cft_map(unsigned int f)
 }
 #define DO_GET_OPCODE(a) (get_opcode_cft_map((uae_u16)*(a)))
 
+#if defined(CPU_AARCH64)
+static unsigned long b2_native_entry_count = 0;
+static void b2_test_native_entry(uae_u32 pc)
+{
+    const char *env = getenv("B2_NATIVE_ASSERT_PC");
+    if (!env || !*env)
+        return;
+    char *end = NULL;
+    unsigned long want = strtoul(env, &end, 0);
+    if (end != env && (uae_u32)want == pc) {
+        b2_native_entry_count++;
+        fprintf(stderr, "NATEXEC pc=%08x count=%lu d0=%08x d7=%08x a0=%08x a3=%08x sr=%04x\n",
+            pc, b2_native_entry_count, regs.regs[0], regs.regs[7], regs.regs[8], regs.regs[11], regs.sr);
+    }
+}
+#endif
+
 void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 {
 #if defined(CPU_AARCH64)
@@ -6348,11 +6426,15 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     else
                         bi->count = -2;
                 } else {
-                    /* RAM: use interpreter dispatch initially. Transient code
-                       (memclear) runs once per address and never escalates.
-                       Hot loops run many times and will escalate on the next
-                       count expiry after 10 dispatches. */
-                    if (optlev == 0) {
+                    const char *force_l2_ram = getenv("B2_TEST_FORCE_L2_RAM");
+                    if (force_l2_ram && *force_l2_ram && strcmp(force_l2_ram, "0") != 0) {
+                        optlev = max_optlev;
+                        bi->count = -2;
+                    } else if (optlev == 0) {
+                        /* RAM: use interpreter dispatch initially. Transient code
+                           (memclear) runs once per address and never escalates.
+                           Hot loops run many times and will escalate on the next
+                           count expiry after 10 dispatches. */
                         bi->count = 9;
                     } else if (optlev < max_optlev) {
                         optlev = max_optlev;
@@ -7492,6 +7574,10 @@ endblock_done:
 
         /* This is the non-direct handler */
         bi->handler = bi->handler_to_use = (cpuop_func*)get_target();
+#if defined(CPU_AARCH64)
+        compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff));
+        compemu_raw_call((uintptr)b2_test_native_entry);
+#endif
         compemu_raw_cmp_pc((uintptr)pc_hist[0].location);
         compemu_raw_maybe_cachemiss();
         comp_pc_p = (uae_u8*)pc_hist[0].location;

@@ -1276,6 +1276,22 @@ jit_pctrace_done:
 			}
 			pc_hist[blocklen++].location = (uae_u16 *)regs.pc_p;
 			uae_u32 opcode = GET_OPCODE;
+#if defined(CPU_AARCH64)
+			{
+				static unsigned long interpop_count = 0;
+				const char *env = getenv("B2_INTERPOP_PC");
+				if (env && *env) {
+					char *end = NULL;
+					unsigned long want = strtoul(env, &end, 0);
+					uae_u32 pc_now = m68k_getpc();
+					if (end != env && (uae_u32)want == pc_now) {
+						interpop_count++;
+						fprintf(stderr, "INTERPOP pc=%08x count=%lu op=%04x d0=%08x d7=%08x a0=%08x a3=%08x sr=%04x\n",
+							pc_now, interpop_count, opcode, regs.regs[0], regs.regs[7], regs.regs[8], regs.regs[11], regs.sr);
+					}
+				}
+			}
+#endif
 			(*cpufunctbl[opcode])(opcode);
 			cpu_check_ticks();
 			total_cycles += 4 * CYCLE_UNIT;

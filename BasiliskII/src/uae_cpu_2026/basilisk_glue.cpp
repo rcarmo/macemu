@@ -288,6 +288,56 @@ static bool run_opcode_test_mode_glue()
 #endif
 		m68k_execute();
 
+	const char *two_pass = getenv("B2_TEST_TWO_PASS");
+	if (two_pass && *two_pass && two_pass[0] != '0') {
+		/* Harness mode: first pass traces/compiles, second pass re-enters the
+		   outer JIT dispatcher from a restored input state so native handlers run. */
+		for (int i = 0; i < 8; i++) {
+			m68k_dreg(regs, i) = 0;
+			m68k_areg(regs, i) = 0;
+		}
+		m68k_areg(regs, 7) = stack_addr;
+		regs.usp = regs.isp = regs.msp = stack_addr;
+		regs.sr = 0x2700;
+		if (init && *init) {
+			uint32 init_words[17];
+			size_t init_count = 0;
+			if (!parse_test_hex_longs_glue(init, init_words, lengthof(init_words), &init_count) ||
+				(init_count != 16 && init_count != 17)) {
+				fprintf(stderr, "B2_TEST_INIT parse failed on two-pass reset\n");
+				quit_program = 1;
+				return true;
+			}
+			for (int i = 0; i < 8; i++)
+				m68k_dreg(regs, i) = init_words[i];
+			for (int i = 0; i < 8; i++)
+				m68k_areg(regs, i) = init_words[8 + i];
+			if (init_count == 17)
+				regs.sr = (uint16)(init_words[16] & 0xffff);
+			regs.usp = regs.isp = regs.msp = m68k_areg(regs, 7);
+		}
+		MakeFromSR();
+		regs.stopped = 0;
+		SPCFLAGS_CLEAR(SPCFLAG_STOP | SPCFLAG_BRK | SPCFLAG_DOTRACE | SPCFLAG_TRACE);
+		uaecptr second_addr = test_addr;
+		const char *second_pc_env = getenv("B2_TEST_SECOND_PC");
+		if (second_pc_env && *second_pc_env) {
+			char *end = NULL;
+			unsigned long off = strtoul(second_pc_env, &end, 0);
+			if (end != second_pc_env)
+				second_addr = RAMBaseMac + (uaecptr)off;
+		}
+		m68k_setpc(second_addr);
+		fill_prefetch_0();
+		quit_program = 0;
+#if USE_JIT
+		if (UseJIT)
+			m68k_compile_execute();
+		else
+#endif
+			m68k_execute();
+	}
+
 	if (test_dump_enabled_glue()) {
 		MakeSR();
 		fprintf(stderr,
