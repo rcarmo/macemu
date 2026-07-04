@@ -2371,11 +2371,12 @@ gen_opcode (unsigned int opcode)
 	       M68K spec: DBcc does NOT affect CCR.
 	       Test src.W for zero BEFORE decrementing (terminal when 0),
 	       then decrement the low word without flag side-effects.  On
-	       ARM64, do this in one midfunc instead of allocating scratchie
-	       virtual registers: scratch virtuals can collide with dirty
-	       architectural registers in the legacy allocator and corrupt
-	       their eventual writeback. */
+	       ARM64, also keep the pre-decrement value in nsrc so the runtime
+	       PC_P can be materialized before the block exits; otherwise a
+	       trace-formed block can follow one DBF outcome and reuse it for a
+	       later iteration with the opposite outcome. */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tmov_l_rr(nsrc,src);\n");
 	    comprintf("\tdbf_dec_test_ne_w(src);\n");
 #else
 	    {
@@ -2403,6 +2404,11 @@ gen_opcode (unsigned int opcode)
 	    comprintf("\tv2=get_const(offs);\n"
 		      "\tregister_branch(v1,v2,%d);\n", NATIVE_CC_NE);
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* Runtime PC_P for the native endblock path: branch to offs when
+	       the pre-decrement counter was non-zero; otherwise fall through.
+	       CBZ/MOV does not touch NZCV, so the branch flags remain available
+	       for the legacy branch emitter if this DBF is compiled as a final op. */
+	    comprintf("\tdbcc_cond_move_ne_w(PC_P, offs, nsrc);\n");
 	    /* Prevent flush(1) from saving the TST's hardware NZCV to
 	       regflags.nzcv.  live_flags() from earlier instructions in
 	       this block set flags_on_stack=TRASH; restore it to VALID

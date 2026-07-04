@@ -6952,23 +6952,22 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #endif
 #if defined(CPU_AARCH64)
                     {
-                        /* DBcc (cc>=2) loop back-edge: the per-op codegen already
-                           computed the correct dynamic PC_P (loop target vs
-                           fall-through, honoring the Dn.W decrement and the -1
-                           wrap). Like dynamic returns, the trace recorder only
-                           followed one observed outcome, so if the block is
-                           allowed to trace-follow PAST the DBcc it discards the
-                           loop back-edge and the search compares only the first
-                           list entry (root cause CONT.24). End the native block
-                           here at the runtime PC_P so both the loop and exit
-                           edges are honored. DBF/DBT (cc<2) are intentionally
-                           excluded: cc=1 (DBF/DBRA) is handled by its own
-                           register_branch path and must not change. */
+                        /* DBcc loop back-edge: the per-op codegen computes the
+                           correct dynamic PC_P (loop target vs fall-through,
+                           honoring the Dn.W decrement and the -1 wrap). Like
+                           dynamic returns, the trace recorder only followed one
+                           observed outcome, so if the block is allowed to
+                           trace-follow PAST the DBcc it bakes in that outcome.
+                           End the native block here at the runtime PC_P so both
+                           the loop and exit edges are honored. This includes
+                           cc=1 (DBF/DBRA): gencomp.c materializes runtime PC_P
+                           from the pre-decrement counter for ARM64. DBT/cc=0
+                           remains excluded because it is an elaborate nop. */
                         const uae_u16 dop = (uae_u16)opcode;
                         const uae_u16 dop_sw = (uae_u16)(((dop & 0xff) << 8) | (dop >> 8));
                         const bool is_dbcc_cond =
-                            (((dop & 0xF0F8) == 0x50C8) && (((dop >> 8) & 0xf) >= 2)) ||
-                            (((dop_sw & 0xF0F8) == 0x50C8) && (((dop_sw >> 8) & 0xf) >= 2));
+                            (((dop & 0xF0F8) == 0x50C8) && (((dop >> 8) & 0xf) >= 1)) ||
+                            (((dop_sw & 0xF0F8) == 0x50C8) && (((dop_sw >> 8) & 0xf) >= 1));
                         if (is_dbcc_cond) {
                             live.flags_are_important = 1;
                             flush(1);

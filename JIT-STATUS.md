@@ -174,7 +174,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 **Build:** ✅
 **Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
 **JIT optlev=0:** ✅ Full boot, zero SEGVs
-**JIT optlev=2:** ⚠️ Full-JIT default. The historical `040ba0xx` late-ROM spin is **FIXED (2026-06-22)** — see below. With three fixes (lazy-cache-flush staleness + cache-tag aliasing + dispatcher-diagnostic gating) the all-native boot clears the NuBus/Slot-Manager frontier and the `040026f8` aliasing frontier, and prints video-init markers (`VideoDriverOpen` → `SetEntries` → `SetGamma`). The `0402e8d0` slot-ROM `bfextu` blit freeze is **FIXED (2026-06-23, `8195ebc9`)**: it lived specifically in the **optlev-0 interpreter warm-up** (`exec_nostats`) path — itself an interpreter fallback the goal forbids. `optcount[0]` set `10→0` (translate on first execution, never whole-block-interpret); jit-test `302/302 fail_equiv=0`, boot advances past `0402e8d0` (d5→0). **Fixes (8195ebc9 + 18c78439):** optcount[0]=0 (eliminate optlev-0 interp warm-up; fixes 0402e8d0) and SPCFLAG_JIT_EXEC_RETURN cleared at any nesting depth (fixes the 04087926 nested-flush do_nothing spin). Boot now advances through video init + InitAll + SCSIReset. **Current frontier:** late video/resource state remains wrong; full-JIT still reaches `SetEntries table=04002478 count=1` instead of the interpreter's `SetEntries table=000b8a48 count=255` + `GetVideoParameters`. Desktop not yet reached.
+**JIT optlev=2:** ⚠️ Full-JIT default. The historical `040ba0xx` late-ROM spin is **FIXED (2026-06-22)** — see below. With three fixes (lazy-cache-flush staleness + cache-tag aliasing + dispatcher-diagnostic gating) the all-native boot clears the NuBus/Slot-Manager frontier and the `040026f8` aliasing frontier, and prints video-init markers (`VideoDriverOpen` → `SetEntries` → `SetGamma`). The `0402e8d0` slot-ROM `bfextu` blit freeze is **FIXED (2026-06-23, `8195ebc9`)**: it lived specifically in the **optlev-0 interpreter warm-up** (`exec_nostats`) path — itself an interpreter fallback the goal forbids. `optcount[0]` set `10→0` (translate on first execution, never whole-block-interpret); jit-test `302/302 fail_equiv=0`, boot advances past `0402e8d0` (d5→0). **Fixes (8195ebc9 + 18c78439):** optcount[0]=0 (eliminate optlev-0 interp warm-up; fixes 0402e8d0) and SPCFLAG_JIT_EXEC_RETURN cleared at any nesting depth (fixes the 04087926 nested-flush do_nothing spin). Boot now advances through video init + InitAll + SCSIReset. **Current frontier:** the post-151b1853 bad video/resource wall (`SetEntries table=04002478 count=1`) is fixed by native DBF runtime-PC endblocking (`33164a1c`); default full-JIT reaches the later interpreter-like `SetEntries table=000b8a48 count=255`. Desktop is not yet reached: the new frontier is a later `M68K_SETPC_BAD newpc=10001000` around `04002600/04002636/04002642`.
 **JIT harness:** ✅ 318/318 vectors pass (score=100) on the current AArch64 harness. Note: the harness can spuriously fail (`INFRA missing REGDUMP`) under concurrent shared-box load from timeouts; individual vectors still pass.
 
 #### `040ba0xx` ROOT CAUSE (2026-06-22) — LAZY translation-cache invalidation reused STALE blocks (FIXED)
@@ -203,6 +203,20 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 **301 total vectors, all risky, score=100**
 
 ### Recent bug fixes (2026-07)
+
+- **ARM64 native DBF exits use the runtime PC** (2026-07-04):
+  the remaining post-`151b1853` bad video/resource wall was narrowed to the
+  `04037520`/`0403754c` QuickDraw bitfield-copy loops. Forcing the real block
+  starts `04037520,04037528,04037530,0403754c,04037552` to optlev-0, or using
+  the DBcc barrier, cleared the bad `SetEntries table=04002478 count=1` wall;
+  Scc and BFEXT helper invalidation/splitting did not. Root cause: native DBF
+  (`cc=1`) was allowed to trace-follow one observed loop outcome. ARM64 DBF now
+  materializes `PC_P` from the pre-decrement counter and the DBcc runtime-PC
+  endblock path includes DBF/DBRA, so both loop and exit edges dispatch via the
+  actual runtime PC. Verified: `jit-test/run.sh` passes `318/318`, `fail_equiv=0`,
+  and default L2 reaches the later good `SetEntries table=000b8a48 count=255`.
+  This is still not boot-through; the next frontier is a later `newpc=10001000`
+  bad-PC path around `04002600/04002636/04002642`.
 
 - **ARM64 Bcc mid-block side exits use M68K-aware condition emission** (2026-07-03):
   the block-link verifier and non-perturbing watchpoints pinned a real control divergence in

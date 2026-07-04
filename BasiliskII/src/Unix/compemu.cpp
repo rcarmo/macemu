@@ -27148,11 +27148,13 @@ void REGPARAM2 op_51c8_0_comp_ff(uae_u32 opcode) /* DBcc */
 	add_l_ri(PC_P,m68k_pc_offset);
 	m68k_pc_offset=0;
 {	int nsrc=scratchie++;
+	mov_l_rr(nsrc,src);
 	dbf_dec_test_ne_w(src);
 {	uintptr v2,v;
 	uintptr v1=get_const(PC_P);
 	v2=get_const(offs);
 	register_branch(v1,v2,5);
+	dbcc_cond_move_ne_w(PC_P, offs, nsrc);
 	discard_flags_in_nzcv();
 	if(srcreg != src)
 		mov_w_rr(srcreg, src);
@@ -73523,11 +73525,13 @@ void REGPARAM2 op_51c8_0_comp_nf(uae_u32 opcode) /* DBcc */
 	add_l_ri(PC_P,m68k_pc_offset);
 	m68k_pc_offset=0;
 {	int nsrc=scratchie++;
+	mov_l_rr(nsrc,src);
 	dbf_dec_test_ne_w(src);
 {	uintptr v2,v;
 	uintptr v1=get_const(PC_P);
 	v2=get_const(offs);
 	register_branch(v1,v2,5);
+	dbcc_cond_move_ne_w(PC_P, offs, nsrc);
 	discard_flags_in_nzcv();
 	if(srcreg != src)
 		mov_w_rr(srcreg, src);
