@@ -120,6 +120,62 @@ static bool ppc_jit_hist_enabled(void)
 	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
 }
 
+static bool ppc_jit_failprobe_enabled(void)
+{
+	static const char *env = getenv("SS_JIT_FAILPROBE");
+	return env && env[0] && !(env[0] == '0' && env[1] == '\0');
+}
+
+static bool ppc_jit_failprobe_pc_match(uint32 pc)
+{
+	/* Default target: the 2026-06-24 interpreted desktop hot clusters. */
+	return pc == 0x18466080 || pc == 0x18466084 ||
+	       (pc >= 0x18467d00 && pc <= 0x18467fff);
+}
+
+static uint32 ppc_jit_failprobe_pending_start = 0;
+static uint32 ppc_jit_failprobe_pending_fail_pc = 0;
+static uint32 ppc_jit_failprobe_pending_fail_opcode = 0;
+static uint64 ppc_jit_failprobe_reports = 0;
+
+static void ppc_jit_failprobe_note(uint32 block_start, uint32 fail_pc, const char *why)
+{
+	if (!ppc_jit_failprobe_enabled()) return;
+	if (!ppc_jit_failprobe_pc_match(block_start) && !ppc_jit_failprobe_pc_match(fail_pc)) return;
+	if (ppc_jit_failprobe_reports >= 256) return;
+	uint32 fail_opcode = vm_read_memory_4(fail_pc);
+	ppc_jit_failprobe_pending_start = block_start;
+	ppc_jit_failprobe_pending_fail_pc = fail_pc;
+	ppc_jit_failprobe_pending_fail_opcode = fail_opcode;
+	fprintf(stderr,
+		"PPC-JIT-A64-FAILPROBE: %s block_start=0x%08x fail_pc=0x%08x "
+		"fail_opcode=0x%08x opc=%u xo31=%u\n",
+		why, block_start, fail_pc, fail_opcode, fail_opcode >> 26,
+		((fail_opcode >> 26) == 31) ? ((fail_opcode >> 1) & 0x3ff) : 0);
+	ppc_jit_failprobe_reports++;
+}
+
+static void ppc_jit_failprobe_exec_entry(uint32 entry_pc, uint32 first_opcode, uint32 insns)
+{
+	if (!ppc_jit_failprobe_enabled()) return;
+	bool pending = ppc_jit_failprobe_pending_fail_pc == entry_pc;
+	if (!pending && !ppc_jit_failprobe_pc_match(entry_pc)) return;
+	if (ppc_jit_failprobe_reports >= 256) return;
+	fprintf(stderr,
+		"PPC-JIT-A64-FAILPROBE: exec_entry=0x%08x first_opcode=0x%08x "
+		"insns=%u prev_block_start=0x%08x prev_fail_pc=0x%08x prev_fail_opcode=0x%08x\n",
+		entry_pc, first_opcode, insns,
+		pending ? ppc_jit_failprobe_pending_start : 0,
+		pending ? ppc_jit_failprobe_pending_fail_pc : 0,
+		pending ? ppc_jit_failprobe_pending_fail_opcode : 0);
+	if (pending) {
+		ppc_jit_failprobe_pending_start = 0;
+		ppc_jit_failprobe_pending_fail_pc = 0;
+		ppc_jit_failprobe_pending_fail_opcode = 0;
+	}
+	ppc_jit_failprobe_reports++;
+}
+
 struct ppc_jit_exec_hist_entry {
 	uint32 pc;
 	uint32 opcode;
@@ -1110,8 +1166,10 @@ void powerpc_cpu::execute(uint32 entry)
 				bool jit_compiled = jit_region_ok && ppc_jit_aarch64_compile(jit_skip_pc, jit_region_base, jit_region_guest_base, jit_region_size, &jblk);
 				if (!jit_region_ok)
 					jit_skip_reason = PPC_JIT_SKIP_REGION;
-				else if (!jit_compiled)
+				else if (!jit_compiled) {
 					jit_skip_reason = PPC_JIT_SKIP_COMPILE_FALSE;
+					ppc_jit_failprobe_note(jit_skip_pc, jit_skip_pc, "compile_false");
+				}
 				/* GATE 2 removed: partial native blocks are safe. The direct compiler
 				 * emits an epilogue that stores the first uncompiled PPC PC before
 				 * returning, so executing a supported prefix is more faithful than
@@ -1131,6 +1189,8 @@ void powerpc_cpu::execute(uint32 entry)
 					}
 					if (jblk.n_insns > 0) ppc_jit_native_hist_record(jblk.ppc_start_pc, vm_read_memory_4(jblk.ppc_start_pc), (uint32)jblk.n_insns);
 					fn((void*)regs_ptr());
+					if (!jblk.complete)
+						ppc_jit_failprobe_note(jblk.ppc_start_pc, pc(), "partial_return");
 				  pdi_jit_post:
 					/* GATE 3: PC range check.
 					 * If the JIT produced an out-of-range PC, the block branched to
@@ -1244,6 +1304,8 @@ void powerpc_cpu::execute(uint32 entry)
 						}
 						if (jblk.n_insns > 0) ppc_jit_native_hist_record(jblk.ppc_start_pc, vm_read_memory_4(jblk.ppc_start_pc), (uint32)jblk.n_insns);
 						fn((void*)regs_ptr());
+						if (!jblk.complete)
+							ppc_jit_failprobe_note(jblk.ppc_start_pc, pc(), "partial_return_fast");
 						goto pdi_jit_post;
 					}
 					bi = my_block_cache.find(pc());
@@ -1261,8 +1323,10 @@ void powerpc_cpu::execute(uint32 entry)
 					ppc_jit_ratio_exec_normal_insns += (uint64)bi->size;
 					ppc_jit_ratio_report(false);
 				}
-				if (bi->di && bi->size > 0)
+				if (bi->di && bi->size > 0) {
+					ppc_jit_failprobe_exec_entry(bi->pc, bi->di[0].opcode, (uint32)bi->size);
 					ppc_jit_hist_record_exec_normal(bi->pc, bi->di[0].opcode, (uint32)bi->size);
+				}
 				const int r = bi->size % 4;
 				di = bi->di + r;
 				int n = (bi->size + 3) / 4;
@@ -1322,6 +1386,7 @@ void powerpc_cpu::execute(uint32 entry)
 			ppc_jit_ratio_exec_normal_insns++;
 			ppc_jit_ratio_report(false);
 		}
+		ppc_jit_failprobe_exec_entry(pc(), opcode, 1);
 		ppc_jit_hist_record_exec_normal(pc(), opcode, 1);
 		ii->execute(this, opcode);
 #if PPC_EXECUTE_DUMP_STATE
