@@ -318,3 +318,4 @@ oracle_zf_bne_z1_take
 oracle_zf_bne_z0_notake
 oracle_zf_mem_take
 oracle_zf_mem_notake
+oracle_zf_dbf_preserve_take
