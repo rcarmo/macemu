@@ -6964,10 +6964,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                            from the pre-decrement counter for ARM64. DBT/cc=0
                            remains excluded because it is an elaborate nop. */
                         const uae_u16 dop = (uae_u16)opcode;
-                        const uae_u16 dop_sw = (uae_u16)(((dop & 0xff) << 8) | (dop >> 8));
                         const bool is_dbcc_cond =
-                            (((dop & 0xF0F8) == 0x50C8) && (((dop >> 8) & 0xf) >= 1)) ||
-                            (((dop_sw & 0xF0F8) == 0x50C8) && (((dop_sw >> 8) & 0xf) >= 1));
+                            (((dop & 0xF0F8) == 0x50C8) && (((dop >> 8) & 0xf) >= 1));
                         if (is_dbcc_cond) {
                             live.flags_are_important = 1;
                             flush(1);
