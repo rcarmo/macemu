@@ -19,6 +19,7 @@ ror_word
 rol_word
 shift_chain
 movem_predec_postinc
+movem_no_writeback
 movem_predec_mixed_order
 movem
 dbra_start_minus1_branch

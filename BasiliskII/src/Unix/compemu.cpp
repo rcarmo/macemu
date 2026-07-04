@@ -24151,11 +24151,13 @@ void REGPARAM2 op_4c90_0_comp_ff(uae_u32 opcode) /* MVMEL */
 {	int srca = dodgy ? scratchie++ : dstreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, dstreg + 8);
+	int movem_srca=scratchie++;
+	mov_l_rr(movem_srca,srca);
 	for (i=0;i<16;i++) {
 		if ((mask>>i)&1) {
-			readword(srca,i,scratchie);
+			readword(movem_srca,i,scratchie);
 			sign_extend_16_rr(i,i);
-			add_l_ri(srca,2);
+			add_l_ri(movem_srca,2);
 			offset+=2;
 		}
 	}}}
@@ -24373,10 +24375,12 @@ void REGPARAM2 op_4cd0_0_comp_ff(uae_u32 opcode) /* MVMEL */
 {	int srca = dodgy ? scratchie++ : dstreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, dstreg + 8);
+	int movem_srca=scratchie++;
+	mov_l_rr(movem_srca,srca);
 	for (i=0;i<16;i++) {
 		if ((mask>>i)&1) {
-			readlong(srca,i,scratchie);
-			add_l_ri(srca,4);
+			readlong(movem_srca,i,scratchie);
+			add_l_ri(movem_srca,4);
 			offset+=4;
 		}
 	}}}
@@ -70768,11 +70772,13 @@ void REGPARAM2 op_4c90_0_comp_nf(uae_u32 opcode) /* MVMEL */
 {	int srca = dodgy ? scratchie++ : dstreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, dstreg + 8);
+	int movem_srca=scratchie++;
+	mov_l_rr(movem_srca,srca);
 	for (i=0;i<16;i++) {
 		if ((mask>>i)&1) {
-			readword(srca,i,scratchie);
+			readword(movem_srca,i,scratchie);
 			sign_extend_16_rr(i,i);
-			add_l_ri(srca,2);
+			add_l_ri(movem_srca,2);
 			offset+=2;
 		}
 	}}}
@@ -70990,10 +70996,12 @@ void REGPARAM2 op_4cd0_0_comp_nf(uae_u32 opcode) /* MVMEL */
 {	int srca = dodgy ? scratchie++ : dstreg + 8;
 	if (dodgy)
 		mov_l_rr(srca, dstreg + 8);
+	int movem_srca=scratchie++;
+	mov_l_rr(movem_srca,srca);
 	for (i=0;i<16;i++) {
 		if ((mask>>i)&1) {
-			readlong(srca,i,scratchie);
-			add_l_ri(srca,4);
+			readlong(movem_srca,i,scratchie);
+			add_l_ri(movem_srca,4);
 			offset+=4;
 		}
 	}}}
