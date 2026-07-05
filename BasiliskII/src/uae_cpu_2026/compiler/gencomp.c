@@ -779,21 +779,21 @@ static void genmov16(uae_u32 opcode, struct instr *curi)
 	comprintf("\t} else\n");
 #endif
 	start_brace();
-	comprintf("\tint tmp=scratchie;\n");
-	comprintf("\tscratchie+=4;\n"
-		"\tget_n_addr(src,src,scratchie);\n"
+	comprintf("\tint tmp=scratchie++;\n");
+	comprintf("\tget_n_addr(src,src,scratchie);\n"
 		"\tget_n_addr(dst,dst,scratchie);\n"
-		"\tmov_l_rR(tmp+0,src,0);\n"
-		"\tmov_l_rR(tmp+1,src,4);\n"
-		"\tmov_l_rR(tmp+2,src,8);\n"
-		"\tmov_l_rR(tmp+3,src,12);\n"
-		"\tmov_l_Rr(dst,tmp+0,0);\n"
-		"\tforget_about(tmp+0);\n"
-		"\tmov_l_Rr(dst,tmp+1,4);\n"
-		"\tforget_about(tmp+1);\n"
-		"\tmov_l_Rr(dst,tmp+2,8);\n"
-		"\tforget_about(tmp+2);\n"
-		"\tmov_l_Rr(dst,tmp+3,12);\n");
+		"\tmov_l_rR(tmp,src,0);\n"
+		"\tmov_l_Rr(dst,tmp,0);\n"
+		"\tforget_about(tmp);\n"
+		"\tmov_l_rR(tmp,src,4);\n"
+		"\tmov_l_Rr(dst,tmp,4);\n"
+		"\tforget_about(tmp);\n"
+		"\tmov_l_rR(tmp,src,8);\n"
+		"\tmov_l_Rr(dst,tmp,8);\n"
+		"\tforget_about(tmp);\n"
+		"\tmov_l_rR(tmp,src,12);\n"
+		"\tmov_l_Rr(dst,tmp,12);\n"
+		"\tforget_about(tmp);\n");
 	close_brace();
 }
 
