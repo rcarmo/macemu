@@ -1782,37 +1782,69 @@ gen_opcode (unsigned int opcode)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace();
-	comprintf("\tint s=scratchie++;\n"
-		  "\tint tmp=scratchie++;\n"
-		  "\tmov_l_rr(s,src);\n");
-	if (curi->size == sz_byte)
-	    comprintf("\tand_l_ri(s,7);\n");
-	else
-	    comprintf("\tand_l_ri(s,31);\n");
-
 	{
-	    const char* op;
+	    const char* armop;
+	    const char* x86op;
 	    int need_write=1;
 
 	    switch(curi->mnemo) {
-	     case i_BCHG: op="btc"; break;
-	     case i_BCLR: op="btr"; break;
-	     case i_BSET: op="bts"; break;
-	     case i_BTST: op="bt"; need_write=0; break;
-	    default: op=""; assert(0);
+	     case i_BCHG: armop="BCHG"; x86op="btc"; break;
+	     case i_BCLR: armop="BCLR"; x86op="btr"; break;
+	     case i_BSET: armop="BSET"; x86op="bts"; break;
+	     case i_BTST: armop="BTST"; x86op="bt"; need_write=0; break;
+	    default: armop=""; x86op=""; assert(0);
 	    }
-	    comprintf("\t%s_l_rr(dst,s);\n"  /* Answer now in C */
-				  "\tsbb_l(s,s);\n" /* s is 0 if bit was 0, -1 otherwise */
-				  "\tmake_flags_live();\n" /* Get the flags back */
-				  "\tdont_care_flags();\n",op);
+
+	    /* The legacy x86-style bit-op lowering below uses BT/BTR/BTS/BTC to
+	       put the tested bit into host C, then SBB reg,reg and set_zero() to
+	       materialize m68k Z.  On ARM64 this is unsafe in multi-op blocks: the
+	       SBB path leaves host N/C from the temporary arithmetic live, so a
+	       following Bcc can see stale NZCV (measured at 04084478: SUB.L; BCLR;
+	       BEQ copied one extra 0x20-byte heap chunk).  Use the native ARM64
+	       bit-op midfuncs instead; their jff forms set m68k Z directly from the
+	       original tested bit and then perform the data mutation. */
+	    comprintf("\n#if defined(CPU_AARCH64)\n");
+	    if (curi->mnemo == i_BTST) {
 		if (!noflags) {
-		  comprintf("\tstart_needflags();\n"
-					"\tset_zero(s,tmp);\n"
-					"\tlive_flags();\n"
-					"\tend_needflags();\n");
+		    comprintf("\tmake_flags_live();\n"
+			      "\tstart_needflags();\n"
+			      "\tjff_BTST_%c(dst, src);\n"
+			      "\tlive_flags();\n"
+			      "\tend_needflags();\n", curi->size == sz_byte ? 'b' : 'l');
 		}
+	    } else {
+		if (!noflags) {
+		    comprintf("\tmake_flags_live();\n"
+			      "\tstart_needflags();\n"
+			      "\tjff_%s_%c(dst, src);\n"
+			      "\tlive_flags();\n"
+			      "\tend_needflags();\n", armop, curi->size == sz_byte ? 'b' : 'l');
+		} else {
+		    comprintf("\tjnf_%s_%c(dst, src);\n", armop, curi->size == sz_byte ? 'b' : 'l');
+		}
+		genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");
+	    }
+	    comprintf("#else\n");
+	    comprintf("\tint s=scratchie++;\n"
+		      "\tint tmp=scratchie++;\n"
+		      "\tmov_l_rr(s,src);\n");
+	    if (curi->size == sz_byte)
+		comprintf("\tand_l_ri(s,7);\n");
+	    else
+		comprintf("\tand_l_ri(s,31);\n");
+	    comprintf("\t%s_l_rr(dst,s);\n"  /* Answer now in C */
+			  "\tsbb_l(s,s);\n" /* s is 0 if bit was 0, -1 otherwise */
+			  "\tmake_flags_live();\n" /* Get the flags back */
+			  "\tdont_care_flags();\n", x86op);
+	    if (!noflags) {
+		comprintf("\tstart_needflags();\n"
+			  "\tset_zero(s,tmp);\n"
+			  "\tlive_flags();\n"
+			  "\tend_needflags();\n");
+	    }
 	    if (need_write)
 		genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");
+	    comprintf("#endif\n");
 	}
 	break;
 
