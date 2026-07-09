@@ -2674,29 +2674,42 @@ static inline void adjust_jmpdep(dependency* d, cpuop_func* a)
  * Soft flush handling support functions                            *
  ********************************************************************/
 
-static inline void set_dhtu(blockinfo* bi, cpuop_func* dh)
+static inline void set_dhtu_policy(blockinfo* bi, cpuop_func* dh, bool honor_prefer_direct)
 {
     jit_log2("bi is %p", bi);
-    if (dh != bi->direct_handler_to_use) {
-        dependency* x = bi->deplist;
-        jit_log2("bi->deplist=%p", bi->deplist);
-        while (x) {
-            jit_log2("x is %p", x);
-            jit_log2("x->next is %p", x->next);
-            jit_log2("x->prev_p is %p", x->prev_p);
+    dependency* x = bi->deplist;
+    jit_log2("bi->deplist=%p", bi->deplist);
+    while (x) {
+        jit_log2("x is %p", x);
+        jit_log2("x->next is %p", x->next);
+        jit_log2("x->prev_p is %p", x->prev_p);
 
-            if (x->jmp_off) {
-                cpuop_func *dep_handler = (x->prefer_direct && bi->direct_handler) ? bi->direct_handler : dh;
-                if (x->prefer_direct && bi->direct_handler)
-                    jit_trace_stable_direct_event("REPATCH_DIRECT", x->source, jit_dependency_edge_slot(x), (uintptr)bi->pc_p, bi, dep_handler);
-                else if (x->prefer_direct)
-                    jit_trace_stable_direct_event("REPATCH_FALLBACK", x->source, jit_dependency_edge_slot(x), (uintptr)bi->pc_p, bi, dep_handler);
-                adjust_jmpdep(x, dep_handler);
-            }
-            x = x->next;
+        if (x->jmp_off) {
+            cpuop_func *dep_handler =
+                (honor_prefer_direct && x->prefer_direct && bi->direct_handler)
+                    ? bi->direct_handler : dh;
+            if (honor_prefer_direct && x->prefer_direct && bi->direct_handler)
+                jit_trace_stable_direct_event("REPATCH_DIRECT", x->source, jit_dependency_edge_slot(x), (uintptr)bi->pc_p, bi, dep_handler);
+            else if (x->prefer_direct)
+                jit_trace_stable_direct_event("REPATCH_FALLBACK", x->source, jit_dependency_edge_slot(x), (uintptr)bi->pc_p, bi, dep_handler);
+            adjust_jmpdep(x, dep_handler);
         }
-        bi->direct_handler_to_use = (cpuop_func*)dh;
+        x = x->next;
     }
+    bi->direct_handler_to_use = (cpuop_func*)dh;
+}
+
+static inline void set_dhtu(blockinfo* bi, cpuop_func* dh)
+{
+    set_dhtu_policy(bi, dh, true);
+}
+
+static inline void set_dhtu_validated(blockinfo* bi, cpuop_func* dh)
+{
+    /* Validation transitions must override stable direct-edge preference.
+       Keep direct_handler intact for reactivation after a successful check,
+       but route every existing inbound branch through dh in the meantime. */
+    set_dhtu_policy(bi, dh, false);
 }
 
 void invalidate_block(blockinfo* bi)
@@ -6318,7 +6331,7 @@ static inline void flush_icache_lazy(int v)
             if (bi == cache_tags[cl + 1].bi)
                 cache_tags[cl].handler = (cpuop_func*)popall_check_checksum;
             bi->handler_to_use = (cpuop_func*)popall_check_checksum;
-            set_dhtu(bi, bi->direct_pcc);
+            set_dhtu_validated(bi, bi->direct_pcc);
             bi->status = BI_NEED_CHECK;
         }
         bi2 = bi;

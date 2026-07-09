@@ -225,6 +225,26 @@ if (freeScratchBody.includes("live.nat[i].locked = 0")) {
   fail("scratch lock ownership: silent lock clearing remains");
 }
 
+const dhtuValidatedStart = allocatorSource.indexOf("static inline void set_dhtu_validated");
+const dhtuValidatedEnd = allocatorSource.indexOf("void invalidate_block", dhtuValidatedStart);
+if (dhtuValidatedStart < 0 || dhtuValidatedEnd < 0) fail("missing validated dependency repatcher");
+const dhtuValidatedBody = allocatorSource.slice(dhtuValidatedStart, dhtuValidatedEnd);
+requireText(
+  dhtuValidatedBody,
+  "set_dhtu_policy(bi, dh, false)",
+  "validated dependency repatching",
+);
+
+const lazyFlushStart = allocatorSource.indexOf("static inline void flush_icache_lazy");
+const lazyFlushEnd = allocatorSource.indexOf("int failure;", lazyFlushStart);
+if (lazyFlushStart < 0 || lazyFlushEnd < 0) fail("missing flush_icache_lazy");
+const lazyFlushBody = allocatorSource.slice(lazyFlushStart, lazyFlushEnd);
+requireText(
+  lazyFlushBody,
+  "set_dhtu_validated(bi, bi->direct_pcc)",
+  "lazy-flush direct-edge validation",
+);
+
 const invalidateStart = allocatorSource.indexOf("void invalidate_block(blockinfo* bi)");
 const invalidateEnd = allocatorSource.indexOf("static inline void create_jmpdep", invalidateStart);
 if (invalidateStart < 0 || invalidateEnd < 0) fail("missing invalidate_block");
@@ -320,6 +340,7 @@ console.log("METRIC structural_scratch_spill_cardinality=1");
 console.log("METRIC structural_scratch_spill_width=1");
 console.log("METRIC structural_scratch_ownership=1");
 console.log("METRIC structural_recompile_dependency_invalidation=1");
+console.log("METRIC structural_lazy_flush_direct_validation=1");
 console.log("METRIC structural_invalidated_edge_profile_reset=1");
 console.log("METRIC structural_reserved_blockinfo_reclamation=1");
 console.log("METRIC structural_cache_exhaustion_blockinfo_lifetime=1");
