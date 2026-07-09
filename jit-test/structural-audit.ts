@@ -262,6 +262,23 @@ requireBefore(
   "reserved blockinfo reclamation",
 );
 
+const finalizationStart = allocatorSource.lastIndexOf("bi->nexthandler = current_compile_p");
+const finalizationEnd = allocatorSource.indexOf("jit_end_write_window();", finalizationStart);
+if (finalizationStart < 0 || finalizationEnd < 0) fail("missing compile_block finalization");
+const finalizationBody = allocatorSource.slice(finalizationStart, finalizationEnd);
+requireBefore(
+  finalizationBody,
+  "bi->status = BI_ACTIVE",
+  "flush_icache_hard(3)",
+  "cache-exhaustion blockinfo lifetime",
+);
+requireBefore(
+  finalizationBody,
+  "if (redo_current_block)",
+  "flush_icache_hard(3)",
+  "cache-exhaustion blockinfo lifetime",
+);
+
 const blockBuilderPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
   import.meta.url,
@@ -294,5 +311,6 @@ console.log("METRIC structural_scratch_ownership=1");
 console.log("METRIC structural_recompile_dependency_invalidation=1");
 console.log("METRIC structural_invalidated_edge_profile_reset=1");
 console.log("METRIC structural_reserved_blockinfo_reclamation=1");
+console.log("METRIC structural_cache_exhaustion_blockinfo_lifetime=1");
 console.log("METRIC structural_endblock_successor_pc=1");
 console.log("METRIC structural_basic_block_control_boundary=1");

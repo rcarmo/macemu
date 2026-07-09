@@ -7646,13 +7646,6 @@ endblock_done:
         raise_in_cl_list(bi);
         bi->nexthandler = current_compile_p;
 
-        /* Code cache exhausted: reclaim the buffer.  A lazy flush only moves
-           block metadata to checksum mode and deliberately does not reset
-           current_compile_p, so using it here lets the compiler write past the
-           high ARM64 mmap and turns cache exhaustion into SEGV_SKIP noise. */
-        if (current_compile_p >= MAX_COMPILE_PTR)
-            flush_icache_hard(3);
-
         bi->status = BI_ACTIVE;
 #if defined(CPU_AARCH64)
         /* RAM blocks compiled from zeroed source: keep as BI_NEED_CHECK.
@@ -7685,6 +7678,13 @@ endblock_done:
 #ifdef USE_CPU_EMUL_SERVICES
         cpu_do_check_ticks();
 #endif
+        /* Reclaim only after the final use of bi.  flush_icache_hard() frees
+           every active/dormant blockinfo, including the block just linked
+           above; flushing before status/finalization updates was a use-after-
+           free at the code-cache boundary.  A hard flush is required here
+           because a lazy flush deliberately does not rewind current_compile_p. */
+        if (current_compile_p >= MAX_COMPILE_PTR)
+            flush_icache_hard(3);
 		jit_end_write_window();
     }
 }
