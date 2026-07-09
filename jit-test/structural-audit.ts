@@ -76,6 +76,8 @@ for (const preserved of [
   "MSR_FPCR_x(R18_INDEX)",
   "MSR_NZCV_x(R18_INDEX)",
   "LDP_xxXi(r, r + 1, RSP_INDEX, r * 8)",
+  "compemu_raw_call_observer_i",
+  "compemu_raw_call_observer_ii",
 ]) {
   requireText(observerBody, preserved, "diagnostic observer preservation");
 }
@@ -175,6 +177,20 @@ const allocatorPath = new URL(
   import.meta.url,
 );
 const allocatorSource = await Bun.file(allocatorPath).text();
+for (const observer of [
+  "trace_emuneigh_entry",
+  "jit_trace_pc_hit",
+  "jit_verify_pre",
+  "jit_verify_post",
+  "jit_flush_delta_compare",
+  "jit_trace_add",
+  "trace_emulop_resume",
+  "b2_test_native_entry",
+]) {
+  if (allocatorSource.includes(`compemu_raw_call((uintptr)${observer})`)) {
+    fail(`diagnostic observer preservation: raw call remains for ${observer}`);
+  }
+}
 const registersPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/registers.h",
   import.meta.url,

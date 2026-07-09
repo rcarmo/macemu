@@ -292,6 +292,23 @@ STATIC_INLINE void compemu_raw_trace_setpc_const(uintptr value, uae_u32 kind)
 	compemu_raw_observer_restore();
 }
 
+STATIC_INLINE void compemu_raw_call_observer_i(uintptr target, uintptr arg1)
+{
+	compemu_raw_observer_save();
+	LOAD_U64(REG_PAR1, arg1);
+	compemu_raw_call(target);
+	compemu_raw_observer_restore();
+}
+
+STATIC_INLINE void compemu_raw_call_observer_ii(uintptr target, uintptr arg1, uintptr arg2)
+{
+	compemu_raw_observer_save();
+	LOAD_U64(REG_PAR1, arg1);
+	LOAD_U64(REG_PAR2, arg2);
+	compemu_raw_call(target);
+	compemu_raw_observer_restore();
+}
+
 LOWFUNC(WRITE,READ,1,compemu_raw_cmp_pc,(IMPTR s))
 {
 	/* s is always >= NATMEM_OFFSET and < NATMEM_OFFSET + max. Amiga mem */

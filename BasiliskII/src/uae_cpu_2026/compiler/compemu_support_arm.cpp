@@ -6651,9 +6651,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 
             if (trace_emuneigh_env() && trace_emuneigh_target(block_m68k_pc) && trace_emuneigh_count < trace_emuneigh_limit()) {
                 uae_u16 first_op = DO_GET_OPCODE(pc_hist[0].location);
-                compemu_raw_mov_l_ri(REG_PAR1, block_m68k_pc);
-                compemu_raw_mov_l_ri(REG_PAR2, first_op);
-                compemu_raw_call((uintptr)trace_emuneigh_entry);
+                compemu_raw_call_observer_ii((uintptr)trace_emuneigh_entry, block_m68k_pc, first_op);
             }
 
             if (block_m68k_pc == 0x0401be88) {
@@ -6815,15 +6813,12 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     if (_verify_this_op || _trace_this_op) {
                         flush(1);
                         if (_trace_this_op) {
-                            compemu_raw_mov_l_ri(REG_PAR1, op_m68k_pc);
-                            compemu_raw_mov_l_ri(REG_PAR2, (1u << 16) | (opcode & 0xffff));
-                            compemu_raw_call((uintptr)jit_trace_pc_hit);
+                            compemu_raw_call_observer_ii((uintptr)jit_trace_pc_hit,
+                                op_m68k_pc, (1u << 16) | (opcode & 0xffff));
                         }
                         if (_verify_this_op) {
                             compemu_raw_set_pc_i((uintptr)pc_hist[i].location);
-                            compemu_raw_mov_l_ri(REG_PAR1, op_m68k_pc);
-                            compemu_raw_mov_l_ri(REG_PAR2, opcode);
-                            compemu_raw_call((uintptr)jit_verify_pre);
+                            compemu_raw_call_observer_ii((uintptr)jit_verify_pre, op_m68k_pc, opcode);
                         }
                         comp_pc_p = (uae_u8*)pc_hist[i].location;
                         init_comp();
@@ -6849,12 +6844,10 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         uae_u32 pc_val = (uae_u32)((uintptr)pc_hist[i].location - (uintptr)ROMBaseHost + ROMBaseMac);
                         /* Save all caller-saved regs around the trace/verify call */
                         flush(1);
-                        compemu_raw_mov_l_ri(REG_PAR1, pc_val);
-                        compemu_raw_mov_l_ri(REG_PAR2, opcode);
                         if (_verify_this_op)
-                            compemu_raw_call((uintptr)jit_verify_post);
+                            compemu_raw_call_observer_ii((uintptr)jit_verify_post, pc_val, opcode);
                         else
-                            compemu_raw_call((uintptr)jit_trace_add);
+                            compemu_raw_call_observer_ii((uintptr)jit_trace_add, pc_val, opcode);
                         comp_pc_p = (uae_u8*)pc_hist[i].location;
                         init_comp();
                         was_comp = 0; /* force re-init for next instruction */
@@ -7035,10 +7028,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         }
                         live.flags_are_important = 1;
                         flush(1);
-                        if (_flush_this_op) {
-                            compemu_raw_mov_l_ri(REG_PAR1, op_m68k_pc);
-                            compemu_raw_call((uintptr)jit_flush_delta_compare);
-                        }
+                        if (_flush_this_op)
+                            compemu_raw_call_observer_i((uintptr)jit_flush_delta_compare, op_m68k_pc);
                         init_comp();
                         was_comp = 0;
                         flushed_after_native_op = true;
@@ -7274,9 +7265,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                        fallback call. */
                     compemu_raw_set_pc_full_i(op_m68k_pc, (uintptr)pc_hist[i].location);
                     if (jit_trace_target_pc(op_m68k_pc)) {
-                        compemu_raw_mov_l_ri(REG_PAR1, op_m68k_pc);
-                        compemu_raw_mov_l_ri(REG_PAR2, (2u << 16) | (opcode & 0xffff));
-                        compemu_raw_call((uintptr)jit_trace_pc_hit);
+                        compemu_raw_call_observer_ii((uintptr)jit_trace_pc_hit,
+                            op_m68k_pc, (2u << 16) | (opcode & 0xffff));
                     }
                     compemu_raw_call((uintptr)cputbl[cft_map(opcode)]);
                     {
@@ -7301,9 +7291,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     /* Trace interpreter-executed family-d instructions */
                     if (((opcode >> 12) & 0xf) == 0xd && getenv("B2_JIT_TRACE_ADD")) {
                         uae_u32 pc_val = (uae_u32)((uintptr)pc_hist[i].location - (uintptr)ROMBaseHost + ROMBaseMac);
-                        compemu_raw_mov_l_ri(REG_PAR1, pc_val);
-                        compemu_raw_mov_l_ri(REG_PAR2, opcode);
-                        compemu_raw_call((uintptr)jit_trace_add);
+                        compemu_raw_call_observer_ii((uintptr)jit_trace_add, pc_val, opcode);
                     }
 #ifdef PROFILE_UNTRANSLATED_INSNS
                     // raw_cputbl_count[] is indexed with plain opcode (in m68k order)
@@ -7313,9 +7301,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         uae_u32 next_pc = 0xffffffff;
                         if (i + 1 < blocklen)
                             next_pc = block_m68k_pc + (uae_u32)((uintptr)pc_hist[i + 1].location - (uintptr)pc_hist[0].location);
-                        compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)opcode);
-                        compemu_raw_mov_l_ri(REG_PAR2, next_pc);
-                        compemu_raw_call((uintptr)trace_emulop_resume);
+                        compemu_raw_call_observer_ii((uintptr)trace_emulop_resume,
+                            (uae_u32)opcode, next_pc);
                     }
 
                     if (jit_force_interpreter_barrier_opcode((uae_u16)opcode)) {
@@ -7622,8 +7609,8 @@ endblock_done:
         /* This is the non-direct handler */
         bi->handler = bi->handler_to_use = (cpuop_func*)get_target();
 #if defined(CPU_AARCH64)
-        compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff));
-        compemu_raw_call((uintptr)b2_test_native_entry);
+        compemu_raw_call_observer_i((uintptr)b2_test_native_entry,
+            (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff));
 #endif
         compemu_raw_cmp_pc((uintptr)pc_hist[0].location);
         compemu_raw_maybe_cachemiss();

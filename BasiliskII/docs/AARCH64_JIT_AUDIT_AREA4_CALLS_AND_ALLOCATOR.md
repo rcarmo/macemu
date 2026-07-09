@@ -38,11 +38,11 @@ Generated `call_helper()` calls could follow `flush(1)` while leaving allocator 
 
 `call_helper()` now runs `prepare_for_call_1()` and `prepare_for_call_2()` before the call, making the ABI transition local and mandatory.
 
-### Set-PC diagnostics were not execution-transparent
+### Diagnostic observers were not execution-transparent
 
-`B2_JIT_TRACE_SETPC` inserted ordinary C calls inside low-level PC stores and allocator midfuncs. Those sites saved only the register carrying the observed PC. The observer could therefore clobber other live x0–x18 mappings, hardware NZCV, FPCR/FPSR, and caller-saved SIMD state; helper barriers could also lose arguments prepared before a traced PC publication.
+`B2_JIT_TRACE_SETPC` inserted ordinary C calls inside low-level PC stores and allocator midfuncs. Those sites saved only the register carrying the observed PC. Other targeted observers had the same class of defect: block-entry tracing could clobber freshly restored NZCV, and fallback PC tracing overwrote x0/x1 immediately before the real interpreter handler consumed its opcode and `regstruct` arguments.
 
-Set-PC observation now uses one ABI-preserving emitter boundary. It saves/restores x0–x18, NZCV, FPCR, FPSR, and d0–d7 around the C call. Callee-saved x19–x28 and d8–d15 retain their normal AAPCS64 guarantees. Enabling the diagnostic no longer changes allocator ownership or architectural flag/FPU state.
+Read-only observation now uses one ABI-preserving emitter boundary. It saves/restores x0–x18, NZCV, FPCR, FPSR, and d0–d7 around the C call, then installs observer arguments inside that save window. Callee-saved x19–x28 and d8–d15 retain their normal AAPCS64 guarantees. Set-PC, targeted-PC, neighbour, add, verifier, flush-delta, fallback-resume, and native-entry observers all use this boundary; semantic helpers remain explicit state-materialising ABI transitions.
 
 ### Locked ownership failures were hidden
 
