@@ -5816,8 +5816,17 @@ static inline void reset_lists(void)
 {
     int i;
 
-    for (i = 0; i < MAX_HOLD_BI; i++)
-        hold_bi[i] = NULL;
+    /* Reserved block records are not linked into active/dormant yet.  A hard
+       cache flush used to drop these pointers without returning the records
+       to BlockInfoAllocator, permanently consuming up to MAX_HOLD_BI chunks
+       on every flush.  Their per-block entry stubs live in the code cache that
+       is being discarded, so release the metadata before clearing the slots. */
+    for (i = 0; i < MAX_HOLD_BI; i++) {
+        if (hold_bi[i]) {
+            free_blockinfo(hold_bi[i]);
+            hold_bi[i] = NULL;
+        }
+    }
     active = NULL;
     dormant = NULL;
 }

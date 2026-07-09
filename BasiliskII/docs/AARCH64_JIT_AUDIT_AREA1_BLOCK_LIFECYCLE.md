@@ -448,6 +448,7 @@ The two highest-risk lifecycle recommendations above are now enforced in code an
 - `execute_normal()` stops trace construction at every `end_block()` control-flow instruction. The former sampled-forward trace policy and its guest-PC-specific exception were removed; compiled units are basic blocks.
 - both ARM64 endblock emitters publish the complete successor PC triple before either countdown or `spcflags` can return to C. The hot chain and both slow exits now observe one canonical state transition.
 - `block_need_recompile()` disables `direct_handler` before `set_dhtu()` repatches inbound dependencies. A `prefer_direct` edge can no longer retain the old native target after that target is marked for recompilation.
+- `reset_lists()` returns every unconsumed `hold_bi[]` reservation to `BlockInfoAllocator` before clearing the reserve slots. Reserved block records are not on the active or dormant lists, so the former hard-flush path leaked up to `MAX_HOLD_BI` allocator chunks on every cache reset.
 
 The same tranche also makes generated C-helper calls explicit allocator barriers. See `AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md`.
 

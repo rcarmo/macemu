@@ -236,6 +236,17 @@ requireBefore(
   "recompile dependency invalidation",
 );
 
+const resetListsStart = allocatorSource.indexOf("static inline void reset_lists(void)");
+const resetListsEnd = allocatorSource.indexOf("static void prepare_block", resetListsStart);
+if (resetListsStart < 0 || resetListsEnd < 0) fail("missing reset_lists");
+const resetListsBody = allocatorSource.slice(resetListsStart, resetListsEnd);
+requireBefore(
+  resetListsBody,
+  "free_blockinfo(hold_bi[i])",
+  "hold_bi[i] = NULL",
+  "reserved blockinfo reclamation",
+);
+
 const blockBuilderPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
   import.meta.url,
@@ -266,5 +277,6 @@ console.log("METRIC structural_scratch_spill_cardinality=1");
 console.log("METRIC structural_scratch_spill_width=1");
 console.log("METRIC structural_scratch_ownership=1");
 console.log("METRIC structural_recompile_dependency_invalidation=1");
+console.log("METRIC structural_reserved_blockinfo_reclamation=1");
 console.log("METRIC structural_endblock_successor_pc=1");
 console.log("METRIC structural_basic_block_control_boundary=1");
