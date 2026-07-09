@@ -30,9 +30,20 @@ For each test vector:
 4. Verify sentinel write to A6 occurred
 5. Diff full REGDUMP lines to decide pass/fail
 
+## Structural engine gates
+
+After a successful build, `run.sh` executes `structural-audit.ts` before opcode vectors. These gates cover emitter ordering and ownership invariants which are asynchronous or compile-time and therefore cannot be scheduled reliably by a register-dump vector:
+
+- complete successor-PC publication before every endblock exit;
+- basic-block termination at every classified control transfer;
+- AAPCS64-safe helper call target and allocator barrier;
+- fail-fast locked-register and scratch ownership.
+
+Each passing invariant emits a `METRIC structural_*=1` line. A structural failure stops the run before equivalence results can mask the engine defect.
+
 ## Current deterministic vectors
 
-`run.sh` currently covers 301 vectors across:
+`run.sh` currently covers 320 vectors across:
 - Decode/dispatch sanity (`nop`, `nop_triplet`)
 - Bit manipulation boundary behavior (`bitops`, `bitops_chg`, high-bit immediate `bitops_highbit`, high-bit toggle `bitops_chg_highbit`)
 - Core arithmetic/data movement (`move` + `moveq_signext` + moveq edge sign-extension checks, `alu` + negative roundtrip check, `addi/subi` incl. byte/word/long plus byte/word/long-boundary-wrap checks, `quick_ops` incl. long-negative roundtrip + word+word-wrap+long-wrap+byte+byte-wrap+address-register variants, `compare` + `cmpi` size coverage for both non-zero and zero immediates plus negative byte/word/long boundary forms, `muldiv`, `movem`, `misc` + `swap_roundtrip`, `not` size forms (`not_sizes`) plus explicit NOT.W/NOT.B upper-bit preservation checks, `clr` size forms (`clr_sizes`) plus byte/word partial-clear upper-bit preservation checks, `neg` size forms (`neg_sizes`) plus explicit zero-input NEG size path, `flags` incl. OR/AND/EOR-CCR path, `exg`, `imm_logic` incl. byte+word+long variants plus explicit byte/word/long high-bit edge logic checks, `tst` size forms on negative, zero, and positive inputs)

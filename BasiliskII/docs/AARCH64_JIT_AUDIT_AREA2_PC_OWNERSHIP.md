@@ -355,3 +355,15 @@ It is:
 4. only re-promote direct successor chaining after the full PC transfer contract is explicit and proven
 
 This is the right next technical lens for BasiliskII.
+
+---
+
+## 2026-07-09 contract update
+
+Hot-chain coherence is now normalized at the common emitter boundary:
+
+- `compemu_raw_set_pc_full_from_reg()` publishes `regs.pc_p`, `regs.pc_oldp`, and the guest `regs.pc` derived through `MEMBaseDiff`;
+- `compemu_raw_set_pc_full_const()` applies the same rule to constant successors;
+- `compemu_raw_endblock_pc_inreg()` and `compemu_raw_endblock_pc_isconst()` invoke those helpers before any countdown or `spcflags` branch can return to C.
+
+This closes the stale-source-PC window that could repeat an already-retired block when a special condition arrived at the block boundary. A source-level structural gate checks ordering on every build because ordinary opcode equivalence cannot deterministically schedule that asynchronous edge.

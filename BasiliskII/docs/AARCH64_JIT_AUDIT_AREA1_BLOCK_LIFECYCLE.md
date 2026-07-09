@@ -438,3 +438,16 @@ It is:
 - stop leaving lifecycle truth distributed across codegen helpers, compile logic, and dispatcher repair
 
 That is the right next step for this backend.
+
+---
+
+## 2026-07-09 structural resolution
+
+The two highest-risk lifecycle recommendations above are now enforced in code and by `jit-test/structural-audit.ts`:
+
+- `execute_normal()` stops trace construction at every `end_block()` control-flow instruction. The former sampled-forward trace policy and its guest-PC-specific exception were removed; compiled units are basic blocks.
+- both ARM64 endblock emitters publish the complete successor PC triple before either countdown or `spcflags` can return to C. The hot chain and both slow exits now observe one canonical state transition.
+
+The same tranche also makes generated C-helper calls explicit allocator barriers. See `AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md`.
+
+Verification: structural gates pass and opcode equivalence remains `320/320`. Frozen-clock boot moved beyond the earlier corrupt-PC/RTE failures, but Finder desktop framebuffer mean `42849` remains outstanding.

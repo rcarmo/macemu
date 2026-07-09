@@ -1296,27 +1296,16 @@ jit_pctrace_done:
 			cpu_check_ticks();
 			total_cycles += 4 * CYCLE_UNIT;
 			bool must_end = __atomic_load_n(&regs.spcflags, __ATOMIC_ACQUIRE) || blocklen >= maxrun_limit;
-			if (!must_end && end_block(opcode)) {
-				uintptr new_pcp = (uintptr)regs.pc_p;
-				uintptr blk_start = (uintptr)pc_hist[0].location;
-				uintptr cur_insn = (uintptr)pc_hist[blocklen - 1].location;
-				uae_u32 cur_guest_pc = get_virtual_address((uae_u8*)pc_hist[blocklen - 1].location);
-				bool is_bsr = ((opcode & 0xff00) == 0x6100);
-				bool forbid_trace_follow = is_bsr || (cur_guest_pc == 0x0401b70c && (opcode & 0xffc0) == 0x4ec0);
-				/* Follow forward short branches to keep straight-line code
-				   together, but NEVER follow backward branches or BSR calls.
-				   A backward branch (target <= current instruction) creates a
-				   loop; unrolling it into a single block causes DBRA/DBcc to
-				   execute a fixed unroll count instead of the runtime counter
-				   value. BSR is a call boundary and must leave the return stack
-				   visible to a fresh successor dispatch. The Resource Manager
-				   callback jump at 0401b70c is data-dependent and must not be
-				   baked into a reusable trace. */
-				if (!forbid_trace_follow && new_pcp > cur_insn && new_pcp < blk_start + 512
-				    && blocklen < 32)
-					continue;
+			/* A compiled block is a basic block: once the interpreter tracer
+			   executes an instruction classified as control flow, stop tracing
+			   and compile exactly the instructions retired so far.  Following a
+			   sampled forward outcome turns data-dependent control flow into a
+			   reusable trace and requires every later stage to reconstruct side
+			   exits, runtime PCs, flags, and register state perfectly.  The old
+			   policy accumulated opcode- and guest-PC-specific exceptions when
+			   those assumptions failed. */
+			if (!must_end && end_block(opcode))
 				must_end = true;
-			}
 			if (must_end) {
 #if defined(CPU_AARCH64)
 				tick_inhibit = false;

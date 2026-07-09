@@ -1,0 +1,72 @@
+# AArch64 JIT Audit — Area 4: Helper ABI and Register Ownership
+
+## Scope
+
+This audit covers C-helper calls, physical-register ownership, and scratch-register lifetime in the UAE2026 AArch64 JIT.
+
+Primary files:
+
+- `compiler/codegen_arm64.cpp`
+- `compiler/compemu_midfunc_arm64.cpp`
+- `compiler/compemu_support_arm.cpp`
+- `compiler/compemu_legacy_arm64_compat.cpp`
+
+## Runtime contract
+
+1. A compiled block is a basic block. The tracer stops after every instruction classified by `end_block()` as control flow.
+2. Every path leaving compiled code publishes a coherent `regs.pc_p`, `regs.pc_oldp`, and `regs.pc` snapshot before it may return to C.
+3. A C helper call is an AAPCS64 ownership boundary:
+   - x0–x7 remain argument registers;
+   - the indirect call target must not overwrite an argument;
+   - all dirty guest state is materialised before the call;
+   - all caller-saved allocator associations are discarded before the call.
+4. A locked physical register cannot be evicted. A lock remaining on an allocatable register at an opcode boundary is an invariant failure.
+5. Scratch virtual-register IDs must be in the configured scratch range and owned exactly once until release.
+
+## Confirmed defects and fixes
+
+### Call target overwrote argument 3
+
+`compemu_raw_call()` materialised its target in `REG_WORK1`, which is physical x2. Under AAPCS64 x2 carries argument 3. Helpers with three arguments therefore received the helper address in place of their third argument.
+
+The target now uses x18, which is reserved by `always_used[]` and unavailable to the virtual-register allocator.
+
+### Helper calls retained stale host-register associations
+
+Generated `call_helper()` calls could follow `flush(1)` while leaving allocator associations intact. C was then free to clobber x0–x17, but later emitted endblock code could still treat those registers as live guest values.
+
+`call_helper()` now runs `prepare_for_call_1()` and `prepare_for_call_2()` before the call, making the ABI transition local and mandatory.
+
+### Locked ownership failures were hidden
+
+The ARM64 `evict()` path used to clear a lock and continue. `freescratch()` likewise cleared leaked locks at opcode boundaries and omitted allocatable x0/x1 from its check. Both behaviours converted allocator defects into guest corruption.
+
+Locked eviction and leaked opcode-boundary locks now abort at the first violated invariant. Reserved registers are derived from `always_used[]`, rather than from a partial hard-coded range.
+
+### Scratch release could index out of bounds
+
+`release_scratch()` logged an invalid virtual-register ID and then indexed `scratch_in_use[i - S1]` anyway. Invalid IDs and double release now abort before indexing.
+
+## Structural regression gate
+
+`jit-test/structural-audit.ts` checks emitter ordering and source-level ownership contracts that ordinary opcode vectors cannot trigger deterministically:
+
+- call target uses reserved x18, not x2;
+- helper call performs both allocator barrier phases;
+- locked eviction and scratch misuse are fail-fast;
+- all endblock return paths publish the complete successor PC first;
+- trace construction stops at every control-flow boundary.
+
+`jit-test/run.sh` runs this gate after a successful build and before the opcode equivalence workload.
+
+## Verification at landing
+
+- clean AArch64 build;
+- structural metrics all `1`;
+- opcode equivalence `320/320`, `fail_equiv=0`;
+- frozen-clock boot advanced from the early corrupt-PC/RTE failures to the established `040b6c20` scanner/driver frontier after basic-block and call-target fixes;
+- Finder desktop framebuffer target `42849` is not yet reached.
+
+## Contributor rule
+
+Do not repair allocator ownership violations by unlocking, reusing, or reconstructing state after the fact. Materialise at explicit boundaries and fail at the first broken ownership invariant.

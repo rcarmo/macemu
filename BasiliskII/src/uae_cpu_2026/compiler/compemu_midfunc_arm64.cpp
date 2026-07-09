@@ -1426,6 +1426,12 @@ MENDFUNC(3,dbcc_cond_move_ne_w,(RW4 d, RR4 s, RR4 src_w))
  * opcodes that are too complex to compile natively. */
 MIDFUNC(1,call_helper,(IMPTR addr))
 {
+	/* A C helper may clobber every AAPCS64 caller-saved register.  Materialise
+	   all guest state and then discard host-register associations before the
+	   call; otherwise the endblock emitted after helper-backed instructions
+	   can reuse a stale x0-x17 value as live PC/register state. */
+	prepare_for_call_1();
+	prepare_for_call_2();
 	compemu_raw_call(addr);
 }
 MENDFUNC(1,call_helper,(IMPTR addr))

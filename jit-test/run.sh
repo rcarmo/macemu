@@ -88,6 +88,13 @@ if ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
 fi
 echo "METRIC build_ok=1"
 
+# Engine-level emitter invariants which ordinary opcode equivalence cannot
+# exercise deterministically (for example an asynchronous spcflags exit at the
+# exact end of a compiled block).
+if ! bun "$SCRIPT_DIR/structural-audit.ts"; then
+    emit_failure_metrics 1 "ARM64 JIT structural audit failed" 0
+fi
+
 # Use a fresh copy-on-write clone of the base disk for this harness run so the
 # shared fixture is never mutated (clone shares extents; only deltas stored).
 if command -v cow_clone >/dev/null 2>&1; then

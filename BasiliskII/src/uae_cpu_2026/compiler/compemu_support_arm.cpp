@@ -3408,14 +3408,11 @@ static void evict(int r)
 
     Dif(live.nat[rr].locked &&
         live.nat[rr].nholds == 1) {
-#if defined(CPU_AARCH64)
-        /* AArch64: force-unlock instead of aborting. Register sharing
-           from mov_l_rr and similar functions can leave registers in
-           a state where eviction is blocked by stale locks. */
-        live.nat[rr].locked = 0;
-#else
+        /* Evicting a locked physical register destroys a value which an
+           in-progress midfunc still owns.  Silently clearing the lock merely
+           turns allocator corruption into guest corruption; fail at the first
+           violated ownership boundary instead. */
         jit_abort("register %d in nreg %d is locked!", r, live.state[r].realreg);
-#endif
     }
 
     live.nat[rr].nholds--;
@@ -4895,30 +4892,27 @@ int alloc_scratch(void)
 void release_scratch(int i)
 {
     if (i < S1 || i >= S1 + SCRATCH_REGS)
-        jit_log("release_scratch(): %d is not a scratch reg.", i);
-    if (live.scratch_in_use[i - S1]) {
-        forget_about(i);
-        live.scratch_in_use[i - S1] = 0;
-    }
-    else {
-        jit_log("release_scratch(): %d not in use.", i);
-    }
+        jit_abort("release_scratch(): %d is not a scratch reg.", i);
+    if (!live.scratch_in_use[i - S1])
+        jit_abort("release_scratch(): %d not in use.", i);
+
+    forget_about(i);
+    live.scratch_in_use[i - S1] = 0;
 }
 
 static void freescratch(void)
 {
     int i;
     for (i = 0; i < N_REGS; i++) {
-#if defined(CPU_AARCH64) 
-        if (live.nat[i].locked && i > 5 && i < 18) {
-#elif defined(CPU_arm)
-        if (live.nat[i].locked && i != 2 && i != 3 && i != 10 && i != 11 && i != 12) {
-#else
-        if (live.nat[i].locked && i != 4 && i != 12) {
-#endif
-            live.nat[i].locked = 0;
-            jit_log("Warning! %d is locked", i);
+        bool reserved = false;
+        for (const uae_s8 *au = always_used; *au >= 0; ++au) {
+            if (*au == i) {
+                reserved = true;
+                break;
+            }
         }
+        if (live.nat[i].locked && !reserved)
+            jit_abort("physical register %d still locked at opcode boundary", i);
     }
 
     for (i = S1; i < VREGS; i++)
