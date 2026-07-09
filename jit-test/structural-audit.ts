@@ -153,6 +153,22 @@ const allocatorPath = new URL(
   import.meta.url,
 );
 const allocatorSource = await Bun.file(allocatorPath).text();
+const registersPath = new URL(
+  "../BasiliskII/src/uae_cpu_2026/registers.h",
+  import.meta.url,
+);
+const registersSource = await Bun.file(registersPath).text();
+requireText(registersSource, "uae_u32 scratchregs[5]", "scratch spill backing");
+requireText(
+  allocatorSource,
+  "sizeof(regs.scratchregs) / sizeof(regs.scratchregs[0]) >= SCRATCH_REGS",
+  "scratch spill backing compile-time assertion",
+);
+requireText(
+  allocatorSource,
+  "live.state[i].mem = &regs.scratchregs[i - S1]",
+  "scratch spill mapping",
+);
 const evictStart = allocatorSource.indexOf("static void evict(int r)");
 const evictEnd = allocatorSource.indexOf("static inline void free_nreg", evictStart);
 if (evictStart < 0 || evictEnd < 0) fail("missing allocator evict function");
@@ -236,6 +252,7 @@ for (const forbidden of [
 console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
 console.log("METRIC structural_allocator_locked_evict=1");
+console.log("METRIC structural_scratch_spill_backing=1");
 console.log("METRIC structural_scratch_ownership=1");
 console.log("METRIC structural_recompile_dependency_invalidation=1");
 console.log("METRIC structural_endblock_successor_pc=1");

@@ -105,8 +105,9 @@ extern struct regstruct
     uae_u32 cacr,caar;
 
 #if defined(USE_JIT) && (defined(CPU_arm) || defined(CPU_aarch64) || defined(CPU_AARCH64))
-    /* Minimal ARM/AArch64 JIT compatibility surface derived from UAE/Amiberry. */
-    uae_u32 scratchregs[3];
+    /* Integer JIT scratch spill backing. Keep this in lockstep with
+       compiler/compemu_arm.h:SCRATCH_REGS (S1..S5). */
+    uae_u32 scratchregs[5];
     fpu_register scratchfregs[2];
     fpu_register fp_result;
     uae_u32 jit_exception;

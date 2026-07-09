@@ -22,6 +22,7 @@ Primary files:
    - all caller-saved allocator associations are discarded before the call.
 4. A locked physical register cannot be evicted. A lock remaining on an allocatable register at an opcode boundary is an invariant failure.
 5. Scratch virtual-register IDs must be in the configured scratch range and owned exactly once until release.
+6. Every scratch vreg must have a distinct in-bounds spill slot; allocator scratch cardinality and `regstruct` backing cardinality are one contract.
 
 ## Confirmed defects and fixes
 
@@ -47,6 +48,12 @@ Locked eviction and leaked opcode-boundary locks now abort at the first violated
 
 `release_scratch()` logged an invalid virtual-register ID and then indexed `scratch_in_use[i - S1]` anyway. Invalid IDs and double release now abort before indexing.
 
+### Scratch spill backing was shorter than the allocator range
+
+The allocator defines five integer scratch vregs (`S1..S5`) and maps all five through `regs.scratchregs[i - S1]`, but `regstruct` provided only three slots. A spill of `S4` or `S5` therefore wrote beyond `scratchregs` into adjacent FPU state.
+
+`regstruct::scratchregs` now has five elements, and `init_comp()` has a compile-time cardinality assertion against `SCRATCH_REGS`. The mapping can no longer silently outgrow its backing storage.
+
 ## Structural regression gate
 
 `jit-test/structural-audit.ts` checks emitter ordering and source-level ownership contracts that ordinary opcode vectors cannot trigger deterministically:
@@ -54,6 +61,7 @@ Locked eviction and leaked opcode-boundary locks now abort at the first violated
 - call target uses reserved x18, not x2;
 - helper call performs both allocator barrier phases;
 - locked eviction and scratch misuse are fail-fast;
+- scratch spill backing covers the full `S1..S5` range;
 - all endblock return paths publish the complete successor PC first;
 - trace construction stops at every control-flow boundary.
 

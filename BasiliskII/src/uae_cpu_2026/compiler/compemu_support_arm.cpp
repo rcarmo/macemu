@@ -4703,6 +4703,9 @@ void compiler_exit(void)
 
 static void init_comp(void)
 {
+    static_assert(sizeof(regs.scratchregs) / sizeof(regs.scratchregs[0]) >= SCRATCH_REGS,
+        "regstruct scratch backing must cover every integer scratch vreg");
+
     int i;
     uae_s8* au = always_used;
 
