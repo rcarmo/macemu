@@ -22,7 +22,7 @@ Primary files:
    - all caller-saved allocator associations are discarded before the call.
 4. A locked physical register cannot be evicted. A lock remaining on an allocatable register at an opcode boundary is an invariant failure.
 5. Scratch virtual-register IDs must be in the configured scratch range and owned exactly once until release.
-6. Every scratch vreg must have a distinct in-bounds spill slot; allocator scratch cardinality and `regstruct` backing cardinality are one contract.
+6. Every scratch vreg must have a distinct in-bounds, pointer-width spill slot; allocator scratch cardinality, host-pointer width, and `regstruct` backing are one contract.
 
 ## Confirmed defects and fixes
 
@@ -52,7 +52,13 @@ Locked eviction and leaked opcode-boundary locks now abort at the first violated
 
 The allocator defines five integer scratch vregs (`S1..S5`) and maps all five through `regs.scratchregs[i - S1]`, but `regstruct` provided only three slots. A spill of `S4` or `S5` therefore wrote beyond `scratchregs` into adjacent FPU state.
 
-`regstruct::scratchregs` now has five elements, and `init_comp()` has a compile-time cardinality assertion against `SCRATCH_REGS`. The mapping can no longer silently outgrow its backing storage.
+`regstruct::scratchregs` now has five helper-argument elements, and `init_comp()` has a compile-time cardinality assertion against `SCRATCH_REGS`. The mapping can no longer silently outgrow its backing storage.
+
+### Scratch spills truncated native host pointers
+
+`get_n_addr*()` writes native host addresses into ordinary scratch vregs for MOVEM and MOVE16. Those values are 64-bit on AArch64, but generic scratch eviction used the 32-bit `tomem()`/`do_load_reg()` path. An allocator spill could therefore preserve only the low half of a valid host address.
+
+Allocator spill backing is now separate from the 32-bit helper-argument array: `jit_scratch_vregs[S1..S5]` is `uintptr_t`, and scratch reload, dirty writeback, and constant writeback all use X-register loads/stores. Compile-time assertions enforce both cardinality and element width.
 
 ## Structural regression gate
 
@@ -61,7 +67,7 @@ The allocator defines five integer scratch vregs (`S1..S5`) and maps all five th
 - call target uses reserved x18, not x2;
 - helper call performs both allocator barrier phases;
 - locked eviction and scratch misuse are fail-fast;
-- scratch spill backing covers the full `S1..S5` range;
+- scratch spill backing covers the full `S1..S5` range and preserves `uintptr` values;
 - all endblock return paths publish the complete successor PC first;
 - trace construction stops at every control-flow boundary.
 

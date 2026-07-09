@@ -158,17 +158,27 @@ const registersPath = new URL(
   import.meta.url,
 );
 const registersSource = await Bun.file(registersPath).text();
-requireText(registersSource, "uae_u32 scratchregs[5]", "scratch spill backing");
+requireText(registersSource, "uae_u32 scratchregs[5]", "helper scratch backing");
+requireText(registersSource, "uintptr_t jit_scratch_vregs[5]", "pointer-width scratch spill backing");
 requireText(
   allocatorSource,
-  "sizeof(regs.scratchregs) / sizeof(regs.scratchregs[0]) >= SCRATCH_REGS",
-  "scratch spill backing compile-time assertion",
+  "sizeof(regs.jit_scratch_vregs) / sizeof(regs.jit_scratch_vregs[0]) >= SCRATCH_REGS",
+  "scratch spill backing compile-time cardinality assertion",
 );
 requireText(
   allocatorSource,
-  "live.state[i].mem = &regs.scratchregs[i - S1]",
+  "sizeof(regs.jit_scratch_vregs[0]) == sizeof(uintptr)",
+  "scratch spill backing compile-time width assertion",
+);
+requireText(
+  allocatorSource,
+  "live.state[i].mem = (uae_u32*)&regs.jit_scratch_vregs[i - S1]",
   "scratch spill mapping",
 );
+const pointerWidthScratchPaths = allocatorSource.match(/if \(r == PC_P \|\| r >= S1\)/g)?.length ?? 0;
+if (pointerWidthScratchPaths < 2) {
+  fail("pointer-width scratch spill path: both reload and writeback must be 64-bit");
+}
 const evictStart = allocatorSource.indexOf("static void evict(int r)");
 const evictEnd = allocatorSource.indexOf("static inline void free_nreg", evictStart);
 if (evictStart < 0 || evictEnd < 0) fail("missing allocator evict function");
@@ -252,7 +262,8 @@ for (const forbidden of [
 console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
 console.log("METRIC structural_allocator_locked_evict=1");
-console.log("METRIC structural_scratch_spill_backing=1");
+console.log("METRIC structural_scratch_spill_cardinality=1");
+console.log("METRIC structural_scratch_spill_width=1");
 console.log("METRIC structural_scratch_ownership=1");
 console.log("METRIC structural_recompile_dependency_invalidation=1");
 console.log("METRIC structural_endblock_successor_pc=1");

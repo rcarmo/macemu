@@ -108,6 +108,9 @@ extern struct regstruct
     /* Integer JIT scratch spill backing. Keep this in lockstep with
        compiler/compemu_arm.h:SCRATCH_REGS (S1..S5). */
     uae_u32 scratchregs[5];
+    /* Allocator spill backing is pointer-width because get_n_addr*() places
+       native host addresses in S1..S5. Keep helper arguments above 32-bit. */
+    uintptr_t jit_scratch_vregs[5];
     fpu_register scratchfregs[2];
     fpu_register fp_result;
     uae_u32 jit_exception;

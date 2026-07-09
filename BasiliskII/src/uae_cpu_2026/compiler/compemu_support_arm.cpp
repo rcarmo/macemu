@@ -3256,8 +3256,10 @@ STATIC_INLINE void do_load_reg(int n, int r)
         UBFX_xxii(n, n, 29, 1); /* interpreter bit-29 format -> JIT 0/1 */
         return;
     }
-    /* PC_P holds a 64-bit host pointer — must use 64-bit load. */
-    if (r == PC_P) {
+    /* PC_P and scratch vregs can hold 64-bit host pointers. Scratch values
+       use dedicated pointer-width spill backing even when they currently hold
+       ordinary 32-bit guest data. */
+    if (r == PC_P || r >= S1) {
         LOAD_U64(REG_WORK2, (uintptr)live.state[r].mem);
         LDR_xXi(n, REG_WORK2, 0);
         return;
@@ -3343,9 +3345,9 @@ static void tomem(int r)
             set_status(r, CLEAN);
             return;
         }
-        /* PC_P holds a 64-bit host pointer — must use 64-bit store.
-           compemu_raw_mov_l_mr uses 32-bit STR which truncates. */
-        if (r == PC_P) {
+        /* PC_P and scratch vregs can hold 64-bit host pointers. Never route
+           either through compemu_raw_mov_l_mr's 32-bit STR. */
+        if (r == PC_P || r >= S1) {
             LOAD_U64(REG_WORK2, (uintptr)live.state[r].mem);
             STR_xXi(rr, REG_WORK2, 0);
             set_status(r, CLEAN);
@@ -3381,6 +3383,10 @@ static inline void writeback_const(int r)
            which truncates to 32 bits via its IM32 parameter. */
         compemu_raw_set_pc_i(live.state[r].val);
 #if defined(CPU_AARCH64)
+    } else if (r >= S1) {
+        LOAD_U64(REG_WORK2, live.state[r].val);
+        LOAD_U64(REG_WORK3, (uintptr)live.state[r].mem);
+        STR_xXi(REG_WORK2, REG_WORK3, 0);
     } else if (r == FLAGX) {
         /* Convert from JIT 0/1 to interpreter bit-29 format */
         uae_u32 val = (live.state[r].val & 1) << 29;
@@ -4704,7 +4710,11 @@ void compiler_exit(void)
 static void init_comp(void)
 {
     static_assert(sizeof(regs.scratchregs) / sizeof(regs.scratchregs[0]) >= SCRATCH_REGS,
-        "regstruct scratch backing must cover every integer scratch vreg");
+        "regstruct helper scratch cardinality must cover every integer scratch vreg");
+    static_assert(sizeof(regs.jit_scratch_vregs) / sizeof(regs.jit_scratch_vregs[0]) >= SCRATCH_REGS,
+        "regstruct pointer-width spill backing must cover every integer scratch vreg");
+    static_assert(sizeof(regs.jit_scratch_vregs[0]) == sizeof(uintptr),
+        "integer scratch spill slots must preserve host pointers");
 
     int i;
     uae_s8* au = always_used;
@@ -4728,7 +4738,7 @@ static void init_comp(void)
             live.state[i].mem = &regs.regs[i];
             set_status(i, INMEM);
         } else if (i >= S1) {
-            live.state[i].mem = &regs.scratchregs[i - S1];
+            live.state[i].mem = (uae_u32*)&regs.jit_scratch_vregs[i - S1];
         }
     }
     live.state[PC_P].mem = (uae_u32*)&(regs.pc_p);
