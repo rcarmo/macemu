@@ -225,6 +225,21 @@ if (freeScratchBody.includes("live.nat[i].locked = 0")) {
   fail("scratch lock ownership: silent lock clearing remains");
 }
 
+const invalidateStart = allocatorSource.indexOf("void invalidate_block(blockinfo* bi)");
+const invalidateEnd = allocatorSource.indexOf("static inline void create_jmpdep", invalidateStart);
+if (invalidateStart < 0 || invalidateEnd < 0) fail("missing invalidate_block");
+const invalidateBody = allocatorSource.slice(invalidateStart, invalidateEnd);
+requireText(
+  invalidateBody,
+  "bi->edge_exec_count[i] = 0",
+  "invalidated edge profile",
+);
+requireText(
+  invalidateBody,
+  "bi->edge_target_pc[i] = 0",
+  "invalidated edge profile",
+);
+
 const recompileStart = allocatorSource.indexOf("static inline void block_need_recompile");
 const recompileEnd = allocatorSource.indexOf("static inline blockinfo* get_blockinfo_addr_new", recompileStart);
 if (recompileStart < 0 || recompileEnd < 0) fail("missing block_need_recompile");
@@ -277,6 +292,7 @@ console.log("METRIC structural_scratch_spill_cardinality=1");
 console.log("METRIC structural_scratch_spill_width=1");
 console.log("METRIC structural_scratch_ownership=1");
 console.log("METRIC structural_recompile_dependency_invalidation=1");
+console.log("METRIC structural_invalidated_edge_profile_reset=1");
 console.log("METRIC structural_reserved_blockinfo_reclamation=1");
 console.log("METRIC structural_endblock_successor_pc=1");
 console.log("METRIC structural_basic_block_control_boundary=1");

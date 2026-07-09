@@ -2716,6 +2716,11 @@ void invalidate_block(blockinfo* bi)
         bi->dep[i].jmp_off = NULL;
         bi->dep[i].target = NULL;
         bi->dep[i].prefer_direct = 0;
+        /* A checksum failure invalidates the code incarnation that produced
+           this profile.  Keeping its counts lets compile_block() immediately
+           reconstruct a stable direct-edge summary for different guest code. */
+        bi->edge_exec_count[i] = 0;
+        bi->edge_target_pc[i] = 0;
         bi->stable_edge_pc[i] = 0;
     }
     bi->stable_edge_mask = 0;
