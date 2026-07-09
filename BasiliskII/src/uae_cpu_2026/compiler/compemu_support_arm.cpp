@@ -2747,8 +2747,12 @@ static inline void block_need_recompile(blockinfo* bi)
     uae_u32 cl = cacheline(bi->pc_p);
 
     jit_trace_edge_snapshot("RECOMP", bi);
-    set_dhtu(bi, bi->direct_pen);
+    /* Disable the old native target before repatching inbound dependencies.
+       set_dhtu() honours prefer_direct edges by selecting direct_handler when
+       non-null; doing this assignment afterwards leaves those edges pointing
+       at stale code which has already been marked for recompilation. */
     bi->direct_handler = bi->direct_pen;
+    set_dhtu(bi, bi->direct_pen);
 
     bi->handler_to_use = (cpuop_func*)popall_execute_normal;
     bi->handler = (cpuop_func*)popall_execute_normal;

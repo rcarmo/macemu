@@ -199,6 +199,17 @@ if (freeScratchBody.includes("live.nat[i].locked = 0")) {
   fail("scratch lock ownership: silent lock clearing remains");
 }
 
+const recompileStart = allocatorSource.indexOf("static inline void block_need_recompile");
+const recompileEnd = allocatorSource.indexOf("static inline blockinfo* get_blockinfo_addr_new", recompileStart);
+if (recompileStart < 0 || recompileEnd < 0) fail("missing block_need_recompile");
+const recompileBody = allocatorSource.slice(recompileStart, recompileEnd);
+requireBefore(
+  recompileBody,
+  "bi->direct_handler = bi->direct_pen",
+  "set_dhtu(bi, bi->direct_pen)",
+  "recompile dependency invalidation",
+);
+
 const blockBuilderPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
   import.meta.url,
@@ -226,5 +237,6 @@ console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
 console.log("METRIC structural_allocator_locked_evict=1");
 console.log("METRIC structural_scratch_ownership=1");
+console.log("METRIC structural_recompile_dependency_invalidation=1");
 console.log("METRIC structural_endblock_successor_pc=1");
 console.log("METRIC structural_basic_block_control_boundary=1");
