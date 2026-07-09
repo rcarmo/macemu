@@ -7656,10 +7656,14 @@ endblock_done:
         if (block_m68k_pc < ROMBaseMac && blocklen > 0) {
             const uae_u16 *_w0 = (const uae_u16 *)pc_hist[0].location;
             if (*_w0 == 0) {
-                /* First word is zero — very likely uninitialized.
-                   Use exec_nostats so interpreter re-reads current content. */
+                /* First word is zero — very likely uninitialized.  Route both
+                   cache dispatch and every existing inbound dependency through
+                   the interpreter stub so no edge can retain the wrapper/direct
+                   code that was installed earlier in finalization. */
                 bi->handler_to_use = (cpuop_func*)popall_execute_normal;
                 bi->handler = (cpuop_func*)popall_execute_normal;
+                bi->direct_handler = bi->direct_pen;
+                set_dhtu(bi, bi->direct_pen);
                 cache_tags[cacheline(pc_hist[0].location)].handler = (cpuop_func*)popall_execute_normal;
             }
         }

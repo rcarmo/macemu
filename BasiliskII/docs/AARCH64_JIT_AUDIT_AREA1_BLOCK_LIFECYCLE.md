@@ -451,6 +451,7 @@ The two highest-risk lifecycle recommendations above are now enforced in code an
 - `reset_lists()` returns every unconsumed `hold_bi[]` reservation to `BlockInfoAllocator` before clearing the reserve slots. Reserved block records are not on the active or dormant lists, so the former hard-flush path leaked up to `MAX_HOLD_BI` allocator chunks on every cache reset.
 - `invalidate_block()` clears both edge counters and recorded targets. A checksum failure means the profiled code incarnation is no longer authoritative; retaining those counters allowed the next compile to reconstruct a stable direct-edge summary from different guest code. Countdown-driven `block_need_recompile()` deliberately remains the profile-preserving transition.
 - code-cache exhaustion is checked only after the final `blockinfo` metadata update. The former finalization order linked the new block into `active`, called `flush_icache_hard()` (which released it), then wrote `status`, zero-source containment state, trace state, and possible recompile state through the freed `bi` pointer.
+- zero-filled RAM containment now replaces `direct_handler` with `direct_pen` and calls `set_dhtu()`. Changing only the cache tag and `handler_to_use` left existing dependency branches pointed at the wrapper/direct native code that containment was intended to suppress.
 
 The same tranche also makes generated C-helper calls explicit allocator barriers. See `AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md`.
 

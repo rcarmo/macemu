@@ -279,6 +279,17 @@ requireBefore(
   "cache-exhaustion blockinfo lifetime",
 );
 
+const zeroContainmentStart = allocatorSource.indexOf("/* RAM blocks compiled from zeroed source");
+const zeroContainmentEnd = allocatorSource.indexOf("jit_trace_edge_snapshot(\"BUILD\"", zeroContainmentStart);
+if (zeroContainmentStart < 0 || zeroContainmentEnd < 0) fail("missing zero-source containment");
+const zeroContainmentBody = allocatorSource.slice(zeroContainmentStart, zeroContainmentEnd);
+requireBefore(
+  zeroContainmentBody,
+  "bi->direct_handler = bi->direct_pen",
+  "set_dhtu(bi, bi->direct_pen)",
+  "zero-source dependency containment",
+);
+
 const blockBuilderPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
   import.meta.url,
@@ -312,5 +323,6 @@ console.log("METRIC structural_recompile_dependency_invalidation=1");
 console.log("METRIC structural_invalidated_edge_profile_reset=1");
 console.log("METRIC structural_reserved_blockinfo_reclamation=1");
 console.log("METRIC structural_cache_exhaustion_blockinfo_lifetime=1");
+console.log("METRIC structural_zero_source_dependency_containment=1");
 console.log("METRIC structural_endblock_successor_pc=1");
 console.log("METRIC structural_basic_block_control_boundary=1");
