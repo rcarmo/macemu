@@ -38,6 +38,12 @@ Generated `call_helper()` calls could follow `flush(1)` while leaving allocator 
 
 `call_helper()` now runs `prepare_for_call_1()` and `prepare_for_call_2()` before the call, making the ABI transition local and mandatory.
 
+### Set-PC diagnostics were not execution-transparent
+
+`B2_JIT_TRACE_SETPC` inserted ordinary C calls inside low-level PC stores and allocator midfuncs. Those sites saved only the register carrying the observed PC. The observer could therefore clobber other live x0–x18 mappings, hardware NZCV, FPCR/FPSR, and caller-saved SIMD state; helper barriers could also lose arguments prepared before a traced PC publication.
+
+Set-PC observation now uses one ABI-preserving emitter boundary. It saves/restores x0–x18, NZCV, FPCR, FPSR, and d0–d7 around the C call. Callee-saved x19–x28 and d8–d15 retain their normal AAPCS64 guarantees. Enabling the diagnostic no longer changes allocator ownership or architectural flag/FPU state.
+
 ### Locked ownership failures were hidden
 
 The ARM64 `evict()` path used to clear a lock and continue. `freescratch()` likewise cleared leaked locks at opcode boundaries and omitted allocatable x0/x1 from its check. Both behaviours converted allocator defects into guest corruption.
@@ -65,6 +71,7 @@ Allocator spill backing is now separate from the 32-bit helper-argument array: `
 `jit-test/structural-audit.ts` checks emitter ordering and source-level ownership contracts that ordinary opcode vectors cannot trigger deterministically:
 
 - call target uses reserved x18, not x2;
+- set-PC observers preserve the complete caller-saved JIT state;
 - helper call performs both allocator barrier phases;
 - locked eviction and scratch misuse are fail-fast;
 - scratch spill backing covers the full `S1..S5` range and preserves `uintptr` values;

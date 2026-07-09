@@ -61,11 +61,33 @@ requireText(
   "helper-call ABI reserved target register",
 );
 
+const observerStart = source.indexOf("STATIC_INLINE void compemu_raw_observer_save(void)");
+const observerEnd = source.indexOf("LOWFUNC(WRITE,READ,1,compemu_raw_cmp_pc", observerStart);
+if (observerStart < 0 || observerEnd < 0) fail("missing diagnostic observer boundary");
+const observerBody = source.slice(observerStart, observerEnd);
+for (const preserved of [
+  "STP_xxXi(r, r + 1, RSP_INDEX, r * 8)",
+  "STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF)",
+  "MRS_NZCV_x(R18_INDEX)",
+  "MRS_FPCR_x(R18_INDEX)",
+  "MRS_FPSR_x(R18_INDEX)",
+  "STR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8)",
+  "MSR_FPSR_x(R18_INDEX)",
+  "MSR_FPCR_x(R18_INDEX)",
+  "MSR_NZCV_x(R18_INDEX)",
+  "LDP_xxXi(r, r + 1, RSP_INDEX, r * 8)",
+]) {
+  requireText(observerBody, preserved, "diagnostic observer preservation");
+}
+
 const midfuncPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp",
   import.meta.url,
 );
 const midfuncSource = await Bun.file(midfuncPath).text();
+if (midfuncSource.includes("compemu_raw_call((uintptr)jit_trace_setpc_value)")) {
+  fail("diagnostic observer preservation: raw trace call remains in allocator midfunc");
+}
 const helperStart = midfuncSource.indexOf("MIDFUNC(1,call_helper,(IMPTR addr))");
 const helperEnd = midfuncSource.indexOf("MENDFUNC(1,call_helper", helperStart);
 if (helperStart < 0 || helperEnd < 0) fail("missing call_helper midfunc");
@@ -334,6 +356,7 @@ for (const forbidden of [
 }
 
 console.log("METRIC structural_helper_call_abi=1");
+console.log("METRIC structural_diagnostic_observer_abi=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
 console.log("METRIC structural_allocator_locked_evict=1");
 console.log("METRIC structural_scratch_spill_cardinality=1");

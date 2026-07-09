@@ -230,6 +230,68 @@ LENDFUNC(WRITE,RMW,1,compemu_raw_inc_opcount,(IM16 op))
 
 STATIC_INLINE void compemu_raw_call(uintptr t);
 
+/* Runtime diagnostics are observers, not allocator boundaries.  Preserve the
+   complete AAPCS64 caller-saved state they can destroy so enabling a trace
+   cannot alter guest execution.  Guest FP0-FP7 use callee-saved d8-d15; d0-d7
+   cover the allocator's caller-saved FP_RESULT/FS1 and emitter scratch values. */
+static constexpr int JIT_OBSERVER_SAVE_SIZE = 240;
+static constexpr int JIT_OBSERVER_X18_OFF = 144;
+static constexpr int JIT_OBSERVER_NZCV_OFF = 152;
+static constexpr int JIT_OBSERVER_FPCR_OFF = 160;
+static constexpr int JIT_OBSERVER_FPSR_OFF = 168;
+static constexpr int JIT_OBSERVER_D0_OFF = 176;
+
+STATIC_INLINE void compemu_raw_observer_save(void)
+{
+	SUB_xxi(RSP_INDEX, RSP_INDEX, JIT_OBSERVER_SAVE_SIZE);
+	for (int r = 0; r < 18; r += 2)
+		STP_xxXi(r, r + 1, RSP_INDEX, r * 8);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF);
+	MRS_NZCV_x(R18_INDEX);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
+	MRS_FPCR_x(R18_INDEX);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
+	MRS_FPSR_x(R18_INDEX);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
+	for (int r = 0; r < 8; ++r)
+		STR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8);
+}
+
+STATIC_INLINE void compemu_raw_observer_restore(void)
+{
+	for (int r = 0; r < 8; ++r)
+		LDR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
+	MSR_FPSR_x(R18_INDEX);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
+	MSR_FPCR_x(R18_INDEX);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
+	MSR_NZCV_x(R18_INDEX);
+	for (int r = 0; r < 18; r += 2)
+		LDP_xxXi(r, r + 1, RSP_INDEX, r * 8);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF);
+	ADD_xxi(RSP_INDEX, RSP_INDEX, JIT_OBSERVER_SAVE_SIZE);
+}
+
+STATIC_INLINE void compemu_raw_trace_setpc_reg(int value_reg, uae_u32 kind)
+{
+	compemu_raw_observer_save();
+	const int value_off = value_reg == R18_INDEX ? JIT_OBSERVER_X18_OFF : value_reg * 8;
+	LDR_xXi(REG_PAR1, RSP_INDEX, value_off);
+	LOAD_U32(REG_PAR2, kind);
+	compemu_raw_call((uintptr)jit_trace_setpc_value);
+	compemu_raw_observer_restore();
+}
+
+STATIC_INLINE void compemu_raw_trace_setpc_const(uintptr value, uae_u32 kind)
+{
+	compemu_raw_observer_save();
+	LOAD_U64(REG_PAR1, value);
+	LOAD_U32(REG_PAR2, kind);
+	compemu_raw_call((uintptr)jit_trace_setpc_value);
+	compemu_raw_observer_restore();
+}
+
 LOWFUNC(WRITE,READ,1,compemu_raw_cmp_pc,(IMPTR s))
 {
 	/* s is always >= NATMEM_OFFSET and < NATMEM_OFFSET + max. Amiga mem */
@@ -269,13 +331,8 @@ STATIC_INLINE void compemu_raw_set_pc_full_const(IMPTR host_pc)
 LOWFUNC(NONE,WRITE,1,compemu_raw_set_pc_i,(IMPTR s))
 {
 	LOAD_U64(REG_WORK1, s);
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(REG_WORK1, RSP_INDEX, -16);
-		LDR_xXi(REG_PAR1, RSP_INDEX, 0);
-		LOAD_U32(REG_PAR2, 9);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(REG_WORK1, RSP_INDEX, 16);
-	}
+	if (jit_trace_setpc_env())
+		compemu_raw_trace_setpc_reg(REG_WORK1, 9);
 	uintptr idx = (uintptr) &(regs.pc_p) - (uintptr) &regs;
 	STR_xXi(REG_WORK1, R_REGSTRUCT, idx);
 }
@@ -283,13 +340,8 @@ LENDFUNC(NONE,WRITE,1,compemu_raw_set_pc_i,(IMPTR s))
 
 LOWFUNC(NONE,WRITE,1,compemu_raw_set_pc_from_reg,(RR4 rr_pc))
 {
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(rr_pc, RSP_INDEX, -16);
-		MOV_xx(REG_PAR1, rr_pc);
-		LOAD_U32(REG_PAR2, 10);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(rr_pc, RSP_INDEX, 16);
-	}
+	if (jit_trace_setpc_env())
+		compemu_raw_trace_setpc_reg(rr_pc, 10);
 	const uintptr idx_pcp = (uintptr)&(regs.pc_p) - (uintptr)&regs;
 	const uintptr idx_pc = (uintptr)&(regs.pc) - (uintptr)&regs;
 	const uintptr idx_oldp = (uintptr)&(regs.pc_oldp) - (uintptr)&regs;
@@ -305,13 +357,8 @@ LENDFUNC(NONE,WRITE,1,compemu_raw_set_pc_from_reg,(RR4 rr_pc))
 LOWFUNC(NONE,WRITE,2,compemu_raw_set_pc_full_i,(IM32 guest_pc, IMPTR host_pc))
 {
 	LOAD_U64(REG_WORK1, host_pc);
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(REG_WORK1, RSP_INDEX, -16);
-		LDR_xXi(REG_PAR1, RSP_INDEX, 0);
-		LOAD_U32(REG_PAR2, 11);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(REG_WORK1, RSP_INDEX, 16);
-	}
+	if (jit_trace_setpc_env())
+		compemu_raw_trace_setpc_reg(REG_WORK1, 11);
 	const uintptr idx_pcp = (uintptr)&(regs.pc_p) - (uintptr)&regs;
 	const uintptr idx_pc = (uintptr)&(regs.pc) - (uintptr)&regs;
 	const uintptr idx_oldp = (uintptr)&(regs.pc_oldp) - (uintptr)&regs;
@@ -726,13 +773,8 @@ LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 		B_i(0);
 		write_jmp_target(br_dn_hot, (uintptr)popall_do_nothing);
 	}
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(rr_pc, RSP_INDEX, -16);
-		MOV_xx(REG_PAR1, rr_pc);
-		LOAD_U32(REG_PAR2, 4);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(rr_pc, RSP_INDEX, 16);
-	}
+	if (jit_trace_setpc_env())
+		compemu_raw_trace_setpc_reg(rr_pc, 4);
 	UBFIZ_xxii(rr_pc, rr_pc, 0, 18);  // mask to TAGMASK width (0x3ffff = 18 bits)
 	/* Clear bit 0 to ensure even cacheline index (handler slot, not bi slot).
 	   cacheline(x)=((x>>1)&(TAGMASK>>1))<<1; TAGMASK>>1=0x1ffff -> 17 bits.
@@ -769,11 +811,8 @@ STATIC_INLINE uae_u32* compemu_raw_endblock_pc_isconst(IM32 cycles, IMPTR v)
 	uae_u32* branch_hot = (uae_u32*)get_target();
 	TBZ_xii(REG_WORK1, 31, 0); // non-negative countdown continues on the hot chain path
 
-	if (jit_trace_setpc_env()) {
-		LOAD_U64(REG_PAR1, v);
-		LOAD_U32(REG_PAR2, 6);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-	}
+	if (jit_trace_setpc_env())
+		compemu_raw_trace_setpc_const(v, 6);
 	uae_u32* branchadd = (uae_u32*)get_target();
 	B_i(0);
 	write_jmp_target(branchadd, (uintptr)popall_do_nothing);
@@ -788,11 +827,8 @@ STATIC_INLINE uae_u32* compemu_raw_endblock_pc_isconst(IM32 cycles, IMPTR v)
 		B_i(0);
 		write_jmp_target(br_dn_hot2, (uintptr)popall_do_nothing);
 	}
-	if (jit_trace_setpc_env()) {
-		LOAD_U64(REG_PAR1, v);
-		LOAD_U32(REG_PAR2, 5);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-	}
+	if (jit_trace_setpc_env())
+		compemu_raw_trace_setpc_const(v, 5);
 	tba = (uae_u32*)get_target();
 	B_i(0); // <target set by caller>
 
