@@ -222,7 +222,7 @@ jobs:
         with:
           name: basiliskii-sdl-arm64-deb
           path: dist/*.deb
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -498,7 +498,7 @@ jobs:
         with:
           name: basiliskii-sdl-armhf-deb
           path: dist/*.deb
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -689,7 +689,7 @@ jobs:
         with:
           name: sheepshaver-sdl-arm64-deb
           path: dist/*.deb
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -885,7 +885,7 @@ jobs:
         with:
           name: sheepshaver-sdl-armhf-deb
           path: dist/*.deb
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
