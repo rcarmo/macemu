@@ -159,7 +159,11 @@ static int cond_codes[]={-1,-1,
 		NATIVE_CC_HI,NATIVE_CC_LS,
 		NATIVE_CC_CC,NATIVE_CC_CS,
 		NATIVE_CC_NE,NATIVE_CC_EQ,
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		NATIVE_CC_VC,NATIVE_CC_VS,
+#else
 		-1,-1,
+#endif
 		NATIVE_CC_PL,NATIVE_CC_MI,
 		NATIVE_CC_GE,NATIVE_CC_LT,
 		NATIVE_CC_GT,NATIVE_CC_LE
@@ -2323,9 +2327,13 @@ gen_opcode (unsigned int opcode)
 	    comprintf("\tcomp_pc_p=(uae_u8*)(uintptr)get_const(PC_P);\n");
 	    break;
 	 case 1: break; /* This is silly! */
-	 case 8: failure; break;  /* Work out details! FIXME */
-	 case 9: failure; break;  /* Not critical, though! */
-
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	 case 8:
+	 case 9:
+#else
+	 case 8: failure; break;
+	 case 9: failure; break;
+#endif
 	 case 2:
 	 case 3:
 	 case 4:
@@ -2458,9 +2466,13 @@ gen_opcode (unsigned int opcode)
 #endif
 	    break;
 
-	 case 8: failure; break;  /* Work out details! FIXME */
-	 case 9: failure; break;  /* Not critical, though! */
-
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	 case 8:
+	 case 9:
+#else
+	 case 8: failure; break;
+	 case 9: failure; break;
+#endif
 	 case 2:
 	 case 3:
 	 case 4:
@@ -2534,9 +2546,13 @@ gen_opcode (unsigned int opcode)
 	    /* Unconditional not-set */
 	    comprintf("\tmov_l_ri(val,1);\n");
 	    break;
-	 case 8: failure; break;  /* Work out details! FIXME */
-	 case 9: failure; break;  /* Not critical, though! */
-
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	 case 8:
+	 case 9:
+#else
+	 case 8: failure; break;
+	 case 9: failure; break;
+#endif
 	 case 2:
 	 case 3:
 	 case 4:

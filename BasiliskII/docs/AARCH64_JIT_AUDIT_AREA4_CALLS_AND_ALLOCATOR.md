@@ -23,6 +23,7 @@ Primary files:
 4. A locked physical register cannot be evicted. A lock remaining on an allocatable register at an opcode boundary is an invariant failure.
 5. Scratch virtual-register IDs must be in the configured scratch range and owned exactly once until release.
 6. Every scratch vreg must have a distinct in-bounds, pointer-width spill slot; allocator scratch cardinality, host-pointer width, and `regstruct` backing are one contract.
+7. Generated opcode objects and JIT support code must be built from the same `regstruct` layout epoch; generated code inlines field addresses and cannot be mixed with stale objects.
 
 ## Confirmed defects and fixes
 
@@ -66,10 +67,17 @@ The allocator defines five integer scratch vregs (`S1..S5`) and maps all five th
 
 Allocator spill backing is now separate from the 32-bit helper-argument array: `jit_scratch_vregs[S1..S5]` is `uintptr_t`, and scratch reload, dirty writeback, and constant writeback all use X-register loads/stores. Compile-time assertions enforce both cardinality and element width.
 
+### Generated opcode objects retained an obsolete `regstruct` layout
+
+Adding `jit_scratch_vregs[S1..S5]` moved every later `regstruct` field, but the Unix build only rebuilt `compemu_support.o`; `compemu1.o..compemu8.o` had no header dependency and retained old inlined field addresses. Measured BFEXTU code stored extension `0x0022` at old offset 360 while its C helper loaded offset 400, so all helper metadata after the inserted field was read from the wrong slot.
+
+The Unix make rules now give the complete JIT object family an explicit shared dependency on configuration and layout-defining headers. They also model the textual `.cpp` includes that make up the aggregate `compemu_support.o` translation unit; an edit to the ARM64 support, compatibility, codegen, preferences, or MIDFUNC fragments can no longer be reported as up to date. The opcode-equivalence harness also deletes the complete `compemu*.o` family before building, so it cannot validate a mixed layout even with an older generated Makefile.
+
 ## Structural regression gate
 
 `jit-test/structural-audit.ts` checks emitter ordering and source-level ownership contracts that ordinary opcode vectors cannot trigger deterministically:
 
+- generated opcode/support objects share explicit `regstruct` layout dependencies, and the harness rebuilds all of them;
 - call target uses reserved x18, not x2;
 - set-PC observers preserve the complete caller-saved JIT state;
 - helper call performs both allocator barrier phases;

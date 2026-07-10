@@ -4063,6 +4063,67 @@ static void jit_runtime_eorsr_word(uae_u32 src)
     m68k_incpc(4);
 }
 
+static void jit_runtime_mvsr2_full(uae_u32 opcode)
+{
+    const uae_u32 real_opcode = cft_map(opcode);
+    const uae_u32 dstreg = real_opcode & 7;
+    const bool ccr_only = (real_opcode & 0x0200) != 0;
+    uaecptr dsta;
+
+    if (!ccr_only && !regs.s) {
+        Exception(8, 0);
+        return;
+    }
+    MakeSR();
+    const uae_u16 value = ccr_only ? (uae_u16)(regs.sr & 0x00ff) : regs.sr;
+
+    switch (real_opcode & 0x0038) {
+    case 0x0000: /* Dn */
+        m68k_dreg(regs, dstreg) = (m68k_dreg(regs, dstreg) & 0xffff0000u) | value;
+        m68k_incpc(2);
+        return;
+    case 0x0010: /* (An) */
+        dsta = m68k_areg(regs, dstreg);
+        m68k_incpc(2);
+        break;
+    case 0x0018: /* (An)+ */
+        dsta = m68k_areg(regs, dstreg);
+        m68k_areg(regs, dstreg) += 2;
+        m68k_incpc(2);
+        break;
+    case 0x0020: /* -(An) */
+        dsta = m68k_areg(regs, dstreg) - 2;
+        m68k_areg(regs, dstreg) = dsta;
+        m68k_incpc(2);
+        break;
+    case 0x0028: /* (d16,An) */
+        dsta = m68k_areg(regs, dstreg) + (uae_s32)(uae_s16)get_iword(2);
+        m68k_incpc(4);
+        break;
+    case 0x0030: /* (d8,An,Xn) */
+        m68k_incpc(2);
+        dsta = get_disp_ea_020(m68k_areg(regs, dstreg), next_iword());
+        break;
+    case 0x0038: /* absolute extension modes */
+        if (dstreg == 0) {
+            dsta = (uae_s32)(uae_s16)get_iword(2);
+            m68k_incpc(4);
+        } else if (dstreg == 1) {
+            dsta = get_ilong(2);
+            m68k_incpc(6);
+        } else {
+            op_illg(opcode);
+            return;
+        }
+        break;
+    default:
+        op_illg(opcode);
+        return;
+    }
+    regs.fault_pc = m68k_getpc();
+    put_word(dsta, value);
+}
+
 static void jit_runtime_mv2sr_word_full(uae_u32 opcode)
 {
     if (!regs.s) {
@@ -4075,7 +4136,7 @@ static void jit_runtime_mv2sr_word_full(uae_u32 opcode)
     uaecptr srca;
     uae_u16 src;
 
-    switch (real_opcode & 0x003f) {
+    switch (real_opcode & 0x0038) {
     case 0x0000: /* Dn */
         src = (uae_u16)m68k_dreg(regs, srcreg);
         regs.sr = src;
@@ -4508,6 +4569,16 @@ static void op_fullsr_eorsr_w_comp_ff(uae_u32 opcode)
     uae_u32 src = (uae_u32)(uae_u16)comp_get_iword((m68k_pc_offset += 2) - 2);
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_eorsr_word,
         (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), src, 0, false);
+}
+
+static void op_fullsr_mvsr2_comp_ff(uae_u32 opcode)
+{
+    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    /* MOVE SR/CCR can raise privilege or destination access exceptions.  The
+       helper owns all EA side effects and the live successor, so terminate at
+       its runtime PC rather than continuing from compile-time PC facts. */
+    jit_emit_runtime_helper_barrier((uintptr)jit_runtime_mvsr2_full,
+        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false, true);
 }
 
 static void op_fullsr_mv2sr_w_comp_ff(uae_u32 opcode)
@@ -5896,6 +5967,19 @@ static inline void reset_compop(int opcode)
 static void jit_install_fast_interpreter_overrides(void);
 #endif
 
+static bool jit_same_compiler_shape(const struct instr& a, const struct instr& b)
+{
+    return a.mnemo == b.mnemo &&
+        a.cc == b.cc && a.plev == b.plev && a.clev == b.clev &&
+        a.size == b.size && a.cflow == b.cflow &&
+        a.smode == b.smode && a.stype == b.stype && a.dmode == b.dmode &&
+        a.suse == b.suse && a.duse == b.duse && a.sduse == b.sduse &&
+        a.spos == b.spos && a.dpos == b.dpos &&
+        (a.spos >= 0 || a.sreg == b.sreg) &&
+        (a.dpos >= 0 || a.dreg == b.dreg) &&
+        a.flagdead == b.flagdead && a.flaglive == b.flaglive;
+}
+
 void build_comp(void)
 {
     int i, j;
@@ -5992,7 +6076,15 @@ void build_comp(void)
 #endif
             isaddx = prop[cft_map(table68k[opcode].handler)].is_addx;
             prop[cft_map(opcode)].is_addx = isaddx;
-            cflow = prop[cft_map(table68k[opcode].handler)].cflow;
+            /* Architectural control-flow classification must not depend on
+               whether this opcode family has a generated compiler handler.
+               Unsupported canonical handlers retain prop's fl_trap default;
+               copying that into aliases (for example BVC/BVS) makes block
+               formation and fallback finalisation treat real branches as
+               straight-line instructions.  Keep generated refinements for
+               compiled aliases, but use table68k semantics for fallbacks. */
+            cflow = f ? prop[cft_map(table68k[opcode].handler)].cflow
+                      : table68k[opcode].cflow;
             prop[cft_map(opcode)].cflow = cflow;
             compfunctbl[cft_map(opcode)] = f;
             nfcompfunctbl[cft_map(opcode)] = nff;
@@ -6046,6 +6138,14 @@ void build_comp(void)
     nfcompfunctbl[cft_map(0x007c)] = op_fullsr_orsr_w_comp_ff;
     nfcompfunctbl[cft_map(0x027c)] = op_fullsr_andsr_w_comp_ff;
     nfcompfunctbl[cft_map(0x0a7c)] = op_fullsr_eorsr_w_comp_ff;
+    /* MOVE SR/CCR to every legal destination EA.  gencomp intentionally has
+       no MVSR2 handlers, but hot ROM interrupt-mask code uses these forms. */
+    for (opcode = 0; opcode < 65536; opcode++) {
+        if (table68k[opcode].mnemo == i_MVSR2) {
+            compfunctbl[cft_map(opcode)] = op_fullsr_mvsr2_comp_ff;
+            nfcompfunctbl[cft_map(opcode)] = op_fullsr_mvsr2_comp_ff;
+        }
+    }
     /* MV2SR.W (all EA modes): use runtime helper for correct stack swap */
     for (opcode = 0x46c0; opcode <= 0x46ff; opcode++) {
         if (compfunctbl[cft_map(opcode)]) {
@@ -6161,32 +6261,37 @@ void build_comp(void)
         }
     }
 
-    /* Propagate compiled handlers from base opcodes to variants.
-       gencomp generates handlers for base opcodes only (e.g., e008 for LSR.B).
-       Variant opcodes (e.g., e214 = LSR.B #1,D4) need to be mapped via
-       table68k[opcode].handler to the base handler. */
+    /* Propagate generated handlers only through readcpu's explicit opcode
+       handler chain.  Mnemonic equality is not a compatibility contract:
+       Bcc conditions share i_Bcc, for example, but BRA's generated handler
+       cannot implement unsupported BVC/BVS encodings. */
     for (opcode = 0; opcode < 65536; opcode++) {
         if (table68k[opcode].mnemo == i_ILLG || table68k[opcode].handler == -1)
             continue;
-        if (!compfunctbl[cft_map(opcode)] && table68k[opcode].handler != -1) {
-            /* Follow the handler chain — may need multiple hops */
+        if (!compfunctbl[cft_map(opcode)]) {
             int base = table68k[opcode].handler;
             int hops = 0;
-            while (base >= 0 && base < 65536 && !compfunctbl[base] && hops < 10) {
+            while (base >= 0 && base < 65536 &&
+                   !compfunctbl[cft_map(base)] && hops < 10) {
                 if (table68k[base].handler == -1 || table68k[base].handler == base)
                     break;
                 base = table68k[base].handler;
                 hops++;
             }
-            compop_func *f = (base >= 0 && base < 65536) ? compfunctbl[base] : NULL;
-            compop_func *nff = (base >= 0 && base < 65536) ? nfcompfunctbl[base] : NULL;
-            /* If chain failed, search by instruction family (same mnemo) */
+            compop_func *f = (base >= 0 && base < 65536)
+                ? compfunctbl[cft_map(base)] : NULL;
+            compop_func *nff = (base >= 0 && base < 65536)
+                ? nfcompfunctbl[cft_map(base)] : NULL;
+            /* Some readcpu aliases have no complete handler chain.  Reuse a
+               generated handler only when every field that shapes emitted
+               code matches; mnemonic alone conflates Bcc conditions and other
+               encodings with different immediate/register extraction. */
             if (!f) {
-                int mnemo = table68k[opcode].mnemo;
                 for (int probe = 0; probe < 65536 && !f; probe++) {
-                    if (table68k[probe].mnemo == mnemo && compfunctbl[probe]) {
-                        f = compfunctbl[probe];
-                        nff = nfcompfunctbl[probe];
+                    if (compfunctbl[cft_map(probe)] &&
+                        jit_same_compiler_shape(table68k[opcode], table68k[probe])) {
+                        f = compfunctbl[cft_map(probe)];
+                        nff = nfcompfunctbl[cft_map(probe)];
                         base = probe;
                     }
                 }
@@ -6845,7 +6950,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         /* Save all caller-saved regs around the trace/verify call */
                         flush(1);
                         if (_verify_this_op)
-                            compemu_raw_call_observer_ii((uintptr)jit_verify_post, pc_val, opcode);
+                            compemu_raw_call_observer_ii((uintptr)jit_verify_post, pc_val,
+                                opcode | ((uae_u32)(needed_flags & FLAG_ALL) << 16));
                         else
                             compemu_raw_call_observer_ii((uintptr)jit_trace_add, pc_val, opcode);
                         comp_pc_p = (uae_u8*)pc_hist[i].location;

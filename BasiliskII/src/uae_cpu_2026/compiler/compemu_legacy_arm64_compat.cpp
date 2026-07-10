@@ -20,6 +20,8 @@ static inline void legacy_copy_carry_to_flagx(void)
 static inline int legacy_x86_cc_to_native(int cc)
 {
 	switch (cc) {
+	case 0: return NATIVE_CC_VS;
+	case 1: return NATIVE_CC_VC;
 	case 2: return NATIVE_CC_CS;
 	case 3: return NATIVE_CC_CC;
 	case 4: return NATIVE_CC_EQ;

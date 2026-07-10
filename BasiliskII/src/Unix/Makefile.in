@@ -222,6 +222,23 @@ $(OBJ_DIR)/gencomp$(EXEEXT): $(OBJ_DIR)/gencomp.o $(OBJ_DIR)/readcpu.o $(OBJ_DIR
 
 UAE_PATH = @UAE_PATH@
 
+# Generated opcode objects inline regstruct field addresses.  Keep every JIT
+# translation unit in one layout epoch when configuration or type/layout
+# headers change; mixing old compemu*.o files with a rebuilt support object
+# silently redirects helper metadata stores to the wrong fields.
+JIT_LAYOUT_DEPS = Makefile sysdeps.h $(UAE_PATH)/newcpu.h \
+	$(UAE_PATH)/registers.h $(UAE_PATH)/fpu/types.h
+JIT_LAYOUT_OBJECTS = $(OBJ_DIR)/compemu_support.o \
+	$(OBJ_DIR)/compemu1.o $(OBJ_DIR)/compemu2.o $(OBJ_DIR)/compemu3.o $(OBJ_DIR)/compemu4.o \
+	$(OBJ_DIR)/compemu5.o $(OBJ_DIR)/compemu6.o $(OBJ_DIR)/compemu7.o $(OBJ_DIR)/compemu8.o
+JIT_SUPPORT_DEPS = $(UAE_PATH)/compiler/compemu_support_arm.cpp \
+	$(UAE_PATH)/compiler/compemu_legacy_arm64_compat.cpp \
+	$(UAE_PATH)/compemu_prefs.cpp $(UAE_PATH)/compiler/codegen_arm64.cpp \
+	$(UAE_PATH)/compiler/compemu_midfunc_arm64.cpp \
+	$(UAE_PATH)/compiler/compemu_midfunc_arm64_2.cpp
+$(JIT_LAYOUT_OBJECTS): $(JIT_LAYOUT_DEPS)
+$(OBJ_DIR)/compemu_support.o: $(JIT_SUPPORT_DEPS)
+
 cpudefs.cpp: $(OBJ_DIR)/build68k$(EXEEXT) @top_srcdir@/$(UAE_PATH)/table68k
 	$(OBJ_DIR)/build68k$(EXEEXT) <@top_srcdir@/$(UAE_PATH)/table68k >cpudefs.cpp
 cpustbl.cpp: cpuemu.cpp

@@ -78,6 +78,7 @@ divu_remainder
 flag_chain_xzn
 flags
 flags_eori_ccr
+scc_vc_vs
 move_sr_roundtrip
 muldiv
 muls_neg_neg

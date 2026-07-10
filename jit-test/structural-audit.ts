@@ -46,6 +46,25 @@ function requireBefore(
   }
 }
 
+const makefileTemplate = await Bun.file(new URL(
+  "../BasiliskII/src/Unix/Makefile.in",
+  import.meta.url,
+)).text();
+for (const layoutDependency of [
+  "JIT_LAYOUT_DEPS = Makefile sysdeps.h $(UAE_PATH)/newcpu.h",
+  "$(UAE_PATH)/registers.h $(UAE_PATH)/fpu/types.h",
+  "JIT_SUPPORT_DEPS = $(UAE_PATH)/compiler/compemu_support_arm.cpp",
+  "$(UAE_PATH)/compiler/compemu_legacy_arm64_compat.cpp",
+  "$(UAE_PATH)/compiler/codegen_arm64.cpp",
+  "$(UAE_PATH)/compiler/compemu_midfunc_arm64.cpp",
+  "$(JIT_LAYOUT_OBJECTS): $(JIT_LAYOUT_DEPS)",
+  "$(OBJ_DIR)/compemu_support.o: $(JIT_SUPPORT_DEPS)",
+]) {
+  requireText(makefileTemplate, layoutDependency, "JIT object layout epoch");
+}
+const harnessSource = await Bun.file(new URL("./run.sh", import.meta.url)).text();
+requireText(harnessSource, "rm -f obj/compemu*.o", "JIT object layout epoch");
+
 const callEmitter = bodyBetween(
   "STATIC_INLINE void compemu_raw_call(uintptr t)\n{",
   "STATIC_INLINE void compemu_raw_call_r",
@@ -177,6 +196,66 @@ const allocatorPath = new URL(
   import.meta.url,
 );
 const allocatorSource = await Bun.file(allocatorPath).text();
+const gencompSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
+  import.meta.url,
+)).text();
+requireText(gencompSource, "NATIVE_CC_VC,NATIVE_CC_VS", "ARM64 overflow condition codegen");
+const arm64OverflowCases = "#if defined(CPU_aarch64) || defined(CPU_AARCH64)\n\t case 8:\n\t case 9:";
+if (gencompSource.split(arm64OverflowCases).length - 1 !== 3) {
+  fail("ARM64 overflow condition codegen: Bcc/DBcc/Scc must all handle VC/VS natively");
+}
+if (allocatorSource.split("switch (real_opcode & 0x0038)").length - 1 < 2) {
+  fail("full-SR EA decoding: mode field must exclude the register bits in both directions");
+}
+if (allocatorSource.includes("switch (real_opcode & 0x003f)")) {
+  fail("full-SR EA decoding: mode switch still includes register bits");
+}
+for (const mvsr2Contract of [
+  "static void jit_runtime_mvsr2_full(uae_u32 opcode)",
+  "if (!ccr_only && !regs.s)",
+  "m68k_dreg(regs, dstreg) = (m68k_dreg(regs, dstreg) & 0xffff0000u) | value;",
+  "dsta = get_disp_ea_020(m68k_areg(regs, dstreg), next_iword());",
+  "regs.fault_pc = m68k_getpc();",
+  "if (table68k[opcode].mnemo == i_MVSR2)",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_mvsr2_full",
+]) {
+  requireText(allocatorSource, mvsr2Contract, "complete MOVE SR/CCR helper family");
+}
+requireText(
+  allocatorSource,
+  "cflow = f ? prop[cft_map(table68k[opcode].handler)].cflow\n                      : table68k[opcode].cflow;",
+  "fallback architectural control-flow classification",
+);
+requireText(
+  allocatorSource,
+  "? compfunctbl[cft_map(base)] : NULL;",
+  "explicit compiler-handler propagation",
+);
+requireText(
+  allocatorSource,
+  "jit_same_compiler_shape(table68k[opcode], table68k[probe])",
+  "shape-safe compiler-handler propagation",
+);
+for (const shapeField of [
+  "a.mnemo == b.mnemo", "a.cc == b.cc", "a.size == b.size",
+  "a.smode == b.smode", "a.dmode == b.dmode",
+  "a.spos == b.spos", "a.dpos == b.dpos",
+  "a.cflow == b.cflow", "a.flagdead == b.flagdead", "a.flaglive == b.flaglive",
+]) {
+  requireText(allocatorSource, shapeField, "shape-safe compiler-handler propagation");
+}
+if (allocatorSource.includes("table68k[probe].mnemo == mnemo")) {
+  fail("explicit compiler-handler propagation: mnemonic-only handler substitution remains");
+}
+requireText(
+  allocatorSource,
+  "if ((prop[cft_map(opcode)].cflow & fl_end_block) != 0) {",
+  "fallback control-flow runtime successor",
+);
+if (allocatorSource.includes("(prop[cft_map(opcode)].cflow & fl_end_block) != 0 && i + 1 < blocklen")) {
+  fail("fallback control-flow runtime successor: terminal fallback remains position-gated");
+}
 for (const observer of [
   "trace_emuneigh_entry",
   "jit_trace_pc_hit",
@@ -353,6 +432,8 @@ const blockBuilderPath = new URL(
   import.meta.url,
 );
 const blockBuilder = await Bun.file(blockBuilderPath).text();
+requireText(blockBuilder, "case 0: return NATIVE_CC_VS;", "complete legacy condition mapping");
+requireText(blockBuilder, "case 1: return NATIVE_CC_VC;", "complete legacy condition mapping");
 const blockBuilderStart = blockBuilder.indexOf("void execute_normal(void)");
 if (blockBuilderStart < 0) fail("missing execute_normal block builder");
 const blockBuilderBody = blockBuilder.slice(blockBuilderStart);
@@ -371,6 +452,15 @@ for (const forbidden of [
   }
 }
 
+console.log("METRIC structural_jit_object_layout_epoch=1");
+console.log("METRIC structural_fullsr_ea_mode_decode=1");
+console.log("METRIC structural_complete_mvsr2_helper_family=1");
+console.log("METRIC structural_complete_legacy_condition_mapping=1");
+console.log("METRIC structural_arm64_overflow_condition_codegen=1");
+console.log("METRIC structural_shape_safe_handler_propagation=1");
+console.log("METRIC structural_explicit_handler_propagation=1");
+console.log("METRIC structural_fallback_architectural_cflow=1");
+console.log("METRIC structural_fallback_controlflow_runtime_pc=1");
 console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_diagnostic_observer_abi=1");
 console.log("METRIC structural_helper_allocator_barrier=1");

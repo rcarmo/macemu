@@ -77,11 +77,12 @@ if [ ! -f config.h ] || [ ! -f Makefile ]; then
     fi
 fi
 
-# The generated Unix Makefile does not always track header-only MIDFUNC/JIT
-# macro changes through to all dependent objects. Force-rebuild the key ARM64
-# JIT glue objects so harness runs do not silently use stale code or fail on
-# missing symbols after header-only changes.
-rm -f obj/compemu_support.o obj/compemu_fpp.o
+# Generated opcode objects inline regstruct offsets and MIDFUNC/JIT code.  They
+# must be rebuilt in the same layout epoch as compemu_support.o; rebuilding only
+# the support object after a registers.h change silently corrupts helper fields.
+# Force the complete JIT object family so the equivalence gate cannot test a
+# mixed ABI even when an older generated Makefile lacks header dependencies.
+rm -f obj/compemu*.o
 if ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
     tail -20 "$RUN_DIR/build.log" >&2 || true
     emit_failure_metrics 0 "build failed"
@@ -1834,6 +1835,7 @@ declare -A RISKY_TESTS=(
     [bitops_chg_highbit]=1
     [flags]=1
     [flags_eori_ccr]=1
+    [scc_vc_vs]=1
     [move_sr_roundtrip]=1
     [muls_neg_neg]=1
     [muls_zero]=1
