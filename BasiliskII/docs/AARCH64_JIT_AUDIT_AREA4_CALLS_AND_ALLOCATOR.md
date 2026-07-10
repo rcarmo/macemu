@@ -67,6 +67,25 @@ The allocator defines five integer scratch vregs (`S1..S5`) and maps all five th
 
 Allocator spill backing is now separate from the 32-bit helper-argument array: `jit_scratch_vregs[S1..S5]` is `uintptr_t`, and scratch reload, dirty writeback, and constant writeback all use X-register loads/stores. Compile-time assertions enforce both cardinality and element width.
 
+### Unsupported aliases inherited compiler-only control-flow metadata
+
+The generated-handler propagation pass copied a base handler's `cflow` metadata
+even when no compatible compiler function was found. Compiler availability then
+silently replaced the opcode's architectural `table68k` classification.
+
+Propagation now copies generated `cflow` only with a compatible compiler
+handler. Unsupported aliases retain their own architectural control-flow class.
+
+### A terminal fallback could resurrect compile-time PC state
+
+Interpreter fallback control transfers published their runtime successor only
+when another traced instruction followed. If the fallback was the final traced
+instruction, block finalisation could instead consult stale compile-time `PC_P`
+state from a preceding native instruction.
+
+Every fallback classified as `fl_end_block` now exits through the runtime
+`regs.pc_p` successor, including the terminal position.
+
 ### Generated opcode objects retained an obsolete `regstruct` layout
 
 Adding `jit_scratch_vregs[S1..S5]` moved every later `regstruct` field, but the Unix build only rebuilt `compemu_support.o`; `compemu1.o..compemu8.o` had no header dependency and retained old inlined field addresses. Measured BFEXTU code stored extension `0x0022` at old offset 360 while its C helper loaded offset 400, so all helper metadata after the inserted field was read from the wrong slot.
@@ -83,6 +102,8 @@ The Unix make rules now give the complete JIT object family an explicit shared d
 - helper call performs both allocator barrier phases;
 - locked eviction and scratch misuse are fail-fast;
 - scratch spill backing covers the full `S1..S5` range and preserves `uintptr` values;
+- unsupported aliases retain architectural control-flow metadata;
+- terminal fallback transfers consume their runtime successor PC;
 - all endblock return paths publish the complete successor PC first;
 - trace construction stops at every control-flow boundary.
 

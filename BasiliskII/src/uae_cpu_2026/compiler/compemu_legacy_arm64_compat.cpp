@@ -1008,8 +1008,10 @@ void exec_nostats(void)
 }
 
 #if defined(CPU_AARCH64)
-extern "C" uae_u32 jit_current_interp_pc = 0;
-extern "C" uae_u32 jit_current_interp_opcode = 0;
+extern "C" {
+uae_u32 jit_current_interp_pc = 0;
+uae_u32 jit_current_interp_opcode = 0;
+}
 
 static void exec_nostats_limited(int maxrun_limit)
 {
@@ -2160,74 +2162,39 @@ extern "C" void jit_op_bfset(void) { jit_bf_rmw(3); }
 /* --- BFINS helper --- */
 extern "C" void jit_op_bfins(void)
 {
-    /* Bit field insert — complex encoding.
-     * jit_exception = extension word
-     * scratchregs[0] = effective address (for memory EA) or reg number + 0x80000000 for Dn
-     * The extension word:
-     *   bits 15-12: Dn (source data register)
-     *   bit 11: Do (0=offset in ext, 1=offset in Dn)
-     *   bits 10-6: offset or offset reg
-     *   bit 5: Dw (0=width in ext, 1=width in Dn)
-     *   bits 4-0: width or width reg */
-    uae_u32 ext = regs.jit_exception;
-    uae_u32 ea_info = regs.scratchregs[0];
-    
-    int dn = (ext >> 12) & 7;
-    int do_reg = (ext >> 11) & 1;
-    int offset = do_reg ? (regs.regs[(ext >> 6) & 7] & 31) : ((ext >> 6) & 31);
-    int dw_reg = (ext >> 5) & 1;
-    int width = dw_reg ? (regs.regs[ext & 7] & 31) : (ext & 31);
-    if (width == 0) width = 32;
-    
-    uae_u32 ins_data = regs.regs[dn];
-    
-    if (ea_info & 0x80000000) {
-        /* Register destination */
-        int dreg = ea_info & 7;
-        uae_u32 val = regs.regs[dreg];
-        uae_u32 mask = (width == 32) ? 0xFFFFFFFF : ((1u << width) - 1);
-        int shift = 32 - offset - width;
-        if (shift < 0) shift += 32; /* shouldn't happen for reg */
-        val &= ~(mask << shift);
-        val |= ((ins_data & mask) << shift);
-        regs.regs[dreg] = val;
-        
-        /* Set flags based on inserted field */
-        uae_u32 field = (ins_data & mask);
-        SET_NFLG((field >> (width - 1)) & 1);
-        SET_ZFLG(field == 0);
-        SET_VFLG(0);
-        SET_CFLG(0);
+    /* Mirror the interpreter's get_bitfield()/put_bitfield() contract.
+     * jit_exception is the extension word; scratchregs[0] is either the
+     * memory EA or 0x80000000|Dn for a register destination.  A dynamic
+     * memory offset is a signed 32-bit value and must not be reduced modulo
+     * 32 until after distinguishing the register-destination case. */
+    const uae_u32 ext = regs.jit_exception;
+    const uae_u32 ea_info = regs.scratchregs[0];
+    uae_s32 offset = (ext & 0x800)
+        ? (uae_s32)regs.regs[(ext >> 6) & 7]
+        : (uae_s32)((ext >> 6) & 0x1f);
+    const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
+    const uae_u32 field_mask = width == 32 ? 0xffffffffu : ((1u << width) - 1);
+    const uae_u32 field = regs.regs[(ext >> 12) & 7] & field_mask;
+
+    if (ea_info & 0x80000000u) {
+        const int dreg = ea_info & 7;
+        const unsigned roff = (unsigned)offset & 0x1f;
+        const uae_u32 old = regs.regs[dreg];
+        const uae_u32 rotated = roff ? (old << roff) | (old >> (32 - roff)) : old;
+        const uae_u32 keep_mask = width == 32 ? 0 : ((1u << (32 - width)) - 1);
+        const uae_u32 merged = (rotated & keep_mask) | (field << (32 - width));
+        regs.regs[dreg] = roff ? (merged >> roff) | (merged << (32 - roff)) : merged;
     } else {
-        /* Memory destination — byte-oriented bit manipulation */
-        uae_u32 addr = ea_info;
-        int byte_offset = offset >> 3;
-        int bit_offset = offset & 7;
-        addr += byte_offset;
-        
-        /* Read enough bytes to cover the field */
-        int total_bits = bit_offset + width;
-        int bytes_needed = (total_bits + 7) >> 3;
-        uae_u32 val = 0;
-        for (int i = 0; i < bytes_needed && i < 5; i++) {
-            val = (val << 8) | get_byte(addr + i);
-        }
-        
-        uae_u32 mask = (width == 32) ? 0xFFFFFFFF : ((1u << width) - 1);
-        int shift = (bytes_needed * 8) - bit_offset - width;
-        val &= ~(mask << shift);
-        val |= ((ins_data & mask) << shift);
-        
-        for (int i = 0; i < bytes_needed && i < 5; i++) {
-            put_byte(addr + i, (val >> ((bytes_needed - 1 - i) * 8)) & 0xFF);
-        }
-        
-        uae_u32 field = (ins_data & mask);
-        SET_NFLG((field >> (width - 1)) & 1);
-        SET_ZFLG(field == 0);
-        SET_VFLG(0);
-        SET_CFLG(0);
+        uae_u32 bdata[2];
+        const uae_u32 dsta = ea_info + (offset >> 3);
+        (void)get_bitfield(dsta, bdata, offset, width);
+        put_bitfield(dsta, bdata, field, offset, width);
     }
+
+    SET_NFLG((field >> (width - 1)) & 1);
+    SET_ZFLG(field == 0);
+    SET_VFLG(0);
+    SET_CFLG(0);
 }
 
 /* --- ROXL/ROXR register helpers --- */

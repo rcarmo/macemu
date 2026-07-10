@@ -50020,37 +50020,12 @@ void REGPARAM2 op_efc0_0_comp_ff(uae_u32 opcode) /* BFINS */
 {	uae_u8 scratchie=S1;
 {	int extra = scratchie++;
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int dst = dstreg;
-	dont_care_flags();
-	{
-	  int dn = (extra >> 12) & 7;
-	  int Do = (extra >> 11) & 1;
-	  int Dw = (extra >> 5) & 1;
-	  int offset, width;
-	  if (Do) { int tmp = scratchie++; mov_l_rr(tmp, (extra>>6)&7); and_l_ri(tmp,31); mov_l_mr((uintptr)&regs.scratchregs[1], tmp); offset = regs.scratchregs[1]; }
-	  if (Do || Dw) {
-	    mov_l_mr((uintptr)&regs.jit_exception, extra);
-	    { int ea_enc = scratchie++;
-	      mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);
-	      mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }
-	    flush(1);
-	    call_helper((uintptr)jit_op_bfins);
-	  } else {
-	    /* Immediate offset and width: fully inline */
-	    int off = (extra >> 6) & 31;
-	    int wid = extra & 31;
-	    if (!wid) wid = 32;
-	    int shift = 32 - off - wid;
-	    uae_u32 mask = (wid == 32) ? 0xFFFFFFFFu : ((1u << wid) - 1);
-	    uae_u32 shifted_mask = mask << shift;
-	    int tmp = scratchie++;
-	    mov_l_rr(tmp, dn);
-	    and_l_ri(tmp, mask);
-	    shll_l_ri(tmp, shift);
-	    and_l_ri(dstreg, ~shifted_mask);
-	    or_l(dstreg, tmp);
-	  }
-	}
+{	mov_l_mr((uintptr)&regs.jit_exception, extra);
+	{ int ea_enc = scratchie++;
+	  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);
+	  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }
+	flush(1);
+	call_helper((uintptr)jit_op_bfins);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -50072,7 +50047,6 @@ void REGPARAM2 op_efd0_0_comp_ff(uae_u32 opcode) /* BFINS */
 {	int dsta = dodgy ? scratchie++ : dstreg + 8;
 	if (dodgy)
 		mov_l_rr(dsta, dstreg + 8);
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -50098,7 +50072,6 @@ void REGPARAM2 op_efe8_0_comp_ff(uae_u32 opcode) /* BFINS */
 {	int dsta = scratchie++;
 	mov_l_rr(dsta, 8 + dstreg);
 	lea_l_brr(dsta, dsta, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -50123,7 +50096,6 @@ void REGPARAM2 op_eff0_0_comp_ff(uae_u32 opcode) /* BFINS */
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dsta = scratchie++;
 	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), dsta, scratchie);
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -50143,7 +50115,6 @@ void REGPARAM2 op_eff8_0_comp_ff(uae_u32 opcode) /* BFINS */
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dsta = scratchie++;
 	mov_l_ri(dsta, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -50163,7 +50134,6 @@ void REGPARAM2 op_eff9_0_comp_ff(uae_u32 opcode) /* BFINS */
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dsta = scratchie++;
 	mov_l_ri(dsta, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -96180,37 +96150,12 @@ void REGPARAM2 op_efc0_0_comp_nf(uae_u32 opcode) /* BFINS */
 {	uae_u8 scratchie=S1;
 {	int extra = scratchie++;
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-{	int dst = dstreg;
-	dont_care_flags();
-	{
-	  int dn = (extra >> 12) & 7;
-	  int Do = (extra >> 11) & 1;
-	  int Dw = (extra >> 5) & 1;
-	  int offset, width;
-	  if (Do) { int tmp = scratchie++; mov_l_rr(tmp, (extra>>6)&7); and_l_ri(tmp,31); mov_l_mr((uintptr)&regs.scratchregs[1], tmp); offset = regs.scratchregs[1]; }
-	  if (Do || Dw) {
-	    mov_l_mr((uintptr)&regs.jit_exception, extra);
-	    { int ea_enc = scratchie++;
-	      mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);
-	      mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }
-	    flush(1);
-	    call_helper((uintptr)jit_op_bfins);
-	  } else {
-	    /* Immediate offset and width: fully inline */
-	    int off = (extra >> 6) & 31;
-	    int wid = extra & 31;
-	    if (!wid) wid = 32;
-	    int shift = 32 - off - wid;
-	    uae_u32 mask = (wid == 32) ? 0xFFFFFFFFu : ((1u << wid) - 1);
-	    uae_u32 shifted_mask = mask << shift;
-	    int tmp = scratchie++;
-	    mov_l_rr(tmp, dn);
-	    and_l_ri(tmp, mask);
-	    shll_l_ri(tmp, shift);
-	    and_l_ri(dstreg, ~shifted_mask);
-	    or_l(dstreg, tmp);
-	  }
-	}
+{	mov_l_mr((uintptr)&regs.jit_exception, extra);
+	{ int ea_enc = scratchie++;
+	  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);
+	  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }
+	flush(1);
+	call_helper((uintptr)jit_op_bfins);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -96232,7 +96177,6 @@ void REGPARAM2 op_efd0_0_comp_nf(uae_u32 opcode) /* BFINS */
 {	int dsta = dodgy ? scratchie++ : dstreg + 8;
 	if (dodgy)
 		mov_l_rr(dsta, dstreg + 8);
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -96258,7 +96202,6 @@ void REGPARAM2 op_efe8_0_comp_nf(uae_u32 opcode) /* BFINS */
 {	int dsta = scratchie++;
 	mov_l_rr(dsta, 8 + dstreg);
 	lea_l_brr(dsta, dsta, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -96283,7 +96226,6 @@ void REGPARAM2 op_eff0_0_comp_nf(uae_u32 opcode) /* BFINS */
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dsta = scratchie++;
 	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), dsta, scratchie);
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -96303,7 +96245,6 @@ void REGPARAM2 op_eff8_0_comp_nf(uae_u32 opcode) /* BFINS */
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dsta = scratchie++;
 	mov_l_ri(dsta, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);
@@ -96323,7 +96264,6 @@ void REGPARAM2 op_eff9_0_comp_nf(uae_u32 opcode) /* BFINS */
 	mov_l_ri(extra, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dsta = scratchie++;
 	mov_l_ri(dsta, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
-	dont_care_flags();
 	mov_l_mr((uintptr)&regs.jit_exception, extra);
 	mov_l_mr((uintptr)&regs.scratchregs[0], dsta);
 	flush(1);

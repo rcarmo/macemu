@@ -253,9 +253,38 @@ requireText(
   "if ((prop[cft_map(opcode)].cflow & fl_end_block) != 0) {",
   "fallback control-flow runtime successor",
 );
+
+const bfinsGeneratorStart = gencompSource.indexOf("     case i_BFINS:");
+const bfinsGeneratorEnd = gencompSource.indexOf("     case i_PACK:", bfinsGeneratorStart);
+if (bfinsGeneratorStart < 0 || bfinsGeneratorEnd < 0) fail("missing BFINS generator");
+const bfinsGenerator = gencompSource.slice(bfinsGeneratorStart, bfinsGeneratorEnd);
+for (const contract of [
+  "isjump;",
+  "GENA_GETV_NO_FETCH",
+  "mov_l_mr((uintptr)&regs.jit_exception, extra)",
+  "mov_l_mr((uintptr)&regs.scratchregs[0], dsta)",
+  "call_helper((uintptr)jit_op_bfins)",
+]) {
+  requireText(bfinsGenerator, contract, "BFINS runtime extension-word contract");
+}
+for (const forbidden of [
+  "GENA_GETV_FETCH_ALIGN",
+  "int dn = (extra >> 12)",
+  "int off = (extra >> 6)",
+  "int wid = extra & 31",
+]) {
+  if (bfinsGenerator.includes(forbidden)) {
+    fail(`BFINS runtime extension-word contract: compile-time decode remains: ${forbidden}`);
+  }
+}
 if (allocatorSource.includes("(prop[cft_map(opcode)].cflow & fl_end_block) != 0 && i + 1 < blocklen")) {
   fail("fallback control-flow runtime successor: terminal fallback remains position-gated");
 }
+requireText(
+  allocatorSource,
+  "const uae_u32 opcode = tagged_opcode & 0xffffu;",
+  "diagnostic verifier tagged-opcode decode",
+);
 for (const observer of [
   "trace_emuneigh_entry",
   "jit_trace_pc_hit",
@@ -434,6 +463,23 @@ const blockBuilderPath = new URL(
 const blockBuilder = await Bun.file(blockBuilderPath).text();
 requireText(blockBuilder, "case 0: return NATIVE_CC_VS;", "complete legacy condition mapping");
 requireText(blockBuilder, "case 1: return NATIVE_CC_VC;", "complete legacy condition mapping");
+const bfinsHelperStart = blockBuilder.indexOf('extern "C" void jit_op_bfins(void)');
+const bfinsHelperEnd = blockBuilder.indexOf("/* --- ROXL/ROXR register helpers --- */", bfinsHelperStart);
+if (bfinsHelperStart < 0 || bfinsHelperEnd < 0) fail("missing BFINS helper");
+const bfinsHelper = blockBuilder.slice(bfinsHelperStart, bfinsHelperEnd);
+for (const contract of [
+  "uae_s32 offset = (ext & 0x800)",
+  "const uae_u32 dsta = ea_info + (offset >> 3)",
+  "(void)get_bitfield(dsta, bdata, offset, width)",
+  "put_bitfield(dsta, bdata, field, offset, width)",
+  "const uae_u32 rotated = roff ?",
+  "const uae_u32 keep_mask = width == 32 ? 0",
+]) {
+  requireText(bfinsHelper, contract, "BFINS signed/wrapping field semantics");
+}
+if (bfinsHelper.includes("bytes_needed") || bfinsHelper.includes("offset = do_reg ?")) {
+  fail("BFINS signed/wrapping field semantics: truncated byte-loop or early modulo remains");
+}
 const blockBuilderStart = blockBuilder.indexOf("void execute_normal(void)");
 if (blockBuilderStart < 0) fail("missing execute_normal block builder");
 const blockBuilderBody = blockBuilder.slice(blockBuilderStart);
@@ -461,8 +507,11 @@ console.log("METRIC structural_shape_safe_handler_propagation=1");
 console.log("METRIC structural_explicit_handler_propagation=1");
 console.log("METRIC structural_fallback_architectural_cflow=1");
 console.log("METRIC structural_fallback_controlflow_runtime_pc=1");
+console.log("METRIC structural_bfins_runtime_contract=1");
+console.log("METRIC structural_bfins_signed_wrapping_semantics=1");
 console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_diagnostic_observer_abi=1");
+console.log("METRIC structural_diagnostic_verifier_opcode_decode=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
 console.log("METRIC structural_allocator_locked_evict=1");
 console.log("METRIC structural_scratch_spill_cardinality=1");

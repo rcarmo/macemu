@@ -916,10 +916,12 @@ static void jit_verify_pre(uae_u32 pc, uae_u32 opcode)
 	jit_verify_pre_valid = true;
 }
 
-static void jit_verify_post(uae_u32 pc, uae_u32 opcode)
+static void jit_verify_post(uae_u32 pc, uae_u32 tagged_opcode)
 {
 	if (!jit_verify_pre_valid)
 		return;
+	/* The emitter tags the opcode with its live-flag mask in the upper bits. */
+	const uae_u32 opcode = tagged_opcode & 0xffffu;
 	jit_verify_snapshot compiled_post;
 	memcpy(&compiled_post.regs, &regs, sizeof(regs));
 	memcpy(&compiled_post.flags, &regflags, sizeof(regflags));
@@ -6299,9 +6301,11 @@ void build_comp(void)
             if (f) {
                 compfunctbl[cft_map(opcode)] = f;
                 nfcompfunctbl[cft_map(opcode)] = nff;
-            }
-            if (base >= 0 && base < 65536) {
-                prop[cft_map(opcode)].cflow = prop[base].cflow;
+                prop[cft_map(opcode)].cflow = prop[cft_map(base)].cflow;
+            } else {
+                /* Compiler availability cannot redefine architectural control
+                   flow.  Unsupported aliases retain readcpu's classification. */
+                prop[cft_map(opcode)].cflow = table68k[opcode].cflow;
             }
             prop[cft_map(opcode)].set_flags = table68k[opcode].flagdead;
             prop[cft_map(opcode)].use_flags = table68k[opcode].flaglive;
@@ -7385,7 +7389,12 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                            live 0401be50). The L2 NATIVE path already handles this via
                            is_dynamic_return/DBcc/runtime-pc-endblock; this closes the same
                            gap for the interpreter-fallback dispatch. */
-                        if ((prop[cft_map(opcode)].cflow & fl_end_block) != 0 && i + 1 < blocklen) {
+                        /* A fallback control-transfer owns the live successor in
+                           regs.pc_p.  This is equally true when it is the final
+                           traced instruction: allowing finalisation to consult
+                           compile-time PC_P in that case can resurrect a stale
+                           constant from the preceding native instruction. */
+                        if ((prop[cft_map(opcode)].cflow & fl_end_block) != 0) {
                             compemu_raw_mov_l_rm(0, (uintptr)specflags);
                             compemu_raw_maybe_do_nothing(retired_cycles);
                             compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);

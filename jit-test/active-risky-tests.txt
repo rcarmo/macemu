@@ -303,6 +303,14 @@ divl_u64
 divl_s64
 bfins_dreg_imm
 bfins_dreg_narrow
+bfins_dreg_wrap
+bfins_dreg_dyn
+bfins_dreg_dyn_width32
+bfins_mem_span32
+bfins_mem_dyn_negative
+bfins_dreg_boot_alias
+bfins_mem_dyn_neg_width32
+bfins_mem_dyn_pos_width32
 dbeq_x_clobber
 oracle_zf_moveq_z1_take
 oracle_zf_moveq_z0_notake
