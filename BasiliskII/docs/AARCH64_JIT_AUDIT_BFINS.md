@@ -84,8 +84,11 @@ The equivalence harness covers:
 - generated `compemu.cpp` is stable after regeneration;
 - clean structural audit passes;
 - opcode equivalence: `329/329`, `fail=0`, `infra_fail=0`, `score=100`;
-- frozen-clock full JIT reaches the known desktop framebuffer background;
-- compared with the prior accepted desktop image, all pixels outside the
-  top-left `28x23` cursor rectangle are identical; the captured cursor frame
-  leaves the whole-image mean at `42877.3`, so the historical exact `42849`
-  whole-image gate remains open rather than being relaxed.
+- frozen-clock full JIT reaches Finder: an injected ADB mouse event paints the
+  expected “This computer may not have been shut down” dialog, and Return
+  dismisses it to the populated Finder menu bar and disk icons;
+- before that first input event, comparison with the prior accepted desktop
+  image is pixel-identical outside the top-left `28x23` cursor rectangle; the
+  captured cursor frame leaves the whole-image mean at `42877.3`, so the
+  historical exact `42849` cursor-sensitive metric is recorded separately
+  rather than being treated as a semantic failure or silently relaxed.
