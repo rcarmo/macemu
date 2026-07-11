@@ -34,7 +34,11 @@
 // Arm optimized midfunc
 DECLARE_MIDFUNC(arm_ADD_l(RW4 d, RR4 s));
 DECLARE_MIDFUNC(arm_ADD_ldiv8(RW4 d, RR4 s));
+/* Keep 32-bit guest arithmetic, signed guest-offset + host-base conversion,
+   and pointer-width increments as distinct contracts. */
 DECLARE_MIDFUNC(arm_ADD_l_ri(RW4 d, IMPTR i));
+DECLARE_MIDFUNC(arm_ADD_l_ri_hostptr(RW4 d, IMPTR base));
+DECLARE_MIDFUNC(arm_ADD_ptr_ri(RW4 d, IM32 offset));
 DECLARE_MIDFUNC(arm_ADD_l_ri8(RW4 d, IM8 i));
 DECLARE_MIDFUNC(arm_SUB_l_ri8(RW4 d, IM8 i));
 

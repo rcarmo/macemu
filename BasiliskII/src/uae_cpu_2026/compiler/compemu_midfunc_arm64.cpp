@@ -596,18 +596,16 @@ MENDFUNC(1,forget_about,(W4 r))
 MIDFUNC(2,arm_ADD_l,(RW4 d, RR4 s))
 {
 	if (isconst(s)) {
-		uintptr val = live.state[s].val;
-		#ifdef CPU_AARCH64
-		// When adding a 32-bit M68K displacement to PC_P (a 64-bit host
-		// pointer), sign-extend the displacement first.  M68K branch
-		// offsets are signed, but stored as unsigned uintptr in
-		// live.state[].val.  Adding an unsigned 0xFFFFFE42 (i.e. -0x1BE)
-		// to a 64-bit pointer causes carry into bit 32, producing 0x4...
-		// instead of the correct 0x3...
-		if (d == PC_P && val <= (uintptr)0xFFFFFFFFULL)
-			val = (uintptr)(uae_s64)(uae_s32)val;
+#ifdef CPU_AARCH64
+		/* PC_P plus a register-sourced M68K displacement is pointer-width
+		   arithmetic even when constant-folded. Keep that type decision at
+		   the destination contract rather than routing it through guest ADD.L. */
+		if (d == PC_P) {
+			COMPCALL(arm_ADD_ptr_ri)(d, (uae_s32)(uae_u32)live.state[s].val);
+			return;
+		}
 #endif
-		COMPCALL(arm_ADD_l_ri)(d, val);
+		COMPCALL(arm_ADD_l_ri)(d, live.state[s].val);
 		return;
 	}
 
@@ -649,73 +647,65 @@ MIDFUNC(2,arm_ADD_ldiv8,(RW4 d, RR4 s))
 }
 MENDFUNC(2,arm_ADD_ldiv8,(RW4 d, RR4 s))
 
-static inline bool arm64_low32_hostptr_imm(uintptr i)
+/* Add a host pointer base to a signed 32-bit M68K displacement.  This is a
+   type contract, not a value heuristic: a guest immediate may numerically
+   overlap a low host mapping and must still use ordinary 32-bit arithmetic. */
+MIDFUNC(2,arm_ADD_l_ri_hostptr,(RW4 d, IMPTR base))
 {
-	uintptr base = (uintptr)RAMBaseHost;
-	uintptr limit = base + RAMSize + ROMSize + 0x100000;
-	if (i >= base && i < limit)
-		return true;
-	if (base <= (uintptr)0xFFFFFFFFULL && limit <= (uintptr)0xFFFFFFFFULL + 1) {
-		uintptr i32 = (uintptr)(uae_u32)i;
-		uintptr b32 = (uintptr)(uae_u32)base;
-		uintptr l32 = (uintptr)(uae_u32)limit;
-		if (i32 >= b32 && i32 < l32)
-			return true;
+	if (isconst(d)) {
+		const uae_s64 displacement = (uae_s32)(uae_u32)live.state[d].val;
+		live.state[d].val = base + (uintptr)displacement;
+		return;
 	}
-	return false;
-}
 
+	d = rmw(d);
+	LOAD_U64(REG_WORK1, base);
+	ADD_xxwEX(d, REG_WORK1, d, EX_SXTW);
+	unlock2(d);
+}
+MENDFUNC(2,arm_ADD_l_ri_hostptr,(RW4 d, IMPTR base))
+
+/* Pointer-width increment for PC_P and pointer-valued scratch registers. */
+MIDFUNC(2,arm_ADD_ptr_ri,(RW4 d, IM32 offset))
+{
+	if (!offset)
+		return;
+	if (isconst(d)) {
+		live.state[d].val += (uintptr)(uae_s64)offset;
+		return;
+	}
+
+	d = rmw(d);
+	if (offset > 0 && offset <= 0xfff) {
+		ADD_xxi(d, d, offset);
+	} else if (offset < 0 && offset >= -0xfff) {
+		SUB_xxi(d, d, -offset);
+	} else {
+		LOAD_U64(REG_WORK1, (uintptr)(uae_s64)offset);
+		ADD_xxx(d, d, REG_WORK1);
+	}
+	unlock2(d);
+}
+MENDFUNC(2,arm_ADD_ptr_ri,(RW4 d, IM32 offset))
+
+/* Ordinary M68K long arithmetic is always modulo 2^32. */
 MIDFUNC(2,arm_ADD_l_ri,(RW4 d, IMPTR i))
 {
-	if (!i)
+	const uae_u32 i32 = (uae_u32)i;
+	if (!i32)
 		return;
-	const bool hostptr_imm = arm64_low32_hostptr_imm(i);
 	if (isconst(d)) {
-		// Preserve full 64-bit result when d is PC_P, when i is a host
-		// pointer immediate (even if it currently fits in 32 bits on Linux),
-		// or when val already exceeds 32 bits.
-		if (d == PC_P || i > (IMPTR)0xFFFFFFFFULL || hostptr_imm || live.state[d].val > (uintptr)0xFFFFFFFFULL) {
-			uintptr val = live.state[d].val;
-			// When adding a host pointer base to a 32-bit M68K displacement,
-			// sign-extend the displacement first. Otherwise values like
-			// 0xFFFFFFFA are treated as +4GB-6 and produce 0x1........ PCs.
-			if (val <= (uintptr)0xFFFFFFFFULL && (i > (IMPTR)0xFFFFFFFFULL || hostptr_imm))
-				val = (uintptr)(uae_s64)(uae_s32)(uae_u32)val;
-			live.state[d].val = val + i;
-		} else {
-			live.state[d].val = (uae_u32)(live.state[d].val + i);
-		}
+		live.state[d].val = (uae_u32)(live.state[d].val + i32);
 		return;
 	}
 
-	// Use 64-bit ADD when d is PC_P or when the immediate is a host pointer
-	// base used to turn a signed guest displacement into a host PC pointer.
-	bool is_ptr = (d == PC_P) || (i > (IMPTR)0xFFFFFFFFULL) || hostptr_imm;
-	bool is_pcp = (d == PC_P);
 	d = rmw(d);
-
-	if (is_ptr) {
-		if (is_pcp) {
-			if(i <= 0xfff) {
-				ADD_xxi(d, d, i);
-			} else {
-				LOAD_U64(REG_WORK1, (uintptr)i);
-				ADD_xxx(d, d, REG_WORK1);
-			}
-		} else {
-			LOAD_U64(REG_WORK1, (uintptr)i);
-			ADD_xxwEX(d, REG_WORK1, d, 6); // ADD Xd, Ximm, Wd, SXTW
-		}
+	if (i32 <= 0xfff) {
+		ADD_wwi(d, d, i32);
 	} else {
-		uae_u32 i32 = (uae_u32)i;
-		if(i32 <= 0xfff) {
-			ADD_wwi(d, d, i32);
-		} else {
-			LOAD_U32(REG_WORK1, i32);
-			ADD_www(d, d, REG_WORK1);
-		}
+		LOAD_U32(REG_WORK1, i32);
+		ADD_www(d, d, REG_WORK1);
 	}
-
 	unlock2(d);
 }
 MENDFUNC(2,arm_ADD_l_ri,(RW4 d, IMPTR i))

@@ -167,6 +167,9 @@ requireBefore(
   "popall_do_nothing",
   "register endblock C return",
 );
+if (source.includes("jit_endblock_inreg_count")) {
+  fail("register endblock hot path: unconditional diagnostic counter remains");
+}
 
 const isconst = bodyBetween(
   "STATIC_INLINE uae_u32* compemu_raw_endblock_pc_isconst",
@@ -200,6 +203,67 @@ const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
 )).text();
+const generatedSource = await Bun.file(new URL(
+  "../BasiliskII/src/Unix/compemu.cpp",
+  import.meta.url,
+)).text();
+
+if (midfuncSource.includes("arm64_low32_hostptr_imm")) {
+  fail("pointer arithmetic contract: numeric host-range inference remains");
+}
+const hostBaseStart = midfuncSource.indexOf("MIDFUNC(2,arm_ADD_l_ri_hostptr");
+const hostBaseEnd = midfuncSource.indexOf("MENDFUNC(2,arm_ADD_l_ri_hostptr", hostBaseStart);
+if (hostBaseStart < 0 || hostBaseEnd < 0) fail("missing signed guest-offset + host-base contract");
+const hostBaseBody = midfuncSource.slice(hostBaseStart, hostBaseEnd);
+for (const contract of ["(uae_s32)(uae_u32)live.state[d].val", "LOAD_U64(REG_WORK1, base)", "EX_SXTW"]) {
+  requireText(hostBaseBody, contract, "signed guest-offset + host-base contract");
+}
+const ptrAddStart = midfuncSource.indexOf("MIDFUNC(2,arm_ADD_ptr_ri");
+const ptrAddEnd = midfuncSource.indexOf("MENDFUNC(2,arm_ADD_ptr_ri", ptrAddStart);
+if (ptrAddStart < 0 || ptrAddEnd < 0) fail("missing pointer-width immediate-add contract");
+const ptrAddBody = midfuncSource.slice(ptrAddStart, ptrAddEnd);
+for (const contract of ["ADD_xxi", "SUB_xxi", "ADD_xxx"]) {
+  requireText(ptrAddBody, contract, "pointer-width immediate-add contract");
+}
+const guestAddStart = midfuncSource.indexOf("MIDFUNC(2,arm_ADD_l_ri,(RW4 d, IMPTR i))");
+const guestAddEnd = midfuncSource.indexOf("MENDFUNC(2,arm_ADD_l_ri", guestAddStart);
+if (guestAddStart < 0 || guestAddEnd < 0) fail("missing 32-bit guest immediate-add contract");
+const guestAddBody = midfuncSource.slice(guestAddStart, guestAddEnd);
+for (const contract of ["const uae_u32 i32", "(uae_u32)(live.state[d].val + i32)", "ADD_wwi", "ADD_www"]) {
+  requireText(guestAddBody, contract, "32-bit guest immediate-add contract");
+}
+if (guestAddBody.includes("ADD_x") || guestAddBody.includes("PC_P")) {
+  fail("32-bit guest immediate-add contract: pointer-width path remains");
+}
+const registerAddStart = midfuncSource.indexOf("MIDFUNC(2,arm_ADD_l,(RW4 d, RR4 s))");
+const registerAddEnd = midfuncSource.indexOf("MENDFUNC(2,arm_ADD_l", registerAddStart);
+if (registerAddStart < 0 || registerAddEnd < 0) fail("missing register-sourced long-add contract");
+const registerAddBody = midfuncSource.slice(registerAddStart, registerAddEnd);
+requireText(
+  registerAddBody,
+  "COMPCALL(arm_ADD_ptr_ri)(d, (uae_s32)(uae_u32)live.state[s].val)",
+  "constant PC_P plus signed guest displacement contract",
+);
+requireText(registerAddBody, "ADD_xxwEX(d, d, s", "runtime PC_P plus signed guest displacement contract");
+for (const contract of [
+  "arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p)",
+  "arm_ADD_l_ri_hostptr(offs,(uintptr)comp_pc_p)",
+  "arm_ADD_ptr_ri(src,m68k_pc_offset)",
+  "arm_ADD_ptr_ri(offs,m68k_pc_offset)",
+  "arm_ADD_ptr_ri(PC_P,m68k_pc_offset)",
+]) {
+  requireText(gencompSource, contract, "generator pointer arithmetic contract");
+  requireText(generatedSource, contract, "generated pointer arithmetic contract");
+}
+for (const forbidden of [
+  "arm_ADD_l_ri(src,(uintptr)comp_pc_p)",
+  "arm_ADD_l_ri(offs,(uintptr)comp_pc_p)",
+]) {
+  if (gencompSource.includes(forbidden) || generatedSource.includes(forbidden)) {
+    fail(`pointer arithmetic contract: ambiguous generated call remains: ${forbidden}`);
+  }
+}
+
 requireText(gencompSource, "NATIVE_CC_VC,NATIVE_CC_VS", "ARM64 overflow condition codegen");
 const arm64OverflowCases = "#if defined(CPU_aarch64) || defined(CPU_AARCH64)\n\t case 8:\n\t case 9:";
 if (gencompSource.split(arm64OverflowCases).length - 1 !== 3) {

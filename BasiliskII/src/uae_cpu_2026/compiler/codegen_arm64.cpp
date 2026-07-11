@@ -749,14 +749,6 @@ LENDFUNC(NONE,NONE,1,compemu_raw_init_r_regstruct,(IMPTR s))
 // Handle end of compiled block
 LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 {
-	/* Increment global counter (for diagnostics) */
-	{
-		extern int32_t jit_endblock_inreg_count;
-		LOAD_U64(REG_WORK3, (uintptr)&jit_endblock_inreg_count);
-		LDR_wXi(REG_WORK1, REG_WORK3, 0);
-		ADD_wwi(REG_WORK1, REG_WORK1, 1);
-		STR_wXi(REG_WORK1, REG_WORK3, 0);
-	}
 	// countdown -= scaled_cycles(totcycles);
 	LOAD_U64(REG_WORK3, (uintptr)&countdown);
 	LDR_wXi(REG_WORK1, REG_WORK3, 0);
@@ -1392,8 +1384,3 @@ LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))
 	}
 }
 LENDFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))
-
-/* Global dispatch counter for periodic spcflags checks in direct dispatch.
- * Decremented by compiled endblock code. When <= 0, spcflags is checked
- * and the counter is reset. */
-int32_t jit_endblock_inreg_count = 0;

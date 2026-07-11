@@ -98,7 +98,7 @@ void add_l(RW4 d, RR4 s) {
 }
 void add_l_ri(RW4 d, uae_s32 i) {
 #ifdef CPU_AARCH64
-	if (d == PC_P) { arm_ADD_l_ri(d, (uintptr)(uae_s64)i); return; }
+	if (d == PC_P) { arm_ADD_ptr_ri(d, i); return; }
 #endif
 	if (legacy_needflags_enabled()) jff_ADD_l_imm(d, i); else jnf_ADD_l_imm(d, i);
 }

@@ -2299,14 +2299,19 @@ gen_opcode (unsigned int opcode)
 	/* Leave the following as "add" --- it will allow it to be optimized
 	   away due to src being a constant ;-) */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	comprintf("\tarm_ADD_l_ri(src,(uintptr)comp_pc_p);\n");
+	comprintf("\tarm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);\n");
 #else
 	comprintf("\tadd_l_ri(src,(uintptr)comp_pc_p);\n");
 #endif
 	comprintf("\tmov_l_ri(PC_P,(uintptr)comp_pc_p);\n");
 	/* Now they are both constant. Might as well fold in m68k_pc_offset */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	comprintf("\tarm_ADD_ptr_ri(src,m68k_pc_offset);\n");
+	comprintf("\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\n");
+#else
 	comprintf("\tadd_l_ri(src,m68k_pc_offset);\n");
 	comprintf("\tadd_l_ri(PC_P,m68k_pc_offset);\n");
+#endif
 	comprintf("\tm68k_pc_offset=0;\n");
 
 	if (curi->cc>=2) {
@@ -2394,13 +2399,18 @@ gen_opcode (unsigned int opcode)
 	comprintf("\tsub_l_ri(offs,m68k_pc_offset-m68k_pc_offset_thisinst-2);\n");
 	/* New PC, once the offset_68k is also added. */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	comprintf("\tarm_ADD_l_ri(offs,(uintptr)comp_pc_p);\n");
+	comprintf("\tarm_ADD_l_ri_hostptr(offs,(uintptr)comp_pc_p);\n");
 #else
 	comprintf("\tadd_l_ri(offs,(uintptr)comp_pc_p);\n");
 #endif
 	/* Let's fold in the m68k_pc_offset at this point */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	comprintf("\tarm_ADD_ptr_ri(offs,m68k_pc_offset);\n");
+	comprintf("\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\n");
+#else
 	comprintf("\tadd_l_ri(offs,m68k_pc_offset);\n");
 	comprintf("\tadd_l_ri(PC_P,m68k_pc_offset);\n");
+#endif
 	comprintf("\tm68k_pc_offset=0;\n");
 
 	start_brace();

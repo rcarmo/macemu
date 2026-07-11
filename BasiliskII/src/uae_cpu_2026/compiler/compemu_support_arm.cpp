@@ -4627,7 +4627,7 @@ uae_u8* compemu_host_pc_from_const(uintptr pc_const)
 void sync_m68k_pc(void)
 {
     if (m68k_pc_offset) {
-        arm_ADD_l_ri(PC_P, m68k_pc_offset);
+        arm_ADD_ptr_ri(PC_P, m68k_pc_offset);
         comp_pc_p += m68k_pc_offset;
         m68k_pc_offset = 0;
     }
