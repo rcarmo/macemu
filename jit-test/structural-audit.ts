@@ -52,7 +52,7 @@ const makefileTemplate = await Bun.file(new URL(
 )).text();
 for (const layoutDependency of [
   "JIT_LAYOUT_DEPS = Makefile sysdeps.h $(UAE_PATH)/newcpu.h",
-  "$(UAE_PATH)/registers.h $(UAE_PATH)/fpu/types.h",
+  "$(UAE_PATH)/registers.h $(UAE_PATH)/memory.h $(UAE_PATH)/fpu/types.h",
   "JIT_SUPPORT_DEPS = $(UAE_PATH)/compiler/compemu_support_arm.cpp",
   "$(UAE_PATH)/compiler/compemu_legacy_arm64_compat.cpp",
   "$(UAE_PATH)/compiler/codegen_arm64.cpp",
@@ -106,9 +106,78 @@ const midfuncPath = new URL(
   import.meta.url,
 );
 const midfuncSource = await Bun.file(midfuncPath).text();
+const midfunc2Source = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp",
+  import.meta.url,
+)).text();
+const memorySource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/memory.h",
+  import.meta.url,
+)).text();
 if (midfuncSource.includes("compemu_raw_call((uintptr)jit_trace_setpc_value)")) {
   fail("diagnostic observer preservation: raw trace call remains in allocator midfunc");
 }
+const directByteWriteStart = midfunc2Source.indexOf("MIDFUNC(2,jnf_MEM_WRITE_OFF_b");
+const directByteWriteEnd = midfunc2Source.indexOf("MENDFUNC(2,jnf_MEM_WRITE_OFF_b", directByteWriteStart);
+if (directByteWriteStart < 0 || directByteWriteEnd < 0) fail("missing direct byte-write helper");
+const directByteWriteBody = midfunc2Source.slice(directByteWriteStart, directByteWriteEnd);
+for (const contract of [
+  "MRS_NZCV_x(REG_WORK4)",
+  "LOAD_U32(REG_WORK1, 0xff001fff)",
+  "LOAD_U32(REG_WORK3, 0x50000006)",
+  "STRB_wXx(b, adr, R_MEMSTART)",
+  "MSR_NZCV_x(REG_WORK4)",
+]) {
+  requireText(directByteWriteBody, contract, "direct byte-write interpreter contract");
+}
+for (const forbidden of ["NEG_ww", "CSEL_wwwc", "STRB_wXx(REG_WORK3, adr, R_MEMSTART)"]) {
+  if (directByteWriteBody.includes(forbidden)) {
+    fail(`direct byte-write interpreter contract: transformed source remains: ${forbidden}`);
+  }
+}
+for (const contract of [
+  "#define LOW_NUBUS_OPEN_BUS_START 0x0a014000u",
+  "#define LOW_NUBUS_OPEN_BUS_END   0x0a815000u",
+  "RAMSize <= 0x08000000u",
+  "if (is_low_nubus_open_bus_gap(addr))\n        return 0xffffffffu;",
+  "if (is_low_nubus_open_bus_gap(addr))\n        return 0xffffu;",
+  "if (is_low_nubus_open_bus_gap(addr))\n        return 0xffu;",
+  "if (is_low_nubus_open_bus_gap(addr) || addr == 0x5ffffffc)",
+  "if (is_low_nubus_open_bus_gap(addr) || is_50f_scanner_data(addr))",
+]) {
+  requireText(memorySource, contract, "shared low-NuBus open-bus contract");
+}
+for (const contract of [
+  "emit_low_nubus_gap_write_skip",
+  "emit_low_nubus_gap_read_value",
+  "LOW_NUBUS_OPEN_BUS_START",
+  "LOW_NUBUS_OPEN_BUS_END",
+  "RAMSize > 0x08000000u",
+  "emit_low_nubus_gap_read_value(adr, d, 0xffffffffu)",
+]) {
+  requireText(midfunc2Source, contract, "emitted low-NuBus open-bus contract");
+}
+for (const helper of ["jnf_MEM_WRITE_OFF_b", "jnf_MEM_WRITE_OFF_w", "jnf_MEM_WRITE_OFF_l"]) {
+  const start = midfunc2Source.indexOf(`MIDFUNC(2,${helper}`);
+  const end = midfunc2Source.indexOf(`MENDFUNC(2,${helper}`, start);
+  if (start < 0 || end < 0) fail(`missing ${helper}`);
+  const body = midfunc2Source.slice(start, end);
+  requireText(body, "emit_low_nubus_gap_write_skip(adr)", `${helper} JIT-cache alias protection`);
+  requireText(body, "finish_low_nubus_gap_skip(gap_done)", `${helper} JIT-cache alias protection`);
+}
+if (midfunc2Source.includes("MOV_wi(d, 0x10)")) {
+  fail("emitted low-NuBus open-bus contract: address-specific long value remains");
+}
+
+for (const contract of [
+  "declare -A NATIVE_REPLAY_TESTS",
+  "[io_byte_write_roundtrip]=1",
+  "B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC=0x1000",
+  "B2_TEST_FORCE_L2_RAM=1",
+]) {
+  requireText(harnessSource, contract, "native replay opcode gate");
+}
+
 const helperStart = midfuncSource.indexOf("MIDFUNC(1,call_helper,(IMPTR addr))");
 const helperEnd = midfuncSource.indexOf("MENDFUNC(1,call_helper", helperStart);
 if (helperStart < 0 || helperEnd < 0) fail("missing call_helper midfunc");

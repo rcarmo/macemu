@@ -199,6 +199,17 @@ The runtime must know whether:
 - the PC state is trustworthy
 - fallback is safe
 
+## Rule 7: direct and callback memory paths implement one guest contract
+
+A native direct load/store is an inlined implementation of `memory.h` semantics,
+not an independent device model. Direct, special-bank, and interpreter accesses
+must agree on value width, endianness, ignored writes, read side effects, and
+open-bus values. Guest addresses which alias host JIT storage must never expose
+or modify native code.
+
+See `AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md` for the active ARM64
+inventory and regression gates.
+
 ---
 
 ## Current boundary inventory

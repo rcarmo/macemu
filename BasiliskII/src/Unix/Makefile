@@ -227,7 +227,7 @@ UAE_PATH = ../uae_cpu_2026
 # headers change; mixing old compemu*.o files with a rebuilt support object
 # silently redirects helper metadata stores to the wrong fields.
 JIT_LAYOUT_DEPS = Makefile sysdeps.h $(UAE_PATH)/newcpu.h \
-	$(UAE_PATH)/registers.h $(UAE_PATH)/fpu/types.h
+	$(UAE_PATH)/registers.h $(UAE_PATH)/memory.h $(UAE_PATH)/fpu/types.h
 JIT_LAYOUT_OBJECTS = $(OBJ_DIR)/compemu_support.o \
 	$(OBJ_DIR)/compemu1.o $(OBJ_DIR)/compemu2.o $(OBJ_DIR)/compemu3.o $(OBJ_DIR)/compemu4.o \
 	$(OBJ_DIR)/compemu5.o $(OBJ_DIR)/compemu6.o $(OBJ_DIR)/compemu7.o $(OBJ_DIR)/compemu8.o

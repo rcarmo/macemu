@@ -8092,32 +8092,77 @@ MENDFUNC(1,jff_TST_l,(RR4 s))
  * Two versions: full address range and 24 bit address range
  *
  */
+
+/* Guest low-NuBus addresses can overlap the host JIT cache reservation.  Emit
+   one shared write-side guard so no direct store can modify native code.  The
+   returned branch is patched after the caller's ordinary store path. */
+STATIC_INLINE uae_u32 *emit_low_nubus_gap_write_skip(RR4 adr)
+{
+	if (RAMSize > 0x08000000u)
+		return NULL;
+
+	LOAD_U32(REG_WORK1, LOW_NUBUS_OPEN_BUS_START);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_low = (uae_u32 *)get_target();
+	BCC_i(0);
+	LOAD_U32(REG_WORK1, LOW_NUBUS_OPEN_BUS_END);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_high = (uae_u32 *)get_target();
+	BCS_i(0);
+	uae_u32 *skip = (uae_u32 *)get_target();
+	B_i(0);
+
+	write_jmp_target(normal_low, (uintptr)get_target());
+	write_jmp_target(normal_high, (uintptr)get_target());
+	return skip;
+}
+
+STATIC_INLINE uae_u32 *emit_low_nubus_gap_read_value(RR4 adr, W4 d, uae_u32 value)
+{
+	if (RAMSize > 0x08000000u)
+		return NULL;
+
+	LOAD_U32(REG_WORK1, LOW_NUBUS_OPEN_BUS_START);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_low = (uae_u32 *)get_target();
+	BCC_i(0);
+	LOAD_U32(REG_WORK1, LOW_NUBUS_OPEN_BUS_END);
+	CMP_ww(adr, REG_WORK1);
+	uae_u32 *normal_high = (uae_u32 *)get_target();
+	BCS_i(0);
+	LOAD_U32(d, value);
+	uae_u32 *skip = (uae_u32 *)get_target();
+	B_i(0);
+
+	write_jmp_target(normal_low, (uintptr)get_target());
+	write_jmp_target(normal_high, (uintptr)get_target());
+	return skip;
+}
+
+STATIC_INLINE void finish_low_nubus_gap_skip(uae_u32 *skip)
+{
+	if (skip)
+		write_jmp_target(skip, (uintptr)get_target());
+}
+
 MIDFUNC(2,jnf_MEM_WRITE_OFF_b,(RR4 adr, RR4 b))
 {
 	adr = readreg(adr);
 	b = readreg(b);
 
-	/* The special-address guards below issue CMP instructions that clobber
-	   the host NZCV holding the just-computed guest flags (e.g. from a
-	   preceding MOVE.B/CLR.B). Save and restore them like the read paths do,
-	   otherwise the block-exit flush captures the address-compare result. */
+	/* Match memory.h::put_byte exactly: scanner-data writes are ignored;
+	   every other direct byte write stores the architectural source byte
+	   unchanged.  The guard CMP is emitter plumbing, not guest arithmetic,
+	   so preserve the incoming NZCV across it. */
 	MRS_NZCV_x(REG_WORK4);
-	/* 0x50xxxxxx is probed as hardware by the Quadra ROM.  Its byte
-	   test expects a transformed readback rather than ordinary RAM. */
-	LOAD_U32(REG_WORK1, 0xff000000);
+	uae_u32 *gap_done = emit_low_nubus_gap_write_skip(adr);
+	LOAD_U32(REG_WORK1, 0xff001fff);
 	AND_www(REG_WORK1, adr, REG_WORK1);
-	LOAD_U32(REG_WORK3, 0x50000000);
+	LOAD_U32(REG_WORK3, 0x50000006);
 	CMP_ww(REG_WORK1, REG_WORK3);
-	LSL_wwi(REG_WORK3, b, 1);
-	NEG_ww(REG_WORK3, REG_WORK3);
-	CSEL_wwwc(REG_WORK3, REG_WORK3, b, NATIVE_CC_EQ);
-	LOAD_U32(REG_WORK1, 0x1fff);
-	AND_www(REG_WORK1, adr, REG_WORK1);
-	CMP_wi(REG_WORK1, 2);
-	CSEL_wwwc(REG_WORK3, b, REG_WORK3, NATIVE_CC_EQ);
-	CMP_wi(REG_WORK1, 6);
 	BEQ_i(2);
-	STRB_wXx(REG_WORK3, adr, R_MEMSTART);
+	STRB_wXx(b, adr, R_MEMSTART);
+	finish_low_nubus_gap_skip(gap_done);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(b);
@@ -8130,8 +8175,12 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_w,(RR4 adr, RR4 w))
 	adr = readreg(adr);
 	w = readreg(w);
 
+	MRS_NZCV_x(REG_WORK4);
+	uae_u32 *gap_done = emit_low_nubus_gap_write_skip(adr);
 	REV16_ww(REG_WORK1, w);
 	STRH_wXx(REG_WORK1, adr, R_MEMSTART);
+	finish_low_nubus_gap_skip(gap_done);
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(w);
 	unlock2(adr);
@@ -8146,6 +8195,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_l,(RR4 adr, RR4 l))
 	/* The 0x5ffffffc guard CMP clobbers host NZCV holding just-computed guest
 	   flags (e.g. MOVE.L/CLR.L). Preserve them as the read paths do. */
 	MRS_NZCV_x(REG_WORK4);
+	uae_u32 *gap_done = emit_low_nubus_gap_write_skip(adr);
 	/* Machine config register at 0x5ffffffc is stable hardware; ROM probes
 	   write test patterns here and expects the original value to remain. */
 	LOAD_U32(REG_WORK1, 0x5ffffffc);
@@ -8153,6 +8203,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_l,(RR4 adr, RR4 l))
 	BEQ_i(3);
 	REV_ww(REG_WORK1, l);
 	STR_wXx(REG_WORK1, adr, R_MEMSTART);
+	finish_low_nubus_gap_skip(gap_done);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(l);
@@ -8167,23 +8218,9 @@ MIDFUNC(2,jnf_MEM_READ_OFF_b,(W4 d, RR4 adr))
 	d = writereg(d);
 	MRS_NZCV_x(REG_WORK4);
 
-	/* Low NuBus mirror gap: direct-addressing ARM64 can alias this region
-	   onto reserved/JIT-cache host space. Match the existing interpreter
-	   SIGSEGV-skip/open-bus behavior without taking a host fault. */
-	LOAD_U32(REG_WORK1, 0x0a014000);
-	CMP_ww(adr, REG_WORK1);
-	uae_u32 *normal_low = (uae_u32*)get_target();
-	BCC_i(0);
-	LOAD_U32(REG_WORK1, 0x0a815000);
-	CMP_ww(adr, REG_WORK1);
-	uae_u32 *normal_high = (uae_u32*)get_target();
-	BCS_i(0);
-	MOV_wi(d, 0xff);
-	uae_u32 *done = (uae_u32*)get_target();
-	B_i(0);
-
-	write_jmp_target(normal_low, (uintptr)get_target());
-	write_jmp_target(normal_high, (uintptr)get_target());
+	/* Low NuBus mirror gap aliases the host JIT cache. memory.h and the
+	   emitted direct path share one all-ones open-bus contract. */
+	uae_u32 *gap_done = emit_low_nubus_gap_read_value(adr, d, 0xffu);
 	LDRB_wXx(d, adr, R_MEMSTART);
 	LOAD_U32(REG_WORK1, 0xff001fff);
 	AND_www(REG_WORK1, adr, REG_WORK1);
@@ -8192,7 +8229,7 @@ MIDFUNC(2,jnf_MEM_READ_OFF_b,(W4 d, RR4 adr))
 	BNE_i(3);
 	MOV_wi(REG_WORK1, 0);
 	STRB_wXx(REG_WORK1, adr, R_MEMSTART);
-	write_jmp_target(done, (uintptr)get_target());
+	finish_low_nubus_gap_skip(gap_done);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
@@ -8206,23 +8243,10 @@ MIDFUNC(2,jnf_MEM_READ_OFF_w,(W4 d, RR4 adr))
 	d = writereg(d);
 	MRS_NZCV_x(REG_WORK4);
 
-	LOAD_U32(REG_WORK1, 0x0a014000);
-	CMP_ww(adr, REG_WORK1);
-	uae_u32 *normal_low = (uae_u32*)get_target();
-	BCC_i(0);
-	LOAD_U32(REG_WORK1, 0x0a815000);
-	CMP_ww(adr, REG_WORK1);
-	uae_u32 *normal_high = (uae_u32*)get_target();
-	BCS_i(0);
-	MOV_wi(d, 0xffff);
-	uae_u32 *done = (uae_u32*)get_target();
-	B_i(0);
-
-	write_jmp_target(normal_low, (uintptr)get_target());
-	write_jmp_target(normal_high, (uintptr)get_target());
+	uae_u32 *gap_done = emit_low_nubus_gap_read_value(adr, d, 0xffffu);
 	LDRH_wXx(REG_WORK1, adr, R_MEMSTART);
 	REV16_ww(d, REG_WORK1);
-	write_jmp_target(done, (uintptr)get_target());
+	finish_low_nubus_gap_skip(gap_done);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
@@ -8236,23 +8260,10 @@ MIDFUNC(2,jnf_MEM_READ_OFF_l,(W4 d, RR4 adr))
 	d = writereg(d);
 	MRS_NZCV_x(REG_WORK4);
 
-	LOAD_U32(REG_WORK1, 0x0a014000);
-	CMP_ww(adr, REG_WORK1);
-	uae_u32 *normal_low = (uae_u32*)get_target();
-	BCC_i(0);
-	LOAD_U32(REG_WORK1, 0x0a815000);
-	CMP_ww(adr, REG_WORK1);
-	uae_u32 *normal_high = (uae_u32*)get_target();
-	BCS_i(0);
-	MOV_wi(d, 0x10);
-	uae_u32 *done = (uae_u32*)get_target();
-	B_i(0);
-
-	write_jmp_target(normal_low, (uintptr)get_target());
-	write_jmp_target(normal_high, (uintptr)get_target());
+	uae_u32 *gap_done = emit_low_nubus_gap_read_value(adr, d, 0xffffffffu);
 	LDR_wXx(REG_WORK1, adr, R_MEMSTART);
 	REV_ww(d, REG_WORK1);
-	write_jmp_target(done, (uintptr)get_target());
+	finish_low_nubus_gap_skip(gap_done);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
