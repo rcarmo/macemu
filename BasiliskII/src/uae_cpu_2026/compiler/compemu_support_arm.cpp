@@ -63,6 +63,15 @@
 #include "compemu_arm.h"
 #include <SDL2/SDL.h>
 
+extern "C" void jit_op_bftst(void);
+extern "C" void jit_op_bfextu(void);
+extern "C" void jit_op_bfchg(void);
+extern "C" void jit_op_bfexts(void);
+extern "C" void jit_op_bfclr(void);
+extern "C" void jit_op_bfffo(void);
+extern "C" void jit_op_bfset(void);
+extern "C" void jit_op_bfins(void);
+
 /* ARM64 JIT is PIE-compatible: it uses register-indirect addressing
  * (R_MEMSTART/R15) rather than PC-relative globals, so code placement
  * relative to .data does not matter. */
@@ -1244,6 +1253,7 @@ static void op_fullsr_orsr_w_comp_ff(uae_u32 opcode);
 static void op_fullsr_andsr_w_comp_ff(uae_u32 opcode);
 static void op_fullsr_eorsr_w_comp_ff(uae_u32 opcode);
 static void op_fullsr_mv2sr_w_comp_ff(uae_u32 opcode);
+static void op_bitfield_comp_ff(uae_u32 opcode);
 static void op_cas_comp_ff(uae_u32 opcode);
 static void op_rts_comp_ff(uae_u32 opcode);
 static void op_bsr_comp_ff(uae_u32 opcode);
@@ -4438,6 +4448,68 @@ static void jit_runtime_trapcc(uae_u32 opcode)
         Exception(7, oldpc);
 }
 
+static void jit_runtime_system_control(uae_u32 opcode)
+{
+    /* This is the single AArch64 semantic boundary for privileged integer
+       control instructions.  The helper enters at the exact pc_hist[] opcode
+       PC, checks privilege before fetching extension words, and advances only
+       at the same commit points as the canonical 68040 core. */
+    if (!regs.s) {
+        Exception(8, 0);
+        return;
+    }
+
+    if ((opcode & 0xfff8) == 0x4e60) { /* MOVE An,USP */
+        regs.usp = m68k_areg(regs, opcode & 7);
+        m68k_incpc(2);
+        return;
+    }
+    if ((opcode & 0xfff8) == 0x4e68) { /* MOVE USP,An */
+        m68k_areg(regs, opcode & 7) = regs.usp;
+        m68k_incpc(2);
+        return;
+    }
+
+    switch (opcode) {
+    case 0x4e70: /* RESET */
+        AtariReset();
+        m68k_incpc(2);
+        return;
+    case 0x4e72: { /* STOP #<sr> */
+        const uae_u16 new_sr = (uae_u16)get_iword(2);
+        /* On the configured 68040, a supervisor STOP that clears S traps from
+           the successor without committing SR or entering the stopped state. */
+        if (!(new_sr & 0x2000)) {
+            m68k_incpc(4);
+            Exception(8, 0);
+            return;
+        }
+        regs.sr = new_sr;
+        MakeFromSR();
+        m68k_setstopped(1);
+        m68k_incpc(4);
+        return;
+    }
+    case 0x4e73: /* RTE */
+        ex_rte();
+        return;
+    case 0x4e7a: /* MOVEC control register to general register */
+    case 0x4e7b: { /* MOVEC general register to control register */
+        const uae_u16 ext = (uae_u16)get_iword(2);
+        uae_u32 *regp = &regs.regs[(ext >> 12) & 15];
+        const bool valid = opcode == 0x4e7a
+            ? m68k_movec2(ext & 0x0fff, regp) != 0
+            : m68k_move2c(ext & 0x0fff, regp) != 0;
+        if (valid)
+            m68k_incpc(4);
+        return;
+    }
+    default:
+        jit_abort("system-control semantic service received opcode %04x",
+            (unsigned)opcode);
+    }
+}
+
 static void jit_runtime_cache_control(uae_u32 opcode)
 {
     if (!regs.s) {
@@ -4445,7 +4517,8 @@ static void jit_runtime_cache_control(uae_u32 opcode)
         return;
     }
     flush_internals();
-    /* The canonical core invalidates translated code for instruction-cache
+    /* CINV and CPUSH use one architectural transition contract.  The
+       canonical core invalidates translated code only for instruction-cache
        forms (bit 7); data-cache-only forms have no additional host state. */
     if (opcode & 0x80)
         flush_icache_hard(0);
@@ -4593,6 +4666,85 @@ static void jit_runtime_moves(uae_u32 opcode)
         m68k_incpc(fixed_length);
 }
 
+static void jit_runtime_bitfield(uae_u32 opcode)
+{
+    /* Decode the complete bitfield instruction at its exact pc_hist[] PC.
+       In particular, fixed-format memory faults retain the opcode PC, indexed
+       forms retain the PC advanced by get_disp_ea_020(), and successful
+       operations alone commit the fixed-format successor. */
+    const uae_u16 extension = (uae_u16)get_iword(2);
+    const unsigned mode = (opcode >> 3) & 7;
+    const unsigned reg = opcode & 7;
+    uaecptr ea = 0;
+    unsigned fixed_length = 0;
+    bool is_dreg = false;
+    bool pc_already_advanced = false;
+
+    switch (mode) {
+    case 0: /* Dn */
+        ea = reg;
+        is_dreg = true;
+        fixed_length = 4;
+        break;
+    case 2: /* (An) */
+        ea = m68k_areg(regs, reg);
+        fixed_length = 4;
+        break;
+    case 5: /* (d16,An) */
+        ea = m68k_areg(regs, reg) + (uae_s32)(uae_s16)get_iword(4);
+        fixed_length = 6;
+        break;
+    case 6: /* (d8,An,Xn), including full-format extensions */
+        m68k_incpc(4);
+        ea = get_disp_ea_020(m68k_areg(regs, reg), next_iword());
+        pc_already_advanced = true;
+        break;
+    case 7:
+        switch (reg) {
+        case 0: /* (xxx).W */
+            ea = (uae_s32)(uae_s16)get_iword(4);
+            fixed_length = 6;
+            break;
+        case 1: /* (xxx).L */
+            ea = get_ilong(4);
+            fixed_length = 8;
+            break;
+        case 2: /* (d16,PC) */
+            ea = m68k_getpc() + 4 + (uae_s32)(uae_s16)get_iword(4);
+            fixed_length = 6;
+            break;
+        case 3: /* (d8,PC,Xn), including full-format extensions */
+            m68k_incpc(4);
+            ea = get_disp_ea_020(m68k_getpc(), next_iword());
+            pc_already_advanced = true;
+            break;
+        default:
+            jit_abort("bitfield semantic service received invalid EA opcode %04x",
+                (unsigned)opcode);
+        }
+        break;
+    default:
+        jit_abort("bitfield semantic service received invalid EA opcode %04x",
+            (unsigned)opcode);
+    }
+
+    regs.jit_exception = extension;
+    regs.scratchregs[0] = ea;
+    regs.scratchregs[1] = is_dreg ? 1 : 0;
+    switch ((opcode >> 8) & 7) {
+    case 0: jit_op_bftst(); break;
+    case 1: jit_op_bfextu(); break;
+    case 2: jit_op_bfchg(); break;
+    case 3: jit_op_bfexts(); break;
+    case 4: jit_op_bfclr(); break;
+    case 5: jit_op_bfffo(); break;
+    case 6: jit_op_bfset(); break;
+    case 7: jit_op_bfins(); break;
+    }
+    if (!pc_already_advanced)
+        m68k_incpc(fixed_length);
+}
+
 static void jit_runtime_cas(uae_u32 opcode)
 {
     const uae_u16 extension = get_iword(2);
@@ -4614,7 +4766,6 @@ static void jit_runtime_cas(uae_u32 opcode)
         break;
     case 4: /* -(An) */
         ea = m68k_areg(regs, areg) - (size == 1 ? areg_byteinc[areg] : size);
-        m68k_areg(regs, areg) = ea;
         fixed_length = 4;
         break;
     case 5: /* (d16,An) */
@@ -4644,14 +4795,25 @@ static void jit_runtime_cas(uae_u32 opcode)
     }
 
     uae_u32 memory_value;
+#ifdef FULLMMU
+    if (size == 1)
+        memory_value = (uae_u8)get_byte(ea);
+    else if (size == 2)
+        memory_value = (uae_u16)get_word(ea);
+    else
+        memory_value = get_long(ea);
+#else
     if (size == 1)
         memory_value = (uae_u8)phys_get_byte(ea);
     else if (size == 2)
         memory_value = (uae_u16)phys_get_word(ea);
     else
         memory_value = phys_get_long(ea);
+#endif
     if (mode == 3)
         m68k_areg(regs, areg) += size == 1 ? areg_byteinc[areg] : size;
+    else if (mode == 4)
+        m68k_areg(regs, areg) = ea;
 
     if (size == 1)
         optflag_cmpb((uae_s8)m68k_dreg(regs, compare_reg), (uae_s8)memory_value);
@@ -4754,12 +4916,16 @@ static void op_trapcc_comp_ff(uae_u32 opcode)
         op_pc, opcode, 0, false);
 }
 
+static void op_system_control_comp_ff(uae_u32 opcode)
+{
+    jit_emit_runtime_helper_barrier((uintptr)jit_runtime_system_control,
+        jit_compile_current_op_host_pc, opcode, 0, false);
+}
+
 static void op_cache_control_comp_ff(uae_u32 opcode)
 {
-    const uintptr op_pc = jit_compile_current_op_host_pc
-        ? jit_compile_current_op_host_pc : (uintptr)(comp_pc_p + m68k_pc_offset);
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_cache_control,
-        op_pc, opcode, 0, false);
+        jit_compile_current_op_host_pc, opcode, 0, false);
 }
 
 static void op_illegal_advanced_comp_ff(uae_u32 opcode)
@@ -4772,31 +4938,31 @@ static void op_illegal_advanced_comp_ff(uae_u32 opcode)
 
 static void op_moves_comp_ff(uae_u32 opcode)
 {
-    const uintptr op_pc = jit_compile_current_op_host_pc
-        ? jit_compile_current_op_host_pc : (uintptr)(comp_pc_p + m68k_pc_offset);
     /* MOVES can privilege-trap and owns faultable SFC/DFC memory semantics,
        so it is an explicit end-block semantic service, never a fallback. */
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_moves,
-        op_pc, opcode, 0, false);
+        jit_compile_current_op_host_pc, opcode, 0, false);
+}
+
+static void op_bitfield_comp_ff(uae_u32 opcode)
+{
+    jit_emit_runtime_helper_barrier((uintptr)jit_runtime_bitfield,
+        jit_compile_current_op_host_pc, opcode, 0, false);
 }
 
 static void op_cas_comp_ff(uae_u32 opcode)
 {
-    const uintptr op_pc = jit_compile_current_op_host_pc
-        ? jit_compile_current_op_host_pc : (uintptr)(comp_pc_p + m68k_pc_offset);
     /* CAS owns a read/compare/conditional-write transaction, lazy flags, EA
        updates and fault PC.  Translate it as one semantic helper boundary;
        never route it through cpufunctbl. */
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_cas,
-        op_pc, opcode, 0, false);
+        jit_compile_current_op_host_pc, opcode, 0, false);
 }
 
 static void op_cas2_comp_ff(uae_u32 opcode)
 {
-    const uintptr op_pc = jit_compile_current_op_host_pc
-        ? jit_compile_current_op_host_pc : (uintptr)(comp_pc_p + m68k_pc_offset);
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_cas2,
-        op_pc, opcode, 0, false);
+        jit_compile_current_op_host_pc, opcode, 0, false);
 }
 
 static void op_rts_comp_ff(uae_u32 opcode)
@@ -5026,6 +5192,8 @@ static void op_illegal_trap_comp_ff(uae_u32 opcode)
 
 static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, uae_u32 arg1, uae_u32 arg2, bool has_arg2)
 {
+    if (!pc)
+        jit_abort("runtime semantic helper: missing exact opcode PC");
     /* B2 helper barrier contract: flush() materializes lazy registers/flags,
        then rebuild the full PC triple before entering C helper code. Some of
        these helpers use m68k_getpc(), MakeSR()/MakeFromSR(), or exception
@@ -5047,53 +5215,82 @@ static inline void jit_emit_runtime_helper_barrier(uintptr helper, uintptr pc, u
     jit_force_runtime_pc_endblock = true;
 }
 
+void jit_emit_ordered_semantic_helper_call(uintptr helper, uae_u32 instruction_bytes)
+{
+    /* Generated whole-instruction services need two distinct architectural
+       PC states: the exact opcode for source accesses, and the linear successor
+       at the interpreter-defined commit point.  Do not infer the opcode by
+       rewinding whatever PC_P happened to contain after flush(1): traced blocks
+       can be non-linear and compiler cursor re-anchoring deliberately emits no
+       runtime write.  The compile loop records the exact pc_hist[] entry for the
+       current opcode; pass its length-derived successor explicitly through x0. */
+    if (!jit_compile_current_op_host_pc || instruction_bytes < 2 || (instruction_bytes & 1))
+        jit_abort("ordered semantic helper: invalid compile PC/length host=%p bytes=%u",
+            (void *)jit_compile_current_op_host_pc, (unsigned)instruction_bytes);
+
+    const uintptr op_host_pc = jit_compile_current_op_host_pc;
+    const uae_u32 op_m68k_pc = jit_compile_current_op_m68k_pc;
+    const uae_u32 next_m68k_pc = op_m68k_pc + instruction_bytes;
+
+    flush(1);
+    compemu_raw_set_pc_full_i(op_m68k_pc, op_host_pc);
+    compemu_raw_mov_l_ri(REG_PAR1, next_m68k_pc);
+    prepare_for_call_2();
+    compemu_raw_call(helper);
+
+    /* The helper owns the final PC triple (successor, trap, or fault).  Forget
+       the compile-time PC_P fact and terminate through the runtime value. */
+    live.state[PC_P].realreg = -1;
+    live.state[PC_P].val = 0;
+    set_status(PC_P, INMEM);
+    jit_force_runtime_pc_endblock = true;
+}
+
 static void op_fullsr_orsr_w_comp_ff(uae_u32 opcode)
 {
     (void)opcode;
-    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    const uintptr op_pc = jit_compile_current_op_host_pc;
     m68k_pc_offset += 2;
     uae_u32 src = (uae_u32)(uae_u16)comp_get_iword((m68k_pc_offset += 2) - 2);
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_orsr_word,
-        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), src, 0, false);
+        op_pc, src, 0, false);
 }
 
 static void op_fullsr_andsr_w_comp_ff(uae_u32 opcode)
 {
     (void)opcode;
-    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    const uintptr op_pc = jit_compile_current_op_host_pc;
     m68k_pc_offset += 2;
     uae_u32 src = (uae_u32)(uae_u16)comp_get_iword((m68k_pc_offset += 2) - 2);
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_andsr_word,
-        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), src, 0, false);
+        op_pc, src, 0, false);
 }
 
 static void op_fullsr_eorsr_w_comp_ff(uae_u32 opcode)
 {
     (void)opcode;
-    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
+    const uintptr op_pc = jit_compile_current_op_host_pc;
     m68k_pc_offset += 2;
     uae_u32 src = (uae_u32)(uae_u16)comp_get_iword((m68k_pc_offset += 2) - 2);
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_eorsr_word,
-        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), src, 0, false);
+        op_pc, src, 0, false);
 }
 
 static void op_fullsr_mvsr2_comp_ff(uae_u32 opcode)
 {
-    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
     /* MOVE SR/CCR can raise privilege or destination access exceptions.  The
        helper owns all EA side effects and the live successor, so terminate at
        its runtime PC rather than continuing from compile-time PC facts. */
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_mvsr2_full,
-        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
+        jit_compile_current_op_host_pc, opcode, 0, false);
 }
 
 static void op_fullsr_mv2sr_w_comp_ff(uae_u32 opcode)
 {
-    uae_u32 m68k_pc_offset_thisinst = m68k_pc_offset;
     /* Delegate exact EA semantics to the runtime helper. It advances PC on
        success and raises privilege/address exceptions with the correct live PC. */
     jit_emit_runtime_helper_barrier((uintptr)jit_runtime_mv2sr_word_full,
-        (uintptr)(comp_pc_p + m68k_pc_offset_thisinst), opcode, 0, false);
+        jit_compile_current_op_host_pc, opcode, 0, false);
 }
 
 #if defined(CPU_AARCH64) 
@@ -6720,7 +6917,13 @@ void build_comp(void)
             compfunctbl[cft_map(opcode)] = op_trapcc_comp_ff;
             nfcompfunctbl[cft_map(opcode)] = op_trapcc_comp_ff;
             prop[cft_map(opcode)].cflow = fl_trap;
-        } else if (mnemonic == i_CINVA || mnemonic == i_CINVL || mnemonic == i_CINVP) {
+        } else if (mnemonic == i_MVR2USP || mnemonic == i_MVUSP2R ||
+                   mnemonic == i_RESET || mnemonic == i_STOP || mnemonic == i_RTE ||
+                   mnemonic == i_MOVEC2 || mnemonic == i_MOVE2C) {
+            compfunctbl[cft_map(opcode)] = op_system_control_comp_ff;
+            nfcompfunctbl[cft_map(opcode)] = op_system_control_comp_ff;
+        } else if (mnemonic == i_CINVA || mnemonic == i_CINVL || mnemonic == i_CINVP ||
+                   mnemonic == i_CPUSHA || mnemonic == i_CPUSHL || mnemonic == i_CPUSHP) {
             compfunctbl[cft_map(opcode)] = op_cache_control_comp_ff;
             nfcompfunctbl[cft_map(opcode)] = op_cache_control_comp_ff;
         } else if (mnemonic == i_BKPT || mnemonic == i_CALLM || mnemonic == i_RTM) {
@@ -6795,6 +6998,16 @@ void build_comp(void)
         } else if (table68k[opcode].mnemo == i_MOVES) {
             compfunctbl[cft_map(opcode)] = op_moves_comp_ff;
             nfcompfunctbl[cft_map(opcode)] = op_moves_comp_ff;
+        } else if (table68k[opcode].mnemo == i_BFTST ||
+                   table68k[opcode].mnemo == i_BFEXTU ||
+                   table68k[opcode].mnemo == i_BFCHG ||
+                   table68k[opcode].mnemo == i_BFEXTS ||
+                   table68k[opcode].mnemo == i_BFCLR ||
+                   table68k[opcode].mnemo == i_BFFFO ||
+                   table68k[opcode].mnemo == i_BFSET ||
+                   table68k[opcode].mnemo == i_BFINS) {
+            compfunctbl[cft_map(opcode)] = op_bitfield_comp_ff;
+            nfcompfunctbl[cft_map(opcode)] = op_bitfield_comp_ff;
         }
     }
     /* RTS: dynamic stack return must not reuse a traced return target. */
@@ -6896,8 +7109,10 @@ void build_comp(void)
                     if (handler == op_cas_comp_ff) return "cas_helper";
                     if (handler == op_cas2_comp_ff) return "cas2_helper";
                     if (handler == op_moves_comp_ff) return "moves_helper";
+                    if (handler == op_bitfield_comp_ff) return "bitfield_helper";
                     if (handler == op_trap_comp_ff) return "trap_helper";
                     if (handler == op_trapcc_comp_ff) return "trapcc_helper";
+                    if (handler == op_system_control_comp_ff) return "system_control_helper";
                     if (handler == op_cache_control_comp_ff) return "cache_control_helper";
                     if (handler == op_illegal_advanced_comp_ff) return "illegal_advanced_trap";
                     if (handler == op_rts_comp_ff) return "rts_helper";
@@ -6912,11 +7127,7 @@ void build_comp(void)
                     switch (mnemo) {
                     case i_MVPRM: return "generated_movep_reg_to_mem_helper";
                     case i_MVPMR: return "generated_movep_mem_to_reg_helper";
-                    case i_STOP: return "generated_stop_helper";
-                    case i_RTE: return "generated_rte_helper";
                     case i_CHK2: return "generated_chk2_helper";
-                    case i_MOVEC2: return "generated_movec_from_control_helper";
-                    case i_MOVE2C: return "generated_movec_to_control_helper";
                     case i_BFCHG: return "generated_bfchg_helper";
                     case i_BFCLR: return "generated_bfclr_helper";
                     case i_BFSET: return "generated_bfset_helper";
@@ -6927,9 +7138,6 @@ void build_comp(void)
                     case i_BFINS: return "generated_bfins_helper";
                     case i_PACK: return "generated_pack_helper";
                     case i_UNPK: return "generated_unpk_helper";
-                    case i_CPUSHL:
-                    case i_CPUSHP:
-                    case i_CPUSHA: return "generated_cache_push_helper";
                     default: return NULL;
                     }
                 };

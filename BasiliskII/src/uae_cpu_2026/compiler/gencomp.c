@@ -423,7 +423,7 @@ static void genamode(amodes mode, const char *reg, wordsizes size, const char *n
 			comprintf("\tint %s = dodgy ? scratchie++ : %s + 8;\n", name, reg);
 			if (getv == GENA_GETV_FETCH)
 			{
-				comprintf("\tif (dodgy) \n");
+				comprintf("\tif (dodgy)\n");
 				comprintf("\t\tmov_l_rr(%s, %s + 8);\n", name, reg);
 			}
 		}
@@ -460,7 +460,7 @@ static void genamode(amodes mode, const char *reg, wordsizes size, const char *n
 			if (movem != GENA_MOVEM_DO_INC)
 			{
 				comprintf("\tint %sa=dodgy?scratchie++:%s+8;\n", name, reg);
-				comprintf("\tif (dodgy) \n");
+				comprintf("\tif (dodgy)\n");
 				comprintf("\tmov_l_rr(%sa,8+%s);\n", name, reg);
 			} else
 			{
@@ -1148,7 +1148,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tor_l_ri(scratchie,0xffffff00);\n");
 		comprintf("\tand_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tand_b(%s,%s);\n",dst,src);
 		break;
 	     case sz_word:
@@ -1157,7 +1157,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tor_l_ri(scratchie,0xffff0000);\n");
 		comprintf("\tand_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tand_w(%s,%s);\n",dst,src);
 		break;
 	     case sz_long:
@@ -1176,7 +1176,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tand_l_ri(%s,0xffffff00);\n",dst);
 		comprintf("\tor_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tmov_b_rr(%s,%s);\n",dst,src);
 		break;
 	     case sz_word:
@@ -1185,7 +1185,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tand_l_ri(%s,0xffff0000);\n",dst);
 		comprintf("\tor_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tmov_w_rr(%s,%s);\n",dst,src);
 		break;
 	     case sz_long:
@@ -1212,7 +1212,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		    comprintf("\tzero_extend_8_rr(scratchie,%s);\n",src);
 		    comprintf("\t%s_l(%s,scratchie);\n",op,dst);
 		    comprintf("\tforget_about(scratchie);\n");
-		    comprintf("\t} else \n"
+		    comprintf("\t} else\n"
 			      "\t%s_b(%s,%s);\n",op,dst,src);
 		    break;
 		 case sz_word:
@@ -1220,7 +1220,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		    comprintf("\tzero_extend_16_rr(scratchie,%s);\n",src);
 		    comprintf("\t%s_l(%s,scratchie);\n",op,dst);
 		    comprintf("\tforget_about(scratchie);\n");
-		    comprintf("\t} else \n"
+		    comprintf("\t} else\n"
 			      "\t%s_w(%s,%s);\n",op,dst,src);
 		    break;
 		 case sz_long:
@@ -1911,8 +1911,7 @@ gen_opcode (unsigned int opcode)
 	comprintf("\t  mov_l_ri(movep_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)movep_disp << 16));\n",
 	    curi->size == sz_long ? 0x40 : 0);
 	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, movep_enc); }\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_mvprm);\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_mvprm, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
 #else
 	isjump;
 	failure;
@@ -1929,8 +1928,7 @@ gen_opcode (unsigned int opcode)
 	comprintf("\t  mov_l_ri(movep_enc, (srcreg & 7) | ((dstreg & 7) << 3) | %u | ((uae_u32)(uae_u16)movep_disp << 16));\n",
 	    curi->size == sz_long ? 0x40 : 0);
 	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, movep_enc); }\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_mvpmr);\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_mvpmr, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
 #else
 	isjump;
 	failure;
@@ -2098,61 +2096,19 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_MVR2USP:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tjnf_MVR2USP(srcreg);\n");
-#else
-	isjump;
-	failure;
-#endif
-	break;
-
      case i_MVUSP2R:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tjnf_MVUSP2R(srcreg);\n");
-#else
-	isjump;
-	failure;
-#endif
-	break;
-
      case i_RESET:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* RESET: no-op in emulation */
-#else
+     case i_STOP:
+     case i_RTE:
+	/* Privilege checks, extension ordering, exception PCs and dynamic control
+	 * flow are owned by the AArch64 system-control semantic service registered
+	 * after generated-table construction.  Do not leave a second partial
+	 * implementation in the generated compiler. */
 	isjump;
 	failure;
-#endif
 	break;
 
      case i_NOP:
-	break;
-
-     case i_STOP:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, src);\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_stop);\n");
-#else
-	isjump;
-	failure;
-#endif
-	break;
-
-     case i_RTE:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_rte);\n");
-#else
-	isjump;
-	failure;
-#endif
 	break;
 
      case i_RTD:
@@ -3338,27 +3294,10 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_MOVEC2:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, src);\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_movec2);\n");
-#else
-	failure;
-#endif
-	break;
-
      case i_MOVE2C:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, src);\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_move2c);\n");
-#else
+	/* The AArch64 system-control semantic service owns privilege-before-fetch,
+	 * invalid-control-register trapping and cache/MMU transition side effects. */
 	failure;
-#endif
 	break;
 
      case i_CAS:
@@ -3540,106 +3479,17 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_BFTST:
-     case i_BFCHG:
-     case i_BFCLR:
-     case i_BFSET:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Native via helper (jit_op_bftst/bfchg/bfclr/bfset). Sets flags in
-	   regflags (and RMW the field for chg/clr/set), so end the block. */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
-	}
-	comprintf("\tflush(1);\n");
-	switch (curi->mnemo) {
-	 case i_BFCHG: comprintf("\tcall_helper((uintptr)jit_op_bfchg);\n"); break;
-	 case i_BFCLR: comprintf("\tcall_helper((uintptr)jit_op_bfclr);\n"); break;
-	 case i_BFSET: comprintf("\tcall_helper((uintptr)jit_op_bfset);\n"); break;
-	 default:      comprintf("\tcall_helper((uintptr)jit_op_bftst);\n"); break;
-	}
-#else
-	failure;
-#endif
-	break;
-
      case i_BFEXTU:
+     case i_BFCHG:
      case i_BFEXTS:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Native via helper (jit_op_bfextu/bfexts). The helper sets flags in
-	   regflags, so end the block after it for correct CCR reload (as BFFFO). */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
-	}
-	comprintf("\tflush(1);\n");
-	if (curi->mnemo == i_BFEXTS)
-	    comprintf("\tcall_helper((uintptr)jit_op_bfexts);\n");
-	else
-	    comprintf("\tcall_helper((uintptr)jit_op_bfextu);\n");
-#else
-	failure;
-#endif
-	break;
-
+     case i_BFCLR:
      case i_BFFFO:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Helper sets flags in regflags; end the block after it so the next
-	   compiled block reloads the correct CCR state. */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
-	}
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_bfffo);\n");
-#else
-	failure;
-#endif
-	break;
-
+     case i_BFSET:
      case i_BFINS:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* BFINS depends on the extension word at execution time and may wrap a
-	   register field or span five bytes at a signed memory offset.  Keep all
-	   forms on one native helper contract; compile-time virtual-register IDs
-	   are not extension-word values.  The helper publishes CCR state, so end
-	   the block and let the next block reload it. */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], dsta);\n");
-	}
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_bfins);\n");
-#else
+	/* One exact-PC runtime service owns extension fetch, EA decoding, field
+	   reads and conditional writes.  Splitting those phases across generated
+	   code and a register-file helper loses the architectural fault PC. */
 	failure;
-#endif
 	break;
 
      case i_PACK:
@@ -3653,8 +3503,7 @@ gen_opcode (unsigned int opcode)
 	comprintf("\t  mov_l_ri(pack_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)pack_adj << 16));\n",
 	    curi->smode == Apdi ? 0x40 : 0);
 	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, pack_enc); }\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_pack);\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_pack, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
 #else
 	failure;
 #endif
@@ -3668,8 +3517,7 @@ gen_opcode (unsigned int opcode)
 	comprintf("\t  mov_l_ri(pack_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)pack_adj << 16));\n",
 	    curi->smode == Apdi ? 0x40 : 0);
 	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, pack_enc); }\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_unpk);\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_unpk, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
 #else
 	failure;
 #endif
@@ -3771,15 +3619,9 @@ gen_opcode (unsigned int opcode)
      case i_CPUSHL:
      case i_CPUSHP:
      case i_CPUSHA:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_cpusha);\n");
-#else
+	/* All cache-control forms share the exact-PC semantic service. */
 	isjump;
 	failure;
-#endif
 	break;
 
      case i_MOVE16:

@@ -281,6 +281,11 @@ declare -a TEST_ORDER=(nop move moveq_signext alu alu_overflow addi_subi_long ad
 # FPU semantic-service vectors are appended independently so additions remain
 # reviewable without rewriting the generated-style master ordering above.
 TEST_ORDER+=(fpp_semantic_successor fscc_false_byte fbcc_false_operand_lengths)
+# Shared SR/control/cache semantic-service coverage.
+TEST_ORDER+=(fullsr_orsr_privilege_vector8 fullsr_andsr_privilege_vector8 fullsr_eorsr_privilege_vector8 fullsr_mv2sr_privilege_vector8 fullsr_mvsr_privilege_vector8 system_usp_roundtrip reset_privilege_vector8 usp_privilege_vector8 stop_clear_s_vector8 stop_privilege_vector8 movec_privilege_vector8 rte_privilege_vector8 cache_privilege_vector8 cache_supervisor_successors)
+# Exact-PC bitfield service coverage spans every operation and each legal EA decoder.
+TEST_ORDER+=(bitfield_mem_an_family bitfield_d16_an bitfield_indexed_an bitfield_absw bitfield_absl bitfield_pc_d16 bitfield_pc_indexed)
+TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves_predec_store_alias moves_predec_read_alias moves_l_indexed_store)
 
 declare -A TESTS
 declare -A EXPECTED_D0
@@ -288,6 +293,9 @@ declare -A EXPECTED_D0
 # forces immediate RAM L2 promotion, so pass two proves native execution rather
 # than merely proving that the tracer/interpreter can compile the block.
 declare -A NATIVE_REPLAY_TESTS=(
+    [cas_b_predec]=1
+    [moves_predec_store_alias]=1
+    [bitfield_mem_an_family]=1
     [io_byte_write_roundtrip]=1
     [btst_b_d16_highbit]=1
     [move_to_mem_and_back]=1
@@ -1109,6 +1117,15 @@ TESTS[bfclr_reg_edge]="203C FFFF FFFF ECC0 0208"
 TESTS[bfchg_reg_edge]="203C FF00 FF00 EAC0 0208"
 TESTS[bftst_reg_edge]="203C 8000 0000 E8C0 0008"
 TESTS[bfins_reg_edge]="7042 203C FFFF 0000 EFC0 0200"
+# All eight bitfield operations share one runtime transaction and raw 32-bit EA contract.
+TESTS[bitfield_mem_an_family]="41F9 0000 9100 20BC 89AB CDEF E8D0 0008 E9D0 1008 EAD0 0008 EBD0 2008 ECD0 0008 EDD0 3008 EED0 0008 283C 0000 005A EFD0 4008 2410"
+TESTS[bitfield_d16_an]="41F9 0000 9100 217C 8000 0000 0002 E8E8 0008 0002 2428 0002"
+TESTS[bitfield_indexed_an]="7000 41F9 0000 9100 20BC 8000 0000 E8F0 0008 0000 2410"
+TESTS[bitfield_absw]="41F8 1100 20BC 8000 0000 E8F8 0008 1100 2410"
+TESTS[bitfield_absl]="41F9 0000 9100 20BC 8000 0000 E8F9 0008 0000 9100 2410"
+# Read-only PC-relative forms branch over their inline field data after the test.
+TESTS[bitfield_pc_d16]="E8FA 0008 0004 6004 8000 0000"
+TESTS[bitfield_pc_indexed]="7000 E8FB 0008 0004 6004 8000 0000"
 TESTS[pack_dn_edge]="203C 0000 1234 8140 0000"
 # PACK -(A7),-(A7) exercises A7's two-byte byte-step, source/destination
 # register aliasing, independent source reads, and ordered dual writeback.
@@ -1137,9 +1154,17 @@ TESTS[chk2_l_fullindexed_inrange]="207C 0000 9A00 20FC FFFF FF9C 20BC 0000 0064 
 # PC-relative CHK2.W resolves its d16 base from opcode+4, reads inline bounds,
 # and rejoins before a branch skips the embedded data.
 TESTS[chk2_w_pcrel_inrange]="7005 44FC 001A 02FA 0000 000A 40C1 6008 4E71 4E71 FFF6 000A"
-TESTS[movep_l_roundtrip]="41F9 0000 9100 203C 1234 5678 01C8 0000 1210 1428 0002 1628 0004 1828 0006"
+# Exercise both MOVEP directions and sizes from a negative displacement. The
+# word read must preserve D5's upper half; the long read must replace all D7;
+# byte reads retain an independent check of the four interleaved write lanes.
+TESTS[movep_l_roundtrip]="41F9 0000 9104 203C 1234 5678 01C8 FFFC 2A3C AAAA 5555 0B08 FFFC 7E00 0F48 FFFC 1228 FFFC 1428 FFFE 1610 1828 0002"
 TESTS[sr_ops_combo]="46FC 2700 007C 0010 027C F7FF 0A7C 0004 40C0"
 TESTS[moves_write_read]="41F9 0000 A000 203C DEAD BEEF 0E90 0800 2010"
+# MOVES snapshots register sources before auto-update; successful reads update
+# An before an aliased address-register destination, which therefore wins.
+TESTS[moves_predec_store_alias]="41F9 0000 9801 0E20 8800 1210"
+TESTS[moves_predec_read_alias]="41F9 0000 9804 317C 8001 FFFE 0E60 8000"
+TESTS[moves_l_indexed_store]="7000 41F9 0000 9800 203C DEAF BEEF 0EB0 0800 0000 2410"
 # MOVES.B (A0)+,A0 reads before postincrement and then lets the aliased
 # address-register destination win; byte loads into An are sign-extended.
 TESTS[moves_b_postinc_areg_alias]="207C 0000 9800 10BC 0080 0E18 8000 2008"
@@ -1167,6 +1192,13 @@ TESTS[fbcc_false_operand_lengths]="F280 DEAD F2C0 DEAD BEEF 7005"
 # CAS2.W/L semantic boundary: successful dual commit, first/second compare
 # failures, partial-word compare-register updates, and aliased compare fields.
 # Extension words encode Rn1/Du1/Dc1 then Rn2/Du2/Dc2.
+# CAS owns extension fetch, EA updates, compare-register failure updates and
+# successor-PC writes as one transaction. Predecrement commits after the read.
+TESTS[cas_b_success]="41F9 0000 A200 10BC 00AA 203C 1234 56AA 223C 8765 4355 0AD0 0040 1410"
+TESTS[cas_b_fail]="41F9 0000 A200 10BC 00AA 203C 1234 56BB 223C 8765 4355 0AD0 0040 1410"
+TESTS[cas_b_predec]="43F9 0000 A200 12BC 00AA 5289 203C 0000 00AA 223C 0000 0055 0AE1 0040 1411"
+TESTS[cas_w_postinc]="41F9 0000 A200 30BC 1234 203C AAAA 1234 223C BBBB 5678 0CD8 0040 3428 FFFE"
+TESTS[cas_l_d16]="41F9 0000 A200 217C 1122 3344 0004 203C 1122 3344 223C 5566 7788 0EE8 0040 0004 2428 0004"
 TESTS[cas2_w_success]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 1111 223C BABE 2222 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
 TESTS[cas2_w_fail_first]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 9999 223C DEAD 7777 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
 TESTS[cas2_w_fail_second]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 1111 223C DEAD 7777 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
@@ -1239,6 +1271,35 @@ TESTS[movec_vbr_roundtrip]="203C 1234 0000 4E7B 0801 4E7A 1801"
 TESTS[movec_sfc_roundtrip]="7005 4E7B 0000 4E7A 1000"
 # MOVEC DFC: write DFC=3, read back
 TESTS[movec_dfc_roundtrip]="7003 4E7B 0001 4E7A 1001"
+
+# Full-SR operations privilege-trap from the opcode, before immediate fetch or
+# destination modification. IPL7 keeps these user-mode windows deterministic.
+TESTS[fullsr_orsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 007C DEAD 60FE 4E71 7E80"
+TESTS[fullsr_andsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 027C DEAD 60FE 4E71 7E81"
+TESTS[fullsr_eorsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 0A7C DEAD 60FE 4E71 7E82"
+TESTS[fullsr_mv2sr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 46FC DEAD 60FE 4E71 7E83"
+TESTS[fullsr_mvsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 40C0 60FE 4E71 7E84"
+
+# Privileged integer control families use one exact-opcode-PC semantic service.
+# Successful USP moves round-trip A0 through USP and expose the result in D0.
+TESTS[system_usp_roundtrip]="207C 1234 5678 4E60 207C 0000 0000 4E68 2008"
+# Each user-mode vector installs a local vector-8 handler and retains IPL7 while
+# clearing S, preventing an asynchronous 60 Hz interrupt from racing the short
+# user-mode window. The spin is reached only if privilege is checked late or
+# omitted; extension-bearing forms carry deliberately non-semantic data.
+TESTS[reset_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 4E70 60FE 4E71 7E70"
+TESTS[usp_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 4E68 60FE 4E71 7E68"
+# A supervisor STOP that clears S traps from the successor without committing
+# SR or entering the stopped state; user STOP traps from the opcode before use
+# of its immediate word.
+TESTS[stop_clear_s_vector8]="7000 4E7B 0801 23FC 0000 1018 0000 0020 4E72 0000 60FE 4E71 7E72"
+TESTS[stop_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 4E72 DEAD 60FE 4E71 7E71"
+TESTS[movec_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 4E7A 1FFF 60FE 4E71 7E7A"
+TESTS[rte_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 4E73 60FE 4E71 7E73"
+TESTS[cache_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 F428 60FE 4E71 7E42"
+# Data-cache-only and instruction-cache CPUSH forms must both advance exactly
+# once; only the latter invalidates host translations.
+TESTS[cache_supervisor_successors]="F428 F4A8 7C42"
 
 # MULL unsigned 64-bit: D0 * D1 → D2:D3 (64-bit result)
 # MOVE.L #$FFFFFFFF,D0; MOVE.L #2,D1; MULL.L D0,D2:D3
@@ -1788,6 +1849,13 @@ SENTINEL_A6[bfclr_reg_edge]="a60001d5"
 SENTINEL_A6[bfchg_reg_edge]="a60001d6"
 SENTINEL_A6[bftst_reg_edge]="a60001d7"
 SENTINEL_A6[bfins_reg_edge]="a60001d8"
+SENTINEL_A6[bitfield_mem_an_family]="a65b0001"
+SENTINEL_A6[bitfield_d16_an]="a65b0002"
+SENTINEL_A6[bitfield_indexed_an]="a65b0003"
+SENTINEL_A6[bitfield_absw]="a65b0004"
+SENTINEL_A6[bitfield_absl]="a65b0005"
+SENTINEL_A6[bitfield_pc_d16]="a65b0006"
+SENTINEL_A6[bitfield_pc_indexed]="a65b0007"
 SENTINEL_A6[pack_dn_edge]="a60001d9"
 SENTINEL_A6[pack_predec_a7_alias]="a6ca3001"
 SENTINEL_A6[unpk_dn_edge]="a60001da"
@@ -1802,14 +1870,36 @@ SENTINEL_A6[chk2_w_pcrel_inrange]="a6c22007"
 SENTINEL_A6[movep_l_roundtrip]="a60001db"
 SENTINEL_A6[sr_ops_combo]="a60001dc"
 SENTINEL_A6[moves_write_read]="a60001dd"
+SENTINEL_A6[moves_predec_store_alias]="a65d0001"
+SENTINEL_A6[moves_predec_read_alias]="a65d0002"
+SENTINEL_A6[moves_l_indexed_store]="a65d0003"
 SENTINEL_A6[moves_b_postinc_areg_alias]="a6c5e001"
 SENTINEL_A6[moves_privilege_vector8]="a6c5e002"
+SENTINEL_A6[fullsr_orsr_privilege_vector8]="a65c0080"
+SENTINEL_A6[fullsr_andsr_privilege_vector8]="a65c0081"
+SENTINEL_A6[fullsr_eorsr_privilege_vector8]="a65c0082"
+SENTINEL_A6[fullsr_mv2sr_privilege_vector8]="a65c0083"
+SENTINEL_A6[fullsr_mvsr_privilege_vector8]="a65c0084"
+SENTINEL_A6[system_usp_roundtrip]="a65c0001"
+SENTINEL_A6[reset_privilege_vector8]="a65c0002"
+SENTINEL_A6[usp_privilege_vector8]="a65c0003"
+SENTINEL_A6[stop_clear_s_vector8]="a65c0004"
+SENTINEL_A6[stop_privilege_vector8]="a65c0005"
+SENTINEL_A6[movec_privilege_vector8]="a65c0006"
+SENTINEL_A6[rte_privilege_vector8]="a65c0007"
+SENTINEL_A6[cache_privilege_vector8]="a65c0008"
+SENTINEL_A6[cache_supervisor_successors]="a65c0009"
 SENTINEL_A6[fdbcc_false_decrement_branch]="a6fd8001"
 SENTINEL_A6[ftrapcc_true_vector7]="a6f7a001"
 SENTINEL_A6[ftrapcc_false_operand_lengths]="a6f7a002"
 SENTINEL_A6[fpp_semantic_successor]="a6f20001"
 SENTINEL_A6[fscc_false_byte]="a6f24001"
 SENTINEL_A6[fbcc_false_operand_lengths]="a6f28001"
+SENTINEL_A6[cas_b_success]="a65c1001"
+SENTINEL_A6[cas_b_fail]="a65c1002"
+SENTINEL_A6[cas_b_predec]="a65c1003"
+SENTINEL_A6[cas_w_postinc]="a65c1004"
+SENTINEL_A6[cas_l_d16]="a65c1005"
 SENTINEL_A6[cas2_w_success]="a6ca2001"
 SENTINEL_A6[cas2_w_fail_first]="a6ca2002"
 SENTINEL_A6[cas2_w_fail_second]="a6ca2003"
@@ -2027,6 +2117,11 @@ SENTINEL_A6[branch_flush_bgt_zero]="a6c0e003"
 # Risk-focused subset used for strict mismatch-first autoresearch.
 # Only these vectors count toward risky_total progression.
 declare -A RISKY_TESTS=(
+    [cas_b_success]=1
+    [cas_b_fail]=1
+    [cas_b_predec]=1
+    [cas_w_postinc]=1
+    [cas_l_d16]=1
     [host_code_reuse_coherence]=1
     [cache_disabled_selfmod_replay]=1
     [movea_l_sp_postinc_cov]=1
@@ -2234,6 +2329,13 @@ declare -A RISKY_TESTS=(
     [bfchg_reg_edge]=1
     [bftst_reg_edge]=1
     [bfins_reg_edge]=1
+    [bitfield_mem_an_family]=1
+    [bitfield_d16_an]=1
+    [bitfield_indexed_an]=1
+    [bitfield_absw]=1
+    [bitfield_absl]=1
+    [bitfield_pc_d16]=1
+    [bitfield_pc_indexed]=1
     [pack_dn_edge]=1
     [pack_predec_a7_alias]=1
     [unpk_dn_edge]=1
@@ -2248,8 +2350,25 @@ declare -A RISKY_TESTS=(
     [movep_l_roundtrip]=1
     [sr_ops_combo]=1
     [moves_write_read]=1
+    [moves_predec_store_alias]=1
+    [moves_predec_read_alias]=1
+    [moves_l_indexed_store]=1
     [moves_b_postinc_areg_alias]=1
     [moves_privilege_vector8]=1
+    [fullsr_orsr_privilege_vector8]=1
+    [fullsr_andsr_privilege_vector8]=1
+    [fullsr_eorsr_privilege_vector8]=1
+    [fullsr_mv2sr_privilege_vector8]=1
+    [fullsr_mvsr_privilege_vector8]=1
+    [system_usp_roundtrip]=1
+    [reset_privilege_vector8]=1
+    [usp_privilege_vector8]=1
+    [stop_clear_s_vector8]=1
+    [stop_privilege_vector8]=1
+    [movec_privilege_vector8]=1
+    [rte_privilege_vector8]=1
+    [cache_privilege_vector8]=1
+    [cache_supervisor_successors]=1
     [fdbcc_false_decrement_branch]=1
     [ftrapcc_true_vector7]=1
     [ftrapcc_false_operand_lengths]=1

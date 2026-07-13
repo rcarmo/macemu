@@ -16,10 +16,6 @@ void jit_op_orsr(void);
 void jit_op_andsr(void);
 void jit_op_eorsr(void);
 
-/* MOVEC */
-void jit_op_movec2(void);
-void jit_op_move2c(void);
-
 /* Divide */
 void jit_op_divu_w(void);
 void jit_op_divs_w(void);
@@ -30,18 +26,13 @@ void jit_op_divl(void);
 void jit_op_abcd(void);
 void jit_op_sbcd(void);
 void jit_op_nbcd(void);
-void jit_op_pack(void);
-void jit_op_unpk(void);
-void jit_op_mvprm(void);
-void jit_op_mvpmr(void);
+void jit_op_pack(uae_u32 next_pc);
+void jit_op_unpk(uae_u32 next_pc);
+void jit_op_mvprm(uae_u32 next_pc);
+void jit_op_mvpmr(uae_u32 next_pc);
 
-/* Privileged/flow */
-void jit_op_mvr2usp(void);
-void jit_op_mvusp2r(void);
-void jit_op_reset(void);
-void jit_op_rte(void);
+/* Flow */
 void jit_op_rtr(void);
-void jit_op_stop(void);
 void jit_op_trap(void);
 void jit_op_trapv(void);
 void jit_op_trapcc(void);
@@ -73,10 +64,6 @@ void jit_op_rolw(void);
 void jit_op_rorw(void);
 void jit_op_roxlw(void);
 void jit_op_roxrw(void);
-
-/* Cache */
-void jit_op_cinva(void);
-void jit_op_cpusha(void);
 
 } /* extern "C" */
 

@@ -1390,25 +1390,6 @@ extern "C" void jit_op_eorsr(void)
     MakeFromSR();
 }
 
-/* MOVEC helpers */
-extern "C" void jit_op_movec2(void)
-{
-    uae_u32 ext = regs.jit_exception;
-    int rn = (ext >> 12) & 15;
-    int cr = ext & 0xFFF;
-    uae_u32 *regp = &regs.regs[rn];
-    m68k_movec2(cr, regp);
-}
-
-extern "C" void jit_op_move2c(void)
-{
-    uae_u32 ext = regs.jit_exception;
-    int rn = (ext >> 12) & 15;
-    int cr = ext & 0xFFF;
-    uae_u32 *regp = &regs.regs[rn];
-    m68k_move2c(cr, regp);
-}
-
 /* ================================================================
  * JIT native-call helpers for opcodes that were interpreter-only.
  * Called via compemu_raw_call from compiled JIT blocks.
@@ -1733,80 +1714,57 @@ extern "C" void jit_op_nbcd(void)
 
 /* --- MOVEP helpers --- */
 
-extern "C" void jit_op_mvprm(void)
+extern "C" void jit_op_mvprm(uae_u32 next_pc)
 {
-    /* Move register to peripheral (byte-interleaved write)
-     * jit_exception: bits 0-2 = An, bits 3-5 = Dn, bit 6 = long mode */
+    /* Move register to peripheral (byte-interleaved write).
+     * jit_exception: bits 0-2 = An, bits 3-5 = Dn, bit 6 = long mode.
+     *
+     * The ordered-helper ABI enters with the exact opcode PC.  Every lane is
+     * independently faultable there; the successor becomes architectural only
+     * after the final successful write, matching the interpreter. */
     int an = regs.jit_exception & 7;
     int dn = (regs.jit_exception >> 3) & 7;
     int is_long = (regs.jit_exception >> 6) & 1;
     uae_s16 disp = (uae_s16)(regs.jit_exception >> 16);
     uae_u32 addr = regs.regs[8 + an] + disp;
     uae_u32 val = regs.regs[dn];
-    
+
     if (is_long) {
         put_byte(addr, (val >> 24) & 0xFF); addr += 2;
         put_byte(addr, (val >> 16) & 0xFF); addr += 2;
     }
     put_byte(addr, (val >> 8) & 0xFF); addr += 2;
     put_byte(addr, val & 0xFF);
+    m68k_setpc(next_pc);
 }
 
-extern "C" void jit_op_mvpmr(void)
+extern "C" void jit_op_mvpmr(uae_u32 next_pc)
 {
-    /* Move peripheral to register (byte-interleaved read) */
+    /* All interleaved source reads fault at the opcode PC.  Commit the complete
+       register value before publishing the explicit successor. */
     int an = regs.jit_exception & 7;
     int dn = (regs.jit_exception >> 3) & 7;
     int is_long = (regs.jit_exception >> 6) & 1;
     uae_s16 disp = (uae_s16)(regs.jit_exception >> 16);
     uae_u32 addr = regs.regs[8 + an] + disp;
     uae_u32 val = 0;
-    
+
     if (is_long) {
         val = (get_byte(addr) << 24); addr += 2;
         val |= (get_byte(addr) << 16); addr += 2;
     }
     val |= (get_byte(addr) << 8); addr += 2;
     val |= get_byte(addr);
-    
+
     if (is_long) {
         regs.regs[dn] = val;
     } else {
         regs.regs[dn] = (regs.regs[dn] & 0xFFFF0000) | (val & 0xFFFF);
     }
+    m68k_setpc(next_pc);
 }
 
-/* --- Privileged/flow control helpers --- */
-
-extern "C" void jit_op_mvr2usp(void)
-{
-    int rn = regs.jit_exception & 0xF;
-    regs.usp = regs.regs[rn];
-}
-
-extern "C" void jit_op_mvusp2r(void)
-{
-    int rn = regs.jit_exception & 0xF;
-    regs.regs[rn] = regs.usp;
-}
-
-extern "C" void jit_op_reset(void)
-{
-    /* RESET instruction — in emulation, this is a no-op */
-}
-
-extern "C" void jit_op_rte(void)
-{
-    /* RTE is a variable-length exception-frame state machine.  Keep one
-     * architectural implementation: ex_rte() handles throwaway frame chaining,
-     * every supported 68040 frame format, invalid-format exceptions, stack
-     * bank transitions, SR materialisation, and the dynamic return PC. */
-    if (!regs.s) {
-        Exception(8, 0);
-        return;
-    }
-    ex_rte();
-}
+/* --- Flow control helpers --- */
 
 extern "C" void jit_op_rtr(void)
 {
@@ -1819,16 +1777,6 @@ extern "C" void jit_op_rtr(void)
     regs.pc = get_long(sp); sp += 4;
     m68k_areg(regs, 7) = sp;
     fill_prefetch_0();
-}
-
-extern "C" void jit_op_stop(void)
-{
-    /* STOP #imm: load SR from immediate and halt */
-    uae_u16 new_sr = (uae_u16)regs.jit_exception;
-    regs.sr = new_sr;
-    MakeFromSR();
-    regs.stopped = 1;
-    SPCFLAGS_SET(SPCFLAG_STOP);
 }
 
 extern "C" void jit_op_trap(void)
@@ -1961,14 +1909,16 @@ extern "C" void jit_op_tas(void)
 }
 
 /* --- PACK/UNPK helpers --- */
-extern "C" void jit_op_pack(void)
+extern "C" void jit_op_pack(uae_u32 next_pc)
 {
-    /* PACK Dn,Dn,#adj or PACK -(An),-(An),#adj */
+    /* The ordered-helper ABI enters at the opcode PC.  Source reads retain that
+       PC; the predecrement destination write observes the explicit successor,
+       exactly where the interpreter performs m68k_incpc(). */
     int dst_reg = regs.jit_exception & 7;
     int src_reg = (regs.jit_exception >> 3) & 7;
     int predec = (regs.jit_exception >> 6) & 1;
     uae_s16 adj = (uae_s16)(regs.jit_exception >> 16);
-    
+
     uae_u16 val;
     if (predec) {
         /* Canonical 68040 ordering is deliberately not a get_word(): the two
@@ -1988,23 +1938,21 @@ extern "C" void jit_op_pack(void)
 
     if (predec) {
         regs.regs[8 + dst_reg] -= areg_byteinc[dst_reg];
-        /* The interpreter advances PC before the destination write and uses
-         * that value as fault_pc.  PC_P itself is advanced by the block
-         * epilogue; publishing fault_pc here preserves write-fault framing. */
-        regs.fault_pc = m68k_getpc() + 4;
+        m68k_setpc(next_pc);
         put_byte(regs.regs[8 + dst_reg], result);
     } else {
         regs.regs[dst_reg] = (regs.regs[dst_reg] & 0xFFFFFF00) | result;
+        m68k_setpc(next_pc);
     }
 }
 
-extern "C" void jit_op_unpk(void)
+extern "C" void jit_op_unpk(uae_u32 next_pc)
 {
     int dst_reg = regs.jit_exception & 7;
     int src_reg = (regs.jit_exception >> 3) & 7;
     int predec = (regs.jit_exception >> 6) & 1;
     uae_s16 adj = (uae_s16)(regs.jit_exception >> 16);
-    
+
     uae_u8 val;
     if (predec) {
         regs.regs[8 + src_reg] -= areg_byteinc[src_reg];
@@ -2018,10 +1966,11 @@ extern "C" void jit_op_unpk(void)
 
     if (predec) {
         regs.regs[8 + dst_reg] -= 2;
-        regs.fault_pc = m68k_getpc() + 4;
+        m68k_setpc(next_pc);
         put_word(regs.regs[8 + dst_reg], result);
     } else {
         regs.regs[dst_reg] = (regs.regs[dst_reg] & 0xFFFF0000) | result;
+        m68k_setpc(next_pc);
     }
 }
 
@@ -2030,8 +1979,8 @@ extern "C" void jit_op_bfffo(void)
 {
     /* Bit Field Find First One.
      * jit_exception = extension word
-     * scratchregs[0] = effective address for memory EA, or reg number +
-     *                  0x80000000 for Dn source.
+     * scratchregs[0] = effective address or Dn number; scratchregs[1]
+     *                  distinguishes Dn from the full 32-bit memory address.
      */
     const uae_u32 ext = regs.jit_exception;
     const uae_u32 ea_info = regs.scratchregs[0];
@@ -2039,7 +1988,7 @@ extern "C" void jit_op_bfffo(void)
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
     uae_u32 tmp;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int src_reg = ea_info & 7;
         offset &= 0x1f;
         const uae_u32 src = regs.regs[src_reg];
@@ -2070,15 +2019,15 @@ extern "C" void jit_op_bfffo(void)
 extern "C" void jit_op_bfextu(void)
 {
     /* Bit Field Extract Unsigned. Mirrors the interpreter (gencpu.c i_BFEXTU).
-     * jit_exception = extension word; scratchregs[0] = memory EA, or reg
-     * number + 0x80000000 for a Dn source. Result -> Dn=(ext>>12)&7. */
+     * jit_exception = extension word; scratchregs[0] = memory EA or Dn;
+     * scratchregs[1] distinguishes the two. Result -> Dn=(ext>>12)&7. */
     const uae_u32 ext = regs.jit_exception;
     const uae_u32 ea_info = regs.scratchregs[0];
     uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
     uae_u32 tmp;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int src_reg = ea_info & 7;
         offset &= 0x1f;
         const uae_u32 src = regs.regs[src_reg];
@@ -2109,7 +2058,7 @@ extern "C" void jit_op_bfexts(void)
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
     uae_u32 tmp;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int src_reg = ea_info & 7;
         offset &= 0x1f;
         const uae_u32 src = regs.regs[src_reg];
@@ -2132,15 +2081,15 @@ extern "C" void jit_op_bfexts(void)
  * Byte-exact mirror of the interpreter (gencpu.c i_BFTST/BFCHG/BFCLR/BFSET):
  * same get_bitfield/put_bitfield + bdata[] idiom and the same Dn rotate.
  * op: 0=TST (no write), 1=CHG, 2=CLR, 3=SET.
- * jit_exception = extension word; scratchregs[0] = memory EA, or reg number
- * + 0x80000000 for a Dn destination. */
+ * jit_exception = extension word; scratchregs[0] = memory EA or Dn number;
+ * scratchregs[1] distinguishes the two without stealing an address bit. */
 static inline void jit_bf_rmw(int op)
 {
     const uae_u32 ext = regs.jit_exception;
     const uae_u32 ea_info = regs.scratchregs[0];
     uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
-    const int is_dreg = (ea_info & 0x80000000u) != 0;
+    const int is_dreg = regs.scratchregs[1] != 0;
     const int dreg = ea_info & 7;
     uae_u32 bdata[2];
     uae_u32 dsta = 0;
@@ -2187,7 +2136,7 @@ extern "C" void jit_op_bfins(void)
 {
     /* Mirror the interpreter's get_bitfield()/put_bitfield() contract.
      * jit_exception is the extension word; scratchregs[0] is either the
-     * memory EA or 0x80000000|Dn for a register destination.  A dynamic
+     * memory EA or Dn number, with scratchregs[1] selecting a register.  A dynamic
      * memory offset is a signed 32-bit value and must not be reduced modulo
      * 32 until after distinguishing the register-destination case. */
     const uae_u32 ext = regs.jit_exception;
@@ -2199,7 +2148,7 @@ extern "C" void jit_op_bfins(void)
     const uae_u32 field_mask = width == 32 ? 0xffffffffu : ((1u << width) - 1);
     const uae_u32 field = regs.regs[(ext >> 12) & 7] & field_mask;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int dreg = ea_info & 7;
         const unsigned roff = (unsigned)offset & 0x1f;
         const uae_u32 old = regs.regs[dreg];
@@ -2403,19 +2352,6 @@ extern "C" void jit_op_roxrw(void)
     SET_ZFLG(val == 0);
     SET_NFLG((val >> 15) & 1);
     SET_VFLG(0);
-}
-
-/* --- Cache instructions (no-ops in emulation) --- */
-extern "C" void jit_op_cinva(void)
-{
-    /* CINVA: Cache invalidate all — no-op in emulation */
-}
-
-extern "C" void jit_op_cpusha(void)
-{
-    /* CPUSH*: guest cache maintenance. Host-side translated code must be
-       invalidated just like the SIGILL fallback path did for CPUSHA. */
-    FlushCodeCache(NULL, 0);
 }
 
 /* --- TRAPcc helper --- */

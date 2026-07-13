@@ -180,6 +180,9 @@ extern void compiler_init(void);
 extern void compiler_exit(void);
 extern bool compiler_use_jit(void);
 extern void flush(int save_regs);
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+extern void jit_emit_ordered_semantic_helper_call(uintptr helper, uae_u32 instruction_bytes);
+#endif
 void flush_reg(int reg);
 extern void set_target(uae_u8* t);
 extern uae_u8* get_target(void);

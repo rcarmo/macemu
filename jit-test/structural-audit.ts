@@ -326,6 +326,164 @@ const basiliskGlueSource = await Bun.file(new URL(
   import.meta.url,
 )).text();
 
+function functionBody(
+  text: string,
+  signature: string,
+  nextSignature: string,
+  context: string,
+): string {
+  const start = text.indexOf(signature);
+  const end = text.indexOf(nextSignature, start + signature.length);
+  if (start < 0 || end < 0) fail(`${context}: missing function boundary`);
+  return text.slice(start, end);
+}
+
+/* Ordered whole-instruction helpers receive an exact pc_hist[] opcode PC and
+ * a length-derived successor.  This must not be reconstructed by rewinding a
+ * flushed PC_P: traced blocks can re-anchor their compile cursor without an
+ * equivalent runtime write. */
+const orderedEmitterBody = functionBody(
+  allocatorSource,
+  "void jit_emit_ordered_semantic_helper_call(uintptr helper, uae_u32 instruction_bytes)",
+  "static void op_fullsr_orsr_w_comp_ff",
+  "ordered semantic-helper emitter",
+);
+for (const contract of [
+  "jit_compile_current_op_host_pc",
+  "jit_compile_current_op_m68k_pc",
+  "const uae_u32 next_m68k_pc = op_m68k_pc + instruction_bytes;",
+  "jit_force_runtime_pc_endblock = true;",
+] as const) {
+  requireText(orderedEmitterBody, contract, "ordered semantic-helper emitter");
+}
+requireBefore(orderedEmitterBody, "flush(1);", "compemu_raw_set_pc_full_i(op_m68k_pc, op_host_pc);", "ordered helper opcode PC");
+requireBefore(orderedEmitterBody, "compemu_raw_set_pc_full_i(op_m68k_pc, op_host_pc);", "compemu_raw_call(helper);", "ordered helper opcode PC");
+requireBefore(orderedEmitterBody, "compemu_raw_mov_l_ri(REG_PAR1, next_m68k_pc);", "compemu_raw_call(helper);", "ordered helper successor ABI");
+
+/* Privileged integer control instructions share one exact-opcode-PC service.
+ * Privilege must precede extension fetch, and each family must publish only its
+ * canonical success/trap successor rather than inheriting a flushed PC_P. */
+const systemControlBody = functionBody(
+  allocatorSource,
+  "static void jit_runtime_system_control(uae_u32 opcode)",
+  "static void jit_runtime_cache_control(uae_u32 opcode)",
+  "system-control semantic service",
+);
+for (const contract of [
+  "(opcode & 0xfff8) == 0x4e60",
+  "(opcode & 0xfff8) == 0x4e68",
+  "case 0x4e70:",
+  "case 0x4e72:",
+  "case 0x4e73:",
+  "case 0x4e7a:",
+  "case 0x4e7b:",
+  "m68k_setstopped(1);",
+  "ex_rte();",
+] as const) {
+  requireText(systemControlBody, contract, "system-control semantic service");
+}
+requireBefore(systemControlBody, "if (!regs.s)", "get_iword(2)", "system-control privilege-before-extension contract");
+if (systemControlBody.includes("cpufunctbl") || systemControlBody.includes("m68k_incpc(-"))
+  fail("system-control semantic service: interpreter dispatch or PC rewind remains");
+const stopControlStart = systemControlBody.indexOf("case 0x4e72:");
+const stopControlEnd = systemControlBody.indexOf("case 0x4e73:", stopControlStart);
+const stopControlBody = systemControlBody.slice(stopControlStart, stopControlEnd);
+requireBefore(stopControlBody, "m68k_incpc(4);", "Exception(8, 0);", "STOP clear-S trap successor");
+const stopSuccessBody = stopControlBody.slice(stopControlBody.indexOf("regs.sr = new_sr;"));
+requireBefore(stopSuccessBody, "MakeFromSR();", "m68k_setstopped(1);", "STOP SR commit ordering");
+requireBefore(stopSuccessBody, "m68k_setstopped(1);", "m68k_incpc(4);", "STOP success successor");
+const movecControlStart = systemControlBody.indexOf("case 0x4e7a:");
+const movecControlBody = systemControlBody.slice(movecControlStart);
+requireBefore(movecControlBody, "get_iword(2)", "m68k_movec2", "MOVEC extension-before-service contract");
+requireBefore(movecControlBody, "if (valid)", "m68k_incpc(4);", "MOVEC success-only successor");
+
+const cacheControlBody = functionBody(
+  allocatorSource,
+  "static void jit_runtime_cache_control(uae_u32 opcode)",
+  "static void jit_runtime_illegal_advanced(uae_u32 opcode)",
+  "cache-control semantic service",
+);
+requireBefore(cacheControlBody, "if (!regs.s)", "flush_internals();", "cache-control privilege ordering");
+requireBefore(cacheControlBody, "if (opcode & 0x80)", "m68k_incpc(2);", "cache-control transition ordering");
+for (const contract of [
+  'jit_abort("runtime semantic helper: missing exact opcode PC")',
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_system_control,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_cache_control,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_mvsr2_full,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_mv2sr_word_full,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_moves,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_bitfield,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_cas,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_cas2,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
+  "mnemonic == i_MVR2USP || mnemonic == i_MVUSP2R",
+  "mnemonic == i_RESET || mnemonic == i_STOP || mnemonic == i_RTE",
+  "mnemonic == i_MOVEC2 || mnemonic == i_MOVE2C",
+  "compfunctbl[cft_map(opcode)] = op_system_control_comp_ff;",
+  "mnemonic == i_CPUSHA || mnemonic == i_CPUSHL || mnemonic == i_CPUSHP",
+  "compfunctbl[cft_map(opcode)] = op_cache_control_comp_ff;",
+  "compfunctbl[cft_map(opcode)] = op_bitfield_comp_ff;",
+] as const) {
+  requireText(allocatorSource, contract, "system/cache handler registration");
+}
+
+const movepWriteBody = functionBody(
+  compatSource,
+  'extern "C" void jit_op_mvprm(uae_u32 next_pc)',
+  'extern "C" void jit_op_mvpmr(uae_u32 next_pc)',
+  "MOVEP register-to-memory fault PC",
+);
+const movepReadBody = functionBody(
+  compatSource,
+  'extern "C" void jit_op_mvpmr(uae_u32 next_pc)',
+  'extern "C" void jit_op_rtr(void)',
+  "MOVEP memory-to-register fault PC",
+);
+for (const [body, firstAccess, finalAccess, context] of [
+  [movepWriteBody, "put_byte(addr, (val >> 24)", "put_byte(addr, val & 0xFF);", "MOVEP register-to-memory fault PC"],
+  [movepReadBody, "get_byte(addr) << 24", "val |= get_byte(addr);", "MOVEP memory-to-register fault PC"],
+] as const) {
+  requireBefore(body, firstAccess, "m68k_setpc(next_pc);", context);
+  requireBefore(body, finalAccess, "m68k_setpc(next_pc);", context);
+  if (body.includes("m68k_incpc(-") || body.split("m68k_setpc(next_pc);").length - 1 !== 1)
+    fail(`${context}: helper must publish exactly one explicit successor after all accesses`);
+}
+requireBefore(movepReadBody, "regs.regs[dn] =", "m68k_setpc(next_pc);", "MOVEP read commit ordering");
+
+const packBody = functionBody(
+  compatSource,
+  'extern "C" void jit_op_pack(uae_u32 next_pc)',
+  'extern "C" void jit_op_unpk(uae_u32 next_pc)',
+  "PACK ordered fault PC",
+);
+const unpkBody = functionBody(
+  compatSource,
+  'extern "C" void jit_op_unpk(uae_u32 next_pc)',
+  'extern "C" void jit_op_bfffo(void)',
+  "UNPK ordered fault PC",
+);
+requireBefore(packBody, "get_byte(source - areg_byteinc[src_reg])", "m68k_setpc(next_pc);", "PACK source fault PC");
+requireBefore(packBody, "regs.regs[8 + dst_reg] -= areg_byteinc[dst_reg];", "m68k_setpc(next_pc);", "PACK destination fault PC");
+requireBefore(packBody, "m68k_setpc(next_pc);", "put_byte(regs.regs[8 + dst_reg], result);", "PACK destination fault PC");
+requireBefore(unpkBody, "val = get_byte(regs.regs[8 + src_reg]);", "m68k_setpc(next_pc);", "UNPK source fault PC");
+requireBefore(unpkBody, "regs.regs[8 + dst_reg] -= 2;", "m68k_setpc(next_pc);", "UNPK destination fault PC");
+requireBefore(unpkBody, "m68k_setpc(next_pc);", "put_word(regs.regs[8 + dst_reg], result);", "UNPK destination fault PC");
+for (const [body, context] of [[packBody, "PACK ordered fault PC"], [unpkBody, "UNPK ordered fault PC"]] as const) {
+  if (body.includes("m68k_incpc(-") || body.includes("regs.fault_pc = m68k_getpc() +"))
+    fail(`${context}: relative/double-advanced PC reconstruction remains`);
+  if (body.split("m68k_setpc(next_pc);").length - 1 !== 2)
+    fail(`${context}: register and memory forms do not each publish the explicit successor`);
+}
+for (const helperCase of ["case i_MVPRM:", "case i_MVPMR:", "case i_PACK:", "case i_UNPK:"]) {
+  const start = gencompSource.indexOf(helperCase);
+  const end = gencompSource.indexOf("break;", start);
+  if (start < 0 || end < 0) fail(`generated helper PC contract: missing ${helperCase}`);
+  const body = gencompSource.slice(start, end);
+  requireText(body, "jit_emit_ordered_semantic_helper_call", `generated helper PC contract ${helperCase}`);
+  requireText(body, "m68k_pc_offset - m68k_pc_offset_thisinst", `generated helper length contract ${helperCase}`);
+  if (body.includes("call_helper(") || body.includes("\\tflush(1)"))
+    fail(`generated helper PC contract ${helperCase}: legacy successor-first call remains`);
+}
+
 if (midfuncSource.includes("arm64_low32_hostptr_imm")) {
   fail("pointer arithmetic contract: numeric host-range inference remains");
 }
@@ -533,9 +691,8 @@ for (const contract of [
   "if (jit_strict_full_jit_env())\n\t\tjit_abort(\"strict full-JIT: %s\", reason)",
   "UseJIT = false;",
   "TimerRestoreAsyncOwnership();",
-  "case i_CPUSHL:",
-  "case i_CPUSHP:",
-  "case i_CPUSHA: return \"generated_cache_push_helper\";",
+  "if (handler == op_system_control_comp_ff) return \"system_control_helper\";",
+  "if (handler == op_cache_control_comp_ff) return \"cache_control_helper\";",
 ]) {
   requireText(allocatorSource, contract, "strict initialization and coverage taxonomy");
 }
@@ -741,29 +898,50 @@ requireText(
   "fallback control-flow runtime successor",
 );
 
-const bfinsGeneratorStart = gencompSource.indexOf("     case i_BFINS:");
-const bfinsGeneratorEnd = gencompSource.indexOf("     case i_PACK:", bfinsGeneratorStart);
-if (bfinsGeneratorStart < 0 || bfinsGeneratorEnd < 0) fail("missing BFINS generator");
-const bfinsGenerator = gencompSource.slice(bfinsGeneratorStart, bfinsGeneratorEnd);
+const bitfieldGeneratorStart = gencompSource.indexOf("     case i_BFTST:");
+const bitfieldGeneratorEnd = gencompSource.indexOf("     case i_PACK:", bitfieldGeneratorStart);
+if (bitfieldGeneratorStart < 0 || bitfieldGeneratorEnd < 0) fail("missing bitfield generator family");
+const bitfieldGenerator = gencompSource.slice(bitfieldGeneratorStart, bitfieldGeneratorEnd);
 for (const contract of [
-  "isjump;",
-  "GENA_GETV_NO_FETCH",
-  "mov_l_mr((uintptr)&regs.jit_exception, extra)",
-  "mov_l_mr((uintptr)&regs.scratchregs[0], dsta)",
-  "call_helper((uintptr)jit_op_bfins)",
+  "case i_BFEXTU:", "case i_BFCHG:", "case i_BFEXTS:",
+  "case i_BFCLR:", "case i_BFFFO:", "case i_BFSET:", "case i_BFINS:",
+  "failure;",
 ]) {
-  requireText(bfinsGenerator, contract, "BFINS runtime extension-word contract");
+  requireText(bitfieldGenerator, contract, "bitfield exact-PC service routing");
 }
 for (const forbidden of [
-  "GENA_GETV_FETCH_ALIGN",
-  "int dn = (extra >> 12)",
-  "int off = (extra >> 6)",
-  "int wid = extra & 31",
+  "genamode (", "call_helper((uintptr)jit_op_bf", "GENA_GETV_NO_FETCH",
+  "mov_l_mr((uintptr)&regs.jit_exception",
 ]) {
-  if (bfinsGenerator.includes(forbidden)) {
-    fail(`BFINS runtime extension-word contract: compile-time decode remains: ${forbidden}`);
+  if (bitfieldGenerator.includes(forbidden)) {
+    fail(`bitfield exact-PC service routing: split generated/helper transaction remains: ${forbidden}`);
   }
 }
+const bitfieldRuntime = functionBody(
+  allocatorSource,
+  "static void jit_runtime_bitfield(uae_u32 opcode)",
+  "static void jit_runtime_cas(uae_u32 opcode)",
+  "bitfield exact-PC runtime service",
+);
+for (const contract of [
+  "const uae_u16 extension = (uae_u16)get_iword(2);",
+  "m68k_incpc(4);",
+  "ea = get_disp_ea_020(m68k_getpc(), next_iword());",
+  "regs.scratchregs[1] = is_dreg ? 1 : 0;",
+  "case 7: jit_op_bfins(); break;",
+  "if (!pc_already_advanced)\n        m68k_incpc(fixed_length);",
+]) {
+  requireText(bitfieldRuntime, contract, "bitfield exact-PC runtime service");
+}
+requireBefore(bitfieldRuntime, "case 7: jit_op_bfins(); break;", "m68k_incpc(fixed_length);", "bitfield write/fault PC ordering");
+const casRuntime = functionBody(
+  allocatorSource,
+  "static void jit_runtime_cas(uae_u32 opcode)",
+  "static void jit_runtime_cas2(uae_u32 opcode)",
+  "CAS ordered transaction",
+);
+requireBefore(casRuntime, "memory_value = (uae_u8)phys_get_byte(ea);", "m68k_areg(regs, areg) = ea;", "CAS predecrement read fault ordering");
+requireText(casRuntime, "#ifdef FULLMMU", "CAS MMU-aware read contract");
 if (allocatorSource.includes("(prop[cft_map(opcode)].cflow & fl_end_block) != 0 && i + 1 < blocklen")) {
   fail("fallback control-flow runtime successor: terminal fallback remains position-gated");
 }
@@ -976,6 +1154,7 @@ const bfinsHelper = blockBuilder.slice(bfinsHelperStart, bfinsHelperEnd);
 for (const contract of [
   "uae_s32 offset = (ext & 0x800)",
   "const uae_u32 dsta = ea_info + (offset >> 3)",
+  "if (regs.scratchregs[1])",
   "(void)get_bitfield(dsta, bdata, offset, width)",
   "put_bitfield(dsta, bdata, field, offset, width)",
   "const uae_u32 rotated = roff ?",
@@ -983,8 +1162,9 @@ for (const contract of [
 ]) {
   requireText(bfinsHelper, contract, "BFINS signed/wrapping field semantics");
 }
-if (bfinsHelper.includes("bytes_needed") || bfinsHelper.includes("offset = do_reg ?")) {
-  fail("BFINS signed/wrapping field semantics: truncated byte-loop or early modulo remains");
+if (bfinsHelper.includes("bytes_needed") || bfinsHelper.includes("offset = do_reg ?") ||
+    bfinsHelper.includes("ea_info & 0x80000000")) {
+  fail("BFINS signed/wrapping field semantics: truncated byte-loop, early modulo, or stolen EA tag bit remains");
 }
 const blockBuilderStart = blockBuilder.indexOf("void execute_normal(void)");
 if (blockBuilderStart < 0) fail("missing execute_normal block builder");
@@ -1171,6 +1351,7 @@ console.log("METRIC structural_diagnostic_observer_abi=1");
 console.log("METRIC structural_diagnostic_verifier_opcode_decode=1");
 console.log("METRIC structural_block_verifier_retirement_bound=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
+console.log("METRIC structural_semantic_helper_fault_pc=1");
 console.log("METRIC structural_allocator_locked_evict=1");
 console.log("METRIC structural_scratch_spill_cardinality=1");
 console.log("METRIC structural_scratch_spill_width=1");
