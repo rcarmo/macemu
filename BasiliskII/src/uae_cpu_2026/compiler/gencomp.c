@@ -1641,16 +1641,25 @@ gen_opcode (unsigned int opcode)
 	if (curi->smode == Apdi) {
 	    comprintf("\tint src_val = scratchie++;\n");
 	    comprintf("\tint dst_val = scratchie++;\n");
-	    comprintf("\tsub_l_ri(srcreg + 8, 1);\n");
+	    /* Byte predecrement is two bytes for A7 and one for A0-A6. Keep
+	       source and destination updates separate so -(A7),-(A7) applies
+	       both architectural decrements before the destination read. */
+	    comprintf("\tlea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);\n");
 	    comprintf("\treadbyte(srcreg + 8, src_val, scratchie);\n");
-	    comprintf("\tsub_l_ri(dstreg + 8, 1);\n");
+	    comprintf("\tlea_l_brr(dstreg + 8, dstreg + 8, (uae_s32)-areg_byteinc[dstreg]);\n");
 	    comprintf("\treadbyte(dstreg + 8, dst_val, scratchie);\n");
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_SBCD_b(dst_val, src_val);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_SBCD_b(dst_val, src_val);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	    comprintf("\twritebyte(dstreg + 8, dst_val, scratchie);\n");
 	} else {
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_SBCD_b(dstreg, srcreg);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_SBCD_b(dstreg, srcreg);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	}
 #else
 	failure;
@@ -1701,17 +1710,25 @@ gen_opcode (unsigned int opcode)
 	    /* -(An),-(An) mode: inline memory access + BCD add */
 	    comprintf("\tint src_val = scratchie++;\n");
 	    comprintf("\tint dst_val = scratchie++;\n");
-	    comprintf("\tsub_l_ri(srcreg + 8, 1);\n");
+	    /* Match generic byte predecrement geometry, including A7's two-byte
+	       stride and the two ordered decrements of the same-register form. */
+	    comprintf("\tlea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);\n");
 	    comprintf("\treadbyte(srcreg + 8, src_val, scratchie);\n");
-	    comprintf("\tsub_l_ri(dstreg + 8, 1);\n");
+	    comprintf("\tlea_l_brr(dstreg + 8, dstreg + 8, (uae_s32)-areg_byteinc[dstreg]);\n");
 	    comprintf("\treadbyte(dstreg + 8, dst_val, scratchie);\n");
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_ABCD_b(dst_val, src_val);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_ABCD_b(dst_val, src_val);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	    comprintf("\twritebyte(dstreg + 8, dst_val, scratchie);\n");
 	} else {
-	    /* Dn,Dn mode: native inline BCD add */
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_ABCD_b(dstreg, srcreg);\n");
+	    /* BCD NZVC is materialised even in a nominally flag-dead block. */
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_ABCD_b(dstreg, srcreg);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	}
 #else
 	failure;
@@ -1746,15 +1763,22 @@ gen_opcode (unsigned int opcode)
      case i_NBCD:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
 	if (curi->smode == Dreg) {
 	    /* Dn mode: native inline BCD negate */
-	    comprintf("\tjnf_NBCD_b(srcreg);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_NBCD_b(srcreg);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	} else {
 	    /* Memory mode: read, BCD negate, write back */
 	    comprintf("\tint val = scratchie++;\n");
 	    comprintf("\treadbyte(srca, val, scratchie);\n");
-	    comprintf("\tjnf_NBCD_b(val);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_NBCD_b(val);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	    comprintf("\twritebyte(srca, val, scratchie);\n");
 	}
 #else

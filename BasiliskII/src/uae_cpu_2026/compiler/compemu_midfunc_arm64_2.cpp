@@ -7900,148 +7900,188 @@ MIDFUNC(2,jff_SUBX_l,(RW4 d, RR4 s))
 MENDFUNC(2,jff_SUBX_l,(RW4 d, RR4 s))
 
 /*
- * ABCD
- * Binary Coded Decimal Add with Extend
- * dst = dst + src + X (BCD)
- * Flags: X=C=decimal carry, Z only cleared (never set)
+ * ABCD/SBCD/NBCD
+ *
+ * Match the authoritative gencpu.c 68040 algorithms exactly, including their
+ * behaviour for non-decimal input nibbles.  The arithmetic cores leave the
+ * byte result in REG_WORK2 and decimal carry/borrow in REG_WORK3.  Every
+ * conditional correction uses a patched branch target: fixed instruction
+ * counts are not stable when an immediate materialisation changes shape.
+ *
+ * Every generated form preserves the architecturally unchanged N/V bits,
+ * computes sticky Z (old Z && result == 0), publishes C, and copies C to X.
+ * BCD therefore has no flag-dead handler split that can leave architectural
+ * NZVC stale at a block or diagnostic-observer boundary.
  */
-MIDFUNC(2,jnf_ABCD_b,(RW1 d, RR1 s))
+STATIC_INLINE void emit_bcd_flags(int result, int carry)
 {
-	int x = readreg(FLAGX);
-	INIT_REGS_b(d, s);
-
-	// lo = (d & 0xF) + (s & 0xF) + X
-	UBFX_wwii(REG_WORK1, d, 0, 4);
-	UBFX_wwii(REG_WORK2, s, 0, 4);
-	ADD_www(REG_WORK1, REG_WORK1, REG_WORK2);
-	ADD_www(REG_WORK1, REG_WORK1, x);    // lo in WORK1
-
-	// if (lo > 9) { lo -= 10; carry = 1; } else { carry = 0; }
-	MOV_wi(REG_WORK3, 0);                 // carry = 0
-	CMP_wi(REG_WORK1, 9);
-	BLE_i(2);                              // skip if lo <= 9
-	SUB_wwi(REG_WORK1, REG_WORK1, 10);
-	MOV_wi(REG_WORK3, 1);                 // carry = 1
-
-	// hi = (d >> 4 & 0xF) + (s >> 4 & 0xF) + carry
-	UBFX_wwii(REG_WORK2, d, 4, 4);
-	UBFX_wwii(REG_WORK4, s, 4, 4);
-	ADD_www(REG_WORK2, REG_WORK2, REG_WORK4);
-	ADD_www(REG_WORK2, REG_WORK2, REG_WORK3); // hi in WORK2
-
-	// if (hi > 9) { hi -= 10; carry = 1; } else { carry = 0; }
-	MOV_wi(REG_WORK3, 0);
-	CMP_wi(REG_WORK2, 9);
-	BLE_i(2);
-	SUB_wwi(REG_WORK2, REG_WORK2, 10);
-	MOV_wi(REG_WORK3, 1);
-
-	// result = (hi << 4) | (lo & 0xF)
-	UBFX_wwii(REG_WORK1, REG_WORK1, 0, 4);
-	ORR_wwwLSLi(REG_WORK1, REG_WORK1, REG_WORK2, 4);
-	BFI_wwii(d, REG_WORK1, 0, 8);
-
-	// FLAGX = carry
-	int xr = writereg(FLAGX);
-	MOV_ww(xr, REG_WORK3);
-	unlock2(xr);
-
-	EXIT_REGS(d, s);
-	unlock2(x);
+	/* REG_WORK4 holds the incoming NZCV and is not touched by the cores. */
+	UBFX_wwii(REG_WORK1, result, 0, 8);
+	CMP_wi(REG_WORK1, 0); /* sticky Z is based on the truncated byte result */
+	MRS_NZCV_x(REG_WORK1);
+	UBFX_wwii(REG_WORK1, REG_WORK1, 30, 1); /* result Z */
+	UBFX_wwii(REG_WORK2, REG_WORK4, 30, 1); /* incoming sticky Z */
+	AND_www(REG_WORK1, REG_WORK1, REG_WORK2);
+	BFI_wwii(REG_WORK4, REG_WORK1, 30, 1);
+	BFI_wwii(REG_WORK4, carry, 29, 1);
+	MSR_NZCV_x(REG_WORK4);
+	flags_carry_inverted = false;
 }
-MENDFUNC(2,jnf_ABCD_b,(RW1 d, RR1 s))
 
-MIDFUNC(2,jnf_SBCD_b,(RW1 d, RR1 s))
+STATIC_INLINE void emit_abcd_b(int d, int s, int x)
 {
-	int x = readreg(FLAGX);
-	INIT_REGS_b(d, s);
+	/* newv_lo = low(src) + low(dst) + X */
+	UBFX_wwii(REG_WORK1, s, 0, 4);
+	UBFX_wwii(REG_WORK2, d, 0, 4);
+	ADD_www(REG_WORK1, REG_WORK1, REG_WORK2);
+	ADD_www(REG_WORK1, REG_WORK1, x);
 
-	// lo = (d & 0xF) - (s & 0xF) - X
+	/* newv = high(src) + high(dst) + newv_lo */
+	UBFX_wwii(REG_WORK2, s, 4, 4);
+	UBFX_wwii(REG_WORK3, d, 4, 4);
+	ADD_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	LSL_wwi(REG_WORK2, REG_WORK2, 4);
+	ADD_www(REG_WORK2, REG_WORK2, REG_WORK1);
+
+	/* if (newv_lo > 9) newv += 6 */
+	CMP_wi(REG_WORK1, 9);
+	uae_u32 *low_ok = (uae_u32 *)get_target();
+	BLS_i(0);
+	ADD_wwi(REG_WORK2, REG_WORK2, 6);
+	write_jmp_target(low_ok, (uintptr)get_target());
+
+	/* cflg = (newv & 0x3f0) > 0x90; if (cflg) newv += 0x60 */
+	UBFX_wwii(REG_WORK1, REG_WORK2, 4, 6);
+	MOV_wi(REG_WORK3, 0);
+	CMP_wi(REG_WORK1, 9);
+	uae_u32 *carry_clear = (uae_u32 *)get_target();
+	BLS_i(0);
+	ADD_wwi(REG_WORK2, REG_WORK2, 0x60);
+	MOV_wi(REG_WORK3, 1);
+	write_jmp_target(carry_clear, (uintptr)get_target());
+}
+
+STATIC_INLINE void emit_sbcd_b(int d, int s, int x)
+{
+	/* Keep the unadjusted byte subtraction for both correction predicates. */
+	UBFX_wwii(REG_WORK1, d, 0, 8);
+	UBFX_wwii(REG_WORK2, s, 0, 8);
+	SUB_www(REG_WORK3, REG_WORK1, REG_WORK2);
+	SUB_www(REG_WORK3, REG_WORK3, x); /* raw dst - src - X */
+
+	/* newv_lo = low(dst) - low(src) - X */
 	UBFX_wwii(REG_WORK1, d, 0, 4);
 	UBFX_wwii(REG_WORK2, s, 0, 4);
 	SUB_www(REG_WORK1, REG_WORK1, REG_WORK2);
-	SUB_www(REG_WORK1, REG_WORK1, x);    // lo in WORK1 (signed)
+	SUB_www(REG_WORK1, REG_WORK1, x);
 
-	// if (lo < 0) { lo += 10; borrow = 1; } else { borrow = 0; }
-	MOV_wi(REG_WORK3, 0);
-	CMP_wi(REG_WORK1, 0);
-	BGE_i(2);
-	ADD_wwi(REG_WORK1, REG_WORK1, 10);
-	MOV_wi(REG_WORK3, 1);
-
-	// hi = (d >> 4 & 0xF) - (s >> 4 & 0xF) - borrow
+	/* newv = high(dst) - high(src) + newv_lo */
 	UBFX_wwii(REG_WORK2, d, 4, 4);
-	UBFX_wwii(REG_WORK4, s, 4, 4);
-	SUB_www(REG_WORK2, REG_WORK2, REG_WORK4);
-	SUB_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	UBFX_wwii(x, s, 4, 4); /* incoming X has already been consumed */
+	SUB_www(REG_WORK2, REG_WORK2, x);
+	LSL_wwi(REG_WORK2, REG_WORK2, 4);
+	ADD_www(REG_WORK2, REG_WORK2, REG_WORK1);
 
-	// if (hi < 0) { hi += 10; borrow = 1; } else { borrow = 0; }
+	/* if (newv_lo & 0xf0) { newv -= 6; bcd = 6; } */
+	MOV_wi(x, 0); /* bcd */
+	UBFX_wwii(REG_WORK1, REG_WORK1, 4, 4);
+	uae_u32 *low_ok = (uae_u32 *)get_target();
+	CBZ_wi(REG_WORK1, 0);
+	SUB_wwi(REG_WORK2, REG_WORK2, 6);
+	MOV_wi(x, 6);
+	write_jmp_target(low_ok, (uintptr)get_target());
+
+	/* if ((raw subtraction & 0x100) != 0) newv -= 0x60 */
+	uae_u32 *high_ok = (uae_u32 *)get_target();
+	TBZ_wii(REG_WORK3, 8, 0);
+	SUB_wwi(REG_WORK2, REG_WORK2, 0x60);
+	write_jmp_target(high_ok, (uintptr)get_target());
+
+	/* cflg = (((raw subtraction - bcd) & 0x300) != 0) */
+	SUB_www(REG_WORK1, REG_WORK3, x);
+	UBFX_wwii(REG_WORK1, REG_WORK1, 8, 2);
 	MOV_wi(REG_WORK3, 0);
-	CMP_wi(REG_WORK2, 0);
-	BGE_i(2);
-	ADD_wwi(REG_WORK2, REG_WORK2, 10);
+	uae_u32 *borrow_clear = (uae_u32 *)get_target();
+	CBZ_wi(REG_WORK1, 0);
 	MOV_wi(REG_WORK3, 1);
-
-	// result = (hi << 4) | (lo & 0xF)
-	UBFX_wwii(REG_WORK1, REG_WORK1, 0, 4);
-	ORR_wwwLSLi(REG_WORK1, REG_WORK1, REG_WORK2, 4);
-	BFI_wwii(d, REG_WORK1, 0, 8);
-
-	// FLAGX = borrow
-	int xr = writereg(FLAGX);
-	MOV_ww(xr, REG_WORK3);
-	unlock2(xr);
-
-	EXIT_REGS(d, s);
-	unlock2(x);
+	write_jmp_target(borrow_clear, (uintptr)get_target());
 }
-MENDFUNC(2,jnf_SBCD_b,(RW1 d, RR1 s))
 
-MIDFUNC(1,jnf_NBCD_b,(RW1 d))
+STATIC_INLINE void emit_nbcd_b(int d, int x)
 {
-	int x = readreg(FLAGX);
-	d = rmw(d);
-
-	// lo = 0 - (d & 0xF) - X
+	/* newv_lo = -low(src) - X */
 	UBFX_wwii(REG_WORK1, d, 0, 4);
 	MOV_wi(REG_WORK2, 0);
 	SUB_www(REG_WORK1, REG_WORK2, REG_WORK1);
 	SUB_www(REG_WORK1, REG_WORK1, x);
 
-	// if (lo < 0) { lo += 10; borrow = 1; } else { borrow = 0; }
-	MOV_wi(REG_WORK3, 0);
-	CMP_wi(REG_WORK1, 0);
-	BGE_i(2);
-	ADD_wwi(REG_WORK1, REG_WORK1, 10);
-	MOV_wi(REG_WORK3, 1);
-
-	// hi = 0 - (d >> 4 & 0xF) - borrow
+	/* newv_hi = -high(src) */
 	UBFX_wwii(REG_WORK2, d, 4, 4);
-	MOV_wi(REG_WORK4, 0);
-	SUB_www(REG_WORK2, REG_WORK4, REG_WORK2);
-	SUB_www(REG_WORK2, REG_WORK2, REG_WORK3);
-
-	// if (hi < 0) { hi += 10; borrow = 1; } else { borrow = 0; }
+	LSL_wwi(REG_WORK2, REG_WORK2, 4);
 	MOV_wi(REG_WORK3, 0);
-	CMP_wi(REG_WORK2, 0);
-	BGE_i(2);
-	ADD_wwi(REG_WORK2, REG_WORK2, 10);
+	SUB_www(REG_WORK2, REG_WORK3, REG_WORK2);
+
+	/* The interpreter compares the unsigned 16-bit underflow against nine. */
+	CMP_wi(REG_WORK1, 9);
+	uae_u32 *low_ok = (uae_u32 *)get_target();
+	BLS_i(0);
+	SUB_wwi(REG_WORK1, REG_WORK1, 6);
+	write_jmp_target(low_ok, (uintptr)get_target());
+
+	ADD_www(REG_WORK2, REG_WORK2, REG_WORK1);
+
+	/* cflg = (newv & 0x1f0) > 0x90; if (cflg) newv -= 0x60 */
+	UBFX_wwii(REG_WORK1, REG_WORK2, 4, 5);
+	MOV_wi(REG_WORK3, 0);
+	CMP_wi(REG_WORK1, 9);
+	uae_u32 *borrow_clear = (uae_u32 *)get_target();
+	BLS_i(0);
+	SUB_wwi(REG_WORK2, REG_WORK2, 0x60);
 	MOV_wi(REG_WORK3, 1);
-
-	// result = (hi << 4) | (lo & 0xF)
-	UBFX_wwii(REG_WORK1, REG_WORK1, 0, 4);
-	ORR_wwwLSLi(REG_WORK1, REG_WORK1, REG_WORK2, 4);
-	BFI_wwii(d, REG_WORK1, 0, 8);
-
-	// FLAGX = borrow
-	int xr = writereg(FLAGX);
-	MOV_ww(xr, REG_WORK3);
-	unlock2(xr);
-
-	unlock2(d);
-	unlock2(x);
+	write_jmp_target(borrow_clear, (uintptr)get_target());
 }
-MENDFUNC(1,jnf_NBCD_b,(RW1 d))
+
+MIDFUNC(2,jff_ABCD_b,(RW1 d, RR1 s))
+{
+	INIT_REGS_b(d, s);
+	int x = rmw(FLAGX);
+	MRS_NZCV_x(REG_WORK4);
+	emit_abcd_b(d, s, x);
+	BFI_wwii(d, REG_WORK2, 0, 8);
+	emit_bcd_flags(REG_WORK2, REG_WORK3);
+	MOV_ww(x, REG_WORK3);
+	unlock2(x);
+	EXIT_REGS(d, s);
+}
+MENDFUNC(2,jff_ABCD_b,(RW1 d, RR1 s))
+
+MIDFUNC(2,jff_SBCD_b,(RW1 d, RR1 s))
+{
+	INIT_REGS_b(d, s);
+	int x = rmw(FLAGX);
+	MRS_NZCV_x(REG_WORK4);
+	emit_sbcd_b(d, s, x);
+	BFI_wwii(d, REG_WORK2, 0, 8);
+	emit_bcd_flags(REG_WORK2, REG_WORK3);
+	MOV_ww(x, REG_WORK3);
+	unlock2(x);
+	EXIT_REGS(d, s);
+}
+MENDFUNC(2,jff_SBCD_b,(RW1 d, RR1 s))
+
+MIDFUNC(1,jff_NBCD_b,(RW1 d))
+{
+	d = rmw(d);
+	int x = rmw(FLAGX);
+	MRS_NZCV_x(REG_WORK4);
+	emit_nbcd_b(d, x);
+	BFI_wwii(d, REG_WORK2, 0, 8);
+	emit_bcd_flags(REG_WORK2, REG_WORK3);
+	MOV_ww(x, REG_WORK3);
+	unlock2(x);
+	unlock2(d);
+}
+MENDFUNC(1,jff_NBCD_b,(RW1 d))
 
 /*
  * CHK — Check Register Against Bounds

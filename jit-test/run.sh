@@ -174,6 +174,10 @@ EOF
             # preserving the harness sentinel after the replacement opcode.
             env_vars+=(B2_TEST_REWRITE_HEX="7002 2C7C ${sentinel_a6:0:4} ${sentinel_a6:4:4}")
         fi
+        local replay_bytes="${NATIVE_REPLAY_BYTES[$name]:-}"
+        if [ -n "$replay_bytes" ]; then
+            env_vars+=(B2_TEST_REPLAY_BYTES="$replay_bytes")
+        fi
         local replay_count="${NATIVE_REPLAY_COUNT[$name]:-1}"
         if [ "$replay_count" -gt 1 ]; then
             # Some alternate-PC or coherency vectors must first trace their
@@ -319,6 +323,16 @@ TEST_ORDER+=(addx_b_overflow_with_x addx_w_overflow_with_x addx_l_overflow_with_
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
 TEST_ORDER+=(ccr_ori_exact_bits ccr_andi_exact_mask ccr_eori_exact_toggle ccr_ori_after_borrow_flags ccr_andi_after_borrow_flags ccr_eori_after_borrow_flags)
+# BCD arithmetic is one lifecycle family: C is copied to X, Z is sticky,
+# data-register aliases consume the pre-write source, and byte predecrement
+# uses the architectural two-byte A7 stride for each source/destination access.
+TEST_ORDER+=(bcd_abcd_zero_sticky_set bcd_abcd_zero_sticky_clear bcd_abcd_nonzero_clears_sticky bcd_abcd_carry_zero bcd_abcd_same_reg_with_x)
+TEST_ORDER+=(bcd_sbcd_zero_sticky_set bcd_sbcd_zero_sticky_clear bcd_sbcd_borrow bcd_sbcd_same_reg_with_x)
+TEST_ORDER+=(bcd_nbcd_zero_sticky_set bcd_nbcd_zero_sticky_clear bcd_nbcd_nonzero bcd_nbcd_with_x)
+TEST_ORDER+=(bcd_abcd_decimal_09_plus_01 bcd_abcd_invalid_nibble_exact bcd_abcd_extend_chain)
+TEST_ORDER+=(bcd_sbcd_decimal_10_minus_01 bcd_sbcd_invalid_nibble_exact bcd_nbcd_decimal_10 bcd_nbcd_invalid_nibble_exact)
+TEST_ORDER+=(bcd_native_abcd_zero_sticky bcd_native_abcd_invalid_extend bcd_native_sbcd_invalid_borrow bcd_native_nbcd_invalid_borrow)
+TEST_ORDER+=(bcd_abcd_predec_src_a7 bcd_abcd_predec_dst_a7 bcd_abcd_predec_a7_alias bcd_sbcd_predec_src_a7 bcd_sbcd_predec_dst_a7 bcd_sbcd_predec_a7_alias bcd_nbcd_predec_a7)
 
 declare -A TESTS
 declare -A EXPECTED_D0
@@ -449,6 +463,37 @@ declare -A NATIVE_REPLAY_TESTS=(
     [branch_flush_bgt_zero]=1
     [dbra_ccr_preserve_z_clear]=1
     [dbra_ccr_preserve_z_set]=1
+    [bcd_abcd_zero_sticky_set]=1
+    [bcd_abcd_zero_sticky_clear]=1
+    [bcd_abcd_nonzero_clears_sticky]=1
+    [bcd_abcd_carry_zero]=1
+    [bcd_abcd_same_reg_with_x]=1
+    [bcd_sbcd_zero_sticky_set]=1
+    [bcd_sbcd_zero_sticky_clear]=1
+    [bcd_sbcd_borrow]=1
+    [bcd_sbcd_same_reg_with_x]=1
+    [bcd_nbcd_zero_sticky_set]=1
+    [bcd_nbcd_zero_sticky_clear]=1
+    [bcd_nbcd_nonzero]=1
+    [bcd_nbcd_with_x]=1
+    [bcd_abcd_decimal_09_plus_01]=1
+    [bcd_abcd_invalid_nibble_exact]=1
+    [bcd_abcd_extend_chain]=1
+    [bcd_sbcd_decimal_10_minus_01]=1
+    [bcd_sbcd_invalid_nibble_exact]=1
+    [bcd_nbcd_decimal_10]=1
+    [bcd_nbcd_invalid_nibble_exact]=1
+    [bcd_native_abcd_zero_sticky]=1
+    [bcd_native_abcd_invalid_extend]=1
+    [bcd_native_sbcd_invalid_borrow]=1
+    [bcd_native_nbcd_invalid_borrow]=1
+    [bcd_abcd_predec_src_a7]=1
+    [bcd_abcd_predec_dst_a7]=1
+    [bcd_abcd_predec_a7_alias]=1
+    [bcd_sbcd_predec_src_a7]=1
+    [bcd_sbcd_predec_dst_a7]=1
+    [bcd_sbcd_predec_a7_alias]=1
+    [bcd_nbcd_predec_a7]=1
 )
 # A setup prefix may install architectural state before the audited instruction.
 # Replay and native-entry proof then start at the exact family opcode PC.
@@ -473,6 +518,49 @@ declare -A NATIVE_REPLAY_PC=(
     [divs_l64_same_dq_dr_nf]=0x1010
     [trapv_taken_frame]=0x1014
     [trapv_not_taken_preserve]=0x1004
+    [bcd_abcd_zero_sticky_set]=0x100c
+    [bcd_abcd_zero_sticky_clear]=0x1008
+    [bcd_abcd_nonzero_clears_sticky]=0x100c
+    [bcd_abcd_carry_zero]=0x1010
+    [bcd_abcd_same_reg_with_x]=0x100e
+    [bcd_sbcd_zero_sticky_set]=0x100c
+    [bcd_sbcd_zero_sticky_clear]=0x1008
+    [bcd_sbcd_borrow]=0x100c
+    [bcd_sbcd_same_reg_with_x]=0x100e
+    [bcd_nbcd_zero_sticky_set]=0x100a
+    [bcd_nbcd_zero_sticky_clear]=0x1006
+    [bcd_nbcd_nonzero]=0x100a
+    [bcd_nbcd_with_x]=0x100a
+    [bcd_abcd_decimal_09_plus_01]=0x1008
+    [bcd_abcd_invalid_nibble_exact]=0x100c
+    [bcd_abcd_extend_chain]=0x1014
+    [bcd_sbcd_decimal_10_minus_01]=0x1008
+    [bcd_sbcd_invalid_nibble_exact]=0x100c
+    [bcd_nbcd_decimal_10]=0x1006
+    [bcd_nbcd_invalid_nibble_exact]=0x100a
+    [bcd_native_abcd_zero_sticky]=0x1000
+    [bcd_native_abcd_invalid_extend]=0x1000
+    [bcd_native_sbcd_invalid_borrow]=0x1000
+    [bcd_native_nbcd_invalid_borrow]=0x1000
+    [bcd_abcd_predec_src_a7]=0x1028
+    [bcd_abcd_predec_dst_a7]=0x1028
+    [bcd_abcd_predec_a7_alias]=0x1022
+    [bcd_sbcd_predec_src_a7]=0x1028
+    [bcd_sbcd_predec_dst_a7]=0x1028
+    [bcd_sbcd_predec_a7_alias]=0x1022
+    [bcd_nbcd_predec_a7]=0x1018
+)
+# Byte pairs are RAM-relative address/value operands restored before every
+# exact-PC replay. This keeps memory-EA vectors deterministic across the trace
+# pass and the later native-entry pass.
+declare -A NATIVE_REPLAY_BYTES=(
+    [bcd_abcd_predec_src_a7]="2080 01 2040 99"
+    [bcd_abcd_predec_dst_a7]="2080 01 2040 99"
+    [bcd_abcd_predec_a7_alias]="2082 01 2080 99"
+    [bcd_sbcd_predec_src_a7]="2080 01 2040 00"
+    [bcd_sbcd_predec_dst_a7]="2080 01 2040 00"
+    [bcd_sbcd_predec_a7_alias]="2082 01 2080 00"
+    [bcd_nbcd_predec_a7]="2040 01"
 )
 declare -A NATIVE_REPLAY_COUNT=(
     [chk_w_in_range]=2
@@ -495,6 +583,35 @@ declare -A NATIVE_REPLAY_COUNT=(
     [divs_l64_same_dq_dr_nf]=2
     [trapv_taken_frame]=2
     [trapv_not_taken_preserve]=2
+    # Prefix-bearing BCD vectors need one replay to trace the exact opcode
+    # anchor and a second replay to prove native entry at that same address.
+    [bcd_abcd_zero_sticky_set]=2
+    [bcd_abcd_zero_sticky_clear]=2
+    [bcd_abcd_nonzero_clears_sticky]=2
+    [bcd_abcd_carry_zero]=2
+    [bcd_abcd_same_reg_with_x]=2
+    [bcd_sbcd_zero_sticky_set]=2
+    [bcd_sbcd_zero_sticky_clear]=2
+    [bcd_sbcd_borrow]=2
+    [bcd_sbcd_same_reg_with_x]=2
+    [bcd_nbcd_zero_sticky_set]=2
+    [bcd_nbcd_zero_sticky_clear]=2
+    [bcd_nbcd_nonzero]=2
+    [bcd_nbcd_with_x]=2
+    [bcd_abcd_decimal_09_plus_01]=2
+    [bcd_abcd_invalid_nibble_exact]=2
+    [bcd_abcd_extend_chain]=2
+    [bcd_sbcd_decimal_10_minus_01]=2
+    [bcd_sbcd_invalid_nibble_exact]=2
+    [bcd_nbcd_decimal_10]=2
+    [bcd_nbcd_invalid_nibble_exact]=2
+    [bcd_abcd_predec_src_a7]=2
+    [bcd_abcd_predec_dst_a7]=2
+    [bcd_abcd_predec_a7_alias]=2
+    [bcd_sbcd_predec_src_a7]=2
+    [bcd_sbcd_predec_dst_a7]=2
+    [bcd_sbcd_predec_a7_alias]=2
+    [bcd_nbcd_predec_a7]=2
     [cache_disabled_selfmod_replay]=2
     [host_code_reuse_coherence]=2
 )
@@ -848,6 +965,87 @@ TESTS[ccr_andi_after_borrow_flags]="7000 7201 9001 023C 0011"
 EXPECTED_REG_FIELDS[ccr_andi_after_borrow_flags]="D0=000000ff D1=00000001 SR=2711"
 TESTS[ccr_eori_after_borrow_flags]="7000 7201 9001 0A3C 001F"
 EXPECTED_REG_FIELDS[ccr_eori_after_borrow_flags]="D0=000000ff D1=00000001 SR=2706"
+
+# ABCD/SBCD/NBCD share C->X and sticky-Z semantics. Clear the five defined
+# CCR bits before installing each incoming X/Z state so witnesses are exact.
+TESTS[bcd_abcd_zero_sticky_set]="7000 7200 023C 00E0 003C 0004 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_zero_sticky_set]="D0=00000000 D1=00000000 SR=2704"
+TESTS[bcd_abcd_zero_sticky_clear]="7000 7200 023C 00E0 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_zero_sticky_clear]="D0=00000000 D1=00000000 SR=2700"
+TESTS[bcd_abcd_nonzero_clears_sticky]="7001 7201 023C 00E0 003C 0004 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_nonzero_clears_sticky]="D0=00000002 D1=00000001 SR=2700"
+TESTS[bcd_abcd_carry_zero]="203C 0000 0099 7201 023C 00E0 003C 0004 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_carry_zero]="D0=00000000 D1=00000001 SR=2715"
+TESTS[bcd_abcd_same_reg_with_x]="203C A5A5 0099 023C 00E0 003C 0014 C100"
+EXPECTED_REG_FIELDS[bcd_abcd_same_reg_with_x]="D0=a5a50099 SR=2711"
+
+TESTS[bcd_sbcd_zero_sticky_set]="7000 7200 023C 00E0 003C 0004 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_zero_sticky_set]="D0=00000000 D1=00000000 SR=2704"
+TESTS[bcd_sbcd_zero_sticky_clear]="7000 7200 023C 00E0 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_zero_sticky_clear]="D0=00000000 D1=00000000 SR=2700"
+TESTS[bcd_sbcd_borrow]="7000 7201 023C 00E0 003C 0004 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_borrow]="D0=00000099 D1=00000001 SR=2711"
+TESTS[bcd_sbcd_same_reg_with_x]="203C A5A5 0000 023C 00E0 003C 0014 8100"
+EXPECTED_REG_FIELDS[bcd_sbcd_same_reg_with_x]="D0=a5a50099 SR=2711"
+
+TESTS[bcd_nbcd_zero_sticky_set]="7000 023C 00E0 003C 0004 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_zero_sticky_set]="D0=00000000 SR=2704"
+TESTS[bcd_nbcd_zero_sticky_clear]="7000 023C 00E0 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_zero_sticky_clear]="D0=00000000 SR=2700"
+TESTS[bcd_nbcd_nonzero]="7001 023C 00E0 003C 0004 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_nonzero]="D0=00000099 SR=2711"
+TESTS[bcd_nbcd_with_x]="7000 023C 00E0 003C 0014 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_with_x]="D0=00000099 SR=2711"
+
+# Decimal boundaries plus non-decimal nibbles distinguish the authoritative
+# 68040 correction equations from a superficially plausible per-digit rewrite.
+# The two-ABCD vector also proves that the first decimal carry is consumed as X
+# by the next native instruction and then replaced by that instruction's carry.
+TESTS[bcd_abcd_decimal_09_plus_01]="7009 7201 023C 00E0 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_decimal_09_plus_01]="D0=00000010 D1=00000001 SR=2700"
+TESTS[bcd_abcd_invalid_nibble_exact]="700A 720F 023C 00E0 003C 0010 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_invalid_nibble_exact]="D0=00000020 D1=0000000f SR=2700"
+TESTS[bcd_abcd_extend_chain]="203C 0000 0099 7201 7400 7600 023C 00E0 003C 0004 C101 C503"
+EXPECTED_REG_FIELDS[bcd_abcd_extend_chain]="D0=00000000 D1=00000001 D2=00000001 D3=00000000 SR=2700"
+TESTS[bcd_sbcd_decimal_10_minus_01]="7010 7201 023C 00E0 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_decimal_10_minus_01]="D0=00000009 D1=00000001 SR=2700"
+TESTS[bcd_sbcd_invalid_nibble_exact]="7000 720A 023C 00E0 003C 0010 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_invalid_nibble_exact]="D0=0000008f D1=0000000a SR=2711"
+TESTS[bcd_nbcd_decimal_10]="7010 023C 00E0 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_decimal_10]="D0=00000090 SR=2711"
+TESTS[bcd_nbcd_invalid_nibble_exact]="700A 023C 00E0 003C 0010 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_invalid_nibble_exact]="D0=0000008f SR=2711"
+
+# Opcode-first replay vectors anchor NATEXEC at the audited instruction itself.
+# INIT_REGS supplies the exact state seen at native entry. The invalid-nibble
+# cases distinguish the 68040 correction model from the old per-digit path.
+TESTS[bcd_native_abcd_zero_sticky]="C101"
+EXPECTED_REG_FIELDS[bcd_native_abcd_zero_sticky]="D0=00000000 D1=00000000 SR=2704"
+TESTS[bcd_native_abcd_invalid_extend]="C101"
+EXPECTED_REG_FIELDS[bcd_native_abcd_invalid_extend]="D0=00000020 D1=0000000f SR=2700"
+TESTS[bcd_native_sbcd_invalid_borrow]="8101"
+EXPECTED_REG_FIELDS[bcd_native_sbcd_invalid_borrow]="D0=0000008f D1=0000000a SR=2711"
+TESTS[bcd_native_nbcd_invalid_borrow]="4800"
+EXPECTED_REG_FIELDS[bcd_native_nbcd_invalid_borrow]="D0=0000008f SR=2711"
+
+# ABCD/SBCD predecrement encode source and destination address registers
+# independently. A7 must decrement by two for each byte access, including both
+# decrements when source and destination are the same A7. NBCD provides the
+# generic single-EA A7 control.
+TESTS[bcd_abcd_predec_src_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0099 41F9 0000 2041 4FF9 0000 2082 023C 00E0 003C 0004 C10F"
+EXPECTED_REG_FIELDS[bcd_abcd_predec_src_a7]="A0=00002040 A7=00002080 SR=2715"
+TESTS[bcd_abcd_predec_dst_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0099 41F9 0000 2081 4FF9 0000 2042 023C 00E0 003C 0004 CF08"
+EXPECTED_REG_FIELDS[bcd_abcd_predec_dst_a7]="A0=00002080 A7=00002040 SR=2715"
+TESTS[bcd_abcd_predec_a7_alias]="43F9 0000 2082 12FC 0001 45F9 0000 2080 14FC 0099 4FF9 0000 2084 023C 00E0 003C 0004 CF0F"
+EXPECTED_REG_FIELDS[bcd_abcd_predec_a7_alias]="A7=00002080 SR=2715"
+TESTS[bcd_sbcd_predec_src_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0000 41F9 0000 2041 4FF9 0000 2082 023C 00E0 003C 0004 810F"
+EXPECTED_REG_FIELDS[bcd_sbcd_predec_src_a7]="A0=00002040 A7=00002080 SR=2711"
+TESTS[bcd_sbcd_predec_dst_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0000 41F9 0000 2081 4FF9 0000 2042 023C 00E0 003C 0004 8F08"
+EXPECTED_REG_FIELDS[bcd_sbcd_predec_dst_a7]="A0=00002080 A7=00002040 SR=2711"
+TESTS[bcd_sbcd_predec_a7_alias]="43F9 0000 2082 12FC 0001 45F9 0000 2080 14FC 0000 4FF9 0000 2084 023C 00E0 003C 0004 8F0F"
+EXPECTED_REG_FIELDS[bcd_sbcd_predec_a7_alias]="A7=00002080 SR=2711"
+TESTS[bcd_nbcd_predec_a7]="43F9 0000 2040 12FC 0001 4FF9 0000 2042 023C 00E0 003C 0004 4827"
+EXPECTED_REG_FIELDS[bcd_nbcd_predec_a7]="A7=00002040 SR=2711"
 
 # ROXL_REG_COUNT_63: ORI #$10,CCR (set X); MOVE.L #$A5A55A5A,D0; MOVEQ #63,D1; ROXL.L D1,D0
 # Stresses masked high register-count behavior near the 6-bit limit.
@@ -1932,6 +2130,39 @@ INIT_REGS[divu_l64_same_dq_dr_nf]="00000001 00000002 00000000 00000000 00000000 
 INIT_REGS[divs_l64_same_dq_dr_nf]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[trapv_taken_frame]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[trapv_not_taken_preserve]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+# Exact-opcode BCD replays bypass each setup prefix. Restore the operands, X/Z
+# state, address registers, and (for predecrement forms) the pre-access EA.
+INIT_REGS[bcd_abcd_zero_sticky_set]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_abcd_zero_sticky_clear]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_abcd_nonzero_clears_sticky]="00000001 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_abcd_carry_zero]="00000099 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_abcd_same_reg_with_x]="A5A50099 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_sbcd_zero_sticky_set]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_sbcd_zero_sticky_clear]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_sbcd_borrow]="00000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_sbcd_same_reg_with_x]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_nbcd_zero_sticky_set]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_nbcd_zero_sticky_clear]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_nbcd_nonzero]="00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_nbcd_with_x]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_abcd_decimal_09_plus_01]="00000009 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_abcd_invalid_nibble_exact]="0000000A 0000000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[bcd_abcd_extend_chain]="00000099 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_sbcd_decimal_10_minus_01]="00000010 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_sbcd_invalid_nibble_exact]="00000000 0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[bcd_nbcd_decimal_10]="00000010 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_nbcd_invalid_nibble_exact]="0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[bcd_abcd_predec_src_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002041 00000000 00000000 00000000 00000000 00000000 00000000 00002082 00002704"
+INIT_REGS[bcd_abcd_predec_dst_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002081 00000000 00000000 00000000 00000000 00000000 00000000 00002042 00002704"
+INIT_REGS[bcd_abcd_predec_a7_alias]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002084 00002704"
+INIT_REGS[bcd_sbcd_predec_src_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002041 00000000 00000000 00000000 00000000 00000000 00000000 00002082 00002704"
+INIT_REGS[bcd_sbcd_predec_dst_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002081 00000000 00000000 00000000 00000000 00000000 00000000 00002042 00002704"
+INIT_REGS[bcd_sbcd_predec_a7_alias]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002084 00002704"
+INIT_REGS[bcd_nbcd_predec_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002042 00002704"
+INIT_REGS[bcd_native_abcd_zero_sticky]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_native_abcd_invalid_extend]="0000000A 0000000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_native_sbcd_invalid_borrow]="00000000 0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_native_nbcd_invalid_borrow]="0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
 # Fuzz vector initial register states
 INIT_REGS[io_byte_write_roundtrip]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 50001000 0A014100 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[fuzz_alu_0]="8878FDF6 80000000 00000000 637A51D3 7FFFFFFF 00000000 000000FF FFFFFFFF 0038D748 007BBF88 003C4A38 0023044C 003974BC 00072334 00000000 007EFF00"
@@ -2061,6 +2292,37 @@ SENTINEL_A6[ccr_eori_exact_toggle]="a6030314"
 SENTINEL_A6[ccr_ori_after_borrow_flags]="a6030315"
 SENTINEL_A6[ccr_andi_after_borrow_flags]="a6030316"
 SENTINEL_A6[ccr_eori_after_borrow_flags]="a6030317"
+SENTINEL_A6[bcd_abcd_zero_sticky_set]="a6030401"
+SENTINEL_A6[bcd_abcd_zero_sticky_clear]="a6030402"
+SENTINEL_A6[bcd_abcd_nonzero_clears_sticky]="a6030403"
+SENTINEL_A6[bcd_abcd_carry_zero]="a6030404"
+SENTINEL_A6[bcd_abcd_same_reg_with_x]="a6030405"
+SENTINEL_A6[bcd_sbcd_zero_sticky_set]="a6030406"
+SENTINEL_A6[bcd_sbcd_zero_sticky_clear]="a6030407"
+SENTINEL_A6[bcd_sbcd_borrow]="a6030408"
+SENTINEL_A6[bcd_sbcd_same_reg_with_x]="a6030409"
+SENTINEL_A6[bcd_nbcd_zero_sticky_set]="a603040a"
+SENTINEL_A6[bcd_nbcd_zero_sticky_clear]="a603040b"
+SENTINEL_A6[bcd_nbcd_nonzero]="a603040c"
+SENTINEL_A6[bcd_nbcd_with_x]="a603040d"
+SENTINEL_A6[bcd_abcd_decimal_09_plus_01]="a6030415"
+SENTINEL_A6[bcd_abcd_invalid_nibble_exact]="a6030416"
+SENTINEL_A6[bcd_abcd_extend_chain]="a6030417"
+SENTINEL_A6[bcd_sbcd_decimal_10_minus_01]="a6030418"
+SENTINEL_A6[bcd_sbcd_invalid_nibble_exact]="a6030419"
+SENTINEL_A6[bcd_nbcd_decimal_10]="a603041a"
+SENTINEL_A6[bcd_nbcd_invalid_nibble_exact]="a603041b"
+SENTINEL_A6[bcd_native_abcd_zero_sticky]="a603041c"
+SENTINEL_A6[bcd_native_abcd_invalid_extend]="a603041d"
+SENTINEL_A6[bcd_native_sbcd_invalid_borrow]="a603041e"
+SENTINEL_A6[bcd_native_nbcd_invalid_borrow]="a603041f"
+SENTINEL_A6[bcd_abcd_predec_src_a7]="a603040e"
+SENTINEL_A6[bcd_abcd_predec_dst_a7]="a603040f"
+SENTINEL_A6[bcd_abcd_predec_a7_alias]="a6030410"
+SENTINEL_A6[bcd_sbcd_predec_src_a7]="a6030411"
+SENTINEL_A6[bcd_sbcd_predec_dst_a7]="a6030412"
+SENTINEL_A6[bcd_sbcd_predec_a7_alias]="a6030413"
+SENTINEL_A6[bcd_nbcd_predec_a7]="a6030414"
 SENTINEL_A6[addx_b_distinct_reg_consumes_x]="a6030211"
 SENTINEL_A6[addx_w_distinct_reg_consumes_x]="a6030212"
 SENTINEL_A6[addx_l_distinct_reg_consumes_x]="a6030213"
@@ -3093,6 +3355,37 @@ declare -A RISKY_TESTS=(
     [oracle_zf_mem_take]=1
     [oracle_zf_mem_notake]=1
     [oracle_zf_dbf_preserve_take]=1
+    [bcd_abcd_zero_sticky_set]=1
+    [bcd_abcd_zero_sticky_clear]=1
+    [bcd_abcd_nonzero_clears_sticky]=1
+    [bcd_abcd_carry_zero]=1
+    [bcd_abcd_same_reg_with_x]=1
+    [bcd_sbcd_zero_sticky_set]=1
+    [bcd_sbcd_zero_sticky_clear]=1
+    [bcd_sbcd_borrow]=1
+    [bcd_sbcd_same_reg_with_x]=1
+    [bcd_nbcd_zero_sticky_set]=1
+    [bcd_nbcd_zero_sticky_clear]=1
+    [bcd_nbcd_nonzero]=1
+    [bcd_nbcd_with_x]=1
+    [bcd_abcd_decimal_09_plus_01]=1
+    [bcd_abcd_invalid_nibble_exact]=1
+    [bcd_abcd_extend_chain]=1
+    [bcd_sbcd_decimal_10_minus_01]=1
+    [bcd_sbcd_invalid_nibble_exact]=1
+    [bcd_nbcd_decimal_10]=1
+    [bcd_nbcd_invalid_nibble_exact]=1
+    [bcd_native_abcd_zero_sticky]=1
+    [bcd_native_abcd_invalid_extend]=1
+    [bcd_native_sbcd_invalid_borrow]=1
+    [bcd_native_nbcd_invalid_borrow]=1
+    [bcd_abcd_predec_src_a7]=1
+    [bcd_abcd_predec_dst_a7]=1
+    [bcd_abcd_predec_a7_alias]=1
+    [bcd_sbcd_predec_src_a7]=1
+    [bcd_sbcd_predec_dst_a7]=1
+    [bcd_sbcd_predec_a7_alias]=1
+    [bcd_nbcd_predec_a7]=1
 )
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.

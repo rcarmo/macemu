@@ -350,6 +350,22 @@ function functionBody(
   return text.slice(start, end);
 }
 
+for (const contract of [
+  "declare -A NATIVE_REPLAY_BYTES",
+  'env_vars+=(B2_TEST_REPLAY_BYTES="$replay_bytes")',
+  '[bcd_abcd_predec_a7_alias]="2082 01 2080 99"',
+]) {
+  requireText(harnessSource, contract, "exact-PC memory replay state");
+}
+for (const contract of [
+  "static bool restore_test_replay_bytes_glue()",
+  'getenv("B2_TEST_REPLAY_BYTES")',
+  "put_byte(RAMBaseMac + (uaecptr)offset, (uint8)value);",
+  "if (!restore_test_replay_bytes_glue())",
+]) {
+  requireText(basiliskGlueSource, contract, "exact-PC memory replay state");
+}
+
 const legacyNarrowZBody = functionBody(
   compatSource,
   "static inline void legacy_set_z_from_narrow_result(",
@@ -394,6 +410,66 @@ for (const forbiddenCcrCall of ["jff_ORSR(ARM_CCR_MAP[src", "jff_ANDSR(ARM_CCR_M
   if (gencompSource.includes(forbiddenCcrCall) || generatedSource.includes(forbiddenCcrCall)) {
     fail(`immediate CCR generator decodes virtual-register id: ${forbiddenCcrCall}`);
   }
+}
+
+// ABCD/SBCD/NBCD are one architectural lifecycle family: decimal correction,
+// X/C publication, and sticky Z must run even when the surrounding block does
+// not consume flags.  Lock the generator to the flag-live handlers and lock
+// every variable-length local correction branch to a patched target.
+const bcdMidfuncStart = midfunc2Source.indexOf("/*\n * ABCD/SBCD/NBCD");
+const bcdMidfuncEnd = midfunc2Source.indexOf("/*\n * CHK", bcdMidfuncStart);
+if (bcdMidfuncStart < 0 || bcdMidfuncEnd < 0) fail("missing native BCD family");
+const bcdMidfunc = midfunc2Source.slice(bcdMidfuncStart, bcdMidfuncEnd);
+for (const contract of [
+  "STATIC_INLINE void emit_bcd_flags(int result, int carry)",
+  "BFI_wwii(REG_WORK4, REG_WORK1, 30, 1);",
+  "BFI_wwii(REG_WORK4, carry, 29, 1);",
+  "MSR_NZCV_x(REG_WORK4);",
+  "flags_carry_inverted = false;",
+  "MIDFUNC(2,jff_ABCD_b,(RW1 d, RR1 s))",
+  "MIDFUNC(2,jff_SBCD_b,(RW1 d, RR1 s))",
+  "MIDFUNC(1,jff_NBCD_b,(RW1 d))",
+]) {
+  requireText(bcdMidfunc, contract, "native BCD flag lifecycle");
+}
+if ((bcdMidfunc.match(/write_jmp_target\(/g) || []).length !== 7) {
+  fail("native BCD branch geometry: every one of seven correction joins must use a patched target");
+}
+for (const forbidden of ["jnf_ABCD_b", "jnf_SBCD_b", "jnf_NBCD_b"]) {
+  if (midfunc2Source.includes(forbidden) || gencompSource.includes(forbidden) || generatedSource.includes(forbidden)) {
+    fail(`native BCD flag lifecycle: flag-dead handler remains: ${forbidden}`);
+  }
+}
+for (const call of ["jff_ABCD_b(dstreg, srcreg);", "jff_SBCD_b(dstreg, srcreg);", "jff_NBCD_b(srcreg);"]) {
+  requireText(gencompSource, call, "BCD generator flag-live routing");
+  requireText(generatedSource, call, "generated BCD flag-live routing");
+}
+const bcdGeneratorStart = gencompSource.indexOf("     case i_SBCD:");
+const bcdGeneratorEnd = gencompSource.indexOf("     case i_NEG:", bcdGeneratorStart);
+if (bcdGeneratorStart < 0 || bcdGeneratorEnd < 0) fail("missing BCD generator family");
+const bcdGenerator = gencompSource.slice(bcdGeneratorStart, bcdGeneratorEnd);
+for (const contract of [
+  "lea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg])",
+  "lea_l_brr(dstreg + 8, dstreg + 8, (uae_s32)-areg_byteinc[dstreg])",
+]) {
+  requireText(bcdGenerator, contract, "BCD A7 byte-predecrement geometry");
+  requireText(generatedSource, contract, "generated BCD A7 byte-predecrement geometry");
+}
+for (const forbidden of [
+  "sub_l_ri(srcreg + 8, 1)",
+  "sub_l_ri(dstreg + 8, 1)",
+]) {
+  if (bcdGenerator.includes(forbidden)) {
+    fail(`BCD A7 byte-predecrement geometry: fixed one-byte decrement remains: ${forbidden}`);
+  }
+}
+for (const vector of [
+  "bcd_abcd_carry_zero",
+  "bcd_sbcd_predec_a7_alias",
+  "bcd_nbcd_predec_a7",
+]) {
+  requireText(harnessSource, `[${vector}]=0x`, "BCD exact-opcode replay coverage");
+  requireText(harnessSource, `INIT_REGS[${vector}]`, "BCD exact-opcode replay state");
 }
 
 const chkGeneratorBody = functionBody(
@@ -1611,6 +1687,10 @@ if (runtimeHelperBody.includes("cft_map(opcode)"))
 requireText(harnessSource, "TESTS[branch_flush_bgt_zero]", "cross-op BGT regression");
 
 console.log("METRIC structural_jit_object_layout_epoch=1");
+console.log("METRIC structural_bcd_flag_lifecycle=1");
+console.log("METRIC structural_bcd_patched_branch_joins=7");
+console.log("METRIC structural_bcd_a7_predecrement_geometry=1");
+console.log("METRIC structural_bcd_exact_pc_memory_replay=1");
 console.log("METRIC structural_fullsr_ea_mode_decode=1");
 console.log("METRIC structural_complete_mvsr2_helper_family=1");
 console.log("METRIC structural_complete_legacy_condition_mapping=1");

@@ -104,3 +104,10 @@ opt-level-zero compilation, interpreter fallback, or unstated execution.
 
 Host-native Orange Pi 6 Plus, CIX P1 (`CD8180`/`CD8160`) 12-core AArch64 SoC,
 16 GB-class RAM (about 14 GiB visible), Debian Trixie, NVMe root storage.
+
+## Subsequent family audit
+
+The next flag-lifecycle tranche applies the same mismatch-first and exact-native
+method to `ABCD`, `SBCD`, and `NBCD`. It is documented in
+`AARCH64_JIT_AUDIT_BCD.md`; its complete gate extends this historical 476-vector
+baseline rather than changing the evidence recorded above.

@@ -228,6 +228,32 @@ static bool parse_test_hex_longs_glue(const char *hex, uint32 *out_longs, size_t
 	return n > 0;
 }
 
+static bool restore_test_replay_bytes_glue()
+{
+	const char *env = getenv("B2_TEST_REPLAY_BYTES");
+	if (!(env && *env))
+		return true;
+
+	uint32 pairs[128];
+	size_t count = 0;
+	if (!parse_test_hex_longs_glue(env, pairs, lengthof(pairs), &count) ||
+		(count & 1) != 0) {
+		fprintf(stderr, "B2_TEST_REPLAY_BYTES parse failed (need address/value pairs)\n");
+		return false;
+	}
+	for (size_t i = 0; i < count; i += 2) {
+		const uint32 offset = pairs[i];
+		const uint32 value = pairs[i + 1];
+		if (offset >= RAMSize || value > 0xff) {
+			fprintf(stderr, "B2_TEST_REPLAY_BYTES range failed at pair %lu\n",
+				(unsigned long)(i / 2));
+			return false;
+		}
+		put_byte(RAMBaseMac + (uaecptr)offset, (uint8)value);
+	}
+	return true;
+}
+
 static void dump_test_mem_ranges_glue()
 {
 	const char *env = getenv("B2_TEST_MEMDUMP");
@@ -359,6 +385,10 @@ static bool run_opcode_test_mode_glue()
 				replay_count = (int)parsed;
 		}
 		for (int replay = 0; replay < replay_count; replay++) {
+			if (!restore_test_replay_bytes_glue()) {
+				quit_program = 1;
+				return true;
+			}
 			for (int i = 0; i < 8; i++) {
 				m68k_dreg(regs, i) = 0;
 				m68k_areg(regs, i) = 0;
