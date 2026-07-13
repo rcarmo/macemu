@@ -173,7 +173,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 **Current structural-audit gate (2026-07-13):** ✅
 **Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible
-**JIT harness:** ✅ 421/421 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**JIT harness:** ✅ 476/476 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -208,6 +208,19 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 **301 total vectors, all risky, score=100**
 
 ### Recent bug fixes (2026-07)
+
+- **ADDX/SUBX and immediate-CCR flag lifecycle** (2026-07-13):
+  byte/word ADC now propagates incoming X through the shifted operand lane, and
+  byte/word ADC/SBC reconstruct Z from the architectural narrow result without
+  disturbing N/C/V or carry polarity. Selective sticky-Z merging no longer
+  relabels SUBX's inverted physical carry before X duplication. The authoritative
+  generator now derives ORI/ANDI/EORI-to-CCR masks from the guest immediate,
+  rather than from its JIT virtual-register identifier. Mismatch-first vectors
+  exposed wrong ADDX.B/W results and wrong SUBX.B/W/L X/C before repair. Focused
+  strict-native coverage passes 48/48; all twelve effective-zero AS/LS register
+  controls passed without an emitter change; the complete gate passes 476/476.
+  Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md`.
 
 - **Register-count ROXL/ROXR effective-zero flags and structural branches** (2026-07-13):
   the AArch64 byte/word/long flag-setting helpers used numeric `CBNZ`/`B` instruction

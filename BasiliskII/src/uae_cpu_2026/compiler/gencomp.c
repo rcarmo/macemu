@@ -1536,15 +1536,17 @@ gen_opcode (unsigned int opcode)
 
      case i_ORSR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	if (curi->size == sz_byte) {
-	    /* ORI to CCR: native flag manipulation */
+	    /* ORI to CCR: the immediate is known while compiling the block. Do not
+	       mistake a materialized virtual-register number for the guest value. */
+	    comprintf("\tuae_u32 ccr_imm = (uae_u32)comp_get_iword((m68k_pc_offset += 2) - 2);\n");
 	    comprintf("\tmake_flags_live();\n");
 	    comprintf("\tstart_needflags();\n");
-	    comprintf("\tjff_ORSR(ARM_CCR_MAP[src & 0xF], ((src & 0x10) >> 4));\n");
+	    comprintf("\tjff_ORSR(ARM_CCR_MAP[ccr_imm & 0xF], ((ccr_imm & 0x10) >> 4));\n");
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
 	} else {
+	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    /* ORI to SR: modify full SR via helper */
 	    /* ORSRI to SR: inline MakeFromSR */
 	    comprintf("\tjnf_ORSR_w(src);\n");
@@ -1557,14 +1559,15 @@ gen_opcode (unsigned int opcode)
 
      case i_EORSR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	if (curi->size == sz_byte) {
+	    comprintf("\tuae_u32 ccr_imm = (uae_u32)comp_get_iword((m68k_pc_offset += 2) - 2);\n");
 	    comprintf("\tmake_flags_live();\n");
 	    comprintf("\tstart_needflags();\n");
-	    comprintf("\tjff_EORSR(ARM_CCR_MAP[src & 0xF], ((src & 0x10) >> 4));\n");
+	    comprintf("\tjff_EORSR(ARM_CCR_MAP[ccr_imm & 0xF], ((ccr_imm & 0x10) >> 4));\n");
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
 	} else {
+	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    /* EORSRI to SR: inline MakeFromSR */
 	    comprintf("\tjnf_EORSR_w(src);\n");
 	}
@@ -1576,14 +1579,15 @@ gen_opcode (unsigned int opcode)
 
      case i_ANDSR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	if (curi->size == sz_byte) {
+	    comprintf("\tuae_u32 ccr_imm = (uae_u32)comp_get_iword((m68k_pc_offset += 2) - 2);\n");
 	    comprintf("\tmake_flags_live();\n");
 	    comprintf("\tstart_needflags();\n");
-	    comprintf("\tjff_ANDSR(ARM_CCR_MAP[src & 0xF], (src & 0x10));\n");
+	    comprintf("\tjff_ANDSR(ARM_CCR_MAP[ccr_imm & 0xF], (ccr_imm & 0x10));\n");
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
 	} else {
+	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    /* ANDSRI to SR: inline MakeFromSR */
 	    comprintf("\tjnf_ANDSR_w(src);\n");
 	}

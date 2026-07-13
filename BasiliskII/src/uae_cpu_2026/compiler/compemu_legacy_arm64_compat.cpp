@@ -290,15 +290,34 @@ static inline void legacy_invert_carry_in_pstate(void)
 	MSR_NZCV_x(REG_WORK4);
 }
 
+/* Shifted byte/word ADC/SBC arithmetic uses the low padding bits to carry the
+   incoming X/borrow into the operand lane.  Rebuild Z from the architectural
+   narrow result while preserving the arithmetic N/C/V bits and the current
+   carry-polarity contract. */
+static inline void legacy_set_z_from_narrow_result(int d, int width)
+{
+	MRS_NZCV_x(REG_WORK4);
+	if (width == 8)
+		UBFX_wwii(REG_WORK3, d, 0, 8);
+	else
+		UBFX_wwii(REG_WORK3, d, 0, 16);
+	CMP_wi(REG_WORK3, 0);
+	CSET_xc(REG_WORK3, NATIVE_CC_EQ);
+	BFI_xxii(REG_WORK4, REG_WORK3, 30, 1);
+	MSR_NZCV_x(REG_WORK4);
+}
+
 void adc_b(RW1 d, RR1 s)
 {
 	legacy_fix_inverted_carry();
 	INIT_REGS_b(d, s);
-	MOV_xi(REG_WORK1, 0);
+	/* Ones below bit 24 propagate carry-in into the byte lane. */
+	MOVN_xi(REG_WORK1, 0);
 	BFI_xxii(REG_WORK1, s, 24, 8);
 	LSL_wwi(REG_WORK3, d, 24);
 	ADCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 24, 8);
+	legacy_set_z_from_narrow_result(d, 8);
 	flags_carry_inverted = false;
 	EXIT_REGS(d, s);
 }
@@ -307,11 +326,13 @@ void adc_w(RW2 d, RR2 s)
 {
 	legacy_fix_inverted_carry();
 	INIT_REGS_w(d, s);
-	MOV_xi(REG_WORK1, 0);
+	/* Ones below bit 16 propagate carry-in into the word lane. */
+	MOVN_xi(REG_WORK1, 0);
 	BFI_xxii(REG_WORK1, s, 16, 16);
 	LSL_wwi(REG_WORK3, d, 16);
 	ADCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 16, 16);
+	legacy_set_z_from_narrow_result(d, 16);
 	flags_carry_inverted = false;
 	EXIT_REGS(d, s);
 }
@@ -334,6 +355,7 @@ void sbb_b(RW1 d, RR1 s)
 	LSL_wwi(REG_WORK3, s, 24);
 	SBCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 24, 8);
+	legacy_set_z_from_narrow_result(d, 8);
 	flags_carry_inverted = true;
 	EXIT_REGS(d, s);
 }
@@ -347,6 +369,7 @@ void sbb_w(RW2 d, RR2 s)
 	LSL_wwi(REG_WORK3, s, 16);
 	SBCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 16, 16);
+	legacy_set_z_from_narrow_result(d, 16);
 	flags_carry_inverted = true;
 	EXIT_REGS(d, s);
 }
@@ -635,7 +658,7 @@ void set_zero(int r, int tmp)
 		unlock2(rr);
 	}
 	MSR_NZCV_x(REG_WORK1);
-	flags_carry_inverted = false;
+	/* Only Z changed; preserve the caller's physical-C polarity contract. */
 }
 
 int kill_rodent(int r)

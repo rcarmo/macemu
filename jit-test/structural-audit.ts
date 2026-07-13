@@ -350,6 +350,52 @@ function functionBody(
   return text.slice(start, end);
 }
 
+const legacyNarrowZBody = functionBody(
+  compatSource,
+  "static inline void legacy_set_z_from_narrow_result(",
+  "void adc_b(",
+  "legacy narrow Z reconstruction",
+);
+requireText(legacyNarrowZBody, "CSET_xc(REG_WORK3, NATIVE_CC_EQ)", "branchless narrow Z reconstruction");
+requireText(legacyNarrowZBody, "BFI_xxii(REG_WORK4, REG_WORK3, 30, 1)", "branchless narrow Z reconstruction");
+if (/\b(?:CBZ|CBNZ|B)_\w+i\s*\(/.test(legacyNarrowZBody)) {
+  fail("legacy narrow Z reconstruction reintroduced fixed-displacement internal branching");
+}
+
+const legacyAdcBBody = functionBody(compatSource, "void adc_b(", "void adc_w(", "legacy ADC.B");
+const legacyAdcWBody = functionBody(compatSource, "void adc_w(", "void adc_l(", "legacy ADC.W");
+for (const [body, width] of [[legacyAdcBBody, 8], [legacyAdcWBody, 16]] as const) {
+  requireText(body, "MOVN_xi(REG_WORK1, 0)", `legacy ADC.${width}`);
+  requireText(body, `legacy_set_z_from_narrow_result(d, ${width})`, `legacy ADC.${width}`);
+  if (body.includes("MOV_xi(REG_WORK1, 0)")) {
+    fail(`legacy ADC.${width}: zero padding still swallows incoming X below the operand lane`);
+  }
+}
+const legacySbbBBody = functionBody(compatSource, "void sbb_b(", "void sbb_w(", "legacy SBB.B");
+const legacySbbWBody = functionBody(compatSource, "void sbb_w(", "void sbb_l(", "legacy SBB.W");
+requireText(legacySbbBBody, "legacy_set_z_from_narrow_result(d, 8)", "legacy SBB.B narrow Z");
+requireText(legacySbbWBody, "legacy_set_z_from_narrow_result(d, 16)", "legacy SBB.W narrow Z");
+const legacySetZeroBody = functionBody(compatSource, "void set_zero(", "int kill_rodent(", "legacy sticky-Z helper");
+if (legacySetZeroBody.includes("flags_carry_inverted = false")) {
+  fail("legacy sticky-Z helper: Z-only merge destroys the caller's physical-C polarity");
+}
+for (const generatedCall of ["adc_b(dst,src);", "adc_w(dst,src);", "sbb_b(dst,src);", "sbb_w(dst,src);"]) {
+  requireText(generatedSource, generatedCall, "generated ADDX/SUBX legacy-helper reachability");
+}
+
+// Immediate-to-CCR instructions are decoded while compiling a block. `src`
+// would be a virtual-register identifier after genamode(), not the guest
+// immediate; lock the family to direct instruction-stream decoding.
+for (const ccrCall of ["jff_ORSR(ARM_CCR_MAP[ccr_imm", "jff_ANDSR(ARM_CCR_MAP[ccr_imm", "jff_EORSR(ARM_CCR_MAP[ccr_imm"]) {
+  requireText(gencompSource, ccrCall, "immediate CCR generator decode");
+  requireText(generatedSource, ccrCall, "generated immediate CCR decode");
+}
+for (const forbiddenCcrCall of ["jff_ORSR(ARM_CCR_MAP[src", "jff_ANDSR(ARM_CCR_MAP[src", "jff_EORSR(ARM_CCR_MAP[src"]) {
+  if (gencompSource.includes(forbiddenCcrCall) || generatedSource.includes(forbiddenCcrCall)) {
+    fail(`immediate CCR generator decodes virtual-register id: ${forbiddenCcrCall}`);
+  }
+}
+
 const chkGeneratorBody = functionBody(
   gencompSource,
   "\t case i_CHK:",

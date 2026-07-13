@@ -307,6 +307,18 @@ TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves
 # modulo-reduction path, the unreduced source-count-zero path, and both directions
 # with the remaining guest register mappings populated before the rotate.
 TEST_ORDER+=(roxl_b_reg_count_63_copies_x roxr_b_reg_count_63_copies_x roxl_w_reg_count_51_copies_x roxr_w_reg_count_51_copies_x roxl_l_reg_count_33_copies_x roxr_l_reg_count_33_copies_x roxl_l_reg_count_0_copies_x roxr_reg_count_0_copies_x roxl_l_reg_count_33_pressure roxr_l_reg_count_33_pressure)
+# Register-count AS/LS effective-zero paths must preserve X while clearing C/V
+# and deriving N/Z from the unchanged size-specific result.
+TEST_ORDER+=(asl_b_reg_count_0_preserves_x asl_w_reg_count_0_preserves_x asl_l_reg_count_0_preserves_x asr_b_reg_count_0_preserves_x asr_w_reg_count_0_preserves_x asr_l_reg_count_0_preserves_x lsl_b_reg_count_0_preserves_x lsl_w_reg_count_0_preserves_x lsl_l_reg_count_0_preserves_x lsr_b_reg_count_0_preserves_x lsr_w_reg_count_0_preserves_x lsr_l_reg_count_0_preserves_x)
+TEST_ORDER+=(addx_b_same_reg_consumes_x addx_w_same_reg_consumes_x addx_l_same_reg_consumes_x subx_b_same_reg_consumes_x subx_w_same_reg_consumes_x subx_l_same_reg_consumes_x)
+TEST_ORDER+=(addx_b_distinct_reg_consumes_x addx_w_distinct_reg_consumes_x addx_l_distinct_reg_consumes_x subx_b_distinct_reg_consumes_x subx_w_distinct_reg_consumes_x subx_l_distinct_reg_consumes_x)
+TEST_ORDER+=(addx_b_zero_sticky_z_set addx_w_zero_sticky_z_set addx_l_zero_sticky_z_set addx_b_zero_without_x_sticky_z_set addx_w_zero_without_x_sticky_z_set addx_l_zero_without_x_sticky_z_set roxl_l_zero_count_copies_cleared_x subx_b_zero_sticky_z_set subx_w_zero_sticky_z_set subx_l_zero_sticky_z_set)
+TEST_ORDER+=(addx_b_zero_sticky_z_clear addx_w_zero_sticky_z_clear addx_l_zero_sticky_z_clear subx_b_zero_sticky_z_clear subx_w_zero_sticky_z_clear subx_l_zero_sticky_z_clear)
+TEST_ORDER+=(addx_b_overflow_with_x addx_w_overflow_with_x addx_l_overflow_with_x subx_b_overflow_with_x subx_w_overflow_with_x subx_l_overflow_with_x subx_b_without_x subx_w_without_x subx_l_without_x)
+# Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
+# Cover each logical operation, all five CCR bits, preservation/toggling, and entry
+# from the subtraction carry-inverted lifecycle.
+TEST_ORDER+=(ccr_ori_exact_bits ccr_andi_exact_mask ccr_eori_exact_toggle ccr_ori_after_borrow_flags ccr_andi_after_borrow_flags ccr_eori_after_borrow_flags)
 
 declare -A TESTS
 declare -A EXPECTED_D0
@@ -315,6 +327,61 @@ declare -A EXPECTED_REG_FIELDS
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
 declare -A NATIVE_REPLAY_TESTS=(
+    [ccr_ori_exact_bits]=1
+    [ccr_andi_exact_mask]=1
+    [ccr_eori_exact_toggle]=1
+    [ccr_ori_after_borrow_flags]=1
+    [ccr_andi_after_borrow_flags]=1
+    [ccr_eori_after_borrow_flags]=1
+    [addx_b_zero_sticky_z_clear]=1
+    [addx_w_zero_sticky_z_clear]=1
+    [addx_l_zero_sticky_z_clear]=1
+    [subx_b_zero_sticky_z_clear]=1
+    [subx_w_zero_sticky_z_clear]=1
+    [subx_l_zero_sticky_z_clear]=1
+    [addx_b_overflow_with_x]=1
+    [addx_w_overflow_with_x]=1
+    [addx_l_overflow_with_x]=1
+    [subx_b_overflow_with_x]=1
+    [subx_w_overflow_with_x]=1
+    [subx_l_overflow_with_x]=1
+    [subx_b_without_x]=1
+    [subx_w_without_x]=1
+    [subx_l_without_x]=1
+    [addx_b_zero_sticky_z_set]=1
+    [addx_w_zero_sticky_z_set]=1
+    [addx_l_zero_sticky_z_set]=1
+    [addx_b_zero_without_x_sticky_z_set]=1
+    [addx_w_zero_without_x_sticky_z_set]=1
+    [addx_l_zero_without_x_sticky_z_set]=1
+    [roxl_l_zero_count_copies_cleared_x]=1
+    [subx_b_zero_sticky_z_set]=1
+    [subx_w_zero_sticky_z_set]=1
+    [subx_l_zero_sticky_z_set]=1
+    [addx_b_distinct_reg_consumes_x]=1
+    [addx_w_distinct_reg_consumes_x]=1
+    [addx_l_distinct_reg_consumes_x]=1
+    [subx_b_distinct_reg_consumes_x]=1
+    [subx_w_distinct_reg_consumes_x]=1
+    [subx_l_distinct_reg_consumes_x]=1
+    [addx_b_same_reg_consumes_x]=1
+    [addx_w_same_reg_consumes_x]=1
+    [addx_l_same_reg_consumes_x]=1
+    [subx_b_same_reg_consumes_x]=1
+    [subx_w_same_reg_consumes_x]=1
+    [subx_l_same_reg_consumes_x]=1
+    [asl_b_reg_count_0_preserves_x]=1
+    [asl_w_reg_count_0_preserves_x]=1
+    [asl_l_reg_count_0_preserves_x]=1
+    [asr_b_reg_count_0_preserves_x]=1
+    [asr_w_reg_count_0_preserves_x]=1
+    [asr_l_reg_count_0_preserves_x]=1
+    [lsl_b_reg_count_0_preserves_x]=1
+    [lsl_w_reg_count_0_preserves_x]=1
+    [lsl_l_reg_count_0_preserves_x]=1
+    [lsr_b_reg_count_0_preserves_x]=1
+    [lsr_w_reg_count_0_preserves_x]=1
+    [lsr_l_reg_count_0_preserves_x]=1
     [roxl_l_reg_count_33_pressure]=1
     [roxr_l_reg_count_33_pressure]=1
     [roxl_b_reg_count_63_copies_x]=1
@@ -648,6 +715,140 @@ EXPECTED_REG_FIELDS[roxl_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
 TESTS[roxr_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E2B0 55C6"
 EXPECTED_REG_FIELDS[roxr_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
 unset ROX_PRESSURE_PREFIX
+
+# Register-count shift effective-zero contract. Seed X=1 and stale V=1,
+# materialise the shift's required C=0 into D5, then consume X with a
+# same-width effective-zero ROXL and materialise its required C=X into D6.
+# ROXL derives the same N/Z/V result as the shift without obscuring X.
+SHIFT_ZERO_PREFIX="003C 0012 203C 89AB CDEF 7200 7A00 7C00"
+SHIFT_ZERO_EXPECTED="D0=89abcdef D5=00000000 D6=000000ff"
+TESTS[asl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E320 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[asl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E360 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[asl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E3A0 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[asl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E220 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[asr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E260 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[asr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E2A0 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[asr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E328 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[lsl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E368 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[lsl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E3A8 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[lsl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E228 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[lsr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E268 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[lsr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E2A8 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[lsr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+unset SHIFT_ZERO_PREFIX SHIFT_ZERO_EXPECTED
+
+# ADDX/SUBX register-alias contract. Source and destination may name the same
+# architectural register; both source operands must be read before writeback,
+# and the incoming X bit must participate exactly once.
+TESTS[addx_b_same_reg_consumes_x]="003C 0010 7400 D502"
+EXPECTED_REG_FIELDS[addx_b_same_reg_consumes_x]="D2=00000001"
+TESTS[addx_w_same_reg_consumes_x]="003C 0010 7400 D542"
+EXPECTED_REG_FIELDS[addx_w_same_reg_consumes_x]="D2=00000001"
+TESTS[addx_l_same_reg_consumes_x]="003C 0010 7400 D582"
+EXPECTED_REG_FIELDS[addx_l_same_reg_consumes_x]="D2=00000001"
+TESTS[subx_b_same_reg_consumes_x]="003C 0010 7400 9502"
+EXPECTED_REG_FIELDS[subx_b_same_reg_consumes_x]="D2=000000ff"
+TESTS[subx_w_same_reg_consumes_x]="003C 0010 7400 9542"
+EXPECTED_REG_FIELDS[subx_w_same_reg_consumes_x]="D2=0000ffff"
+TESTS[subx_l_same_reg_consumes_x]="003C 0010 7400 9582"
+EXPECTED_REG_FIELDS[subx_l_same_reg_consumes_x]="D2=ffffffff"
+TESTS[addx_b_distinct_reg_consumes_x]="003C 0010 7400 7600 D503"
+EXPECTED_REG_FIELDS[addx_b_distinct_reg_consumes_x]="D2=00000001 D3=00000000"
+TESTS[addx_w_distinct_reg_consumes_x]="003C 0010 7400 7600 D543"
+EXPECTED_REG_FIELDS[addx_w_distinct_reg_consumes_x]="D2=00000001 D3=00000000"
+TESTS[addx_l_distinct_reg_consumes_x]="003C 0010 7400 7600 D583"
+EXPECTED_REG_FIELDS[addx_l_distinct_reg_consumes_x]="D2=00000001 D3=00000000"
+TESTS[subx_b_distinct_reg_consumes_x]="003C 0010 7400 7600 9503"
+EXPECTED_REG_FIELDS[subx_b_distinct_reg_consumes_x]="D2=000000ff D3=00000000"
+TESTS[subx_w_distinct_reg_consumes_x]="003C 0010 7400 7600 9543"
+EXPECTED_REG_FIELDS[subx_w_distinct_reg_consumes_x]="D2=0000ffff D3=00000000"
+TESTS[subx_l_distinct_reg_consumes_x]="003C 0010 7400 7600 9583"
+EXPECTED_REG_FIELDS[subx_l_distinct_reg_consumes_x]="D2=ffffffff D3=00000000"
+# Sticky-Z controls cover both padding polarities and all widths: carry-in
+# propagating into a zero result, no carry-in with a zero result, SBC borrow-in
+# ending in zero, and both old-Z states. Register setup precedes CCR seeding
+# because MOVE clears N/Z/V/C.
+TESTS[addx_b_zero_sticky_z_set]="74FF 7600 003C 0014 D503"
+EXPECTED_REG_FIELDS[addx_b_zero_sticky_z_set]="D2=ffffff00 D3=00000000 SR=2715"
+TESTS[addx_w_zero_sticky_z_set]="243C 0000 FFFF 7600 003C 0014 D543"
+EXPECTED_REG_FIELDS[addx_w_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2715"
+TESTS[addx_l_zero_sticky_z_set]="243C FFFF FFFF 7600 003C 0014 D583"
+EXPECTED_REG_FIELDS[addx_l_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2715"
+TESTS[addx_b_zero_without_x_sticky_z_set]="7400 7600 023C 0000 003C 0004 D503"
+EXPECTED_REG_FIELDS[addx_b_zero_without_x_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[addx_w_zero_without_x_sticky_z_set]="7400 7600 023C 0000 003C 0004 D543"
+EXPECTED_REG_FIELDS[addx_w_zero_without_x_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[addx_l_zero_without_x_sticky_z_set]="7400 7600 023C 0000 003C 0004 D583"
+EXPECTED_REG_FIELDS[addx_l_zero_without_x_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[roxl_l_zero_count_copies_cleared_x]="7000 7200 7C00 023C 0000 003C 0004 E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_zero_count_copies_cleared_x]="D0=00000000 D1=00000000 D6=00000000 SR=2704"
+TESTS[subx_b_zero_sticky_z_set]="7401 7600 003C 0014 9503"
+EXPECTED_REG_FIELDS[subx_b_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[subx_w_zero_sticky_z_set]="7401 7600 003C 0014 9543"
+EXPECTED_REG_FIELDS[subx_w_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[subx_l_zero_sticky_z_set]="7401 7600 003C 0014 9583"
+EXPECTED_REG_FIELDS[subx_l_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[addx_b_zero_sticky_z_clear]="243C 0000 00FF 7600 023C 0000 003C 0010 D503"
+EXPECTED_REG_FIELDS[addx_b_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2711"
+TESTS[addx_w_zero_sticky_z_clear]="243C 0000 FFFF 7600 023C 0000 003C 0010 D543"
+EXPECTED_REG_FIELDS[addx_w_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2711"
+TESTS[addx_l_zero_sticky_z_clear]="243C FFFF FFFF 7600 023C 0000 003C 0010 D583"
+EXPECTED_REG_FIELDS[addx_l_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2711"
+TESTS[subx_b_zero_sticky_z_clear]="7401 7600 023C 0000 003C 0010 9503"
+EXPECTED_REG_FIELDS[subx_b_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2700"
+TESTS[subx_w_zero_sticky_z_clear]="7401 7600 023C 0000 003C 0010 9543"
+EXPECTED_REG_FIELDS[subx_w_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2700"
+TESTS[subx_l_zero_sticky_z_clear]="7401 7600 023C 0000 003C 0010 9583"
+EXPECTED_REG_FIELDS[subx_l_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2700"
+
+# Signed-overflow and no-X controls complete the result/N/V/C/X contract for
+# each active byte/word/long legacy helper.
+TESTS[addx_b_overflow_with_x]="747F 7600 023C 0000 003C 0010 D503"
+EXPECTED_REG_FIELDS[addx_b_overflow_with_x]="D2=00000080 D3=00000000 SR=270a"
+TESTS[addx_w_overflow_with_x]="243C 0000 7FFF 7600 023C 0000 003C 0010 D543"
+EXPECTED_REG_FIELDS[addx_w_overflow_with_x]="D2=00008000 D3=00000000 SR=270a"
+TESTS[addx_l_overflow_with_x]="243C 7FFF FFFF 7600 023C 0000 003C 0010 D583"
+EXPECTED_REG_FIELDS[addx_l_overflow_with_x]="D2=80000000 D3=00000000 SR=270a"
+TESTS[subx_b_overflow_with_x]="7480 7600 023C 0000 003C 0010 9503"
+EXPECTED_REG_FIELDS[subx_b_overflow_with_x]="D2=ffffff7f D3=00000000 SR=2702"
+TESTS[subx_w_overflow_with_x]="243C 0000 8000 7600 023C 0000 003C 0010 9543"
+EXPECTED_REG_FIELDS[subx_w_overflow_with_x]="D2=00007fff D3=00000000 SR=2702"
+TESTS[subx_l_overflow_with_x]="243C 8000 0000 7600 023C 0000 003C 0010 9583"
+EXPECTED_REG_FIELDS[subx_l_overflow_with_x]="D2=7fffffff D3=00000000 SR=2702"
+TESTS[subx_b_without_x]="7405 7603 023C 0000 9503"
+EXPECTED_REG_FIELDS[subx_b_without_x]="D2=00000002 D3=00000003 SR=2700"
+TESTS[subx_w_without_x]="7405 7603 023C 0000 9543"
+EXPECTED_REG_FIELDS[subx_w_without_x]="D2=00000002 D3=00000003 SR=2700"
+TESTS[subx_l_without_x]="7405 7603 023C 0000 9583"
+EXPECTED_REG_FIELDS[subx_l_without_x]="D2=00000002 D3=00000003 SR=2700"
+
+# ORI/ANDI/EORI to CCR consume the guest immediate at translation time. Exact
+# masks prove all five bits; borrow-produced flags prove physical-C polarity is
+# normalized before the logical merge.
+TESTS[ccr_ori_exact_bits]="023C 0000 003C 001F"
+EXPECTED_REG_FIELDS[ccr_ori_exact_bits]="SR=271f"
+TESTS[ccr_andi_exact_mask]="023C 0000 003C 001F 023C 000A"
+EXPECTED_REG_FIELDS[ccr_andi_exact_mask]="SR=270a"
+TESTS[ccr_eori_exact_toggle]="023C 0000 003C 001F 0A3C 0015"
+EXPECTED_REG_FIELDS[ccr_eori_exact_toggle]="SR=270a"
+TESTS[ccr_ori_after_borrow_flags]="7000 7201 9001 003C 0006"
+EXPECTED_REG_FIELDS[ccr_ori_after_borrow_flags]="D0=000000ff D1=00000001 SR=271f"
+TESTS[ccr_andi_after_borrow_flags]="7000 7201 9001 023C 0011"
+EXPECTED_REG_FIELDS[ccr_andi_after_borrow_flags]="D0=000000ff D1=00000001 SR=2711"
+TESTS[ccr_eori_after_borrow_flags]="7000 7201 9001 0A3C 001F"
+EXPECTED_REG_FIELDS[ccr_eori_after_borrow_flags]="D0=000000ff D1=00000001 SR=2706"
+
 # ROXL_REG_COUNT_63: ORI #$10,CCR (set X); MOVE.L #$A5A55A5A,D0; MOVEQ #63,D1; ROXL.L D1,D0
 # Stresses masked high register-count behavior near the 6-bit limit.
 # ORI.B #$10,CCR = 003C 0010; MOVE.L #$A5A55A5A,D0 = 203C A5A5 5A5A; MOVEQ #63,D1 = 723F; ROXL.L D1,D0 = E3B0
@@ -1829,6 +2030,61 @@ SENTINEL_A6[roxr_l_reg_count_33_copies_x]="a60100f9"
 SENTINEL_A6[roxl_l_reg_count_0_copies_x]="a60100fa"
 SENTINEL_A6[roxl_l_reg_count_33_pressure]="a60100fb"
 SENTINEL_A6[roxr_l_reg_count_33_pressure]="a60100fc"
+SENTINEL_A6[addx_b_zero_sticky_z_set]="a6030221"
+SENTINEL_A6[addx_w_zero_sticky_z_set]="a6030222"
+SENTINEL_A6[addx_b_zero_without_x_sticky_z_set]="a6030223"
+SENTINEL_A6[addx_w_zero_without_x_sticky_z_set]="a6030224"
+SENTINEL_A6[addx_l_zero_without_x_sticky_z_set]="a6030227"
+SENTINEL_A6[roxl_l_zero_count_copies_cleared_x]="a6030228"
+SENTINEL_A6[subx_b_zero_sticky_z_set]="a6030225"
+SENTINEL_A6[subx_w_zero_sticky_z_set]="a6030226"
+SENTINEL_A6[addx_l_zero_sticky_z_set]="a6030301"
+SENTINEL_A6[subx_l_zero_sticky_z_set]="a6030302"
+SENTINEL_A6[addx_b_zero_sticky_z_clear]="a6030303"
+SENTINEL_A6[addx_w_zero_sticky_z_clear]="a6030304"
+SENTINEL_A6[addx_l_zero_sticky_z_clear]="a6030305"
+SENTINEL_A6[subx_b_zero_sticky_z_clear]="a6030306"
+SENTINEL_A6[subx_w_zero_sticky_z_clear]="a6030307"
+SENTINEL_A6[subx_l_zero_sticky_z_clear]="a6030308"
+SENTINEL_A6[addx_b_overflow_with_x]="a6030309"
+SENTINEL_A6[addx_w_overflow_with_x]="a603030a"
+SENTINEL_A6[addx_l_overflow_with_x]="a603030b"
+SENTINEL_A6[subx_b_overflow_with_x]="a603030c"
+SENTINEL_A6[subx_w_overflow_with_x]="a603030d"
+SENTINEL_A6[subx_l_overflow_with_x]="a603030e"
+SENTINEL_A6[subx_b_without_x]="a603030f"
+SENTINEL_A6[subx_w_without_x]="a6030310"
+SENTINEL_A6[subx_l_without_x]="a6030311"
+SENTINEL_A6[ccr_ori_exact_bits]="a6030312"
+SENTINEL_A6[ccr_andi_exact_mask]="a6030313"
+SENTINEL_A6[ccr_eori_exact_toggle]="a6030314"
+SENTINEL_A6[ccr_ori_after_borrow_flags]="a6030315"
+SENTINEL_A6[ccr_andi_after_borrow_flags]="a6030316"
+SENTINEL_A6[ccr_eori_after_borrow_flags]="a6030317"
+SENTINEL_A6[addx_b_distinct_reg_consumes_x]="a6030211"
+SENTINEL_A6[addx_w_distinct_reg_consumes_x]="a6030212"
+SENTINEL_A6[addx_l_distinct_reg_consumes_x]="a6030213"
+SENTINEL_A6[subx_b_distinct_reg_consumes_x]="a6030214"
+SENTINEL_A6[subx_w_distinct_reg_consumes_x]="a6030215"
+SENTINEL_A6[subx_l_distinct_reg_consumes_x]="a6030216"
+SENTINEL_A6[addx_b_same_reg_consumes_x]="a6030201"
+SENTINEL_A6[addx_w_same_reg_consumes_x]="a6030202"
+SENTINEL_A6[addx_l_same_reg_consumes_x]="a6030203"
+SENTINEL_A6[subx_b_same_reg_consumes_x]="a6030204"
+SENTINEL_A6[subx_w_same_reg_consumes_x]="a6030205"
+SENTINEL_A6[subx_l_same_reg_consumes_x]="a6030206"
+SENTINEL_A6[asl_b_reg_count_0_preserves_x]="a6030101"
+SENTINEL_A6[asl_w_reg_count_0_preserves_x]="a6030102"
+SENTINEL_A6[asl_l_reg_count_0_preserves_x]="a6030103"
+SENTINEL_A6[asr_b_reg_count_0_preserves_x]="a6030104"
+SENTINEL_A6[asr_w_reg_count_0_preserves_x]="a6030105"
+SENTINEL_A6[asr_l_reg_count_0_preserves_x]="a6030106"
+SENTINEL_A6[lsl_b_reg_count_0_preserves_x]="a6030107"
+SENTINEL_A6[lsl_w_reg_count_0_preserves_x]="a6030108"
+SENTINEL_A6[lsl_l_reg_count_0_preserves_x]="a6030109"
+SENTINEL_A6[lsr_b_reg_count_0_preserves_x]="a603010a"
+SENTINEL_A6[lsr_w_reg_count_0_preserves_x]="a603010b"
+SENTINEL_A6[lsr_l_reg_count_0_preserves_x]="a603010c"
 SENTINEL_A6[roxl_reg_count_63]="a60100ef"
 SENTINEL_A6[roxr_reg_count_63]="a60100f0"
 SENTINEL_A6[roxr_roxl_chain_x]="a60100f1"
@@ -2393,6 +2649,61 @@ declare -A RISKY_TESTS=(
     [roxr_reg_count_0_copies_x]=1
     [roxl_l_reg_count_33_pressure]=1
     [roxr_l_reg_count_33_pressure]=1
+    [ccr_ori_exact_bits]=1
+    [ccr_andi_exact_mask]=1
+    [ccr_eori_exact_toggle]=1
+    [ccr_ori_after_borrow_flags]=1
+    [ccr_andi_after_borrow_flags]=1
+    [ccr_eori_after_borrow_flags]=1
+    [addx_b_zero_sticky_z_clear]=1
+    [addx_w_zero_sticky_z_clear]=1
+    [addx_l_zero_sticky_z_clear]=1
+    [subx_b_zero_sticky_z_clear]=1
+    [subx_w_zero_sticky_z_clear]=1
+    [subx_l_zero_sticky_z_clear]=1
+    [addx_b_overflow_with_x]=1
+    [addx_w_overflow_with_x]=1
+    [addx_l_overflow_with_x]=1
+    [subx_b_overflow_with_x]=1
+    [subx_w_overflow_with_x]=1
+    [subx_l_overflow_with_x]=1
+    [subx_b_without_x]=1
+    [subx_w_without_x]=1
+    [subx_l_without_x]=1
+    [addx_b_zero_sticky_z_set]=1
+    [addx_w_zero_sticky_z_set]=1
+    [addx_l_zero_sticky_z_set]=1
+    [addx_b_zero_without_x_sticky_z_set]=1
+    [addx_w_zero_without_x_sticky_z_set]=1
+    [addx_l_zero_without_x_sticky_z_set]=1
+    [roxl_l_zero_count_copies_cleared_x]=1
+    [subx_b_zero_sticky_z_set]=1
+    [subx_w_zero_sticky_z_set]=1
+    [subx_l_zero_sticky_z_set]=1
+    [addx_b_distinct_reg_consumes_x]=1
+    [addx_w_distinct_reg_consumes_x]=1
+    [addx_l_distinct_reg_consumes_x]=1
+    [subx_b_distinct_reg_consumes_x]=1
+    [subx_w_distinct_reg_consumes_x]=1
+    [subx_l_distinct_reg_consumes_x]=1
+    [addx_b_same_reg_consumes_x]=1
+    [addx_w_same_reg_consumes_x]=1
+    [addx_l_same_reg_consumes_x]=1
+    [subx_b_same_reg_consumes_x]=1
+    [subx_w_same_reg_consumes_x]=1
+    [subx_l_same_reg_consumes_x]=1
+    [asl_b_reg_count_0_preserves_x]=1
+    [asl_w_reg_count_0_preserves_x]=1
+    [asl_l_reg_count_0_preserves_x]=1
+    [asr_b_reg_count_0_preserves_x]=1
+    [asr_w_reg_count_0_preserves_x]=1
+    [asr_l_reg_count_0_preserves_x]=1
+    [lsl_b_reg_count_0_preserves_x]=1
+    [lsl_w_reg_count_0_preserves_x]=1
+    [lsl_l_reg_count_0_preserves_x]=1
+    [lsr_b_reg_count_0_preserves_x]=1
+    [lsr_w_reg_count_0_preserves_x]=1
+    [lsr_l_reg_count_0_preserves_x]=1
     [roxl_reg_count_63]=1
     [roxr_reg_count_63]=1
     [roxr_roxl_chain_x]=1
