@@ -185,12 +185,20 @@ if (midfunc2Source.includes("MOV_wi(d, 0x10)")) {
 
 for (const contract of [
   "declare -A NATIVE_REPLAY_TESTS",
+  "declare -A NATIVE_REPLAY_PC",
+  "declare -A NATIVE_REPLAY_COUNT",
   "[io_byte_write_roundtrip]=1",
-  "B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC=0x1000",
+  'B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC="$replay_pc"',
+  'B2_NATIVE_ASSERT_PC="$replay_pc"',
   "B2_TEST_FORCE_L2_RAM=1",
 ]) {
   requireText(harnessSource, contract, "native replay opcode gate");
 }
+requireText(
+  harnessSource,
+  "46FC 0700 0E90 0800",
+  "MOVES privilege-vector interrupt masking",
+);
 
 const helperStart = midfuncSource.indexOf("MIDFUNC(1,call_helper,(IMPTR addr))");
 const helperEnd = midfuncSource.indexOf("MENDFUNC(1,call_helper", helperStart);
@@ -336,6 +344,84 @@ function functionBody(
   const end = text.indexOf(nextSignature, start + signature.length);
   if (start < 0 || end < 0) fail(`${context}: missing function boundary`);
   return text.slice(start, end);
+}
+
+const chkGeneratorBody = functionBody(
+  gencompSource,
+  "\t case i_CHK:",
+  "     case i_CHK2:",
+  "CHK generator",
+);
+for (const contract of [
+  "isjump;",
+  "preserve_flags_before_nzcv_clobber();",
+  "jnf_CHK_w(dstreg, src);",
+  "jnf_CHK_l(dstreg, src);",
+]) {
+  requireText(chkGeneratorBody, contract, "CHK exception boundary");
+}
+const chkMidfuncBody = functionBody(
+  midfunc2Source,
+  "STATIC_INLINE void emit_chk_trap",
+  "/*\n * SWAP",
+  "CHK native midfuncs",
+);
+for (const contract of [
+  "JIT_EXCEPTION_CHK_N_VALID",
+  "JIT_EXCEPTION_CHK_N_SET",
+  "LOAD_U32(REG_WORK3, request)",
+  "register_possible_exception();",
+]) {
+  requireText(chkMidfuncBody, contract, "CHK N/exception publication");
+}
+if (chkMidfuncBody.split("register_possible_exception();").length - 1 !== 2) {
+  fail("CHK N/exception publication: both W and L must register an exception gate");
+}
+const exceptionRegistrationBody = functionBody(
+  allocatorSource,
+  "void register_possible_exception(void)",
+  "/* Note: get_handler may fail",
+  "deferred exception registration",
+);
+for (const contract of [
+  "if (!jit_compile_current_op_host_pc)",
+  "jit_compile_current_op_m68k_pc",
+  "regs.jit_exception_oldpc",
+  "LOAD_U32(REG_WORK3, jit_compile_current_op_m68k_pc)",
+  "STR_wXi(REG_WORK3, R_REGSTRUCT, oldpc_idx)",
+]) {
+  requireText(exceptionRegistrationBody, contract, "CHK exact format-2 instruction PC");
+}
+const executeExceptionBody = functionBody(
+  compatSource,
+  "void execute_exception(uae_u32 cycles)",
+  "/* --- JIT native-call helpers for SR/CCR opcodes --- */",
+  "deferred exception execution",
+);
+for (const contract of [
+  "request & JIT_EXCEPTION_CHK_N_VALID",
+  "SET_NFLG((request & JIT_EXCEPTION_CHK_N_SET) != 0)",
+  "is_chk ? regs.jit_exception_oldpc : 0",
+  "regs.jit_exception_oldpc = 0",
+]) {
+  requireText(executeExceptionBody, contract, "CHK exception-entry N/PC publication");
+}
+requireText(
+  generatedSource,
+  "preserve_flags_before_nzcv_clobber();\n\tjnf_CHK_w(dstreg, src);",
+  "generated CHK.W contract",
+);
+requireText(
+  generatedSource,
+  "preserve_flags_before_nzcv_clobber();\n\tjnf_CHK_l(dstreg, src);",
+  "generated CHK.L contract",
+);
+for (const replayState of [
+  'INIT_REGS[chk_w_in_range]="00000008 00000014',
+  'INIT_REGS[chk_w_zero]="00000000 00000064',
+  'INIT_REGS[chk_w_equal]="00000032 00000032',
+]) {
+  requireText(harnessSource, replayState, "CHK exact-anchor operand restoration");
 }
 
 /* Ordered whole-instruction helpers receive an exact pc_hist[] opcode PC and
@@ -669,8 +755,8 @@ if (compatSource.split("(*cpufunctbl[opcode])(opcode);").length - 1 !== 3) {
 for (const contract of [
   "[strict_zero_ram_native]=1",
   "B2_JIT_STRICT_FULL=1",
-  "B2_NATIVE_ASSERT_PC=0x1000",
-  "^NATEXEC pc=00001000 ",
+  'B2_NATIVE_ASSERT_PC="$replay_pc"',
+  "^NATEXEC pc=$replay_pc_hex ",
   "strict-full-jit.sh",
 ]) {
   requireText(harnessSource, contract, "strict full-JIT native replay gate");
@@ -969,6 +1055,7 @@ const registersPath = new URL(
   import.meta.url,
 );
 const registersSource = await Bun.file(registersPath).text();
+requireText(registersSource, "uae_u32 jit_exception_oldpc", "deferred exception exact-PC backing");
 requireText(registersSource, "uae_u32 scratchregs[5]", "helper scratch backing");
 requireText(registersSource, "uintptr_t jit_scratch_vregs[5]", "pointer-width scratch spill backing");
 requireText(
@@ -1320,7 +1407,8 @@ requireText(
   "memcmp(pc_hist[i].source, pc_hist[i].location,",
   "trace extension-word coherency",
 );
-requireText(harnessSource, "B2_TEST_REPLAY_COUNT=2", "three-pass coherency proof");
+requireText(harnessSource, "[cache_disabled_selfmod_replay]=2", "three-pass coherency proof");
+requireText(harnessSource, 'B2_TEST_REPLAY_COUNT="$replay_count"', "replay-count plumbing");
 requireText(
   harnessSource,
   "TESTS[movea_l_sp_postinc_cov]",

@@ -167,20 +167,21 @@ EOF
         env_vars+=(B2_JIT_FORCE_TRANSLATE=1)
     fi
     if [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then
-        env_vars+=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC=0x1000)
+        local replay_pc="${NATIVE_REPLAY_PC[$name]:-0x1000}"
+        env_vars+=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC="$replay_pc")
         if [ "$name" = "host_code_reuse_coherence" ]; then
             # Reuse the same host-injected address with a different MOVEQ,
             # preserving the harness sentinel after the replacement opcode.
             env_vars+=(B2_TEST_REWRITE_HEX="7002 2C7C ${sentinel_a6:0:4} ${sentinel_a6:4:4}")
         fi
-        if [ "$name" = "cache_disabled_selfmod_replay" ] ||
-           [ "$name" = "host_code_reuse_coherence" ]; then
-            # Invalidate, retrace the now-stable stream, then require a
-            # third-pass native entry. Two passes cannot prove that lifecycle.
-            env_vars+=(B2_TEST_REPLAY_COUNT=2)
+        local replay_count="${NATIVE_REPLAY_COUNT[$name]:-1}"
+        if [ "$replay_count" -gt 1 ]; then
+            # Some alternate-PC or coherency vectors must first trace their
+            # replay anchor before a later pass can prove its native entry.
+            env_vars+=(B2_TEST_REPLAY_COUNT="$replay_count")
         fi
         if [ "$use_jit" = "true" ]; then
-            env_vars+=(B2_TEST_FORCE_L2_RAM=1 B2_JIT_STRICT_FULL=1 B2_NATIVE_ASSERT_PC=0x1000)
+            env_vars+=(B2_TEST_FORCE_L2_RAM=1 B2_JIT_STRICT_FULL=1 B2_NATIVE_ASSERT_PC="$replay_pc")
         fi
     fi
     if [ -n "$init_regs" ]; then
@@ -213,9 +214,11 @@ EOF
             echo "INFRA $name jit=$use_jit: missing clean strict native summary" >&2
             return 1
         fi
-        if ! grep -q '^NATEXEC pc=00001000 ' "$td/emu.log"; then
+        local replay_pc_hex
+        replay_pc_hex=$(printf '%08x' "$((replay_pc))")
+        if ! grep -q "^NATEXEC pc=$replay_pc_hex " "$td/emu.log"; then
             echo "strict_native_entry_evidence" > "$reason_file"
-            echo "INFRA $name jit=$use_jit: test block did not enter native L2 code at PC 00001000" >&2
+            echo "INFRA $name jit=$use_jit: test block did not enter native L2 code at PC $replay_pc_hex" >&2
             return 1
         fi
     fi
@@ -281,6 +284,9 @@ declare -a TEST_ORDER=(nop move moveq_signext alu alu_overflow addi_subi_long ad
 # FPU semantic-service vectors are appended independently so additions remain
 # reviewable without rewriting the generated-style master ordering above.
 TEST_ORDER+=(fpp_semantic_successor fscc_false_byte fbcc_false_operand_lengths)
+# CHK exception-state vectors are kept beside the family audit rather than
+# rewriting the generated-style master ordering above.
+TEST_ORDER+=(chk_w_negative_trap_n chk_w_upper_trap_n_clear chk_l_negative_trap_n chk_l_upper_trap_n_clear chk_l_in_range_preserve_ccr)
 # Shared SR/control/cache semantic-service coverage.
 TEST_ORDER+=(fullsr_orsr_privilege_vector8 fullsr_andsr_privilege_vector8 fullsr_eorsr_privilege_vector8 fullsr_mv2sr_privilege_vector8 fullsr_mvsr_privilege_vector8 system_usp_roundtrip reset_privilege_vector8 usp_privilege_vector8 stop_clear_s_vector8 stop_privilege_vector8 movec_privilege_vector8 rte_privilege_vector8 cache_privilege_vector8 cache_supervisor_successors)
 # Exact-PC bitfield service coverage spans every operation and each legal EA decoder.
@@ -289,10 +295,18 @@ TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves
 
 declare -A TESTS
 declare -A EXPECTED_D0
-# Tests in this set run twice from reset architectural state. The JIT pass
-# forces immediate RAM L2 promotion, so pass two proves native execution rather
-# than merely proving that the tracer/interpreter can compile the block.
+# Tests in this set replay from reset architectural state at an exact anchor.
+# The JIT pass forces immediate RAM L2 promotion; the configured final replay
+# proves native entry rather than merely proving that the tracer compiled it.
 declare -A NATIVE_REPLAY_TESTS=(
+    [chk_w_in_range]=1
+    [chk_w_zero]=1
+    [chk_w_equal]=1
+    [chk_w_negative_trap_n]=1
+    [chk_w_upper_trap_n_clear]=1
+    [chk_l_negative_trap_n]=1
+    [chk_l_upper_trap_n_clear]=1
+    [chk_l_in_range_preserve_ccr]=1
     [cas_b_predec]=1
     [moves_predec_store_alias]=1
     [bitfield_mem_an_family]=1
@@ -330,6 +344,30 @@ declare -A NATIVE_REPLAY_TESTS=(
     [branch_flush_bgt_zero]=1
     [dbra_ccr_preserve_z_clear]=1
     [dbra_ccr_preserve_z_set]=1
+)
+# A setup prefix may install architectural state before the audited instruction.
+# Replay and native-entry proof then start at the exact family opcode PC.
+declare -A NATIVE_REPLAY_PC=(
+    [chk_w_in_range]=0x1004
+    [chk_w_zero]=0x1004
+    [chk_w_equal]=0x1004
+    [chk_w_negative_trap_n]=0x1018
+    [chk_w_upper_trap_n_clear]=0x1018
+    [chk_l_negative_trap_n]=0x1018
+    [chk_l_upper_trap_n_clear]=0x1020
+    [chk_l_in_range_preserve_ccr]=0x1010
+)
+declare -A NATIVE_REPLAY_COUNT=(
+    [chk_w_in_range]=2
+    [chk_w_zero]=2
+    [chk_w_equal]=2
+    [chk_w_negative_trap_n]=2
+    [chk_w_upper_trap_n_clear]=2
+    [chk_l_negative_trap_n]=2
+    [chk_l_upper_trap_n_clear]=2
+    [chk_l_in_range_preserve_ccr]=2
+    [cache_disabled_selfmod_replay]=2
+    [host_code_reuse_coherence]=2
 )
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
@@ -1169,8 +1207,9 @@ TESTS[moves_l_indexed_store]="7000 41F9 0000 9800 203C DEAF BEEF 0EB0 0800 0000 
 # address-register destination win; byte loads into An are sign-extended.
 TESTS[moves_b_postinc_areg_alias]="207C 0000 9800 10BC 0080 0E18 8000 2008"
 # MOVES must privilege-trap before consuming the extension or touching memory.
-# Vector 8 is the sole route from the MOVES instruction to D7=$68 and sentinel.
-TESTS[moves_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0000 0E90 0800 60FE 4E71 7E68"
+# Vector 8 is the sole route from the MOVES instruction to D7=$68 and sentinel;
+# IPL7 masks asynchronous guest interrupts throughout the user-mode window.
+TESTS[moves_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 0E90 0800 60FE 4E71 7E68"
 # FDBF decrements only D0.W, preserves its upper word, and branches relative
 # to the displacement-word PC while the postdecrement value is not -1.
 TESTS[fdbcc_false_decrement_branch]="203C 1234 0001 F248 0000 0008 7201 6004 7202"
@@ -1245,6 +1284,22 @@ TESTS[chk_w_in_range]="7008 7214 4181"
 TESTS[chk_w_zero]="7000 7264 4181"
 # CHK.W equal: D0=D1=50
 TESTS[chk_w_equal]="7032 7232 4181"
+# CHK.W negative trap: vector 6 copies the stacked SR, frame PC, and format-2
+# instruction address to D6/D4/D5. N starts clear and must be set before the
+# frame is built; both frame addresses must identify the CHK opcode at $1018.
+TESTS[chk_w_negative_trap_n]="7000 4E7B 0801 23FC 0000 101E 0000 0018 70FF 7214 44FC 0015 4181 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.W upper-bound trap: seed X/N/Z/C, exceed the bound by one, and require
+# the frame to clear only N and identify the CHK opcode at $1018.
+TESTS[chk_w_upper_trap_n_clear]="7000 4E7B 0801 23FC 0000 101E 0000 0018 7015 7214 44FC 001D 4181 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.L negative trap: a full-width negative D0 must take vector 6, publish N,
+# preserve X/Z/C, and identify the CHK opcode at $1018 in both frame fields.
+TESTS[chk_l_negative_trap_n]="7000 4E7B 0801 23FC 0000 101E 0000 0018 70FF 7214 44FC 0015 4101 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.L upper-bound trap: $00010000 exceeds $0000ffff only in a full 32-bit
+# comparison. The frame must clear only N and identify the opcode at $1020.
+TESTS[chk_l_upper_trap_n_clear]="7000 4E7B 0801 23FC 0000 1026 0000 0018 203C 0001 0000 223C 0000 FFFF 44FC 001D 4101 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.L non-trap: compare full-width positive values and snapshot the seeded
+# X/N/Z/C state after CHK to prove that the in-range path changes no flags.
+TESTS[chk_l_in_range_preserve_ccr]="203C 0001 0000 223C 0002 0000 44FC 001D 4101 40C6"
 
 # SBCD borrow chain: 0x00 - 0x01 with X=0 → 0x99, borrow
 # ANDI #$EF,CCR; MOVEQ #0,D0; MOVEQ #1,D1; SBCD D1,D0
@@ -1516,6 +1571,16 @@ TESTS[fuzz_flags_4]="003C 001A D584 4A82"
 
 declare -A SENTINEL_A6
 declare -A INIT_REGS   # optional initial register state (D0-D7 A0-A7 [SR])
+# Exact-anchor replay skips each setup prefix, so restore the audited operands
+# explicitly rather than collapsing every pre-existing CHK.W case to 0 <= 0.
+INIT_REGS[chk_w_in_range]="00000008 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[chk_w_zero]="00000000 00000064 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[chk_w_equal]="00000032 00000032 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[chk_w_negative_trap_n]="FFFFFFFF 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[chk_w_upper_trap_n_clear]="00000015 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+INIT_REGS[chk_l_negative_trap_n]="FFFFFFFF 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[chk_l_upper_trap_n_clear]="00010000 0000FFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+INIT_REGS[chk_l_in_range_preserve_ccr]="00010000 00020000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
 # Fuzz vector initial register states
 INIT_REGS[io_byte_write_roundtrip]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 50001000 0A014100 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[fuzz_alu_0]="8878FDF6 80000000 00000000 637A51D3 7FFFFFFF 00000000 000000FF FFFFFFFF 0038D748 007BBF88 003C4A38 0023044C 003974BC 00072334 00000000 007EFF00"
@@ -2012,6 +2077,11 @@ SENTINEL_A6[a7_byte_postinc_cov]="a60001fb"
 SENTINEL_A6[chk_w_in_range]="a6f03200"
 SENTINEL_A6[chk_w_zero]="a6f03300"
 SENTINEL_A6[chk_w_equal]="a6f03400"
+SENTINEL_A6[chk_w_negative_trap_n]="a6c6e001"
+SENTINEL_A6[chk_w_upper_trap_n_clear]="a6c6e002"
+SENTINEL_A6[chk_l_negative_trap_n]="a6c6e003"
+SENTINEL_A6[chk_l_upper_trap_n_clear]="a6c6e004"
+SENTINEL_A6[chk_l_in_range_preserve_ccr]="a6c6e005"
 SENTINEL_A6[sbcd_borrow_chain]="a6f03500"
 SENTINEL_A6[sbcd_zero_zero]="a6f03600"
 SENTINEL_A6[nbcd_zero_no_x]="a6f03700"
@@ -2466,6 +2536,11 @@ declare -A RISKY_TESTS=(
     [chk_w_in_range]=1
     [chk_w_zero]=1
     [chk_w_equal]=1
+    [chk_w_negative_trap_n]=1
+    [chk_w_upper_trap_n_clear]=1
+    [chk_l_negative_trap_n]=1
+    [chk_l_upper_trap_n_clear]=1
+    [chk_l_in_range_preserve_ccr]=1
     [sbcd_borrow_chain]=1
     [sbcd_zero_zero]=1
     [nbcd_zero_no_x]=1

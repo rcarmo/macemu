@@ -114,6 +114,9 @@ extern struct regstruct
     fpu_register scratchfregs[2];
     fpu_register fp_result;
     uae_u32 jit_exception;
+    /* Exact opcode PC carried by tagged deferred exceptions whose format-2
+       frame includes an instruction-address field (currently native CHK). */
+    uae_u32 jit_exception_oldpc;
     /* Shadow FP register file for JIT FPU (64-bit double).
      * The JIT FP register allocator loads/stores these instead of
      * fpu.registers[] (which are mpfr_t under FPU_MPFR).

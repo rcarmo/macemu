@@ -1,5 +1,10 @@
 # Active risky vectors for mismatch-first autoresearch.
 # Add at most one new vector per iteration, in priority order.
+chk_w_negative_trap_n
+chk_w_upper_trap_n_clear
+chk_l_negative_trap_n
+chk_l_upper_trap_n_clear
+chk_l_in_range_preserve_ccr
 host_code_reuse_coherence
 fpp_semantic_successor
 fscc_false_byte

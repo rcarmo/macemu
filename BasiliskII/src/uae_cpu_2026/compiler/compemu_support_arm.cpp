@@ -5782,6 +5782,16 @@ void register_branch(uintptr not_taken, uintptr taken, uae_u8 cond)
 
 void register_possible_exception(void)
 {
+    /* Native CHK reaches the common deferred-exception gate after its inline
+       comparison.  Carry the exact pc_hist[] opcode PC independently of PC_P:
+       compile cursor re-anchoring and block finalisation are not an architectural
+       source for the format-2 instruction-address field.  The store is harmless
+       on CHK's non-trapping path and is consumed only by its tagged request. */
+    if (!jit_compile_current_op_host_pc)
+        jit_abort("deferred exception: missing exact opcode PC");
+    const uintptr oldpc_idx = (uintptr)(&regs.jit_exception_oldpc) - (uintptr)(&regs);
+    LOAD_U32(REG_WORK3, jit_compile_current_op_m68k_pc);
+    STR_wXi(REG_WORK3, R_REGSTRUCT, oldpc_idx);
     may_raise_exception = true;
 }
 

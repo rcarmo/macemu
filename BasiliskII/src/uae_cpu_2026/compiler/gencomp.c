@@ -2637,9 +2637,13 @@ gen_opcode (unsigned int opcode)
 
 	 case i_CHK:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* CHK conditionally crosses an architectural exception boundary.  Split the
+	   trace here, preserve the incoming partial CCR, and let the native midfunc
+	   publish N plus a deferred vector-6 request before the exception gate. */
+	isjump;
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	if (curi->size == sz_word) {
 	    comprintf("\tjnf_CHK_w(dstreg, src);\n");
 	} else {

@@ -7892,34 +7892,46 @@ MENDFUNC(1,jnf_NBCD_b,(RW1 d))
 
 /*
  * CHK — Check Register Against Bounds
- * If Dn < 0 or Dn > src: set jit_exception = 6 (trap)
- * Otherwise: no-op
+ *
+ * CHK changes only N, and only on a trapping comparison.  The generator saves
+ * the incoming NZCV before entering here.  Encode the selected N value in the
+ * deferred request; execute_exception publishes that one bit immediately before
+ * Exception(6), while plain vector-6 requests such as CHK2 remain untouched.
  */
+STATIC_INLINE void emit_chk_trap(int negative, uintptr exception_idx)
+{
+	const uae_u32 request = 6 | JIT_EXCEPTION_CHK_N_VALID |
+		(negative ? JIT_EXCEPTION_CHK_N_SET : 0);
+	LOAD_U32(REG_WORK3, request);
+	STR_wXi(REG_WORK3, R_REGSTRUCT, exception_idx);
+}
+
 MIDFUNC(2,jnf_CHK_w,(RR2 d, RR2 s))
 {
 	d = readreg(d);
 	s = readreg(s);
 
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 
-	// Sign-extend both to 32-bit for comparison
 	SXTH_ww(REG_WORK1, d);
 	SXTH_ww(REG_WORK2, s);
 
-	// Check d < 0
 	CMP_wi(REG_WORK1, 0);
-	BGE_i(3);  // skip trap if d >= 0
-	MOV_wi(REG_WORK3, 6);
-	STR_wXi(REG_WORK3, R_REGSTRUCT, idx);
-	B_i(4);    // skip to end
+	uae_u32 *nonnegative = (uae_u32 *)get_target();
+	BGE_i(0);
+	emit_chk_trap(1, exception_idx);
+	uae_u32 *done = (uae_u32 *)get_target();
+	B_i(0);
 
-	// Check d > src
+	write_jmp_target(nonnegative, (uintptr)get_target());
 	CMP_ww(REG_WORK1, REG_WORK2);
-	BLE_i(3);  // skip trap if d <= src
-	MOV_wi(REG_WORK3, 6);
-	STR_wXi(REG_WORK3, R_REGSTRUCT, idx);
+	uae_u32 *in_range = (uae_u32 *)get_target();
+	BLE_i(0);
+	emit_chk_trap(0, exception_idx);
 
-	// end
+	write_jmp_target(done, (uintptr)get_target());
+	write_jmp_target(in_range, (uintptr)get_target());
+	register_possible_exception();
 	unlock2(s);
 	unlock2(d);
 }
@@ -7930,22 +7942,24 @@ MIDFUNC(2,jnf_CHK_l,(RR4 d, RR4 s))
 	d = readreg(d);
 	s = readreg(s);
 
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 
-	// Check d < 0 (signed compare)
 	CMP_wi(d, 0);
-	BGE_i(3);
-	MOV_wi(REG_WORK3, 6);
-	STR_wXi(REG_WORK3, R_REGSTRUCT, idx);
-	B_i(4);
+	uae_u32 *nonnegative = (uae_u32 *)get_target();
+	BGE_i(0);
+	emit_chk_trap(1, exception_idx);
+	uae_u32 *done = (uae_u32 *)get_target();
+	B_i(0);
 
-	// Check d > src
+	write_jmp_target(nonnegative, (uintptr)get_target());
 	CMP_ww(d, s);
-	BLE_i(3);
-	MOV_wi(REG_WORK3, 6);
-	STR_wXi(REG_WORK3, R_REGSTRUCT, idx);
+	uae_u32 *in_range = (uae_u32 *)get_target();
+	BLE_i(0);
+	emit_chk_trap(0, exception_idx);
 
-	// end
+	write_jmp_target(done, (uintptr)get_target());
+	write_jmp_target(in_range, (uintptr)get_target());
+	register_possible_exception();
 	unlock2(s);
 	unlock2(d);
 }
