@@ -229,6 +229,7 @@ static const char *gui_connection_path = NULL;	// GUI connection identifier
 // Prototypes
 static void *xpram_func(void *arg);
 static void *tick_func(void *arg);
+bool Restore60HzAsyncOwnership(void);
 static void one_tick(...);
 void rom_harness_init(void);
 void rom_harness_tick(void);
@@ -286,8 +287,6 @@ static int vm_acquire_mac_fixed(void *addr, size_t size)
  *  SIGSEGV handler
  */
 
-extern "C" void jit_describe_native_pc_for_segv(uintptr native_pc);
-
 static sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
 {
 	const uintptr fault_address = (uintptr)sigsegv_get_fault_address(sip);
@@ -302,24 +301,6 @@ static sigsegv_return_t sigsegv_handler(sigsegv_info_t *sip)
 	// Ignore writes to ROM
 	if (((uintptr)fault_address - (uintptr)ROMBaseHost) < ROMSize)
 		return SIGSEGV_RETURN_SKIP_INSTRUCTION;
-
-	// JIT or interpreter may access unmapped Mac hardware/probe addresses.
-	// Always skip — aarch64_skip_instruction redirects JIT code to recovery,
-	// and advances PC+4 for interpreter code.
-	{
-		static unsigned long segv_skip_count = 0;
-		segv_skip_count++;
-		if (segv_skip_count <= 5 || segv_skip_count % 500000 == 0) {
-			uintptr native_pc = (uintptr)sigsegv_get_fault_instruction_address(sip);
-			fprintf(stderr, "SEGV_SKIP[%lu] host=%p mac=%08lx pc=%p",
-				segv_skip_count, (void*)fault_address,
-				(unsigned long)(uae_u32)(fault_address - MEMBaseDiff),
-				(void*)native_pc);
-			jit_describe_native_pc_for_segv(native_pc);
-			fprintf(stderr, "\n");
-		}
-		return SIGSEGV_RETURN_SKIP_INSTRUCTION;
-	}
 #endif
 
 	return SIGSEGV_RETURN_FAILURE;
@@ -1175,15 +1156,27 @@ int main(int argc, char **argv)
 #ifndef USE_CPU_EMUL_SERVICES
 #if defined(HAVE_PTHREADS)
 
-	// POSIX threads available, start 60Hz thread
-	Set_pthread_attr(&tick_thread_attr, 0);
-	tick_thread_active = (pthread_create(&tick_thread, &tick_thread_attr, tick_func, NULL) == 0);
-	if (!tick_thread_active) {
-		sprintf(str, GetString(STR_TICK_THREAD_ERR), strerror(errno));
-		ErrorAlert(str);
-		QuitEmulator();
+	/* The AArch64 JIT delivers 60Hz ticks from safe dispatcher boundaries.
+	   Do not also start the asynchronous tick thread: even an inhibited thread
+	   has a startup/read race and can mutate InterruptFlags while generated code
+	   owns live architectural state. B2_JIT_SYNC_TICKS=0 explicitly restores the
+	   legacy async source unless guest-retirement ticks were requested. */
+	const char *sync_tick_env = getenv("B2_JIT_SYNC_TICKS");
+	const char *retirement_tick_env = getenv("B2_JIT_RETIREMENT_TICK_EVERY");
+	const bool retirement_ticks = retirement_tick_env && *retirement_tick_env &&
+		strtoul(retirement_tick_env, NULL, 0) != 0;
+	const bool jit_dispatcher_owns_ticks = UseJIT &&
+		(retirement_ticks || !(sync_tick_env && sync_tick_env[0] == '0'));
+	if (jit_dispatcher_owns_ticks) {
+		tick_thread_active = false;
+	} else {
+		// POSIX threads available, start legacy 60Hz thread
+		if (!Restore60HzAsyncOwnership()) {
+			sprintf(str, GetString(STR_TICK_THREAD_ERR), strerror(errno));
+			ErrorAlert(str);
+			QuitEmulator();
+		}
 	}
-	D(bug("60Hz thread started\n"));
 
 #elif defined(HAVE_TIMER_CREATE) && defined(_POSIX_REALTIME_SIGNALS)
 
@@ -1671,6 +1664,18 @@ static void one_tick(...)
 
 #ifdef USE_PTHREADS_SERVICES
 bool tick_inhibit;
+bool Restore60HzAsyncOwnership(void)
+{
+	if (tick_thread_active)
+		return true;
+	tick_thread_cancel = false;
+	Set_pthread_attr(&tick_thread_attr, 0);
+	tick_thread_active = (pthread_create(&tick_thread, &tick_thread_attr, tick_func, NULL) == 0);
+	if (tick_thread_active)
+		D(bug("60Hz thread started\n"));
+	return tick_thread_active;
+}
+
 static void *tick_func(void *arg)
 {
 	uint64 start = GetTicks_usec();
@@ -2107,6 +2112,7 @@ bool ChoiceAlert(const char *text, const char *pos, const char *neg)
 
 void jit_one_tick(void)
 {
+    TimerAdvanceDeterministicTick();
     one_tick();
 }
 

@@ -8163,6 +8163,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_b,(RR4 adr, RR4 b))
 	BEQ_i(2);
 	STRB_wXx(b, adr, R_MEMSTART);
 	finish_low_nubus_gap_skip(gap_done);
+	emit_strict_cache_disabled_write_barrier(adr, 1);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(b);
@@ -8180,6 +8181,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_w,(RR4 adr, RR4 w))
 	REV16_ww(REG_WORK1, w);
 	STRH_wXx(REG_WORK1, adr, R_MEMSTART);
 	finish_low_nubus_gap_skip(gap_done);
+	emit_strict_cache_disabled_write_barrier(adr, 2);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(w);
@@ -8204,6 +8206,7 @@ MIDFUNC(2,jnf_MEM_WRITE_OFF_l,(RR4 adr, RR4 l))
 	REV_ww(REG_WORK1, l);
 	STR_wXx(REG_WORK1, adr, R_MEMSTART);
 	finish_low_nubus_gap_skip(gap_done);
+	emit_strict_cache_disabled_write_barrier(adr, 4);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(l);
@@ -8296,6 +8299,10 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_b,(RR4 adr, RR4 b))
 	BEQ_i(3);
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
 	STRB_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
+	/* Coherency follows the effective 24-bit bus address, not the unmasked
+	   logical register value: high-byte aliases must invalidate the RAM block
+	   that the store actually modified. */
+	emit_strict_cache_disabled_write_barrier(REG_WORK1, 1);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(b);
@@ -8311,6 +8318,7 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_w,(RR4 adr, RR4 w))
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
 	REV16_ww(REG_WORK3, w);
 	STRH_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
+	emit_strict_cache_disabled_write_barrier(REG_WORK1, 2);
 
 	unlock2(w);
 	unlock2(adr);
@@ -8332,6 +8340,7 @@ MIDFUNC(2,jnf_MEM_WRITE24_OFF_l,(RR4 adr, RR4 l))
 	BEQ_i(3);
 	REV_ww(REG_WORK3, l);
 	STR_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
+	emit_strict_cache_disabled_write_barrier(REG_WORK1, 4);
 	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(l);
@@ -8345,6 +8354,10 @@ MIDFUNC(2,jnf_MEM_READ24_OFF_b,(W4 d, RR4 adr))
 	adr = readreg(adr);
 	d = writereg(d);
 
+	/* The scanner-status comparison is an addressing implementation detail,
+	   not a 68k flag-producing operation. Preserve live guest NZCV exactly as
+	   the 32-bit direct read path does. */
+	MRS_NZCV_x(REG_WORK4);
 	UBFIZ_xxii(REG_WORK1, adr, 0, 24);
 	LDRB_wXx(d, REG_WORK1, R_MEMSTART);
 	LOAD_U32(REG_WORK3, 0x00ffff);
@@ -8353,6 +8366,7 @@ MIDFUNC(2,jnf_MEM_READ24_OFF_b,(W4 d, RR4 adr))
 	BNE_i(3);
 	MOV_wi(REG_WORK3, 0);
 	STRB_wXx(REG_WORK3, REG_WORK1, R_MEMSTART);
+	MSR_NZCV_x(REG_WORK4);
 
 	unlock2(d);
 	unlock2(adr);

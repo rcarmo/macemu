@@ -1,5 +1,19 @@
 # Active risky vectors for mismatch-first autoresearch.
 # Add at most one new vector per iteration, in priority order.
+host_code_reuse_coherence
+fpp_semantic_successor
+fscc_false_byte
+fbcc_false_operand_lengths
+cache_disabled_selfmod_replay
+cas2_w_success
+cas2_w_fail_first
+cas2_w_fail_second
+cas2_l_success
+cas2_l_fail_second
+cas2_l_alias_compare
+movea_l_sp_postinc_cov
+movea_l_postinc_alias
+branch_flush_bgt_zero
 roxl_x_propagation
 roxr_x_propagation
 roxl_count_2
@@ -36,6 +50,8 @@ addx_chain
 bitops_chg_highbit
 bitops_highbit
 btst_reg_high_bit
+btst_b_d16_highbit
+move_to_mem_and_back
 dbcc_ccr_preserve_bcs_taken
 dbcc_ccr_preserve_beq_taken
 dbcc_ccr_preserve_bge_taken
@@ -197,10 +213,24 @@ bfchg_reg_edge
 bftst_reg_edge
 bfins_reg_edge
 pack_dn_edge
+pack_predec_a7_alias
 unpk_dn_edge
+unpk_predec_a7_alias
+chk2_w_equal_preserve_ccr
+chk2_b_areg_fullwidth_d16
+chk2_l_wrapped_absl
+chk2_w_trap_vector6
+chk2_w_indexed_inrange
+chk2_l_fullindexed_inrange
+chk2_w_pcrel_inrange
 movep_l_roundtrip
 sr_ops_combo
 moves_write_read
+moves_b_postinc_areg_alias
+moves_privilege_vector8
+fdbcc_false_decrement_branch
+ftrapcc_true_vector7
+ftrapcc_false_operand_lengths
 adda_w_cov
 adda_l_cov
 adda_w_neg_cov
@@ -210,6 +240,7 @@ mvr2usp_cov
 move_b_d16_an_cov
 move_w_d16_an_cov
 move_l_d16_an_cov
+move_l_idx_absw_native
 move_b_idx_cov
 move_l_idx_scale_cov
 move_l_pc_rel_cov
@@ -331,3 +362,6 @@ oracle_zf_mem_notake
 oracle_zf_dbf_preserve_take
 indexed_full_neg_base
 io_byte_write_roundtrip
+strict_zero_ram_native
+dbra_ccr_preserve_z_clear
+dbra_ccr_preserve_z_set

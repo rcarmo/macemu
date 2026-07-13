@@ -26,10 +26,14 @@ void jit_op_divs_w(void);
 void jit_op_mull(void);
 void jit_op_divl(void);
 
-/* BCD */
+/* BCD and packed/peripheral moves */
 void jit_op_abcd(void);
 void jit_op_sbcd(void);
 void jit_op_nbcd(void);
+void jit_op_pack(void);
+void jit_op_unpk(void);
+void jit_op_mvprm(void);
+void jit_op_mvpmr(void);
 
 /* Privileged/flow */
 void jit_op_mvr2usp(void);
@@ -40,7 +44,10 @@ void jit_op_rtr(void);
 void jit_op_stop(void);
 void jit_op_trap(void);
 void jit_op_trapv(void);
+void jit_op_trapcc(void);
+void jit_op_moves(void);
 void jit_op_chk(void);
+void jit_op_chk2(void);
 
 /* Bit operations */
 void jit_op_tas(void);

@@ -138,9 +138,10 @@ bool Init680x0(void)
 	init_m68k();
 #if USE_JIT
 	UseJIT = compiler_use_jit();
-	fprintf(stderr, "JIT: UseJIT=%d\n", (int)UseJIT);
 	if (UseJIT)
 	    compiler_init();
+	else
+		TimerRestoreAsyncOwnership();
 #endif
 	return true;
 }
@@ -275,6 +276,9 @@ static bool run_opcode_test_mode_glue()
 	for (size_t i = 0; i < n_words; i++)
 		put_word(test_addr + (uaecptr)(i * 2), words[i]);
 	put_word(test_addr + (uaecptr)(n_words * 2), M68K_EXEC_RETURN);
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+	jit_invalidate_host_code_write(test_addr, (uae_u32)((n_words + 1) * 2));
+#endif
 
 	for (int i = 0; i < 8; i++) {
 		m68k_dreg(regs, i) = 0;
@@ -319,52 +323,87 @@ static bool run_opcode_test_mode_glue()
 
 	const char *two_pass = getenv("B2_TEST_TWO_PASS");
 	if (two_pass && *two_pass && two_pass[0] != '0') {
-		/* Harness mode: first pass traces/compiles, second pass re-enters the
-		   outer JIT dispatcher from a restored input state so native handlers run. */
-		for (int i = 0; i < 8; i++) {
-			m68k_dreg(regs, i) = 0;
-			m68k_areg(regs, i) = 0;
-		}
-		m68k_areg(regs, 7) = stack_addr;
-		regs.usp = regs.isp = regs.msp = stack_addr;
-		regs.sr = 0x2700;
-		if (init && *init) {
-			uint32 init_words[17];
-			size_t init_count = 0;
-			if (!parse_test_hex_longs_glue(init, init_words, lengthof(init_words), &init_count) ||
-				(init_count != 16 && init_count != 17)) {
-				fprintf(stderr, "B2_TEST_INIT parse failed on two-pass reset\n");
+		/* A host-injected stream may deliberately reuse an address with new
+		   opcodes (Execute68kTrap does this on the guest stack). Rewrite it only
+		   after the first pass has had a chance to enter the translation cache. */
+		const char *rewrite_hex = getenv("B2_TEST_REWRITE_HEX");
+		if (rewrite_hex && *rewrite_hex) {
+			uint16 rewrite_words[1024];
+			size_t rewrite_count = 0;
+			if (!parse_test_hex_words_glue(rewrite_hex, rewrite_words,
+					lengthof(rewrite_words), &rewrite_count)) {
+				fprintf(stderr, "B2_TEST_REWRITE_HEX parse failed\n");
 				quit_program = 1;
 				return true;
 			}
-			for (int i = 0; i < 8; i++)
-				m68k_dreg(regs, i) = init_words[i];
-			for (int i = 0; i < 8; i++)
-				m68k_areg(regs, i) = init_words[8 + i];
-			if (init_count == 17)
-				regs.sr = (uint16)(init_words[16] & 0xffff);
-			regs.usp = regs.isp = regs.msp = m68k_areg(regs, 7);
-		}
-		MakeFromSR();
-		regs.stopped = 0;
-		SPCFLAGS_CLEAR(SPCFLAG_STOP | SPCFLAG_BRK | SPCFLAG_DOTRACE | SPCFLAG_TRACE);
-		uaecptr second_addr = test_addr;
-		const char *second_pc_env = getenv("B2_TEST_SECOND_PC");
-		if (second_pc_env && *second_pc_env) {
-			char *end = NULL;
-			unsigned long off = strtoul(second_pc_env, &end, 0);
-			if (end != second_pc_env)
-				second_addr = RAMBaseMac + (uaecptr)off;
-		}
-		m68k_setpc(second_addr);
-		fill_prefetch_0();
-		quit_program = 0;
-#if USE_JIT
-		if (UseJIT)
-			m68k_compile_execute();
-		else
+			for (size_t i = 0; i < rewrite_count; i++)
+				put_word(test_addr + (uaecptr)(i * 2), rewrite_words[i]);
+			put_word(test_addr + (uaecptr)(rewrite_count * 2), M68K_EXEC_RETURN);
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+			jit_invalidate_host_code_write(test_addr,
+				(uae_u32)((rewrite_count + 1) * 2));
 #endif
-			m68k_execute();
+		}
+
+		/* Harness mode: replay from restored architectural input state. One
+		   replay gives the historical two-pass trace/native proof. Coherency
+		   vectors may request another replay: pass one dirties and invalidates,
+		   pass two retraces stable rewritten code, and pass three must enter it
+		   natively. Keep this test-only control out of ordinary execution. */
+		int replay_count = 1;
+		const char *replay_count_env = getenv("B2_TEST_REPLAY_COUNT");
+		if (replay_count_env && *replay_count_env) {
+			char *end = NULL;
+			long parsed = strtol(replay_count_env, &end, 0);
+			if (end != replay_count_env && parsed >= 1 && parsed <= 8)
+				replay_count = (int)parsed;
+		}
+		for (int replay = 0; replay < replay_count; replay++) {
+			for (int i = 0; i < 8; i++) {
+				m68k_dreg(regs, i) = 0;
+				m68k_areg(regs, i) = 0;
+			}
+			m68k_areg(regs, 7) = stack_addr;
+			regs.usp = regs.isp = regs.msp = stack_addr;
+			regs.sr = 0x2700;
+			if (init && *init) {
+				uint32 init_words[17];
+				size_t init_count = 0;
+				if (!parse_test_hex_longs_glue(init, init_words, lengthof(init_words), &init_count) ||
+					(init_count != 16 && init_count != 17)) {
+					fprintf(stderr, "B2_TEST_INIT parse failed on replay reset\n");
+					quit_program = 1;
+					return true;
+				}
+				for (int i = 0; i < 8; i++)
+					m68k_dreg(regs, i) = init_words[i];
+				for (int i = 0; i < 8; i++)
+					m68k_areg(regs, i) = init_words[8 + i];
+				if (init_count == 17)
+					regs.sr = (uint16)(init_words[16] & 0xffff);
+				regs.usp = regs.isp = regs.msp = m68k_areg(regs, 7);
+			}
+			MakeFromSR();
+			regs.stopped = 0;
+			SPCFLAGS_CLEAR(SPCFLAG_STOP | SPCFLAG_BRK | SPCFLAG_DOTRACE | SPCFLAG_TRACE);
+			uaecptr second_addr = test_addr;
+			const char *second_pc_env = getenv("B2_TEST_SECOND_PC");
+			if (second_pc_env && *second_pc_env) {
+				char *end = NULL;
+				unsigned long off = strtoul(second_pc_env, &end, 0);
+				if (end != second_pc_env)
+					second_addr = RAMBaseMac + (uaecptr)off;
+			}
+			m68k_setpc(second_addr);
+			fill_prefetch_0();
+			quit_program = 0;
+#if USE_JIT
+			if (UseJIT)
+				m68k_compile_execute();
+			else
+#endif
+				m68k_execute();
+		}
 	}
 
 	if (test_dump_enabled_glue()) {
@@ -578,6 +617,9 @@ void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
 	put_word(m68k_areg(regs, 7), M68K_EXEC_RETURN);
 	m68k_areg(regs, 7) -= 2;
 	put_word(m68k_areg(regs, 7), trap);
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+	jit_invalidate_host_code_write(m68k_areg(regs, 7), 4);
+#endif
 
 	// Execute trap
 	m68k_setpc(m68k_areg(regs, 7));
@@ -630,6 +672,9 @@ void Execute68k(uint32 addr, struct M68kRegisters *r)
 	put_word(m68k_areg(regs, 7), M68K_EXEC_RETURN);
 	m68k_areg(regs, 7) -= 4;
 	put_long(m68k_areg(regs, 7), m68k_areg(regs, 7) + 4);
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+	jit_invalidate_host_code_write(m68k_areg(regs, 7), 6);
+#endif
 
 	// Execute routine
 	m68k_setpc(addr);

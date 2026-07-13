@@ -171,11 +171,16 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 ## BasiliskII 68K JIT
 
-**Build:** ✅
-**Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
-**JIT optlev=0:** ✅ Full boot, zero SEGVs
-**JIT optlev=2:** ⚠️ Full-JIT default. The historical `040ba0xx` late-ROM spin is **FIXED (2026-06-22)** — see below. With three fixes (lazy-cache-flush staleness + cache-tag aliasing + dispatcher-diagnostic gating) the all-native boot clears the NuBus/Slot-Manager frontier and the `040026f8` aliasing frontier, and prints video-init markers (`VideoDriverOpen` → `SetEntries` → `SetGamma`). The `0402e8d0` slot-ROM `bfextu` blit freeze is **FIXED (2026-06-23, `8195ebc9`)**: it lived specifically in the **optlev-0 interpreter warm-up** (`exec_nostats`) path — itself an interpreter fallback the goal forbids. `optcount[0]` set `10→0` (translate on first execution, never whole-block-interpret); jit-test `302/302 fail_equiv=0`, boot advances past `0402e8d0` (d5→0). **Fixes (8195ebc9 + 18c78439):** optcount[0]=0 (eliminate optlev-0 interp warm-up; fixes 0402e8d0) and SPCFLAG_JIT_EXEC_RETURN cleared at any nesting depth (fixes the 04087926 nested-flush do_nothing spin). Boot now advances through video init + InitAll + SCSIReset. **Current frontier:** the post-151b1853 bad video/resource wall (`SetEntries table=04002478 count=1`) is fixed by native DBF runtime-PC endblocking (`33164a1c`); default full-JIT reaches the later interpreter-like `SetEntries table=000b8a48 count=255`. Desktop is not yet reached: the new frontier is a later `M68K_SETPC_BAD newpc=10001000` around `04002600/04002636/04002642`.
-**JIT harness:** ✅ 318/318 vectors pass (score=100) on the current AArch64 harness. Note: the harness can spuriously fail (`INFRA missing REGDUMP`) under concurrent shared-box load from timeouts; individual vectors still pass.
+**Current structural-audit gate (2026-07-13):** ✅
+**Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible
+**JIT harness:** ✅ 365/365 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
+**Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in both ordinary and strict tables. With FPU translation enabled: 46,343 native-generated, 1,871 semantic services, and 68 architectural traps.
+**Finder retirement gate:** ✅ ordinary and strict runs each reached twelve `DiskStatus 43` events and captured 24,000,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 da5b5d0a98b945ff7540dbc8a62197c877b8d61d8947e7c66f1e03c98c7cd466`), with no host signal.
+
+This gate was run host-native on the Orange Pi 6 Plus (`CIX P1`/`CD8180` or `CD8160`, 12 AArch64 CPU cores, 16 GB-class RAM with about 14 GiB visible, Debian Trixie, NVMe root storage). It covers structural opcode-family repairs, helper and exception boundaries, guest-memory coherency, translated-source revalidation, cache-state separation, retirement-clock ownership, register-allocation pressure, and partial JIT initialization/teardown. `MV2SR.W` intentionally remains on its exact legacy semantic-service path pending stronger native proof.
+
+The older frontier narrative below is retained as historical diagnosis; it no longer describes the acceptance frontier of the structural-audit branch.
 
 #### `040ba0xx` ROOT CAUSE (2026-06-22) — LAZY translation-cache invalidation reused STALE blocks (FIXED)
 

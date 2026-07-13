@@ -210,6 +210,13 @@ static __inline__ uae_u32 get_byte(uaecptr addr)
     return v;
 }
 #define phys_get_byte get_byte
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+extern void jit_notify_guest_memory_write(uae_u32 address, uae_u32 size);
+#define JIT_NOTIFY_GUEST_WRITE(addr, size) jit_notify_guest_memory_write((addr), (size))
+#else
+#define JIT_NOTIFY_GUEST_WRITE(addr, size) do { } while (0)
+#endif
+
 static __inline__ void put_long(uaecptr addr, uae_u32 l)
 {
     if (trace_write_window_enabled())
@@ -218,6 +225,7 @@ static __inline__ void put_long(uaecptr addr, uae_u32 l)
         return;
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     do_put_mem_long(m, l);
+    JIT_NOTIFY_GUEST_WRITE(addr, 4);
 }
 #define phys_put_long put_long
 static __inline__ void put_word(uaecptr addr, uae_u32 w)
@@ -228,6 +236,7 @@ static __inline__ void put_word(uaecptr addr, uae_u32 w)
         return;
     uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
     do_put_mem_word(m, w);
+    JIT_NOTIFY_GUEST_WRITE(addr, 2);
 }
 #define phys_put_word put_word
 static __inline__ void put_byte(uaecptr addr, uae_u32 b)
@@ -238,6 +247,7 @@ static __inline__ void put_byte(uaecptr addr, uae_u32 b)
         return;
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
     do_put_mem_byte(m, b);
+    JIT_NOTIFY_GUEST_WRITE(addr, 1);
 }
 #define phys_put_byte put_byte
 static __inline__ uae_u8 *get_real_address(uaecptr addr)

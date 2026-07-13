@@ -227,7 +227,8 @@ UAE_PATH = @UAE_PATH@
 # headers change; mixing old compemu*.o files with a rebuilt support object
 # silently redirects helper metadata stores to the wrong fields.
 JIT_LAYOUT_DEPS = Makefile sysdeps.h $(UAE_PATH)/newcpu.h \
-	$(UAE_PATH)/registers.h $(UAE_PATH)/memory.h $(UAE_PATH)/fpu/types.h
+	$(UAE_PATH)/registers.h $(UAE_PATH)/memory.h $(UAE_PATH)/fpu/types.h \
+	$(UAE_PATH)/compiler/compemu.h
 JIT_LAYOUT_OBJECTS = $(OBJ_DIR)/compemu_support.o \
 	$(OBJ_DIR)/compemu1.o $(OBJ_DIR)/compemu2.o $(OBJ_DIR)/compemu3.o $(OBJ_DIR)/compemu4.o \
 	$(OBJ_DIR)/compemu5.o $(OBJ_DIR)/compemu6.o $(OBJ_DIR)/compemu7.o $(OBJ_DIR)/compemu8.o
@@ -236,7 +237,17 @@ JIT_SUPPORT_DEPS = $(UAE_PATH)/compiler/compemu_support_arm.cpp \
 	$(UAE_PATH)/compemu_prefs.cpp $(UAE_PATH)/compiler/codegen_arm64.cpp \
 	$(UAE_PATH)/compiler/compemu_midfunc_arm64.cpp \
 	$(UAE_PATH)/compiler/compemu_midfunc_arm64_2.cpp
+# memory.h inlines the cache-disabled write notification into interpreter
+# opcode tables and harness setup. Rebuild every such consumer with the JIT
+# support object or first-seen tracer writes can silently miss invalidation.
+JIT_MEMORY_INLINE_OBJECTS = \
+	$(OBJ_DIR)/cpuemu1.o $(OBJ_DIR)/cpuemu2.o $(OBJ_DIR)/cpuemu3.o $(OBJ_DIR)/cpuemu4.o \
+	$(OBJ_DIR)/cpuemu5.o $(OBJ_DIR)/cpuemu6.o $(OBJ_DIR)/cpuemu7.o $(OBJ_DIR)/cpuemu8.o \
+	$(OBJ_DIR)/cpuemu1_nf.o $(OBJ_DIR)/cpuemu2_nf.o $(OBJ_DIR)/cpuemu3_nf.o $(OBJ_DIR)/cpuemu4_nf.o \
+	$(OBJ_DIR)/cpuemu5_nf.o $(OBJ_DIR)/cpuemu6_nf.o $(OBJ_DIR)/cpuemu7_nf.o $(OBJ_DIR)/cpuemu8_nf.o \
+	$(OBJ_DIR)/basilisk_glue.o $(OBJ_DIR)/newcpu.o
 $(JIT_LAYOUT_OBJECTS): $(JIT_LAYOUT_DEPS)
+$(JIT_MEMORY_INLINE_OBJECTS): $(UAE_PATH)/memory.h
 $(OBJ_DIR)/compemu_support.o: $(JIT_SUPPORT_DEPS)
 
 cpudefs.cpp: $(OBJ_DIR)/build68k$(EXEEXT) @top_srcdir@/$(UAE_PATH)/table68k

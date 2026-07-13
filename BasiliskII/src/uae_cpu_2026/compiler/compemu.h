@@ -69,8 +69,15 @@ extern uae_u32 start_pc;
 
 struct blockinfo_t;
 
+/* The architectural 68020+ instruction encoding is at most 22 bytes. Keep an
+   exact source window per retired instruction so extension-word rewrites are
+   detected as well as opcode rewrites before a trace is compiled. */
+#define JIT_TRACE_SOURCE_BYTES 22
+
 struct cpu_history {
 	uae_u16* location;
+	uae_u16 opcode;
+	uae_u8 source[JIT_TRACE_SOURCE_BYTES];
 #ifdef UAE
 	uae_u8  specmem;
 #endif

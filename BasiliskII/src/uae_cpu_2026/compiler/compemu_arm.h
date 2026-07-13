@@ -108,8 +108,12 @@ extern uae_u32 start_pc;
 
 struct blockinfo_t;
 
+#define JIT_TRACE_SOURCE_BYTES 22
+
 typedef struct {
   uae_u16* location;
+  uae_u16 opcode;
+  uae_u8  source[JIT_TRACE_SOURCE_BYTES];
   uae_u8  specmem;
 } cpu_history;
 

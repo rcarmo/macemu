@@ -53,16 +53,22 @@ const makefileTemplate = await Bun.file(new URL(
 for (const layoutDependency of [
   "JIT_LAYOUT_DEPS = Makefile sysdeps.h $(UAE_PATH)/newcpu.h",
   "$(UAE_PATH)/registers.h $(UAE_PATH)/memory.h $(UAE_PATH)/fpu/types.h",
+  "$(UAE_PATH)/compiler/compemu.h",
   "JIT_SUPPORT_DEPS = $(UAE_PATH)/compiler/compemu_support_arm.cpp",
   "$(UAE_PATH)/compiler/compemu_legacy_arm64_compat.cpp",
   "$(UAE_PATH)/compiler/codegen_arm64.cpp",
   "$(UAE_PATH)/compiler/compemu_midfunc_arm64.cpp",
   "$(JIT_LAYOUT_OBJECTS): $(JIT_LAYOUT_DEPS)",
+  "JIT_MEMORY_INLINE_OBJECTS =",
+  "$(OBJ_DIR)/cpuemu1_nf.o",
+  "$(OBJ_DIR)/basilisk_glue.o $(OBJ_DIR)/newcpu.o",
+  "$(JIT_MEMORY_INLINE_OBJECTS): $(UAE_PATH)/memory.h",
   "$(OBJ_DIR)/compemu_support.o: $(JIT_SUPPORT_DEPS)",
 ]) {
   requireText(makefileTemplate, layoutDependency, "JIT object layout epoch");
 }
 const harnessSource = await Bun.file(new URL("./run.sh", import.meta.url)).text();
+const strictHarnessSource = await Bun.file(new URL("./strict-full-jit.sh", import.meta.url)).text();
 requireText(harnessSource, "rm -f obj/compemu*.o", "JIT object layout epoch");
 
 const callEmitter = bodyBetween(
@@ -97,6 +103,7 @@ for (const preserved of [
   "LDP_xxXi(r, r + 1, RSP_INDEX, r * 8)",
   "compemu_raw_call_observer_i",
   "compemu_raw_call_observer_ii",
+  "compemu_raw_call_observer_ri",
 ]) {
   requireText(observerBody, preserved, "diagnostic observer preservation");
 }
@@ -110,12 +117,19 @@ const midfunc2Source = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp",
   import.meta.url,
 )).text();
+const codegenSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp",
+  import.meta.url,
+)).text();
 const memorySource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/memory.h",
   import.meta.url,
 )).text();
-if (midfuncSource.includes("compemu_raw_call((uintptr)jit_trace_setpc_value)")) {
-  fail("diagnostic observer preservation: raw trace call remains in allocator midfunc");
+if (
+  codegenSource.includes("jit_trace_setpc_value") ||
+  midfuncSource.includes("jit_trace_setpc_value")
+) {
+  fail("diagnostic residue: set-PC tracing remains in production JIT paths");
 }
 const directByteWriteStart = midfunc2Source.indexOf("MIDFUNC(2,jnf_MEM_WRITE_OFF_b");
 const directByteWriteEnd = midfunc2Source.indexOf("MENDFUNC(2,jnf_MEM_WRITE_OFF_b", directByteWriteStart);
@@ -268,12 +282,47 @@ const allocatorPath = new URL(
   import.meta.url,
 );
 const allocatorSource = await Bun.file(allocatorPath).text();
+if (allocatorSource.includes("jit_trace_setpc_value")) {
+  fail("diagnostic residue: set-PC tracing remains in the allocator");
+}
+const supportSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_support.cpp",
+  import.meta.url,
+)).text();
+const timerSource = await Bun.file(new URL(
+  "../BasiliskII/src/timer.cpp",
+  import.meta.url,
+)).text();
+const mainUnixSource = await Bun.file(new URL(
+  "../BasiliskII/src/Unix/main_unix.cpp",
+  import.meta.url,
+)).text();
+const compatSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
+  import.meta.url,
+)).text();
+const compemuHeaderSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu.h",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
 )).text();
 const generatedSource = await Bun.file(new URL(
   "../BasiliskII/src/Unix/compemu.cpp",
+  import.meta.url,
+)).text();
+const newcpuSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/newcpu.cpp",
+  import.meta.url,
+)).text();
+const gencpuSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/gencpu.c",
+  import.meta.url,
+)).text();
+const basiliskGlueSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/basilisk_glue.cpp",
   import.meta.url,
 )).text();
 
@@ -324,6 +373,27 @@ for (const contract of [
   requireText(gencompSource, contract, "generator pointer arithmetic contract");
   requireText(generatedSource, contract, "generated pointer arithmetic contract");
 }
+for (const sourceText of [gencompSource, generatedSource]) {
+  requireBefore(
+    sourceText,
+    "preserve_flags_before_nzcv_clobber();",
+    "dbf_dec_test_ne_w(src);",
+    "DBF architectural CCR preservation",
+  );
+  requireBefore(
+    sourceText,
+    "dbf_dec_test_ne_w(src);",
+    "discard_flags_in_nzcv();",
+    "DBF temporary NZCV discard",
+  );
+}
+for (const contract of [
+  "[dbra_ccr_preserve_z_clear]=1",
+  "[dbra_ccr_preserve_z_set]=1",
+]) {
+  requireText(harnessSource, contract, "DBF native replay CCR regression");
+}
+
 for (const forbidden of [
   "arm_ADD_l_ri(src,(uintptr)comp_pc_p)",
   "arm_ADD_l_ri(offs,(uintptr)comp_pc_p)",
@@ -332,6 +402,290 @@ for (const forbidden of [
     fail(`pointer arithmetic contract: ambiguous generated call remains: ${forbidden}`);
   }
 }
+
+for (const contract of [
+  "jit_block_verify_compiled_ops = i + 1",
+  "jit_block_verify_compiled_ops = i;",
+  "const int reference_ops = jit_block_verify_compiled_ops > 0",
+  "for (int step = 0; step < reference_ops; step++)",
+  "native_ops=%d REACHED",
+  "native_ops=%d SKIP-NOREACH",
+]) {
+  requireText(allocatorSource, contract, "block verifier exact retirement bound");
+}
+if (allocatorSource.includes("const int maxsteps = blocklen * 16 + 64")) {
+  fail("block verifier exact retirement bound: first-stop-PC loop remains");
+}
+
+for (const contract of [
+  "B2_JIT_STRICT_FULL",
+  "strict full-JIT: translator unavailable",
+  "strict full-JIT: optlev-0 block",
+  "strict full-JIT: non-L2 block",
+  "strict full-JIT: opcode fallback",
+  "strict full-JIT: exact exec_nostats",
+  "strict full-JIT: verifier interpreter reference",
+  "strict full-JIT: verifier opcode reference",
+  "JIT_STRICT_SUMMARY native=%llu trace=%llu warmup=%llu verify=%llu blocks=%llu opt0=0 fallback=0 exec_nostats=0",
+  "if (block_m68k_pc < ROMBaseMac && blocklen > 0)",
+  "bi->handler_to_use = (cpuop_func*)popall_check_checksum",
+  "set_dhtu_validated(bi, bi->direct_pcc)",
+  "bi->status = BI_NEED_CHECK",
+  "STRICT_RAM_HOT_THRESHOLD = 10",
+  "jit_strict_trace_warmups++",
+]) {
+  requireText(allocatorSource, contract, "strict full-JIT fallback gate");
+}
+for (const contract of [
+  "strict full-JIT: exec_nostats runtime entry",
+  "strict full-JIT: exec_nostats_limited runtime entry",
+  "if (!jit_strict_full_jit_env())",
+  "first-seen tracer observe the code and compile an L2 block normally.",
+  "jit_strict_note_trace_op(jit_current_interp_pc, opcode)",
+  "jit_strict_defer_cold_ram_trace(pc_hist, blocklen)",
+]) {
+  requireText(compatSource, contract, "strict full-JIT runtime gate");
+}
+for (const forbidden of ["jit_execute_ori_b_run_native", "jit_strict_note_native_zero_op"]) {
+  if (compatSource.includes(forbidden) || allocatorSource.includes(forbidden))
+    fail(`strict full-JIT: zero-RAM semantic helper remains: ${forbidden}`);
+}
+const emulopStart = allocatorSource.indexOf("static void op_emulop_comp_ff(uae_u32 opcode)\n{");
+const emulopEnd = allocatorSource.indexOf("static void op_aline_trap_comp_ff", emulopStart);
+if (emulopStart < 0 || emulopEnd < 0) fail("strict full-JIT: missing EMUL_OP compiler handler");
+const emulopBody = allocatorSource.slice(emulopStart, emulopEnd);
+requireText(emulopBody, "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_emulop", "native EMUL_OP boundary");
+if (emulopBody.includes("cpufunctbl") || emulopBody.includes("cputbl")) {
+  fail("strict full-JIT: EMUL_OP compiler handler still emits an interpreter-table call");
+}
+requireText(
+  allocatorSource,
+  "m68k_dispatch_emulop(opcode);",
+  "native EMUL_OP shared dispatcher",
+);
+for (const contract of [
+  "void m68k_dispatch_emulop(uae_u32 opcode)",
+  "if (opcode == M68K_EXEC_RETURN)",
+  "if (!regs.s)",
+  "m68k_emulop_return();",
+  "m68k_emulop(opcode);",
+  "m68k_incpc(2);",
+]) {
+  requireText(newcpuSource, contract, "shared EMUL_OP semantics");
+}
+for (const contract of [
+  'm68k_dispatch_emulop(0x7100)',
+  'm68k_dispatch_emulop(opcode)',
+]) {
+  requireText(gencpuSource, contract, "generated reference EMUL_OP dispatcher");
+}
+for (const forbidden of [
+  "jit_force_optlev0_block_exact",
+  "B2_JIT_UNFORCE_OPT0_PCS",
+  "B2_JIT_NO_FORCE_OPT0",
+  "pc >= 0x04000000 && pc <= 0x0400ffff",
+  "pc >= 0x040b0000 && pc <= 0x040bffff",
+]) {
+  if (allocatorSource.includes(forbidden)) {
+    fail(`strict full-JIT: hard-coded optlev-0 ROM gate remains: ${forbidden}`);
+  }
+}
+requireText(
+  allocatorSource,
+  "jit_force_optlev0() || jit_force_optlev0_block_env(block_m68k_pc)",
+  "strict full-JIT explicit optlev-0 diagnostics",
+);
+for (const contract of [
+  "static inline bool jit_strict_probe_opcode_fallback(void)",
+  "if (!jit_strict_full_jit_env())",
+  "jit_strict_probe_opcode_fallback())",
+]) {
+  requireText(allocatorSource, contract, "strict full-JIT fallback fault injection");
+}
+if (allocatorSource.split("(*cpufunctbl[opcode])(opcode);").length - 1 !== 2) {
+  fail("strict full-JIT: unexpected direct cpufunctbl execution site in ARM64 support");
+}
+if (compatSource.split("(*cpufunctbl[opcode])(opcode);").length - 1 !== 3) {
+  fail("strict full-JIT: unexpected direct cpufunctbl execution site in ARM64 compatibility layer");
+}
+for (const contract of [
+  "[strict_zero_ram_native]=1",
+  "B2_JIT_STRICT_FULL=1",
+  "B2_NATIVE_ASSERT_PC=0x1000",
+  "^NATEXEC pc=00001000 ",
+  "strict-full-jit.sh",
+]) {
+  requireText(harnessSource, contract, "strict full-JIT native replay gate");
+}
+for (const contract of [
+  "B2_JIT_FORCE_OPTLEV0=1",
+  "B2_JIT_STRICT_PROBE_OPCODE_FALLBACK=1",
+  "B2_JIT_VERIFY_BLOCKS=0x1000",
+  "grep -q '^REGDUMP:'",
+  "METRIC strict_full_jit_negative_gate=1",
+]) {
+  requireText(strictHarnessSource, contract, "strict full-JIT negative gate");
+}
+if (supportSource.includes("jit_strict_full_jit_env()\n\t\treturn;")) {
+  fail("strict full-JIT: guest CACR/cache-maintenance semantics are conditionally suppressed");
+}
+for (const contract of [
+  "if (jit_strict_full_jit_env())\n\t\tjit_abort(\"strict full-JIT: %s\", reason)",
+  "UseJIT = false;",
+  "TimerRestoreAsyncOwnership();",
+  "case i_CPUSHL:",
+  "case i_CPUSHP:",
+  "case i_CPUSHA: return \"generated_cache_push_helper\";",
+]) {
+  requireText(allocatorSource, contract, "strict initialization and coverage taxonomy");
+}
+requireText(
+  allocatorSource,
+  "bool uses_fpu = (nftbl[i].specific & COMP_OPCODE_USES_FPU) != 0;",
+  "no-flags FPU table registration",
+);
+for (const contract of [
+  "static void jit_runtime_fpu_semantic(uae_u32 opcode)",
+  "case i_FPP:",
+  "case i_FDBcc:",
+  "case i_FScc:",
+  "case i_FTRAPcc:",
+  "case i_FBcc:",
+  "case i_FSAVE:",
+  "case i_FRESTORE:",
+  "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_fpu_semantic",
+  "if (avoid_fpu) {",
+  "compfunctbl[cft_map(opcode)] = op_fpu_semantic_comp_ff;",
+  "nfcompfunctbl[cft_map(opcode)] = op_fpu_semantic_comp_ff;",
+  'if (handler == op_fpu_semantic_comp_ff) return "fpu_semantic_service";',
+]) {
+  requireText(allocatorSource, contract, "disabled-FPU semantic service coverage");
+}
+for (const vector of [
+  "[fpp_semantic_successor]=1",
+  "[fscc_false_byte]=1",
+  "[fbcc_false_operand_lengths]=1",
+]) {
+  requireText(harnessSource, vector, "disabled-FPU focused native replay");
+}
+requireText(
+  allocatorSource,
+  'if (legal) trap_count++;',
+  "legal-opcode coverage taxonomy",
+);
+requireText(
+  supportSource,
+  "if (UseJIT)\n\t\t\tdisable_jit_runtime",
+  "ordinary lazy JIT initialization failure",
+);
+const ordinaryFallback = supportSource.slice(
+  requireText(supportSource, "void m68k_compile_execute(void)", "ordinary lazy JIT fallback"),
+  requireText(supportSource, "void readbyte(int address", "ordinary lazy JIT fallback"),
+);
+requireBefore(
+  ordinaryFallback,
+  "if (!UseJIT) {",
+  "m68k_execute();",
+  "ordinary lazy JIT initialization fallback",
+);
+requireBefore(
+  ordinaryFallback,
+  "m68k_execute();",
+  "return;",
+  "ordinary lazy JIT initialization fallback",
+);
+requireText(
+  timerSource,
+  "Restore60HzAsyncOwnership()",
+  "ordinary lazy JIT initialization restores 60 Hz ownership",
+);
+requireText(
+  mainUnixSource,
+  "if (tick_thread_active)\n\t\treturn true;",
+  "idempotent 60 Hz ownership restoration",
+);
+for (const contract of [
+  "return jit_guest_path_enabled() || jit_retirement_tick_every() != 0;",
+  "if (tick_every && (++retirement_count % tick_every) == 0)",
+  "jit_guest_instruction_retired(pc);",
+]) {
+  requireText(allocatorSource, contract, "retirement ticks independent of path capture");
+}
+requireText(
+  supportSource,
+  "if (use_sync_ticks && !use_retirement_ticks)",
+  "retirement ticks suppress dispatcher wall-clock ticks",
+);
+if (supportSource.includes("jit_guest_path_is_armed")) {
+  fail("retirement tick ownership is still coupled to path-capture arming");
+}
+const referenceObserverStart = allocatorSource.indexOf('extern "C" void jit_guest_path_record_reference');
+const referenceObserverEnd = allocatorSource.indexOf('extern "C" void jit_guest_path_record_nostats', referenceObserverStart);
+if (referenceObserverStart < 0 || referenceObserverEnd < 0) fail("missing verifier path observer");
+const referenceObserverBody = allocatorSource.slice(referenceObserverStart, referenceObserverEnd);
+if (referenceObserverBody.includes("jit_guest_instruction_retired")) {
+  fail("verifier replay advances architectural retirement ticks");
+}
+requireText(referenceObserverBody, "jit_guest_path_record(pc);", "verifier path-only observer");
+if (supportSource.includes("B2_PATH_RING_TARGET") ||
+    supportSource.includes("SCAN2F98_ENTRY") ||
+    supportSource.includes("ROM_TO_RAM") ||
+    supportSource.includes("REGDUMP2")) {
+  fail("workload-specific dispatch diagnostics remain in active ARM64 support");
+}
+requireText(
+  allocatorSource,
+  "jit_collect_edge_profile(bi)",
+  "opt-in edge profiling",
+);
+if (allocatorSource.includes("jit_maybe_promote_stable_edge") ||
+    allocatorSource.includes("compemu_raw_call((uintptr)jit_maybe_promote_stable_edge)")) {
+  fail("stable direct edges retain a per-exit runtime promotion callback");
+}
+if (supportSource.includes("jit_abort(\"ARM64 JIT dispatcher stubs were not initialized")) {
+  fail("ordinary lazy JIT initialization still aborts instead of falling back");
+}
+requireText(
+  allocatorSource,
+  'getenv("B2_JIT_PROBE_CODE_ALLOC_FAIL")',
+  "deterministic JIT allocation lifecycle probe",
+);
+const popallStart = allocatorSource.indexOf("STATIC_INLINE void create_popalls(void)");
+const popallEnd = allocatorSource.indexOf("static inline void reset_lists(void)", popallStart);
+if (popallStart < 0 || popallEnd < 0) fail("missing popallspace initialization lifecycle");
+const popallBody = allocatorSource.slice(popallStart, popallEnd);
+if (popallBody.includes("jit_abort(")) {
+  fail("ordinary lazy JIT popallspace allocation still aborts before policy fallback");
+}
+const disableStart = allocatorSource.indexOf("static void disable_jit_runtime(const char* reason)");
+const disableEnd = allocatorSource.indexOf("#ifdef NOFLAGS_SUPPORT_GENCOMP", disableStart);
+if (disableStart < 0 || disableEnd < 0) fail("missing JIT disable lifecycle");
+const disableBody = allocatorSource.slice(disableStart, disableEnd);
+requireBefore(
+  disableBody,
+  "compiler_exit();",
+  "cache_size = 0;",
+  "partial JIT allocation teardown preserves allocation size",
+);
+const compilerExitStart = allocatorSource.indexOf("void compiler_exit(void)");
+const compilerExitEnd = allocatorSource.indexOf("/********************************************************************", compilerExitStart);
+if (compilerExitStart < 0 || compilerExitEnd < 0) fail("missing compiler exit lifecycle");
+const compilerExitBody = allocatorSource.slice(compilerExitStart, compilerExitEnd);
+for (const contract of [
+  "flush_icache_hard(3);",
+  "reset_lists();",
+  "pushall_call_handler = NULL;",
+  "popall_execute_normal = NULL;",
+  "current_compile_p = NULL;",
+  "memset(cache_tags, 0, sizeof(cache_tags));",
+]) {
+  requireText(compilerExitBody, contract, "JIT executable-storage teardown");
+}
+requireText(
+  allocatorSource,
+  "if (cache_enabled && !strict_cache_disable_boundary_seen)\n            flush_icache_hard(3);\n        cache_enabled = 1;",
+  "strict full-JIT guest cache transition preserves invalidation",
+);
 
 requireText(gencompSource, "NATIVE_CC_VC,NATIVE_CC_VS", "ARM64 overflow condition codegen");
 const arm64OverflowCases = "#if defined(CPU_aarch64) || defined(CPU_AARCH64)\n\t case 8:\n\t case 9:";
@@ -550,7 +904,7 @@ requireBefore(
   "recompile dependency invalidation",
 );
 
-const resetListsStart = allocatorSource.indexOf("static inline void reset_lists(void)");
+const resetListsStart = allocatorSource.lastIndexOf("static inline void reset_lists(void)");
 const resetListsEnd = allocatorSource.indexOf("static void prepare_block", resetListsStart);
 if (resetListsStart < 0 || resetListsEnd < 0) fail("missing reset_lists");
 const resetListsBody = allocatorSource.slice(resetListsStart, resetListsEnd);
@@ -584,10 +938,29 @@ if (zeroContainmentStart < 0 || zeroContainmentEnd < 0) fail("missing zero-sourc
 const zeroContainmentBody = allocatorSource.slice(zeroContainmentStart, zeroContainmentEnd);
 requireBefore(
   zeroContainmentBody,
+  "bi->handler_to_use = (cpuop_func*)popall_check_checksum",
+  "bi->status = BI_NEED_CHECK",
+  "strict zero-source checksum validation",
+);
+requireBefore(
+  zeroContainmentBody,
   "bi->direct_handler = bi->direct_pen",
   "set_dhtu(bi, bi->direct_pen)",
-  "zero-source dependency containment",
+  "ordinary zero-source interpreter containment",
 );
+
+const checksumValidationStart = allocatorSource.indexOf("static inline int block_check_checksum");
+const checksumValidationEnd = allocatorSource.indexOf("static int called_check_checksum", checksumValidationStart);
+if (checksumValidationStart < 0 || checksumValidationEnd < 0) fail("missing checksum validation");
+const checksumValidationBody = allocatorSource.slice(checksumValidationStart, checksumValidationEnd);
+requireText(
+  checksumValidationBody,
+  "isgood = bi->csi != NULL",
+  "zero-valued checksum validity",
+);
+if (checksumValidationBody.includes("if (bi->c1 || bi->c2)")) {
+  fail("zero-valued checksum validity: checksum value is still overloaded as presence");
+}
 
 const blockBuilderPath = new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
@@ -631,6 +1004,157 @@ for (const forbidden of [
   }
 }
 
+for (const contract of [
+  "extern void jit_notify_guest_memory_write",
+  "JIT_NOTIFY_GUEST_WRITE(addr, 4)",
+  "JIT_NOTIFY_GUEST_WRITE(addr, 2)",
+  "JIT_NOTIFY_GUEST_WRITE(addr, 1)",
+]) {
+  requireText(memorySource, contract, "cache-disabled tracer write coherency");
+}
+for (const contract of [
+  "emit_strict_cache_disabled_write_barrier(adr, 1)",
+  "emit_strict_cache_disabled_write_barrier(adr, 2)",
+  "emit_strict_cache_disabled_write_barrier(adr, 4)",
+]) {
+  requireText(midfunc2Source, contract, "cache-disabled native integer-write coherency");
+}
+for (const contract of [
+  "emit_strict_cache_disabled_write_barrier(REG_WORK1, 1)",
+  "emit_strict_cache_disabled_write_barrier(REG_WORK1, 2)",
+  "emit_strict_cache_disabled_write_barrier(REG_WORK1, 4)",
+]) {
+  requireText(midfunc2Source, contract, "24-bit alias write coherency");
+}
+const read24ByteStart = midfunc2Source.indexOf("MIDFUNC(2,jnf_MEM_READ24_OFF_b");
+const read24ByteEnd = midfunc2Source.indexOf("MENDFUNC(2,jnf_MEM_READ24_OFF_b", read24ByteStart);
+if (read24ByteStart < 0 || read24ByteEnd < 0) fail("missing 24-bit byte read emitter");
+const read24ByteBody = midfunc2Source.slice(read24ByteStart, read24ByteEnd);
+requireBefore(read24ByteBody, "MRS_NZCV_x(REG_WORK4)", "CMP_wi(REG_WORK3, 2)", "24-bit byte-read flag preservation");
+requireBefore(read24ByteBody, "CMP_wi(REG_WORK3, 2)", "MSR_NZCV_x(REG_WORK4)", "24-bit byte-read flag preservation");
+for (const contract of [
+  "emit_strict_cache_disabled_write_barrier(adr, 12)",
+  "emit_strict_cache_disabled_write_barrier(adr, 8)",
+]) {
+  requireText(midfuncSource, contract, "cache-disabled native FPU-write coherency");
+}
+for (const contract of [
+  "if (value_reg <= R18_INDEX)",
+  "MOV_xx(REG_PAR1, value_reg)",
+  "jit_emitted_guest_memory_write = true",
+  "compemu_raw_call_observer_ri((uintptr)jit_notify_guest_memory_write",
+]) {
+  requireText(codegenSource, contract, "cache-disabled native write barrier");
+}
+for (const contract of [
+  "static int guest_cache_enabled = 0",
+  "static bool strict_cache_disable_boundary_seen = false",
+  "if (cache_enabled && !strict_cache_disable_boundary_seen)",
+  "strict_cache_disable_boundary_seen = true",
+  "strict_cache_disable_boundary_seen = false;\n    set_cache_state(0)",
+  "void jit_notify_guest_memory_write",
+  "jit_write_overlaps_checksum",
+  "block_need_recompile(bi)",
+  "jit_emitted_guest_memory_write &&",
+  "!(prop[cft_map(opcode)].cflow & fl_end_block)",
+  "static void jit_runtime_fsave",
+  "static void jit_runtime_frestore",
+  "table68k[opcode].mnemo == i_FSAVE",
+  "table68k[opcode].mnemo == i_FRESTORE",
+]) {
+  requireText(allocatorSource, contract, "strict native lifecycle services");
+}
+requireText(
+  harnessSource,
+  "TESTS[cache_disabled_selfmod_replay]",
+  "cache-disabled self-modifying RAM regression",
+);
+const hostCodeInvalidateStart = allocatorSource.indexOf(
+  "void jit_invalidate_host_code_write(uae_u32 address, uae_u32 size)",
+);
+const hostCodeInvalidateEnd = allocatorSource.indexOf(
+  "void jit_notify_guest_memory_write",
+  hostCodeInvalidateStart,
+);
+if (hostCodeInvalidateStart < 0 || hostCodeInvalidateEnd < 0) {
+  fail("host-injected code coherency: missing dedicated invalidation path");
+}
+const hostCodeInvalidateBody = allocatorSource.slice(
+  hostCodeInvalidateStart,
+  hostCodeInvalidateEnd,
+);
+requireText(
+  hostCodeInvalidateBody,
+  "jit_invalidate_guest_code_range(address, size, false)",
+  "host-injected code coherency",
+);
+if (hostCodeInvalidateBody.includes("jit_strict_cache_disabled_coherence")) {
+  fail("host-injected code coherency: invalidation still depends on guest CACR/strict mode");
+}
+for (const contract of [
+  "jit_invalidate_host_code_write(test_addr",
+  "jit_invalidate_host_code_write(m68k_areg(regs, 7), 4)",
+  "jit_invalidate_host_code_write(m68k_areg(regs, 7), 6)",
+]) {
+  requireText(basiliskGlueSource, contract, "host-injected code coherency");
+}
+for (const contract of [
+  "TESTS[host_code_reuse_coherence]",
+  "B2_TEST_REWRITE_HEX",
+  'EXPECTED_D0[host_code_reuse_coherence]="00000002"',
+]) {
+  requireText(harnessSource, contract, "host-injected code reuse regression");
+}
+for (const contract of [
+  "#define JIT_TRACE_SOURCE_BYTES 22",
+  "uae_u16 opcode;",
+  "uae_u8 source[JIT_TRACE_SOURCE_BYTES];",
+]) {
+  requireText(compemuHeaderSource, contract, "trace source snapshot");
+}
+for (const contract of [
+  "hist->opcode = (uae_u16)do_get_mem_word(hist->location)",
+  "memcpy(hist->source, hist->location, JIT_TRACE_SOURCE_BYTES)",
+]) {
+  requireText(compatSource, contract, "trace source snapshot");
+}
+const traceSnapshotStart = requireText(
+  allocatorSource,
+  "void compile_block(cpu_history* pc_hist",
+  "trace source coherency",
+);
+const traceSnapshotEnd = allocatorSource.indexOf(
+  "if (jit_strict_full_jit_env() &&",
+  traceSnapshotStart,
+);
+if (traceSnapshotEnd < 0) fail("trace source coherency: missing strict gate after snapshot guard");
+const traceSnapshotGuard = allocatorSource.slice(traceSnapshotStart, traceSnapshotEnd);
+requireBefore(
+  traceSnapshotGuard,
+  "const uae_u16 current_opcode = (uae_u16)DO_GET_OPCODE(pc_hist[i].location)",
+  "if (current_opcode != pc_hist[i].opcode ||",
+  "trace source coherency",
+);
+requireText(
+  traceSnapshotGuard,
+  "memcmp(pc_hist[i].source, pc_hist[i].location,",
+  "trace extension-word coherency",
+);
+requireText(harnessSource, "B2_TEST_REPLAY_COUNT=2", "three-pass coherency proof");
+requireText(
+  harnessSource,
+  "TESTS[movea_l_sp_postinc_cov]",
+  "runtime-helper logical opcode regression",
+);
+const runtimeHelperStart = allocatorSource.indexOf("static void jit_runtime_mvsr2_full");
+const runtimeHelperEnd = allocatorSource.indexOf("static void op_trap_comp_ff", runtimeHelperStart);
+if (runtimeHelperStart < 0 || runtimeHelperEnd < 0)
+  fail("missing runtime semantic helper region");
+const runtimeHelperBody = allocatorSource.slice(runtimeHelperStart, runtimeHelperEnd);
+if (runtimeHelperBody.includes("cft_map(opcode)"))
+  fail("runtime semantic helpers must decode the logical opcode, not the compiler-table index");
+requireText(harnessSource, "TESTS[branch_flush_bgt_zero]", "cross-op BGT regression");
+
 console.log("METRIC structural_jit_object_layout_epoch=1");
 console.log("METRIC structural_fullsr_ea_mode_decode=1");
 console.log("METRIC structural_complete_mvsr2_helper_family=1");
@@ -645,6 +1169,7 @@ console.log("METRIC structural_bfins_signed_wrapping_semantics=1");
 console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_diagnostic_observer_abi=1");
 console.log("METRIC structural_diagnostic_verifier_opcode_decode=1");
+console.log("METRIC structural_block_verifier_retirement_bound=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
 console.log("METRIC structural_allocator_locked_evict=1");
 console.log("METRIC structural_scratch_spill_cardinality=1");
@@ -656,5 +1181,16 @@ console.log("METRIC structural_invalidated_edge_profile_reset=1");
 console.log("METRIC structural_reserved_blockinfo_reclamation=1");
 console.log("METRIC structural_cache_exhaustion_blockinfo_lifetime=1");
 console.log("METRIC structural_zero_source_dependency_containment=1");
+console.log("METRIC structural_dbf_ccr_preservation=1");
+console.log("METRIC structural_strict_full_jit_gate=1");
+console.log("METRIC structural_native_emulop_boundary=1");
 console.log("METRIC structural_endblock_successor_pc=1");
 console.log("METRIC structural_basic_block_control_boundary=1");
+console.log("METRIC structural_cache_disabled_write_coherency=1");
+console.log("METRIC structural_host_code_reuse_coherency=1");
+console.log("METRIC structural_cache_transition_idempotence=1");
+console.log("METRIC structural_coverage_taxonomy=1");
+console.log("METRIC structural_trace_source_coherency=1");
+console.log("METRIC structural_native_fpu_state_boundary=1");
+console.log("METRIC structural_disabled_fpu_semantic_service=1");
+console.log("METRIC structural_runtime_helper_logical_opcode=1");

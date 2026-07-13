@@ -225,8 +225,6 @@ MIDFUNC(2,mov_l_mi,(IMPTR d, IMPTR s))
 		uintptr idx = d - (uintptr) &regs;
 		if(d == (uintptr) &(regs.pc_p) || d == (uintptr) &(regs.pc_oldp)) {
 			LOAD_U64(REG_WORK2, s);  // pc_p/pc_oldp are 64-bit host pointers
-			if (jit_trace_setpc_env())
-				compemu_raw_trace_setpc_reg(REG_WORK2, 7);
 			STR_xXi(REG_WORK2, R_REGSTRUCT, idx);
 		} else {
 			LOAD_U32(REG_WORK2, (uae_u32)s);
@@ -475,8 +473,6 @@ MIDFUNC(2,mov_l_mr,(IMPTR d, RR4 s))
 	if(d >= (uintptr)&regs && d < (uintptr)&regs + 32760) {
 		uintptr idx = d - (uintptr) &regs;
 		if(d == (uintptr)&regs.pc_oldp || d == (uintptr)&regs.pc_p) {
-			if (jit_trace_setpc_env())
-				compemu_raw_trace_setpc_reg(s, 8);
 			STR_xXi(s, R_REGSTRUCT, idx);
 		} else
 			STR_wXi(s, R_REGSTRUCT, idx);
@@ -1269,6 +1265,7 @@ MIDFUNC(2,fp_from_exten_mr,(RR4 adr, FR s))
 	adr = readreg(adr);
 	s = f_readreg(s);
 	raw_fp_from_exten_mr(adr, s);
+	emit_strict_cache_disabled_write_barrier(adr, 12);
 	f_unlock(s);
 	unlock2(adr);
 }
@@ -1291,6 +1288,7 @@ MIDFUNC(2,fp_from_double_mr,(RR4 adr, FR s))
 	adr = readreg(adr);
 	s = f_readreg(s);
 	raw_fp_from_double_mr(adr, s);
+	emit_strict_cache_disabled_write_barrier(adr, 8);
 	f_unlock(s);
 	unlock2(adr);
 }

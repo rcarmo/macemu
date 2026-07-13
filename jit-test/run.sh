@@ -17,7 +17,11 @@ DISK_CLONE=""
 
 cleanup() {
     [ -n "$DISK_CLONE" ] && command -v cow_release >/dev/null 2>&1 && cow_release "$DISK_CLONE"
-    rm -rf "$RUN_DIR"
+    if [ "${B2_KEEP_TEST_RUN_DIR:-0}" = "1" ]; then
+        echo "JIT_TEST_RUN_DIR=$RUN_DIR" >&2
+    else
+        rm -rf "$RUN_DIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -164,8 +168,19 @@ EOF
     fi
     if [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then
         env_vars+=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC=0x1000)
+        if [ "$name" = "host_code_reuse_coherence" ]; then
+            # Reuse the same host-injected address with a different MOVEQ,
+            # preserving the harness sentinel after the replacement opcode.
+            env_vars+=(B2_TEST_REWRITE_HEX="7002 2C7C ${sentinel_a6:0:4} ${sentinel_a6:4:4}")
+        fi
+        if [ "$name" = "cache_disabled_selfmod_replay" ] ||
+           [ "$name" = "host_code_reuse_coherence" ]; then
+            # Invalidate, retrace the now-stable stream, then require a
+            # third-pass native entry. Two passes cannot prove that lifecycle.
+            env_vars+=(B2_TEST_REPLAY_COUNT=2)
+        fi
         if [ "$use_jit" = "true" ]; then
-            env_vars+=(B2_TEST_FORCE_L2_RAM=1)
+            env_vars+=(B2_TEST_FORCE_L2_RAM=1 B2_JIT_STRICT_FULL=1 B2_NATIVE_ASSERT_PC=0x1000)
         fi
     fi
     if [ -n "$init_regs" ]; then
@@ -191,6 +206,20 @@ EOF
         return 1
     fi
 
+    if [ "$use_jit" = "true" ] && [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then
+        if ! grep -q '^JIT_STRICT_SUMMARY ' "$td/emu.log" ||
+           grep -qE 'strict full-JIT:|JIT_FALLBACK' "$td/emu.log"; then
+            echo "strict_native_evidence" > "$reason_file"
+            echo "INFRA $name jit=$use_jit: missing clean strict native summary" >&2
+            return 1
+        fi
+        if ! grep -q '^NATEXEC pc=00001000 ' "$td/emu.log"; then
+            echo "strict_native_entry_evidence" > "$reason_file"
+            echo "INFRA $name jit=$use_jit: test block did not enter native L2 code at PC 00001000" >&2
+            return 1
+        fi
+    fi
+
     local dump_count
     dump_count=$(grep -c "^REGDUMP:" "$td/emu.log" 2>/dev/null || true)
     if [ "$dump_count" -eq 0 ]; then
@@ -208,6 +237,12 @@ EOF
     if ! grep -qi "A6=$sentinel_a6" "$outfile"; then
         echo "sentinel_mismatch" > "$reason_file"
         echo "INFRA $name jit=$use_jit: sentinel A6 mismatch (expected $sentinel_a6)" >&2
+        return 1
+    fi
+    local expected_d0="${EXPECTED_D0[$name]:-}"
+    if [ -n "$expected_d0" ] && ! grep -qi "D0=$expected_d0" "$outfile"; then
+        echo "semantic_d0_mismatch" > "$reason_file"
+        echo "INFRA $name jit=$use_jit: D0 mismatch (expected $expected_d0)" >&2
         return 1
     fi
 
@@ -231,20 +266,88 @@ if ! DISPLAY=:99 xdpyinfo >/dev/null 2>&1; then
     emit_failure_metrics 0 "failed to start Xvfb on :99"
 fi
 
+# Strict mode is fail-closed. Exercise its negative contracts separately from
+# equivalence tests so an expected abort can never be misreported as an opcode
+# mismatch or a successful REGDUMP.
+if ! "$SCRIPT_DIR/strict-full-jit.sh" "$UNIX_DIR" "$ROM" "$DISK"; then
+    emit_failure_metrics 1 "strict full-JIT negative contract gate failed" 0
+fi
+
 # ---- Define test cases -------------------------------------------------------
 # Format: name|hex_words (M68K big-endian, STOP #0x2700 appended automatically)
 # Each test sets up known state and exercises one opcode class.
 
-declare -a TEST_ORDER=(nop move moveq_signext alu alu_overflow addi_subi_long addi_subi_long_wrap addi_subi_word addi_subi_word_wrap addi_subi_byte addi_subi_byte_wrap shift bitops bitops_chg bitops_highbit bitops_chg_highbit branch branch_chain compare compare_negative cmpi_sizes cmpi_sizes_zero cmpi_byte_negative cmpi_word_negative cmpi_long_negative cmpi_beq_taken muldiv movem misc clr_sizes clr_byte_preserve_upper clr_word_preserve_upper neg_sizes neg_zero_sizes swap_roundtrip flags flags_eori_ccr exg exg_roundtrip imm_logic imm_logic_alt imm_logic_byte_highbit imm_logic_word imm_logic_long imm_logic_long_alt tst_sizes tst_zero tst_positive bra_taken bra_w_taken bne_not_taken bne_taken bne_w_not_taken bne_w_taken beq_taken beq_not_taken beq_w_taken beq_w_not_taken bpl_taken bpl_not_taken bpl_w_taken bpl_w_not_taken bmi_taken bmi_not_taken bmi_w_taken bmi_w_not_taken bvc_taken bvc_not_taken_overflow bvc_w_taken bvc_w_not_taken_overflow bvs_taken_overflow bvs_not_taken bvs_w_taken_overflow bvs_w_not_taken bge_taken bge_not_taken bge_w_taken bge_w_not_taken blt_taken blt_not_taken blt_w_taken blt_w_not_taken bgt_taken bgt_not_taken bgt_w_taken bgt_w_not_taken ble_taken ble_not_taken ble_w_taken ble_w_not_taken bcc_taken bcc_not_taken bcc_w_taken bcc_w_not_taken bcs_taken bcs_not_taken bcs_w_taken bcs_w_not_taken bhi_taken bhi_not_taken bhi_w_taken bhi_w_not_taken bls_taken bls_not_taken bls_w_taken bls_w_not_taken scc_basic scc_eq_ne scc_carry scc_hi_ls scc_hi_ls_z scc_vc_vs scc_pl_mi scc_ge_lt scc_gt_le scc_ccr_preserve_blt scc_ccr_preserve_bcs scc_ccr_preserve_bne_not_taken scc_ccr_preserve_beq_taken quick_ops quick_ops_long_neg_roundtrip quick_ops_word quick_ops_word_wrap quick_ops_long_wrap quick_ops_byte quick_ops_byte_wrap quick_ops_addr dbra dbra_not_taken dbra_start_minus1_branch dbra_start_8000_branch dbt_true_not_taken dbra_three_iter dbcc_loop_c_set dbcs_not_taken_c_set dbpl_loop_n_set dbmi_not_taken_n_set dbhi_not_taken_hi_set dbls_not_taken_ls_set dbge_not_taken_n_eq_v dblt_not_taken_n_ne_v dbgt_not_taken_gt_set dble_not_taken_le_set dbhi_false_dec_terminal_ls_set dbls_false_dec_terminal_hi_set dbge_false_dec_terminal_n_ne_v dblt_false_dec_terminal_n_eq_v dbgt_false_dec_terminal_z_set dble_false_dec_terminal_gt_set dbcc_ccr_preserve_beq_taken dbcc_ccr_preserve_bne_taken dbcc_ccr_preserve_bcs_taken dbcc_ccr_preserve_bvc_taken dbcc_ccr_preserve_bvs_taken dbcc_ccr_preserve_bhi_taken dbcc_ccr_preserve_bls_taken dbcc_ccr_preserve_bge_taken dbcc_ccr_preserve_blt_taken dbcc_ccr_preserve_bgt_taken dbcc_ccr_preserve_ble_taken dbvc_loop_v_set dbvs_loop_v_clear dbvc_not_taken_v_clear dbvs_not_taken_v_set dbne_loop_z_set dbeq_loop_z_clear dbeq_x_clobber moveq_edges alu_negative_roundtrip imm_logic_word_highbit branch_chain_z_clear branch_chain_carry_set branch_chain_overflow_set scc_ccr_preserve_bvs_taken dbra_four_iter scc_ccr_preserve_bvc_taken scc_ccr_preserve_bhi_taken scc_ccr_preserve_bls_taken dbra_five_iter branch_chain_eq_then_ne branch_chain_carry_clear imm_logic_long_highbit dbra_six_iter not_sizes not_word_preserve_upper not_byte_preserve_upper scc_ccr_preserve_bpl_taken scc_ccr_preserve_bmi_taken scc_ccr_preserve_bge_taken scc_ccr_preserve_bgt_taken scc_ccr_preserve_ble_taken nop_triplet roxl_x_propagation roxr_x_propagation roxl_count_2 asl_overflow lsr_count_32 asr_count_0 ror_word rol_word btst_reg_high_bit muls_neg_neg muls_zero divs_neg_neg divs_overflow abcd_basic sbcd_basic negx_with_x negx_zero addx_basic subx_basic ext_word ext_long move_to_mem_and_back movem_predec_postinc movem_no_writeback movem_predec_mixed_order addx_chain flag_chain_xzn shift_chain roxl_reg_count_32 roxl_reg_count_33 roxr_reg_count_33 roxr_reg_count_32 roxr_reg_count_0 roxl_reg_count_63 roxr_reg_count_63 roxr_roxl_chain_x roxl_lsr_chain_x mulu_large divu_remainder abcd_with_carry nbcd_basic bsr_rts link_unlk indexed_addr_mode indexed_full_neg_base io_byte_write_roundtrip byte_postinc cmpm_equal move_sr_roundtrip dbra_loop_100 dbne_loop_cmpi bsr_in_dbra_loop table_lookup dbra_loop_1000 swap_pack lea_scaled_index multi_branch andi_l_dn eor_self asl_w_vflag asl_b_overflow lsr_w_regcount asr_w_preserve movem_w_signext cmpm_l_equal cmpm_b_unequal addx_64bit subx_64bit muls_boundary divu_max_quotient move_b_preserve_flags byte_logic_chain bchg_imm_high neg_w_partial clr_b_tst all_regs_alive scaled_index_word byte_indexed_load indexed_store_load addq_subq_sizes x_flag_chain sub_w_subx_chain exg_dn_an push_pop_a0 dbeq_loop_50 dbmi_loop_neg lsl_l_count0 asr_l_8_neg rol_l_16 lsl_b_7 asr_b_1_sign move_b_flags move_w_zero add_l_an_dn sub_w_dn_an cmp_b cmp_w ori_w_mem andi_b_mem link_neg16 mulu_max divs_neg_rem negx_64bit cmpi_l_abs_short_eq cmpi_l_abs_short_ne cmpi_bne_w_not_taken cmpi_bne_w_taken cmpi_b_abs_short_blt movem_save_modify_restore bsr_l_long jmp_d8_pc_dn_w pea_movem_stack subq_sp_movea_write tst_bne_after_bsr_rts tst_bne_after_jsr_an save_clear_slot_restore_tst movec_cacr_roundtrip cache_init_sequence move_l_neg_disp_a5 sr_barrier_cache_init divs_word_hardfail divu_word_hardfail mull_32_hardfail divl_32_hardfail aslw_mem_hardfail lsrw_mem_hardfail rolw_mem_hardfail ori_sr_hardfail andi_sr_hardfail eori_sr_hardfail move_from_sr_hardfail move_to_sr_hardfail divs_neg_by_neg_edge divs_by_minus_one_edge divs_zero_dividend_edge divs_overflow_edge divu_exact_edge divu_with_remainder_edge divu_overflow_edge mull_unsigned_32 mull_signed_32 divl_unsigned_32 divl_signed_32 asrw_mem_edge roxlw_mem_edge roxrw_mem_edge abcd_99_plus_01_edge sbcd_with_x_edge nbcd_99_edge bfextu_reg_edge bfexts_reg_edge bfffo_reg_edge bfset_reg_edge bfclr_reg_edge bfchg_reg_edge bftst_reg_edge bfins_reg_edge pack_dn_edge unpk_dn_edge movep_l_roundtrip sr_ops_combo moves_write_read adda_w_cov adda_l_cov adda_w_neg_cov eori_ccr_cov rtr_cov mvr2usp_cov move_b_d16_an_cov move_w_d16_an_cov move_l_d16_an_cov move_b_idx_cov move_l_idx_scale_cov move_l_pc_rel_cov move_l_abs_w_cov move_l_abs_l_cov predec_postinc_cov imm_to_mem_b_cov imm_to_mem_w_cov imm_to_mem_l_cov add_b_overflow_cov sub_w_borrow_cov cmp_l_equal_cov and_l_zero_cov or_l_allones_cov eor_self_cov neg_b_overflow_cov not_b_cov odd_addr_cov a7_byte_postinc_cov fuzz_alu_0 fuzz_shift_0 fuzz_bitops_0 fuzz_muldiv_0 fuzz_extswap_0 fuzz_addxsubx_0 fuzz_memrt_0 fuzz_exg_0 fuzz_mixed_0 fuzz_flags_0 fuzz_alu_1 fuzz_shift_1 fuzz_bitops_1 fuzz_muldiv_1 fuzz_extswap_1 fuzz_addxsubx_1 fuzz_memrt_1 fuzz_exg_1 fuzz_mixed_1 fuzz_flags_1 fuzz_alu_2 fuzz_shift_2 fuzz_bitops_2 fuzz_muldiv_2 fuzz_extswap_2 fuzz_addxsubx_2 fuzz_memrt_2 fuzz_exg_2 fuzz_mixed_2 fuzz_flags_2 fuzz_alu_3 fuzz_shift_3 fuzz_bitops_3 fuzz_muldiv_3 fuzz_extswap_3 fuzz_addxsubx_3 fuzz_memrt_3 fuzz_exg_3 fuzz_mixed_3 fuzz_flags_3 fuzz_alu_4 fuzz_shift_4 fuzz_bitops_4 fuzz_muldiv_4 fuzz_extswap_4 fuzz_addxsubx_4 fuzz_memrt_4 fuzz_exg_4 fuzz_mixed_4 fuzz_flags_4 chk_w_in_range chk_w_zero chk_w_equal sbcd_borrow_chain sbcd_zero_zero nbcd_zero_no_x nbcd_with_x bfins_low8 bfins_mid8 movec_vbr_roundtrip movec_sfc_roundtrip movec_dfc_roundtrip mull_u64 mull_s32_neg divl_u32_rem divl_s32_neg divl_u32_max divl_s32_neg_divisor mull_s64_neg divl_same_dq_dr divl_u64 divl_s64 bfins_dreg_imm bfins_dreg_narrow bfins_dreg_wrap bfins_dreg_dyn bfins_dreg_dyn_width32 bfins_mem_span32 bfins_mem_dyn_negative bfins_dreg_boot_alias bfins_mem_dyn_neg_width32 bfins_mem_dyn_pos_width32 oracle_zf_moveq_z1_take oracle_zf_moveq_z0_notake oracle_zf_moveq_z0_take oracle_zf_moveq_z1_notake oracle_zf_tst_z1_take oracle_zf_tst_z0_notake oracle_zf_move_z1_take oracle_zf_move_z0_notake oracle_zf_and_z1_take oracle_zf_and_z0_notake oracle_zf_sub_z1_take oracle_zf_sub_z0_notake oracle_zf_bne_z1_take oracle_zf_bne_z0_notake oracle_zf_mem_take oracle_zf_mem_notake oracle_zf_dbf_preserve_take)
+declare -a TEST_ORDER=(nop move moveq_signext alu alu_overflow addi_subi_long addi_subi_long_wrap addi_subi_word addi_subi_word_wrap addi_subi_byte addi_subi_byte_wrap shift bitops bitops_chg bitops_highbit bitops_chg_highbit btst_b_d16_highbit branch branch_chain compare compare_negative cmpi_sizes cmpi_sizes_zero cmpi_byte_negative cmpi_word_negative cmpi_long_negative cmpi_beq_taken muldiv movem misc clr_sizes clr_byte_preserve_upper clr_word_preserve_upper neg_sizes neg_zero_sizes swap_roundtrip flags flags_eori_ccr exg exg_roundtrip imm_logic imm_logic_alt imm_logic_byte_highbit imm_logic_word imm_logic_long imm_logic_long_alt tst_sizes tst_zero tst_positive bra_taken bra_w_taken bne_not_taken bne_taken bne_w_not_taken bne_w_taken beq_taken beq_not_taken beq_w_taken beq_w_not_taken bpl_taken bpl_not_taken bpl_w_taken bpl_w_not_taken bmi_taken bmi_not_taken bmi_w_taken bmi_w_not_taken bvc_taken bvc_not_taken_overflow bvc_w_taken bvc_w_not_taken_overflow bvs_taken_overflow bvs_not_taken bvs_w_taken_overflow bvs_w_not_taken bge_taken bge_not_taken bge_w_taken bge_w_not_taken blt_taken blt_not_taken blt_w_taken blt_w_not_taken bgt_taken bgt_not_taken bgt_w_taken bgt_w_not_taken ble_taken ble_not_taken ble_w_taken ble_w_not_taken bcc_taken bcc_not_taken bcc_w_taken bcc_w_not_taken bcs_taken bcs_not_taken bcs_w_taken bcs_w_not_taken bhi_taken bhi_not_taken bhi_w_taken bhi_w_not_taken bls_taken bls_not_taken bls_w_taken bls_w_not_taken scc_basic scc_eq_ne scc_carry scc_hi_ls scc_hi_ls_z scc_vc_vs scc_pl_mi scc_ge_lt scc_gt_le scc_ccr_preserve_blt scc_ccr_preserve_bcs scc_ccr_preserve_bne_not_taken scc_ccr_preserve_beq_taken quick_ops quick_ops_long_neg_roundtrip quick_ops_word quick_ops_word_wrap quick_ops_long_wrap quick_ops_byte quick_ops_byte_wrap quick_ops_addr dbra dbra_not_taken dbra_start_minus1_branch dbra_start_8000_branch dbt_true_not_taken dbra_three_iter dbcc_loop_c_set dbcs_not_taken_c_set dbpl_loop_n_set dbmi_not_taken_n_set dbhi_not_taken_hi_set dbls_not_taken_ls_set dbge_not_taken_n_eq_v dblt_not_taken_n_ne_v dbgt_not_taken_gt_set dble_not_taken_le_set dbhi_false_dec_terminal_ls_set dbls_false_dec_terminal_hi_set dbge_false_dec_terminal_n_ne_v dblt_false_dec_terminal_n_eq_v dbgt_false_dec_terminal_z_set dble_false_dec_terminal_gt_set dbcc_ccr_preserve_beq_taken dbra_ccr_preserve_z_clear dbra_ccr_preserve_z_set dbcc_ccr_preserve_bne_taken dbcc_ccr_preserve_bcs_taken dbcc_ccr_preserve_bvc_taken dbcc_ccr_preserve_bvs_taken dbcc_ccr_preserve_bhi_taken dbcc_ccr_preserve_bls_taken dbcc_ccr_preserve_bge_taken dbcc_ccr_preserve_blt_taken dbcc_ccr_preserve_bgt_taken dbcc_ccr_preserve_ble_taken dbvc_loop_v_set dbvs_loop_v_clear dbvc_not_taken_v_clear dbvs_not_taken_v_set dbne_loop_z_set dbeq_loop_z_clear dbeq_x_clobber moveq_edges alu_negative_roundtrip imm_logic_word_highbit branch_chain_z_clear branch_chain_carry_set branch_chain_overflow_set scc_ccr_preserve_bvs_taken dbra_four_iter scc_ccr_preserve_bvc_taken scc_ccr_preserve_bhi_taken scc_ccr_preserve_bls_taken dbra_five_iter branch_chain_eq_then_ne branch_chain_carry_clear branch_flush_bgt_zero imm_logic_long_highbit dbra_six_iter not_sizes not_word_preserve_upper not_byte_preserve_upper scc_ccr_preserve_bpl_taken scc_ccr_preserve_bmi_taken scc_ccr_preserve_bge_taken scc_ccr_preserve_bgt_taken scc_ccr_preserve_ble_taken nop_triplet roxl_x_propagation roxr_x_propagation roxl_count_2 asl_overflow lsr_count_32 asr_count_0 ror_word rol_word btst_reg_high_bit muls_neg_neg muls_zero divs_neg_neg divs_overflow abcd_basic sbcd_basic negx_with_x negx_zero addx_basic subx_basic ext_word ext_long move_to_mem_and_back movem_predec_postinc movem_no_writeback movem_predec_mixed_order addx_chain flag_chain_xzn shift_chain roxl_reg_count_32 roxl_reg_count_33 roxr_reg_count_33 roxr_reg_count_32 roxr_reg_count_0 roxl_reg_count_63 roxr_reg_count_63 roxr_roxl_chain_x roxl_lsr_chain_x mulu_large divu_remainder abcd_with_carry nbcd_basic bsr_rts link_unlk indexed_addr_mode indexed_full_neg_base io_byte_write_roundtrip strict_zero_ram_native host_code_reuse_coherence cache_disabled_selfmod_replay byte_postinc cmpm_equal move_sr_roundtrip dbra_loop_100 dbne_loop_cmpi bsr_in_dbra_loop table_lookup dbra_loop_1000 swap_pack lea_scaled_index multi_branch andi_l_dn eor_self asl_w_vflag asl_b_overflow lsr_w_regcount asr_w_preserve movem_w_signext cmpm_l_equal cmpm_b_unequal addx_64bit subx_64bit muls_boundary divu_max_quotient move_b_preserve_flags byte_logic_chain bchg_imm_high neg_w_partial clr_b_tst all_regs_alive scaled_index_word byte_indexed_load indexed_store_load addq_subq_sizes x_flag_chain sub_w_subx_chain exg_dn_an push_pop_a0 dbeq_loop_50 dbmi_loop_neg lsl_l_count0 asr_l_8_neg rol_l_16 lsl_b_7 asr_b_1_sign move_b_flags move_w_zero add_l_an_dn sub_w_dn_an cmp_b cmp_w ori_w_mem andi_b_mem link_neg16 mulu_max divs_neg_rem negx_64bit cmpi_l_abs_short_eq cmpi_l_abs_short_ne cmpi_bne_w_not_taken cmpi_bne_w_taken cmpi_b_abs_short_blt movem_save_modify_restore bsr_l_long jmp_d8_pc_dn_w pea_movem_stack subq_sp_movea_write tst_bne_after_bsr_rts tst_bne_after_jsr_an save_clear_slot_restore_tst movea_l_sp_postinc_cov movea_l_postinc_alias movec_cacr_roundtrip cache_init_sequence move_l_neg_disp_a5 sr_barrier_cache_init divs_word_hardfail divu_word_hardfail mull_32_hardfail divl_32_hardfail aslw_mem_hardfail lsrw_mem_hardfail rolw_mem_hardfail ori_sr_hardfail andi_sr_hardfail eori_sr_hardfail move_from_sr_hardfail move_to_sr_hardfail divs_neg_by_neg_edge divs_by_minus_one_edge divs_zero_dividend_edge divs_overflow_edge divu_exact_edge divu_with_remainder_edge divu_overflow_edge mull_unsigned_32 mull_signed_32 divl_unsigned_32 divl_signed_32 asrw_mem_edge roxlw_mem_edge roxrw_mem_edge abcd_99_plus_01_edge sbcd_with_x_edge nbcd_99_edge bfextu_reg_edge bfexts_reg_edge bfffo_reg_edge bfset_reg_edge bfclr_reg_edge bfchg_reg_edge bftst_reg_edge bfins_reg_edge pack_dn_edge pack_predec_a7_alias unpk_dn_edge unpk_predec_a7_alias chk2_w_equal_preserve_ccr chk2_b_areg_fullwidth_d16 chk2_l_wrapped_absl chk2_w_trap_vector6 chk2_w_indexed_inrange chk2_l_fullindexed_inrange chk2_w_pcrel_inrange movep_l_roundtrip sr_ops_combo moves_write_read moves_b_postinc_areg_alias moves_privilege_vector8 fdbcc_false_decrement_branch ftrapcc_true_vector7 ftrapcc_false_operand_lengths cas2_w_success cas2_w_fail_first cas2_w_fail_second cas2_l_success cas2_l_fail_second cas2_l_alias_compare adda_w_cov adda_l_cov adda_w_neg_cov eori_ccr_cov rtr_cov mvr2usp_cov move_b_d16_an_cov move_w_d16_an_cov move_l_d16_an_cov move_l_idx_absw_native move_b_idx_cov move_l_idx_scale_cov move_l_pc_rel_cov move_l_abs_w_cov move_l_abs_l_cov predec_postinc_cov imm_to_mem_b_cov imm_to_mem_w_cov imm_to_mem_l_cov add_b_overflow_cov sub_w_borrow_cov cmp_l_equal_cov and_l_zero_cov or_l_allones_cov eor_self_cov neg_b_overflow_cov not_b_cov odd_addr_cov a7_byte_postinc_cov fuzz_alu_0 fuzz_shift_0 fuzz_bitops_0 fuzz_muldiv_0 fuzz_extswap_0 fuzz_addxsubx_0 fuzz_memrt_0 fuzz_exg_0 fuzz_mixed_0 fuzz_flags_0 fuzz_alu_1 fuzz_shift_1 fuzz_bitops_1 fuzz_muldiv_1 fuzz_extswap_1 fuzz_addxsubx_1 fuzz_memrt_1 fuzz_exg_1 fuzz_mixed_1 fuzz_flags_1 fuzz_alu_2 fuzz_shift_2 fuzz_bitops_2 fuzz_muldiv_2 fuzz_extswap_2 fuzz_addxsubx_2 fuzz_memrt_2 fuzz_exg_2 fuzz_mixed_2 fuzz_flags_2 fuzz_alu_3 fuzz_shift_3 fuzz_bitops_3 fuzz_muldiv_3 fuzz_extswap_3 fuzz_addxsubx_3 fuzz_memrt_3 fuzz_exg_3 fuzz_mixed_3 fuzz_flags_3 fuzz_alu_4 fuzz_shift_4 fuzz_bitops_4 fuzz_muldiv_4 fuzz_extswap_4 fuzz_addxsubx_4 fuzz_memrt_4 fuzz_exg_4 fuzz_mixed_4 fuzz_flags_4 chk_w_in_range chk_w_zero chk_w_equal sbcd_borrow_chain sbcd_zero_zero nbcd_zero_no_x nbcd_with_x bfins_low8 bfins_mid8 movec_vbr_roundtrip movec_sfc_roundtrip movec_dfc_roundtrip mull_u64 mull_s32_neg divl_u32_rem divl_s32_neg divl_u32_max divl_s32_neg_divisor mull_s64_neg divl_same_dq_dr divl_u64 divl_s64 bfins_dreg_imm bfins_dreg_narrow bfins_dreg_wrap bfins_dreg_dyn bfins_dreg_dyn_width32 bfins_mem_span32 bfins_mem_dyn_negative bfins_dreg_boot_alias bfins_mem_dyn_neg_width32 bfins_mem_dyn_pos_width32 oracle_zf_moveq_z1_take oracle_zf_moveq_z0_notake oracle_zf_moveq_z0_take oracle_zf_moveq_z1_notake oracle_zf_tst_z1_take oracle_zf_tst_z0_notake oracle_zf_move_z1_take oracle_zf_move_z0_notake oracle_zf_and_z1_take oracle_zf_and_z0_notake oracle_zf_sub_z1_take oracle_zf_sub_z0_notake oracle_zf_bne_z1_take oracle_zf_bne_z0_notake oracle_zf_mem_take oracle_zf_mem_notake oracle_zf_dbf_preserve_take)
+# FPU semantic-service vectors are appended independently so additions remain
+# reviewable without rewriting the generated-style master ordering above.
+TEST_ORDER+=(fpp_semantic_successor fscc_false_byte fbcc_false_operand_lengths)
+
 declare -A TESTS
+declare -A EXPECTED_D0
 # Tests in this set run twice from reset architectural state. The JIT pass
 # forces immediate RAM L2 promotion, so pass two proves native execution rather
 # than merely proving that the tracer/interpreter can compile the block.
 declare -A NATIVE_REPLAY_TESTS=(
     [io_byte_write_roundtrip]=1
+    [btst_b_d16_highbit]=1
+    [move_to_mem_and_back]=1
+    [move_l_d16_an_cov]=1
+    [move_l_idx_absw_native]=1
+    [strict_zero_ram_native]=1
+    [host_code_reuse_coherence]=1
+    [cache_disabled_selfmod_replay]=1
+    [fpp_semantic_successor]=1
+    [fscc_false_byte]=1
+    [fbcc_false_operand_lengths]=1
+    [cas2_w_success]=1
+    [cas2_w_fail_first]=1
+    [cas2_w_fail_second]=1
+    [cas2_l_success]=1
+    [cas2_l_fail_second]=1
+    [cas2_l_alias_compare]=1
+    [pack_dn_edge]=1
+    [pack_predec_a7_alias]=1
+    [unpk_dn_edge]=1
+    [unpk_predec_a7_alias]=1
+    [chk2_w_equal_preserve_ccr]=1
+    [chk2_b_areg_fullwidth_d16]=1
+    [chk2_l_wrapped_absl]=1
+    [chk2_w_trap_vector6]=1
+    [chk2_w_indexed_inrange]=1
+    [chk2_l_fullindexed_inrange]=1
+    [chk2_w_pcrel_inrange]=1
+    [movep_l_roundtrip]=1
+    [movea_l_sp_postinc_cov]=1
+    [movea_l_postinc_alias]=1
+    [branch_flush_bgt_zero]=1
+    [dbra_ccr_preserve_z_clear]=1
+    [dbra_ccr_preserve_z_set]=1
 )
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
+# Strict-mode zero RAM must be traced once, compiled at L2, and replayed
+# natively. Each 0000 0000 pair is ORI.B #0,D0.
+TESTS[strict_zero_ram_native]="0000 0000 0000 0000"
+# Pass one caches MOVEQ #1 at a host-injected RAM address. The harness then
+# rewrites that same address to MOVEQ #2; pass two must retrace it and pass three
+# must execute the replacement natively rather than replaying stale code.
+TESTS[host_code_reuse_coherence]="7001"
+EXPECTED_D0[host_code_reuse_coherence]="00000002"
+# Pass one rewrites the mutable body into a stable BRA.W to a MOVEQ #9 target,
+# invalidating the traced block. Pass two retraces the rewritten stream without
+# further stores. Pass three must retire the stable stream natively and yield 9;
+# stale code, missed invalidation, or an interpreter-only replay cannot pass.
+TESTS[cache_disabled_selfmod_replay]="6000 003C 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 7007 31FC 7009 1060 31FC 6000 1040 31FC 001C 1042 4EF8 1060 4E71 4E71 4E71 4E71 7001"
+EXPECTED_D0[cache_disabled_selfmod_replay]="00000009"
+# Runtime helper register-field decode: 205f is MOVEA.L (A7)+,A0. A second
+# native pass must load A0 and restore A7, never byte-swap it into (A0)+,A7.
+TESTS[movea_l_sp_postinc_cov]="2F3C 1234 5678 205F"
+# MOVEA.L (A0)+,A0: destination assignment wins over source postincrement.
+# This must be generated natively rather than hidden behind a runtime override.
+TESTS[movea_l_postinc_alias]="207C 0000 9000 20BC 1234 5678 2058"
+# ADD.L yields zero; BGT must remain not-taken after end-of-block canonical
+# register writeback and branch finalisation reload the architectural NZCV.
+TESTS[branch_flush_bgt_zero]="700C 72F4 D280 6E04 7401 6002 7402"
 # NOP_TRIPLET: additional decode/dispatch stream-length sanity for repeated NOPs
 TESTS[nop_triplet]="4E71 4E71 4E71"
 # --- HIGH-RISK OPCODE VECTORS ---
@@ -284,6 +387,9 @@ TESTS[rol_word]="203C FFFF 8001 E358"
 # Register BTST uses bit mod 32, so bit 31 should test set → Z=0
 # MOVEQ #31,D1 = 721F; MOVE.L #0x80000000,D0 = 203C 8000 0000; BTST D1,D0 = 0300
 TESTS[btst_reg_high_bit]="721F 203C 8000 0000 0300"
+# Native byte-EA path: BTST #7,(d16,A0) must use the shared readbyte primitive,
+# preserve X/N/V/C, and clear Z for a set high bit.
+TESTS[btst_b_d16_highbit]="207C 0000 9000 10BC 0080 44FC 001B 0828 0007 0000 40C1"
 # MULS_NEG_NEG: MOVEQ #-3,D0 (0xFFFFFFFD); MOVEQ #-5,D1 (0xFFFFFFFB); MULS D1,D0
 # (-3)*(-5) = 15, result in D0.L
 # MOVEQ #-3,D0 = 70FD; MOVEQ #-5,D1 = 72FB; MULS D1,D0 = C1C1
@@ -796,6 +902,11 @@ TESTS[dbgt_false_dec_terminal_z_set]="7000 B080 5EC8 0002 7407"
 TESTS[dble_false_dec_terminal_gt_set]="7000 7201 0C81 0000 0000 5FC8 0002 7407"
 # DBCC_CCR_PRESERVE_BEQ_TAKEN: DBEQ (condition true) should not clobber Z; subsequent BEQ must remain taken
 TESTS[dbcc_ccr_preserve_beq_taken]="7001 B080 57C8 0002 6702 7207 7408"
+# DBRA's host-only terminal test must not replace a preceding architectural Z.
+# Counter zero makes the temporary TST set Z while MOVEQ #9 left guest Z clear.
+TESTS[dbra_ccr_preserve_z_clear]="7200 7009 51C9 0002 6602 7407 7608"
+# Counter nonzero makes the temporary TST clear Z while MOVEQ #0 left guest Z set.
+TESTS[dbra_ccr_preserve_z_set]="7201 7000 51C9 0002 6702 7407 7608"
 # DBCC_CCR_PRESERVE_BNE_TAKEN: DBNE (condition true) should not clobber Z=0; subsequent BNE must remain taken
 TESTS[dbcc_ccr_preserve_bne_taken]="7001 7201 0C81 0000 0002 56C8 0002 6602 7407 7608"
 # DBCC_CCR_PRESERVE_BCS_TAKEN: DBCS (condition true) should not clobber C=1; subsequent BCS must remain taken
@@ -999,10 +1110,69 @@ TESTS[bfchg_reg_edge]="203C FF00 FF00 EAC0 0208"
 TESTS[bftst_reg_edge]="203C 8000 0000 E8C0 0008"
 TESTS[bfins_reg_edge]="7042 203C FFFF 0000 EFC0 0200"
 TESTS[pack_dn_edge]="203C 0000 1234 8140 0000"
+# PACK -(A7),-(A7) exercises A7's two-byte byte-step, source/destination
+# register aliasing, independent source reads, and ordered dual writeback.
+TESTS[pack_predec_a7_alias]="207C 0000 9204 20BC 1200 3400 2E7C 0000 9208 8F4F 0000 7000 1017"
 TESTS[unpk_dn_edge]="203C 0000 0012 8180 0000"
+# UNPK -(A7),-(A7) has a two-byte source decrement and an additional
+# two-byte destination decrement when both encoded operands alias A7.
+TESTS[unpk_predec_a7_alias]="207C 0000 9306 20BC 1200 0000 2E7C 0000 9308 8F8F 0000 7000 3017"
+# CHK2.W equality sets Z, clears C, and must preserve the seeded X/N/V bits.
+TESTS[chk2_w_equal_preserve_ccr]="207C 0000 9400 20BC FFF6 000A 700A 44FC 001A 02D0 0000 40C1"
+# CHK2.B with an address-register selector must compare all 32 bits, while the
+# adjacent byte bounds are sign-extended; d16 also checks EA extension order.
+TESTS[chk2_b_areg_fullwidth_d16]="247C 0000 9504 34BC 807F 207C 0000 9500 227C 1000 0050 44FC 001A 00E8 9000 0004 40C2"
+# Reversed long bounds use CHK2's wrapped-range rule; equality with the lower
+# bound deliberately leaves both Z and C set. Absolute-long covers a distinct EA.
+TESTS[chk2_l_wrapped_absl]="207C 0000 9600 20FC 0000 0064 20BC FFFF FF9C 7064 44FC 001A 04F9 0000 0000 9600 40C1"
+# Install a local vector-6 handler, request CHK2 trapping, and make the handler
+# the sole path that sets D7=$66 before joining the harness sentinel.
+TESTS[chk2_w_trap_vector6]="7000 4E7B 0801 23FC 0000 102A 0000 0018 207C 0000 9700 20BC 0000 000A 7014 44FC 001A 02D0 0800 60FE 4E71 7E66"
+# Brief indexed CHK2.W reaches an interior value and clears Z/C while
+# preserving seeded X/N/V; D1.W participates in effective-address formation.
+TESTS[chk2_w_indexed_inrange]="207C 0000 9900 20BC FFF6 000A 207C 0000 98F0 223C 0000 0010 7005 44FC 001A 02F0 0000 1000 40C2"
+# Full-format indexed CHK2.L uses a signed word base displacement before the
+# two ordered long bound reads; -50 lies strictly inside [-100,100].
+TESTS[chk2_l_fullindexed_inrange]="207C 0000 9A00 20FC FFFF FF9C 20BC 0000 0064 207C 0000 9A10 7200 203C FFFF FFCE 44FC 001A 04F0 0000 1920 FFF0 40C2"
+# PC-relative CHK2.W resolves its d16 base from opcode+4, reads inline bounds,
+# and rejoins before a branch skips the embedded data.
+TESTS[chk2_w_pcrel_inrange]="7005 44FC 001A 02FA 0000 000A 40C1 6008 4E71 4E71 FFF6 000A"
 TESTS[movep_l_roundtrip]="41F9 0000 9100 203C 1234 5678 01C8 0000 1210 1428 0002 1628 0004 1828 0006"
 TESTS[sr_ops_combo]="46FC 2700 007C 0010 027C F7FF 0A7C 0004 40C0"
 TESTS[moves_write_read]="41F9 0000 A000 203C DEAD BEEF 0E90 0800 2010"
+# MOVES.B (A0)+,A0 reads before postincrement and then lets the aliased
+# address-register destination win; byte loads into An are sign-extended.
+TESTS[moves_b_postinc_areg_alias]="207C 0000 9800 10BC 0080 0E18 8000 2008"
+# MOVES must privilege-trap before consuming the extension or touching memory.
+# Vector 8 is the sole route from the MOVES instruction to D7=$68 and sentinel.
+TESTS[moves_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0000 0E90 0800 60FE 4E71 7E68"
+# FDBF decrements only D0.W, preserves its upper word, and branches relative
+# to the displacement-word PC while the postdecrement value is not -1.
+TESTS[fdbcc_false_decrement_branch]="203C 1234 0001 F248 0000 0008 7201 6004 7202"
+# FTRAPT without an optional operand must deliver vector 7 with the opcode PC;
+# the installed handler is the sole route past the local spin to D7=$67.
+TESTS[ftrapcc_true_vector7]="7000 4E7B 0801 23FC 0000 1018 0000 001C F27C 000F 60FE 4E71 7E67"
+# False FTRAPcc.W/L forms still fetch and skip their optional word/long
+# operands before execution continues at the exact architectural successor.
+TESTS[ftrapcc_false_operand_lengths]="F27A 0000 DEAD F27B 0000 DEAD BEEF 7005"
+# General FPP execution consumes its extension word and performs the canonical
+# arithmetic service before control resumes at the exact successor.
+TESTS[fpp_semantic_successor]="7001 F200 0000 7005"
+# FSF writes a false condition byte through the canonical FPU condition path
+# while preserving the upper 24 bits of the destination data register.
+TESTS[fscc_false_byte]="70FF F240 0000"
+# False FBcc.W/L forms consume their signed displacement widths and rejoin at
+# the exact successor without allowing either embedded value to become code.
+TESTS[fbcc_false_operand_lengths]="F280 DEAD F2C0 DEAD BEEF 7005"
+# CAS2.W/L semantic boundary: successful dual commit, first/second compare
+# failures, partial-word compare-register updates, and aliased compare fields.
+# Extension words encode Rn1/Du1/Dc1 then Rn2/Du2/Dc2.
+TESTS[cas2_w_success]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 1111 223C BABE 2222 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
+TESTS[cas2_w_fail_first]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 9999 223C DEAD 7777 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
+TESTS[cas2_w_fail_second]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 1111 223C DEAD 7777 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
+TESTS[cas2_l_success]="207C 0000 A100 227C 0000 A104 20BC 1111 2222 22BC 3333 4444 203C 1111 2222 223C 3333 4444 243C 5555 6666 263C 7777 8888 0EFC 8080 90C1 2810 2A11"
+TESTS[cas2_l_fail_second]="207C 0000 A100 227C 0000 A104 20BC 1111 2222 22BC 3333 4444 203C 1111 2222 223C 9999 AAAA 243C 5555 6666 263C 7777 8888 0EFC 8080 90C1 2810 2A11"
+TESTS[cas2_l_alias_compare]="207C 0000 A100 227C 0000 A104 20BC 1111 2222 22BC 3333 4444 203C 1111 2222 223C 5555 6666 243C 7777 8888 0EFC 8040 9080 2810 2A11"
 TESTS[adda_w_cov]="41F9 0000 1000 D0FC 0500"
 TESTS[adda_l_cov]="41F9 0000 1000 D1FC 0000 0500"
 TESTS[adda_w_neg_cov]="41F9 0000 1000 D0FC FF00"
@@ -1012,6 +1182,9 @@ TESTS[mvr2usp_cov]="41F9 0000 1234 4E60 4E69 2009"
 TESTS[move_b_d16_an_cov]="41F9 0000 A000 117C 0042 0010 1028 0010"
 TESTS[move_w_d16_an_cov]="41F9 0000 A000 317C 1234 0010 3028 0010"
 TESTS[move_l_d16_an_cov]="41F9 0000 A000 217C DEAD BEEF 0010 2028 0010"
+# MOVE.L (d8,A0,D1.L),(abs.w): prove the generated indexed source and shared
+# long read/write primitives natively, without the former runtime override.
+TESTS[move_l_idx_absw_native]="207C 0000 9000 223C 0000 0004 217C DEAD BEEF 0004 21F0 1800 A000 2438 A000"
 TESTS[move_b_idx_cov]="41F9 0000 A000 117C 0042 0004 7204 1030 1000"
 TESTS[move_l_idx_scale_cov]="41F9 0000 A000 217C DEAD BEEF 0008 7202 2030 1400"
 TESTS[move_l_pc_rel_cov]="203A 0002 4E71 4E71"
@@ -1345,6 +1518,7 @@ SENTINEL_A6[asr_count_0]="a60100c8"
 SENTINEL_A6[ror_word]="a60100c9"
 SENTINEL_A6[rol_word]="a60100ca"
 SENTINEL_A6[btst_reg_high_bit]="a60100cb"
+SENTINEL_A6[btst_b_d16_highbit]="a6b7d160"
 SENTINEL_A6[muls_neg_neg]="a60100cc"
 SENTINEL_A6[muls_zero]="a60100cd"
 SENTINEL_A6[divs_neg_neg]="a60100ce"
@@ -1382,6 +1556,10 @@ SENTINEL_A6[link_unlk]="a60100e2"
 SENTINEL_A6[indexed_addr_mode]="a60100e3"
 SENTINEL_A6[indexed_full_neg_base]="a6010200"
 SENTINEL_A6[io_byte_write_roundtrip]="a60102ff"
+SENTINEL_A6[strict_zero_ram_native]="a6010300"
+SENTINEL_A6[host_code_reuse_coherence]="a6010303"
+SENTINEL_A6[dbra_ccr_preserve_z_clear]="a6010301"
+SENTINEL_A6[dbra_ccr_preserve_z_set]="a6010302"
 SENTINEL_A6[byte_postinc]="a60100e4"
 SENTINEL_A6[cmpm_equal]="a60100e5"
 SENTINEL_A6[move_sr_roundtrip]="a60100e6"
@@ -1611,10 +1789,33 @@ SENTINEL_A6[bfchg_reg_edge]="a60001d6"
 SENTINEL_A6[bftst_reg_edge]="a60001d7"
 SENTINEL_A6[bfins_reg_edge]="a60001d8"
 SENTINEL_A6[pack_dn_edge]="a60001d9"
+SENTINEL_A6[pack_predec_a7_alias]="a6ca3001"
 SENTINEL_A6[unpk_dn_edge]="a60001da"
+SENTINEL_A6[unpk_predec_a7_alias]="a6ca3002"
+SENTINEL_A6[chk2_w_equal_preserve_ccr]="a6c22001"
+SENTINEL_A6[chk2_b_areg_fullwidth_d16]="a6c22002"
+SENTINEL_A6[chk2_l_wrapped_absl]="a6c22003"
+SENTINEL_A6[chk2_w_trap_vector6]="a6c22004"
+SENTINEL_A6[chk2_w_indexed_inrange]="a6c22005"
+SENTINEL_A6[chk2_l_fullindexed_inrange]="a6c22006"
+SENTINEL_A6[chk2_w_pcrel_inrange]="a6c22007"
 SENTINEL_A6[movep_l_roundtrip]="a60001db"
 SENTINEL_A6[sr_ops_combo]="a60001dc"
 SENTINEL_A6[moves_write_read]="a60001dd"
+SENTINEL_A6[moves_b_postinc_areg_alias]="a6c5e001"
+SENTINEL_A6[moves_privilege_vector8]="a6c5e002"
+SENTINEL_A6[fdbcc_false_decrement_branch]="a6fd8001"
+SENTINEL_A6[ftrapcc_true_vector7]="a6f7a001"
+SENTINEL_A6[ftrapcc_false_operand_lengths]="a6f7a002"
+SENTINEL_A6[fpp_semantic_successor]="a6f20001"
+SENTINEL_A6[fscc_false_byte]="a6f24001"
+SENTINEL_A6[fbcc_false_operand_lengths]="a6f28001"
+SENTINEL_A6[cas2_w_success]="a6ca2001"
+SENTINEL_A6[cas2_w_fail_first]="a6ca2002"
+SENTINEL_A6[cas2_w_fail_second]="a6ca2003"
+SENTINEL_A6[cas2_l_success]="a6ca2004"
+SENTINEL_A6[cas2_l_fail_second]="a6ca2005"
+SENTINEL_A6[cas2_l_alias_compare]="a6ca2006"
 SENTINEL_A6[move_b_flags]="a601012a"
 SENTINEL_A6[move_w_zero]="a601012b"
 SENTINEL_A6[cmpi_l_abs_short_eq]="a6010136"
@@ -1697,6 +1898,7 @@ SENTINEL_A6[mvr2usp_cov]="a60001e5"
 SENTINEL_A6[move_b_d16_an_cov]="a60001e6"
 SENTINEL_A6[move_w_d16_an_cov]="a60001e7"
 SENTINEL_A6[move_l_d16_an_cov]="a60001e8"
+SENTINEL_A6[move_l_idx_absw_native]="a621f0f0"
 SENTINEL_A6[move_b_idx_cov]="a60001e9"
 SENTINEL_A6[move_l_idx_scale_cov]="a60001ea"
 SENTINEL_A6[move_l_pc_rel_cov]="a60001eb"
@@ -1817,10 +2019,19 @@ SENTINEL_A6[fuzz_memrt_4]="a6f02e00"
 SENTINEL_A6[fuzz_exg_4]="a6f02f00"
 SENTINEL_A6[fuzz_mixed_4]="a6f03000"
 SENTINEL_A6[fuzz_flags_4]="a6f03100"
+SENTINEL_A6[cache_disabled_selfmod_replay]="a6c0e001"
+SENTINEL_A6[movea_l_sp_postinc_cov]="a6c0e002"
+SENTINEL_A6[movea_l_postinc_alias]="a62058a0"
+SENTINEL_A6[branch_flush_bgt_zero]="a6c0e003"
 
 # Risk-focused subset used for strict mismatch-first autoresearch.
 # Only these vectors count toward risky_total progression.
 declare -A RISKY_TESTS=(
+    [host_code_reuse_coherence]=1
+    [cache_disabled_selfmod_replay]=1
+    [movea_l_sp_postinc_cov]=1
+    [movea_l_postinc_alias]=1
+    [branch_flush_bgt_zero]=1
     [roxl_x_propagation]=1
     [roxr_x_propagation]=1
     [roxl_count_2]=1
@@ -1845,6 +2056,9 @@ declare -A RISKY_TESTS=(
     [movem]=1
     [indexed_full_neg_base]=1
     [io_byte_write_roundtrip]=1
+    [strict_zero_ram_native]=1
+    [dbra_ccr_preserve_z_clear]=1
+    [dbra_ccr_preserve_z_set]=1
     [dbra]=1
     [dbra_not_taken]=1
     [dbra_start_minus1_branch]=1
@@ -1888,6 +2102,8 @@ declare -A RISKY_TESTS=(
     [dbne_loop_z_set]=1
     [dbeq_loop_z_clear]=1
     [btst_reg_high_bit]=1
+    [btst_b_d16_highbit]=1
+    [move_to_mem_and_back]=1
     [bitops_highbit]=1
     [bitops_chg_highbit]=1
     [flags]=1
@@ -2019,10 +2235,33 @@ declare -A RISKY_TESTS=(
     [bftst_reg_edge]=1
     [bfins_reg_edge]=1
     [pack_dn_edge]=1
+    [pack_predec_a7_alias]=1
     [unpk_dn_edge]=1
+    [unpk_predec_a7_alias]=1
+    [chk2_w_equal_preserve_ccr]=1
+    [chk2_b_areg_fullwidth_d16]=1
+    [chk2_l_wrapped_absl]=1
+    [chk2_w_trap_vector6]=1
+    [chk2_w_indexed_inrange]=1
+    [chk2_l_fullindexed_inrange]=1
+    [chk2_w_pcrel_inrange]=1
     [movep_l_roundtrip]=1
     [sr_ops_combo]=1
     [moves_write_read]=1
+    [moves_b_postinc_areg_alias]=1
+    [moves_privilege_vector8]=1
+    [fdbcc_false_decrement_branch]=1
+    [ftrapcc_true_vector7]=1
+    [ftrapcc_false_operand_lengths]=1
+    [fpp_semantic_successor]=1
+    [fscc_false_byte]=1
+    [fbcc_false_operand_lengths]=1
+    [cas2_w_success]=1
+    [cas2_w_fail_first]=1
+    [cas2_w_fail_second]=1
+    [cas2_l_success]=1
+    [cas2_l_fail_second]=1
+    [cas2_l_alias_compare]=1
     [adda_w_cov]=1
     [adda_l_cov]=1
     [adda_w_neg_cov]=1
@@ -2032,6 +2271,7 @@ declare -A RISKY_TESTS=(
     [move_b_d16_an_cov]=1
     [move_w_d16_an_cov]=1
     [move_l_d16_an_cov]=1
+    [move_l_idx_absw_native]=1
     [move_b_idx_cov]=1
     [move_l_idx_scale_cov]=1
     [move_l_pc_rel_cov]=1

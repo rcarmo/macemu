@@ -944,19 +944,28 @@ genmovemle (uae_u16 opcode)
 #endif
 #endif
 #if defined(CPU_AARCH64)
-    if (table68k[opcode].dmode!=Apdi) {
+    const char *movem_dsta = "srca";
+    if (table68k[opcode].dmode != Apdi) {
+        /* Control addressing modes do not write their walked EA back. In the
+         * plain (An) form genamode aliases srca directly to architectural An;
+         * incrementing srca while emitting each element therefore corrupted An
+         * as if MOVEM used postincrement. Always walk a private EA for every
+         * non-predecrement form, independent of genamode's storage choice. */
+        comprintf("\tint movem_dsta=scratchie++;\n"
+                  "\tmov_l_rr(movem_dsta,srca);\n");
+        movem_dsta = "movem_dsta";
         comprintf("\tfor (i=0;i<16;i++) {\n"
                   "\t\tif ((mask>>i)&1) {\n");
         switch(table68k[opcode].size) {
          case sz_long:
             comprintf("\t\t\tmov_l_rr(tmp,i);\n"
-                      "\t\t\twritelong(srca,tmp,scratchie);\n"
-                      "\t\t\tadd_l_ri(srca,4);\n");
+                      "\t\t\twritelong(%s,tmp,scratchie);\n"
+                      "\t\t\tadd_l_ri(%s,4);\n", movem_dsta, movem_dsta);
             break;
          case sz_word:
             comprintf("\t\t\tmov_l_rr(tmp,i);\n"
-                      "\t\t\twriteword(srca,tmp,scratchie);\n"
-                      "\t\t\tadd_l_ri(srca,2);\n");
+                      "\t\t\twriteword(%s,tmp,scratchie);\n"
+                      "\t\t\tadd_l_ri(%s,2);\n", movem_dsta, movem_dsta);
             break;
          default: assert(0);
         }
@@ -1892,15 +1901,40 @@ gen_opcode (unsigned int opcode)
 	 * weird things... */
 
      case i_MVPRM:
-	/* MOVEP: rare peripheral I/O — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* MOVEP Dn,(d16,An): keep the four byte-lane writes in one explicit
+	   semantic helper.  The displacement is part of the compiled instruction;
+	   the register fields remain runtime values for canonical propagation. */
+	isjump;
+	comprintf("\tuae_s16 movep_disp = %s;\n", gen_nextiword());
+	comprintf("\t{ int movep_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(movep_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)movep_disp << 16));\n",
+	    curi->size == sz_long ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, movep_enc); }\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_mvprm);\n");
+#else
 	isjump;
 	failure;
+#endif
 	break;
 
      case i_MVPMR:
-	/* MOVEP: rare peripheral I/O — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* MOVEP (d16,An),Dn: byte-interleaved reads are likewise one classified
+	   helper operation rather than an opcode-table fallback. */
+	isjump;
+	comprintf("\tuae_s16 movep_disp = %s;\n", gen_nextiword());
+	comprintf("\t{ int movep_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(movep_enc, (srcreg & 7) | ((dstreg & 7) << 3) | %u | ((uae_u32)(uae_u16)movep_disp << 16));\n",
+	    curi->size == sz_long ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, movep_enc); }\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_mvpmr);\n");
+#else
 	isjump;
 	failure;
+#endif
 	break;
 
      case i_MOVE:
@@ -2436,6 +2470,10 @@ gen_opcode (unsigned int opcode)
 	       later iteration with the opposite outcome. */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	    comprintf("\tmov_l_rr(nsrc,src);\n");
+	    /* DBF's terminal TST is host-only control plumbing. Save the live
+	       architectural CCR produced by any preceding instruction before that
+	       TST overwrites NZCV, then discard the temporary branch flags below. */
+	    comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	    comprintf("\tdbf_dec_test_ne_w(src);\n");
 #else
 	    {
@@ -2657,8 +2695,26 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_CHK2:
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* CHK2 compares a register against two adjacent signed bounds.  Keep
+	   extension decoding and EA formation in generated code, but perform the
+	   ordered pair of memory reads and the partial-CCR update in one semantic
+	   helper.  The helper publishes a deferred vector-6 request through
+	   jit_exception; ending the block gives the dispatcher the same precise
+	   instruction boundary as native CHK. */
 	isjump;
+	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], dsta);\n");
+	comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[1], extra);\n");
+	comprintf("\t{ int chk2_size = scratchie++;\n");
+	comprintf("\t  mov_l_ri(chk2_size, %u);\n", curi->size == sz_byte ? 1 : curi->size == sz_word ? 2 : 4);
+	comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[2], chk2_size); }\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_chk2);\n");
+#else
 	failure;
+#endif
 	break;
 
      case i_ASR:
@@ -3341,22 +3397,12 @@ gen_opcode (unsigned int opcode)
 
      case i_DIVL:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Same table68k convention as MULL: 'DIVL.L  #1,s[!Areg]' — the
-	   '#1' immediate-word placeholder for the extra (dq/dr/signed/64-bit
-	   specifier) is in the SOURCE field (curi->smode = imm1), and the
-	   actual divisor EA from the opcode bits is in the DEST field
-	   (curi->dmode). Order: read extra word first (smode), then the EA
-	   (dmode) so any EA extension words follow in the correct stream
-	   position. Variable names must reflect data flow: 'extra' for the
-	   specifier word, 'src' for the divisor fetched from memory.
-
-	   PRIOR BUG: this path used 'src' for the smode immediate and 'extra'
-	   for the dmode memory — inverted relative to the C code that
-	   extracts dq/dr from 'extra' and passes 'src' as the divisor to
-	   jnf_DIVLx*. Result was: dq/dr derived from a memory-loaded long
-	   instead of the architectural specifier word, and the divisor
-	   passed to the helper was actually the specifier word. */
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* DIVL's first extension word is instruction metadata, not a runtime
+	   operand.  genamode(imm1) yields a virtual-register number; using that
+	   number as `extra` selects arbitrary quotient/remainder registers and
+	   signed/64-bit modes.  Consume the extension at code-generation time,
+	   exactly as MULL does, then fetch the divisor through the real EA. */
+	comprintf("\tuae_u16 extra=%s;\n", gen_nextiword());
 	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	comprintf("\tint dq = (extra >> 12) & 7;\n");
 	comprintf("\tint dr = extra & 7;\n");
@@ -3597,13 +3643,36 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_PACK:
-	/* PACK: rare BCD packing — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* PACK has no CCR result, but its predecrement form has observable ordered
+	   reads and address-register updates.  End the block around the helper so
+	   all guest registers are canonical at the memory/fault boundary. */
+	isjump;
+	comprintf("\tuae_s16 pack_adj = %s;\n", gen_nextiword());
+	comprintf("\t{ int pack_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(pack_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)pack_adj << 16));\n",
+	    curi->smode == Apdi ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, pack_enc); }\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_pack);\n");
+#else
 	failure;
+#endif
 	break;
 
      case i_UNPK:
-	/* UNPK: rare BCD packing — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	isjump;
+	comprintf("\tuae_s16 pack_adj = %s;\n", gen_nextiword());
+	comprintf("\t{ int pack_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(pack_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)pack_adj << 16));\n",
+	    curi->smode == Apdi ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, pack_enc); }\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_unpk);\n");
+#else
 	failure;
+#endif
 	break;
 
 	 case i_TAS:

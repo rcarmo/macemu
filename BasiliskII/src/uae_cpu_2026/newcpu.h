@@ -311,6 +311,10 @@ extern void m68k_divl (uae_u32, uae_u32, uae_u16, uaecptr);
 extern void m68k_mull (uae_u32, uae_u32, uae_u16);
 extern void m68k_emulop (uae_u32);
 extern void m68k_emulop_return (void);
+extern void m68k_dispatch_emulop (uae_u32);
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+extern void jit_invalidate_host_code_write (uae_u32 address, uae_u32 size);
+#endif
 extern void m68k_natfeat_id(void);
 extern void m68k_natfeat_call(void);
 extern void init_m68k (void);

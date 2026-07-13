@@ -22,6 +22,7 @@
 #include "timer.h"
 #include "macos_util.h"
 #include "main.h"
+#include "prefs.h"
 #include "cpu_emulation.h"
 
 #ifdef PRECISE_TIMING_POSIX
@@ -71,6 +72,8 @@ static int32 timer_func(void *arg);
 #ifdef PRECISE_TIMING_POSIX
 static pthread_t timer_thread;
 static bool timer_thread_active = false;
+static bool timer_dispatch_poll = false;
+static bool timer_jit_owns = false;
 static volatile bool timer_thread_cancel = false;
 static tm_time_t wakeup_time_max = { 0x7fffffff, 999999999 };
 static tm_time_t wakeup_time = wakeup_time_max;
@@ -217,6 +220,7 @@ static bool timer_thread_init(void)
 		return false;
 
 	// Create thread in running state
+	timer_thread_cancel = false;
 	suspend_count = 0;
 	return (pthread_create(&timer_thread, NULL, timer_func, NULL) == 0);
 }
@@ -280,7 +284,55 @@ void TimerInit(void)
 	pthread_create(&pthread, NULL, &timer_func, NULL);
 #endif
 #ifdef PRECISE_TIMING_POSIX
+	/* Generated code may hold live guest state outside regs while it runs. A
+	   Time Manager thread must therefore never raise InterruptFlags concurrently
+	   with JIT execution. When the JIT owns interrupt scheduling, poll precise
+	   timer expiry at safe dispatcher boundaries instead. Guest-retirement test
+	   mode deliberately freezes host-time Time Manager expiry as well. */
+#ifdef USE_JIT
+	/* TimerInit runs before Init680x0 assigns UseJIT, so use the loaded JIT
+	   preference here rather than the not-yet-initialized runtime flag. */
+	const bool jit_requested = PrefsFindBool("jit");
+	const char *sync_tick_env = getenv("B2_JIT_SYNC_TICKS");
+	const char *retirement_tick_env = getenv("B2_JIT_RETIREMENT_TICK_EVERY");
+	const bool retirement_ticks = retirement_tick_env && *retirement_tick_env &&
+		strtoul(retirement_tick_env, NULL, 0) != 0;
+	const bool jit_dispatcher_owns_ticks = jit_requested &&
+		(retirement_ticks || !(sync_tick_env && sync_tick_env[0] == '0'));
+	if (jit_dispatcher_owns_ticks) {
+		timer_thread_active = false;
+		timer_jit_owns = true;
+		timer_dispatch_poll = !retirement_ticks;
+	} else
+#endif
+	{
+		timer_jit_owns = false;
+		timer_dispatch_poll = false;
+		timer_thread_active = timer_thread_init();
+	}
+#endif
+#endif
+}
+
+void TimerRestoreAsyncOwnership(void)
+{
+#ifdef PRECISE_TIMING_POSIX
+	if (!timer_jit_owns)
+		return;
+
+	/* TimerInit selected dispatcher ownership from the loaded preference before
+	   compiler initialization established whether a usable JIT exists. If that
+	   initialization fails, restart both asynchronous sources: the precise Time
+	   Manager thread and the 60 Hz tick thread suppressed by main_unix.cpp. */
+	timer_jit_owns = false;
+	timer_dispatch_poll = false;
 	timer_thread_active = timer_thread_init();
+	if (!timer_thread_active)
+		fprintf(stderr, "Time Manager: failed to restore asynchronous timer after JIT initialization failure\n");
+#ifdef USE_PTHREADS_SERVICES
+	extern bool Restore60HzAsyncOwnership(void);
+	if (!Restore60HzAsyncOwnership())
+		fprintf(stderr, "Time Manager: failed to restore asynchronous 60 Hz ticks after JIT initialization failure\n");
 #endif
 #endif
 }
@@ -377,7 +429,8 @@ int16 RmvTime(uint32 tm)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_lock(&wakeup_time_lock);
-	timer_thread_suspend();
+	if (timer_thread_active)
+		timer_thread_suspend();
 #endif
 	if (ReadMacInt16(tm + qType) & 0x8000) {
 
@@ -416,8 +469,10 @@ int16 RmvTime(uint32 tm)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_unlock(&wakeup_time_lock);
-	timer_thread_resume();
-	assert(suspend_count == 0);
+	if (timer_thread_active) {
+		timer_thread_resume();
+		assert(suspend_count == 0);
+	}
 #endif
 
 	// Free descriptor
@@ -494,7 +549,8 @@ int16 PrimeTime(uint32 tm, int32 time)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_lock(&wakeup_time_lock);
-	timer_thread_suspend();
+	if (timer_thread_active)
+		timer_thread_suspend();
 #endif
 	WriteMacInt16(tm + qType, ReadMacInt16(tm + qType) | 0x8000);
 	enqueue_tm(tm);
@@ -520,8 +576,10 @@ int16 PrimeTime(uint32 tm, int32 time)
 #endif
 #ifdef PRECISE_TIMING_POSIX
 	pthread_mutex_unlock(&wakeup_time_lock);
-	timer_thread_resume();
-	assert(suspend_count == 0);
+	if (timer_thread_active) {
+		timer_thread_resume();
+		assert(suspend_count == 0);
+	}
 #endif
 #endif
 	return 0;
@@ -647,7 +705,8 @@ void TimerInterrupt(void)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_lock(&wakeup_time_lock);
-	timer_thread_suspend();
+	if (timer_thread_active)
+		timer_thread_suspend();
 #endif
 	wakeup_time = wakeup_time_max;
 	for (TMDesc *d = tmDescList; d; d = d->next)
@@ -669,8 +728,32 @@ void TimerInterrupt(void)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_unlock(&wakeup_time_lock);
-	timer_thread_resume();
-	assert(suspend_count == 0);
+	if (timer_thread_active) {
+		timer_thread_resume();
+		assert(suspend_count == 0);
+	}
 #endif
+#endif
+}
+
+void TimerPoll(void)
+{
+#ifdef PRECISE_TIMING_POSIX
+	if (!timer_dispatch_poll)
+		return;
+
+	tm_time_t now;
+	timer_current_time(now);
+	bool expired = false;
+	pthread_mutex_lock(&wakeup_time_lock);
+	if (timer_cmp_time(wakeup_time, now) < 0) {
+		wakeup_time = wakeup_time_max;
+		expired = true;
+	}
+	pthread_mutex_unlock(&wakeup_time_lock);
+	if (expired) {
+		SetInterruptFlag(INTFLAG_TIMER);
+		TriggerInterrupt();
+	}
 #endif
 }

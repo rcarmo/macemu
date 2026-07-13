@@ -71,7 +71,6 @@ static const uae_u32 MIN_CACHE_SIZE = 1024;
 
 bool compiler_use_jit(void)
 {
-	fflush(stderr); fprintf(stderr, "JIT_INIT: jit=%d cs=%d\n", PrefsFindBool("jit"), PrefsFindInt32("jitcachesize"));
 	if (!PrefsFindBool("jit"))
 		return false;
 	int32 cs = PrefsFindInt32("jitcachesize");
@@ -97,539 +96,46 @@ static bool ensure_aarch64_jit_runtime_ready(void)
 
 extern void jit_one_tick(void);
 
-static inline bool jit_bad_pcp_guard_enabled(void)
-{
-	static int cached = -1;
-	if (cached < 0) {
-		const char *env = getenv("B2_JIT_GUARD_PCP");
-		cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
-	}
-	return cached != 0;
-}
-
-static inline bool jit_trace_dispatch_pc_enabled(void)
-{
-	static int cached = -1;
-	if (cached < 0) {
-		const char *env = getenv("B2_TRACE_DISPATCH_PC_START");
-		cached = (env && *env) ? 1 : 0;
-	}
-	return cached != 0;
-}
-
-static inline uae_u32 jit_trace_dispatch_pc_start(void)
-{
-	static uae_u32 value = 0;
-	static bool init = false;
-	if (!init) {
-		const char *env = getenv("B2_TRACE_DISPATCH_PC_START");
-		value = env && *env ? (uae_u32)strtoul(env, NULL, 0) : 0;
-		init = true;
-	}
-	return value;
-}
-
-static inline uae_u32 jit_trace_dispatch_pc_end(void)
-{
-	static uae_u32 value = 0xffffffffu;
-	static bool init = false;
-	if (!init) {
-		const char *env = getenv("B2_TRACE_DISPATCH_PC_END");
-		value = env && *env ? (uae_u32)strtoul(env, NULL, 0) : 0xffffffffu;
-		init = true;
-	}
-	return value;
-}
-
-static inline bool jit_trace_dispatch_ring_enabled(void)
-{
-	static int cached = -1;
-	if (cached < 0) {
-		const char *env = getenv("B2_TRACE_DISPATCH_RING");
-		cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
-	}
-	return cached != 0;
-}
-
-struct jit_dispatch_ring_entry {
-	unsigned long dispatch_seq;
-	uae_u32 guest_pc;
-	uae_u32 block_entry_pc;
-	uae_u32 d0, d1, d2, d4, d5;
-	uae_u32 a0, a1, a2, a3, a5, a7;
-	uae_u32 sr, intmask, spcflags;
-};
-
-static jit_dispatch_ring_entry jit_dispatch_ring[64];
-static unsigned long jit_dispatch_ring_count = 0;
-static bool jit_dispatch_ring_dumped = false;
-
-static void jit_trace_dispatch_ring_maybe_dump(unsigned long dispatch_seq, uae_u32 guest_pc, uae_u32 block_entry_pc)
-{
-	if (!jit_trace_dispatch_ring_enabled())
-		return;
-	jit_dispatch_ring_entry &slot = jit_dispatch_ring[jit_dispatch_ring_count % (sizeof(jit_dispatch_ring) / sizeof(jit_dispatch_ring[0]))];
-	MakeSR();
-	slot.dispatch_seq = dispatch_seq;
-	slot.guest_pc = guest_pc;
-	slot.block_entry_pc = block_entry_pc;
-	slot.d0 = (uae_u32)regs.regs[0];
-	slot.d1 = (uae_u32)regs.regs[1];
-	slot.d2 = (uae_u32)regs.regs[2];
-	slot.d4 = (uae_u32)regs.regs[4];
-	slot.d5 = (uae_u32)regs.regs[5];
-	slot.a0 = (uae_u32)regs.regs[8];
-	slot.a1 = (uae_u32)regs.regs[9];
-	slot.a2 = (uae_u32)regs.regs[10];
-	slot.a3 = (uae_u32)regs.regs[11];
-	slot.a5 = (uae_u32)regs.regs[13];
-	slot.a7 = (uae_u32)regs.regs[15];
-	slot.sr = (uae_u32)regs.sr;
-	slot.intmask = (uae_u32)regs.intmask;
-	slot.spcflags = (uae_u32)regs.spcflags;
-	jit_dispatch_ring_count++;
-
-	if (jit_dispatch_ring_dumped)
-		return;
-	if (!(guest_pc == 0x0400706a || guest_pc == 0x04007080 || guest_pc == 0x04007116 || guest_pc == 0x0400e1a4))
-		return;
-	jit_dispatch_ring_dumped = true;
-	fprintf(stderr, "DISPATCHRING dump trigger guest_pc=%08x dispatch=%lu count=%lu\n",
-		(unsigned)guest_pc, dispatch_seq, jit_dispatch_ring_count);
-	const unsigned long cap = (unsigned long)(sizeof(jit_dispatch_ring) / sizeof(jit_dispatch_ring[0]));
-	unsigned long start = jit_dispatch_ring_count > cap ? (jit_dispatch_ring_count - cap) : 0;
-	for (unsigned long i = start; i < jit_dispatch_ring_count; i++) {
-		const jit_dispatch_ring_entry &e = jit_dispatch_ring[i % cap];
-		fprintf(stderr,
-			"DISPATCHRING[%lu] dispatch=%lu guest_pc=%08x block_entry_pc=%08x d0=%08x d1=%08x d2=%08x d4=%08x d5=%08x a0=%08x a1=%08x a2=%08x a3=%08x a5=%08x a7=%08x sr=%04x intmask=%u spc=%08x\n",
-			i - start,
-			e.dispatch_seq,
-			(unsigned)e.guest_pc,
-			(unsigned)e.block_entry_pc,
-			(unsigned)e.d0,
-			(unsigned)e.d1,
-			(unsigned)e.d2,
-			(unsigned)e.d4,
-			(unsigned)e.d5,
-			(unsigned)e.a0,
-			(unsigned)e.a1,
-			(unsigned)e.a2,
-			(unsigned)e.a3,
-			(unsigned)e.a5,
-			(unsigned)e.a7,
-			(unsigned)e.sr,
-			(unsigned)e.intmask,
-			(unsigned)e.spcflags);
-	}
-}
-
-static void jit_log_dispatch_pc(unsigned long dispatch_seq,
-	uae_u32 guest_pc,
-	uae_u32 block_entry_pc,
-	uintptr block_entry_pcp,
-	uintptr block_entry_oldp,
-	unsigned long prev_dispatch_seq,
-	uae_u32 prev_block_entry_pc,
-	uintptr prev_block_entry_pcp,
-	uintptr prev_block_entry_oldp)
-{
-	static unsigned long log_count = 0;
-	jit_trace_dispatch_ring_maybe_dump(dispatch_seq, guest_pc, block_entry_pc);
-	if (log_count >= 400)
-		return;
-	MakeSR();
-	uae_u32 a5 = (uae_u32)regs.regs[13];
-	uae_u32 a5_byte = 0xffffffffu;
-	if (a5)
-		a5_byte = (uae_u32)get_byte(a5);
-	fprintf(stderr,
-		"DISPATCHPC[%lu] dispatch=%lu guest_pc=%08x regs.pc=%08x regs.pc_p=%p oldp=%p block_entry_pc=%08x block_entry_pcp=%p block_entry_oldp=%p prev_dispatch=%lu prev_block_entry_pc=%08x prev_block_entry_pcp=%p prev_block_entry_oldp=%p d0=%08x d1=%08x d4=%08x d5=%08x a0=%08x a1=%08x a2=%08x a3=%08x a5=%08x m[a5]=%02x a7=%08x sr=%04x intmask=%u spc=%08x\n",
-		++log_count,
-		dispatch_seq,
-		(unsigned)guest_pc,
-		(unsigned)regs.pc,
-		(void*)regs.pc_p,
-		(void*)regs.pc_oldp,
-		(unsigned)block_entry_pc,
-		(void*)block_entry_pcp,
-		(void*)block_entry_oldp,
-		prev_dispatch_seq,
-		(unsigned)prev_block_entry_pc,
-		(void*)prev_block_entry_pcp,
-		(void*)prev_block_entry_oldp,
-		(unsigned)regs.regs[0],
-		(unsigned)regs.regs[1],
-		(unsigned)regs.regs[4],
-		(unsigned)regs.regs[5],
-		(unsigned)regs.regs[8],
-		(unsigned)regs.regs[9],
-		(unsigned)regs.regs[10],
-		(unsigned)regs.regs[11],
-		a5,
-		(unsigned)(a5_byte & 0xff),
-		(unsigned)regs.regs[15],
-		(unsigned)regs.sr,
-		(unsigned)regs.intmask,
-		(unsigned)regs.spcflags);
-}
-
-static inline bool jit_bad_pcp_value(uintptr value, uae_u32 *guest_pc_out, uintptr *expected_pcp_out)
-{
-	const uae_u32 guest_pc = m68k_getpc();
-	const uintptr expected_pcp = (uintptr)get_real_address(guest_pc, 0, sz_word);
-	if (guest_pc_out)
-		*guest_pc_out = guest_pc;
-	if (expected_pcp_out)
-		*expected_pcp_out = expected_pcp;
-	return value != expected_pcp;
-}
-
-static void jit_log_bad_pcp(const char *phase,
-	unsigned long dispatch_seq,
-	uae_u32 block_entry_pc,
-	uintptr block_entry_pcp,
-	uintptr block_entry_oldp,
-	unsigned long prev_dispatch_seq,
-	uae_u32 prev_block_entry_pc,
-	uintptr prev_block_entry_pcp,
-	uintptr prev_block_entry_oldp,
-	uae_u32 guest_pc,
-	uintptr expected_pcp)
-{
-	static unsigned long log_count = 0;
-	if (log_count >= 32)
-		return;
-	fprintf(stderr,
-		"BAD_PCP[%lu] phase=%s dispatch=%lu guest_pc=%08x expected_pcp=%p regs.pc=%08x regs.pc_p=%p regs.pc_oldp=%p block_entry_pc=%08x block_entry_pcp=%p block_entry_oldp=%p prev_dispatch=%lu prev_block_entry_pc=%08x prev_block_entry_pcp=%p prev_block_entry_oldp=%p last_setpc_seq=%lu last_setpc_kind=%s last_setpc_value=%p d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x spc=%08x\n",
-		++log_count,
-		phase,
-		dispatch_seq,
-		(unsigned)guest_pc,
-		(void*)expected_pcp,
-		(unsigned)regs.pc,
-		(void*)regs.pc_p,
-		(void*)regs.pc_oldp,
-		(unsigned)block_entry_pc,
-		(void*)block_entry_pcp,
-		(void*)block_entry_oldp,
-		prev_dispatch_seq,
-		(unsigned)prev_block_entry_pc,
-		(void*)prev_block_entry_pcp,
-		(void*)prev_block_entry_oldp,
-		jit_last_setpc_seq,
-		jit_setpc_kind_name(jit_last_setpc_kind),
-		(void*)jit_last_setpc_value,
-		(unsigned)regs.regs[0],
-		(unsigned)regs.regs[1],
-		(unsigned)regs.regs[8],
-		(unsigned)regs.regs[9],
-		(unsigned)regs.regs[10],
-		(unsigned)regs.regs[15],
-		(unsigned)regs.spcflags);
-}
-
-static inline bool jit_spin_trace_enabled(void)
-{
-	static int cached = -1;
-	if (cached < 0) {
-		const char *env = getenv("B2_JIT_TRACE_SPIN");
-		cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
-	}
-	return cached != 0;
-}
-
-static inline bool jit_is_late_spin_pc(uae_u32 pc)
-{
-	switch (pc) {
-	case 0x040b98f6:
-	case 0x040b98fa:
-	case 0x040b9a18:
-	case 0x040b9a1c:
-	case 0x040ba0a8:
-	case 0x040ba0b0:
-	case 0x040ba0b2:
-	case 0x040ba0d6:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static inline bool jit_trace_0230_enabled(void)
-{
-	static int cached = -1;
-	if (cached < 0) {
-		const char *env = getenv("B2_TRACE_REGION_0230");
-		cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
-	}
-	return cached != 0;
-}
-
-static inline bool jit_is_region_0230_pc(uae_u32 pc)
-{
-	return pc >= 0x04000220 && pc <= 0x04000248;
-}
-
-static void jit_log_region_0230(unsigned long dispatch_seq,
-	uae_u32 guest_pc,
-	uae_u32 prev_guest_pc,
-	uae_u32 block_entry_pc,
-	uintptr block_entry_pcp,
-	uintptr block_entry_oldp,
-	unsigned long prev_dispatch_seq,
-	uae_u32 prev_block_entry_pc,
-	uintptr prev_block_entry_pcp,
-	uintptr prev_block_entry_oldp)
-{
-	static unsigned long log_count = 0;
-	if (log_count >= 128)
-		return;
-	fprintf(stderr,
-		"TRACE0230[%lu] dispatch=%lu guest_pc=%08x prev_guest_pc=%08x regs.pc=%08x regs.pc_p=%p regs.pc_oldp=%p block_entry_pc=%08x block_entry_pcp=%p block_entry_oldp=%p prev_dispatch=%lu prev_block_entry_pc=%08x prev_block_entry_pcp=%p prev_block_entry_oldp=%p last_setpc_seq=%lu last_setpc_kind=%s last_setpc_value=%p d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x spc=%08x\n",
-		++log_count,
-		dispatch_seq,
-		(unsigned)guest_pc,
-		(unsigned)prev_guest_pc,
-		(unsigned)regs.pc,
-		(void*)regs.pc_p,
-		(void*)regs.pc_oldp,
-		(unsigned)block_entry_pc,
-		(void*)block_entry_pcp,
-		(void*)block_entry_oldp,
-		prev_dispatch_seq,
-		(unsigned)prev_block_entry_pc,
-		(void*)prev_block_entry_pcp,
-		(void*)prev_block_entry_oldp,
-		jit_last_setpc_seq,
-		jit_setpc_kind_name(jit_last_setpc_kind),
-		(void*)jit_last_setpc_value,
-		(unsigned)regs.regs[0],
-		(unsigned)regs.regs[1],
-		(unsigned)regs.regs[8],
-		(unsigned)regs.regs[9],
-		(unsigned)regs.regs[10],
-		(unsigned)regs.regs[15],
-		(unsigned)regs.spcflags);
-}
-
-static void jit_log_spin_trace(unsigned long dispatch_seq,
-	uae_u32 guest_pc,
-	uae_u32 prev_guest_pc,
-	uae_u32 block_entry_pc,
-	uintptr block_entry_pcp,
-	uintptr block_entry_oldp,
-	unsigned long prev_dispatch_seq,
-	uae_u32 prev_block_entry_pc,
-	uintptr prev_block_entry_pcp,
-	uintptr prev_block_entry_oldp)
-{
-	static unsigned long log_count = 0;
-	if (log_count >= 128)
-		return;
-	fprintf(stderr,
-		"SPIN_TRACE[%lu] dispatch=%lu guest_pc=%08x prev_guest_pc=%08x regs.pc=%08x regs.pc_p=%p regs.pc_oldp=%p block_entry_pc=%08x block_entry_pcp=%p block_entry_oldp=%p prev_dispatch=%lu prev_block_entry_pc=%08x prev_block_entry_pcp=%p prev_block_entry_oldp=%p last_setpc_seq=%lu last_setpc_kind=%s last_setpc_value=%p d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x spc=%08x\n",
-		++log_count,
-		dispatch_seq,
-		(unsigned)guest_pc,
-		(unsigned)prev_guest_pc,
-		(unsigned)regs.pc,
-		(void*)regs.pc_p,
-		(void*)regs.pc_oldp,
-		(unsigned)block_entry_pc,
-		(void*)block_entry_pcp,
-		(void*)block_entry_oldp,
-		prev_dispatch_seq,
-		(unsigned)prev_block_entry_pc,
-		(void*)prev_block_entry_pcp,
-		(void*)prev_block_entry_oldp,
-		jit_last_setpc_seq,
-		jit_setpc_kind_name(jit_last_setpc_kind),
-		(void*)jit_last_setpc_value,
-		(unsigned)regs.regs[0],
-		(unsigned)regs.regs[1],
-		(unsigned)regs.regs[8],
-		(unsigned)regs.regs[9],
-		(unsigned)regs.regs[10],
-		(unsigned)regs.regs[15],
-		(unsigned)regs.spcflags);
-}
-
 void m68k_do_compile_execute(void)
 {
-	if (!ensure_aarch64_jit_runtime_ready())
-		jit_abort("ARM64 JIT dispatcher stubs were not initialized before compiled execution");
-	static int jit_diag = -1;
-	if (jit_diag < 0) {
-		const char *de = getenv("B2_JIT_DIAG");
-		jit_diag = (de && de[0] && de[0] != '0') ? 1 : 0;
+	if (!ensure_aarch64_jit_runtime_ready()) {
+		/* build_comp() normally reports the precise allocation failure itself.
+		   Keep this defensive path fail-closed in strict mode, but let ordinary
+		   execution transfer cleanly to m68k_execute() below. */
+		if (UseJIT)
+			disable_jit_runtime("ARM64 JIT dispatcher stubs were not initialized before compiled execution");
+		return;
 	}
-	if (jit_diag) {
-		fprintf(stderr, "JIT_ENTRY pc=%08x spc=%08x a7=%08x\n", m68k_getpc(), (unsigned)regs.spcflags, regs.regs[15]);
-		fflush(stderr);
-	}
-	static unsigned long _dc = 0;
 #if defined(CPU_AARCH64)
 	extern bool tick_inhibit;
 	/* Synchronous tick model: inhibit the async tick thread and drive
 	   one_tick() from this dispatch loop. This makes interrupt delivery
 	   deterministic based on block execution count rather than wall-clock. */
 	static bool use_sync_ticks = false;
+	static bool use_retirement_ticks = false;
 	static bool sync_ticks_init = false;
 	if (!sync_ticks_init) {
 		const char *sync_env = getenv("B2_JIT_SYNC_TICKS");
+		const char *retirement_env = getenv("B2_JIT_RETIREMENT_TICK_EVERY");
+		use_retirement_ticks = retirement_env && *retirement_env &&
+			strtoul(retirement_env, NULL, 0) != 0;
 		/* ARM64 full-JIT cannot safely let the async 60Hz tick thread mutate
 		   emulator state while generated code has live register/flag state.
-		   Use deterministic dispatcher-driven ticks by default; allow
-		   B2_JIT_SYNC_TICKS=0 only for diagnosis. */
+		   Use dispatcher-bound wall-clock ticks normally. An explicitly requested
+		   guest-retirement schedule supersedes wall-clock ticks from the first
+		   retired instruction, independently of path-capture diagnostics. */
 		use_sync_ticks = !(sync_env && sync_env[0] == '0');
-		if (use_sync_ticks)
-			fprintf(stderr, "JIT: synchronous tick model enabled (env=%s)\n", sync_env ? sync_env : "default");
 		sync_ticks_init = true;
 	}
-	unsigned long tick_counter = 0;
-	const unsigned long tick_interval = 8000; /* ~60Hz at typical block dispatch rate */
 #endif
 	for (;;) {
 #if defined(CPU_AARCH64)
-		if (use_sync_ticks)
+		if (use_sync_ticks || use_retirement_ticks)
 			tick_inhibit = true;
 #endif
 		((compiled_handler)(pushall_call_handler))();
-		_dc++;
-		/* Two-run path differential recorder (CONT.86): non-perturbing ring of the
-		   last N block dispatches with key registers; dumped once when guest pc
-		   reaches B2_PATH_RING_TARGET. Used to follow the deterministic data/path
-		   divergence into the NuBus slot scanner (the chain is RESOLVED post-5d5090ca,
-		   so this finds the first divergent register/branch). Ring write only -> no
-		   per-dispatch fprintf, deterministic (tick-timing ruled out for this bug). */
-		{
-			static int pr_init = -1;
-			static uae_u32 pr_target = 0;
-			/* CONT.109 cont-fv (auditor 2026-06-30): bisect-on-the-count. Record the
-			   bfextu-loop framevars (m212/m20a/m1ee/m1ec count + m1e8 dest pointer)
-			   from FIXED guest addresses (a6-relative offsets of the 04037xxx frame,
-			   default a6=0x0200fa3e) at EVERY dispatch, so a single ring dump shows
-			   where the loop count FIRST becomes garbage. Reads are pure get_word/
-			   get_long = non-perturbing (no codegen/flush change). Override the frame
-			   base with B2_FV_A6 if a6 differs in a run. */
-			static uae_u32 pr_fv_a6 = 0;
-			if (pr_init < 0) {
-				const char* e = getenv("B2_PATH_RING_TARGET"); pr_target = (e && *e) ? (uae_u32)strtoul(e, 0, 0) : 0;
-				const char* a = getenv("B2_FV_A6"); pr_fv_a6 = (a && *a) ? (uae_u32)strtoul(a, 0, 0) : 0x0200fa3eUL;
-				pr_init = 0;
-			}
-			if (pr_target) {
-				static struct { uae_u32 pc, a0, a1, a2, a6, d0, d1, d3, d5, d7, m1e8; uae_u16 m212, m20a, m1ee, m1ec; } pr_ring[8192];
-				static unsigned long pr_idx = 0;
-				static int pr_dumped = 0;
-				uae_u32 _gpc = m68k_getpc();
-				unsigned slot = (unsigned)(pr_idx & 8191);
-				pr_ring[slot].pc = _gpc;
-				pr_ring[slot].a0 = regs.regs[8];
-				pr_ring[slot].a1 = regs.regs[9];
-				pr_ring[slot].a2 = regs.regs[10];
-				pr_ring[slot].a6 = regs.regs[14];
-				pr_ring[slot].d0 = regs.regs[0];
-				pr_ring[slot].d1 = regs.regs[1];
-				pr_ring[slot].d3 = regs.regs[3];
-				pr_ring[slot].d5 = regs.regs[5];
-				pr_ring[slot].d7 = regs.regs[7];
-				pr_ring[slot].m212 = (uae_u16)get_word(pr_fv_a6 - 0x212);
-				pr_ring[slot].m20a = (uae_u16)get_word(pr_fv_a6 - 0x20a);
-				pr_ring[slot].m1ee = (uae_u16)get_word(pr_fv_a6 - 0x1ee);
-				pr_ring[slot].m1ec = (uae_u16)get_word(pr_fv_a6 - 0x1ec);
-				pr_ring[slot].m1e8 = (uae_u32)get_long(pr_fv_a6 - 0x1e8);
-				pr_idx++;
-				if (_gpc == pr_target && !pr_dumped) {
-					pr_dumped = 1;
-					fprintf(stderr, "PATHRING_FV_BASE a6=%08x m212@%08x m20a@%08x m1ee@%08x m1ec@%08x m1e8@%08x\n",
-						pr_fv_a6, pr_fv_a6 - 0x212, pr_fv_a6 - 0x20a, pr_fv_a6 - 0x1ee, pr_fv_a6 - 0x1ec, pr_fv_a6 - 0x1e8);
-					unsigned long start = (pr_idx > 8192) ? pr_idx - 8192 : 0;
-					for (unsigned long i = start; i < pr_idx; i++) {
-						unsigned s = (unsigned)(i & 8191);
-						fprintf(stderr, "PATHRING %lu pc=%08x a0=%08x a1=%08x a2=%08x a6=%08x d0=%08x d1=%08x d3=%08x d5=%08x d7=%08x m212=%04x m20a=%04x m1ee=%04x m1ec=%04x m1e8=%08x\n",
-							i - start, pr_ring[s].pc, pr_ring[s].a0, pr_ring[s].a1, pr_ring[s].a2, pr_ring[s].a6, pr_ring[s].d0, pr_ring[s].d1, pr_ring[s].d3, pr_ring[s].d5, pr_ring[s].d7,
-							pr_ring[s].m212, pr_ring[s].m20a, pr_ring[s].m1ee, pr_ring[s].m1ec, pr_ring[s].m1e8);
-					}
-					fflush(stderr);
-				}
-			}
-		}
-		if (jit_diag) {
-			static unsigned long dc_log = 0;
-			static uae_u32 prev_dc_pc = 0xffffffff;
-			static uae_u32 prev_dc_sr = 0;
-			static int rom_to_ram_logged = 0;
-			++dc_log;
-			uae_u32 _pc = m68k_getpc();
-			{
-				static int scanner_entry_log_count = 0;
-				if (_pc == 0x04002f98 && scanner_entry_log_count < 20) {
-					scanner_entry_log_count++;
-					fprintf(stderr, "SCAN2F98_ENTRY[%d] dc=%lu prev_pc=%08x prev_sr=%04x pc=%08x sr=%04x D0=%08x D1=%08x D2=%08x D3=%08x A0=%08x A1=%08x A2=%08x A6=%08x A7=%08x pc_p=%p oldp=%p\n",
-						scanner_entry_log_count, dc_log, prev_dc_pc, (unsigned)prev_dc_sr, _pc, (unsigned)regs.sr,
-						regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3], regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[14], regs.regs[15],
-						(void*)regs.pc_p, (void*)regs.pc_oldp);
-				}
-			}
-			if (!rom_to_ram_logged && prev_dc_pc >= 0x04000000 && _pc < 0x04000000) {
-				rom_to_ram_logged = 1;
-				fprintf(stderr, "ROM_TO_RAM dc=%lu prev_pc=%08x prev_sr=%04x pc=%08x sr=%04x intmask=%u spc=%08x D0=%08x D1=%08x D2=%08x D3=%08x A0=%08x A1=%08x A2=%08x A6=%08x A7=%08x pc_p=%p oldp=%p\n",
-					dc_log, prev_dc_pc, (unsigned)prev_dc_sr, _pc, (unsigned)regs.sr,
-					(unsigned)regs.intmask, (unsigned)regs.spcflags,
-					regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3],
-					regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[14], regs.regs[15],
-					(void*)regs.pc_p, (void*)regs.pc_oldp);
-			}
-			prev_dc_pc = _pc;
-			prev_dc_sr = regs.sr;
-			if (dc_log % 10000 == 0 || (dc_log <= 500)) {
-				if (dc_log % 10000 == 0 || dc_log <= 500) {
-					fprintf(stderr, "DC[%lu] pc=%08x sr=%04x intmask=%u spc=%08x",
-						dc_log, _pc, (unsigned)regs.sr, (unsigned)regs.intmask,
-						(unsigned)regs.spcflags);
-					if (dc_log <= 30)
-						fprintf(stderr, " D0=%08x D3=%08x D7=%08x A0=%08x A7=%08x",
-							regs.regs[0], regs.regs[3], regs.regs[7],
-							regs.regs[8], regs.regs[15]);
-					if (_pc >= 0x040b9f90 && _pc <= 0x040ba1b0)
-						fprintf(stderr, " D0=%08x D1=%08x D2=%08x D3=%08x D7=%08x A1=%08x A2=%08x A3=%08x A6=%08x A7=%08x M3=%08x M3P4=%08x",
-							regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3], regs.regs[7],
-							regs.regs[9], regs.regs[10], regs.regs[11], regs.regs[14], regs.regs[15],
-							(unsigned)get_long(regs.regs[11]), (unsigned)get_long(regs.regs[11] + 4));
-					fprintf(stderr, "\n");
-				}
-				static int dump_once = 0;
-				if (!dump_once && _pc < 0x00800000 && dc_log > 30000) {
-					dump_once = 1;
-					uae_u8 *p = get_real_address(_pc);
-					fprintf(stderr, "RAMDUMP pc=%08x:", _pc);
-					for (int _i = 0; _i < 32; _i++)
-						fprintf(stderr, " %02x", p[_i]);
-					fprintf(stderr, "\n");
-					fprintf(stderr, "REGDUMP2 D0=%08x D1=%08x D2=%08x D3=%08x D4=%08x D5=%08x D6=%08x D7=%08x\n",
-						regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3],
-						regs.regs[4], regs.regs[5], regs.regs[6], regs.regs[7]);
-					fprintf(stderr, "REGDUMP2 A0=%08x A1=%08x A2=%08x A3=%08x A4=%08x A5=%08x A6=%08x A7=%08x\n",
-						regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[11],
-						regs.regs[12], regs.regs[13], regs.regs[14], regs.regs[15]);
-					fprintf(stderr, "REGDUMP2 pc_p=%p pc_oldp=%p pc=%08x sr=%04x isp=%08x usp=%08x msp=%08x\n",
-						(void*)regs.pc_p, (void*)regs.pc_oldp, regs.pc,
-						regs.sr, regs.isp, regs.usp, regs.msp);
-					/* Also dump what pc_p actually points to */
-					if (regs.pc_p) {
-						uae_u8 *pp = (uae_u8*)regs.pc_p;
-						fprintf(stderr, "CODEAT pc_p:");
-						for (int _i = 0; _i < 32; _i++)
-							fprintf(stderr, " %02x", pp[_i]);
-						fprintf(stderr, "\n");
-					}
-				}
-			}
-		}
 #if defined(CPU_AARCH64)
-		if (use_sync_ticks) {
-			tick_inhibit = false;
+		if (use_sync_ticks && !use_retirement_ticks) {
 			/* Drive the 60Hz tick by WALL-CLOCK at this safe block-dispatch
 			   boundary. The async tick thread stays inhibited for thread-safety
 			   (it must not mutate emulator state while generated code holds live
@@ -656,6 +162,9 @@ void m68k_do_compile_execute(void)
 				jit_one_tick();
 			}
 		}
+		/* The precise Time Manager uses the same ownership rule as 60Hz:
+		   poll only here, after generated code has materialized guest state. */
+		TimerPoll();
 		{
 			extern int32 jit_countdown;
 			if (jit_countdown < 0)
@@ -684,6 +193,14 @@ void m68k_compile_execute(void)
 			m68k_reset();
 		}
 		m68k_do_compile_execute();
+		if (!UseJIT) {
+			/* JIT initialization can fail lazily on the first execution request.
+			   Timer ownership and preferences were already restored by
+			   disable_jit_runtime(); continue in the ordinary interpreter rather
+			   than aborting or returning from the emulator entry point. */
+			m68k_execute();
+			return;
+		}
 	}
 }
 
@@ -5092,7 +4609,9 @@ void build_comp(void)
 	}
 
 	for (i = 0; nftbl[i].opcode < 65536; i++) {
-		bool uses_fpu = (tbl[i].specific & COMP_OPCODE_USES_FPU) != 0;
+		/* Normal and no-flags tables are independently generated; classify the
+		   entry actually being installed rather than assuming slot parity. */
+		bool uses_fpu = (nftbl[i].specific & COMP_OPCODE_USES_FPU) != 0;
 		if (uses_fpu && avoid_fpu)
 			nfcompfunctbl[cft_map(nftbl[i].opcode)] = NULL;
 		else
@@ -6166,13 +5685,9 @@ void execute_normal(void)
 		start_pc = regs.pc; 
 #endif
 		for (;;)  { /* Take note: This is the do-it-normal loop */
-			/* CONT.109 cont14: non-perturbing block-split probe.
-			   When B2_FORCE_BLOCK_BREAK_BEFORE=<guest pc> matches the current
-			   guest PC and the block already has at least one insn, end the
-			   block here so the next dispatch starts at the target PC. Pairs
-			   with PATHRING (B2_PATH_RING_TARGET) to capture live D0/A* at the
-			   target boundary without altering codegen semantics inside the
-			   following block. */
+			/* Optional verifier block-split probe. End the trace after at least
+			   one retired instruction so the next dispatch begins at the requested
+			   architectural boundary. */
 			{
 				static int bb_init = -1;
 				static uae_u32 bb_target = 0;
@@ -6280,13 +5795,18 @@ extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode)
     static int armed = -1;       /* -1 = uninit, 0 = waiting for anchor, 1 = armed */
     static uae_u32 anchor = 0;
     static unsigned long limit = 0;
+    static unsigned long after = 0;
     if (armed < 0) {
         const char *aenv = getenv("B2_TRACE_ANCHOR_PC");
         anchor = (aenv && *aenv) ? (uae_u32)strtoul(aenv, NULL, 0) : 0;
         const char *lenv = getenv("B2_JIT_TRACE_LIMIT");
         limit = (lenv && *lenv) ? strtoul(lenv, NULL, 0) : 400;
+        const char *after_env = getenv("B2_JIT_TRACE_AFTER");
+        after = (after_env && *after_env) ? strtoul(after_env, NULL, 0) : 0;
         armed = anchor ? 0 : 1;  /* no anchor => emit immediately */
     }
+    if (jit_guest_path_index < after)
+        return;
     if (!armed) {
         if (pc == anchor)
             armed = 1;
@@ -6301,7 +5821,7 @@ extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode)
         return;
     MakeSR();
     fprintf(stderr,
-        "JITPCHIT[%lu] kind=%s pc=%08x op=%04x regs.pc=%08x regs.pc_p=%p oldp=%p sr=%04x intmask=%u d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a2=%08x a6=%08x a7=%08x spc=%08x\n",
+        "JITPCHIT[%lu] kind=%s pc=%08x op=%04x regs.pc=%08x regs.pc_p=%p oldp=%p sr=%04x intmask=%u d0=%08x d1=%08x d2=%08x d3=%08x d4=%08x d5=%08x d6=%08x d7=%08x a0=%08x a1=%08x a2=%08x a3=%08x a4=%08x a5=%08x a6=%08x a7=%08x spc=%08x\n",
         ++tc,
         kind_name,
         (unsigned)pc,
@@ -6314,9 +5834,17 @@ extern "C" void jit_trace_pc_hit(uae_u32 pc, uae_u32 tagged_opcode)
         (unsigned)regs.regs[0],
         (unsigned)regs.regs[1],
         (unsigned)regs.regs[2],
+        (unsigned)regs.regs[3],
+        (unsigned)regs.regs[4],
+        (unsigned)regs.regs[5],
+        (unsigned)regs.regs[6],
+        (unsigned)regs.regs[7],
         (unsigned)regs.regs[8],
         (unsigned)regs.regs[9],
         (unsigned)regs.regs[10],
+        (unsigned)regs.regs[11],
+        (unsigned)regs.regs[12],
+        (unsigned)regs.regs[13],
         (unsigned)regs.regs[14],
         (unsigned)regs.regs[15],
         (unsigned)regs.spcflags);

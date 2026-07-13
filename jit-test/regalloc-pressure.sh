@@ -32,7 +32,10 @@ ignoresegv true
 EOF
 sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 HEX="2042 20BC 1122 3344 43F9 0000 2040 337C 0005 0012 3E3C 003F 2042 2244 3005 C0E9 0012 2658 51CF FFF2 2C7C A6AA 55CC"
-INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2000"
+# Mask asynchronous guest interrupts: this vector proves allocator state, not
+# host-timer scheduling, and interpreter/JIT runs otherwise race the first 60 Hz
+# tick independently.
+INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
 run_one(){
   local mode="$1"
   local pref="$RUN_DIR/prefs-$mode"
