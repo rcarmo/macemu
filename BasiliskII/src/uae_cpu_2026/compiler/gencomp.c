@@ -2174,6 +2174,9 @@ gen_opcode (unsigned int opcode)
 
      case i_TRAPV:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* TRAPV consumes but never modifies the incoming CCR.  Materialise it
+	   before the native conditional vector-7 request and precise-PC gate. */
+	comprintf("\tmake_flags_live();\n");
 	comprintf("\tjnf_TRAPV();\n");
 #else
 	isjump;
@@ -2583,6 +2586,8 @@ gen_opcode (unsigned int opcode)
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Divide-by-zero clears only V, so N/Z/C must be live on entry. */
+	comprintf("\tmake_flags_live();\n");
 	comprintf("\tstart_needflags();\n");
 	comprintf("\tjff_DIVU(dst, src);\n");
 	comprintf("\tlive_flags();\n");
@@ -2597,6 +2602,8 @@ gen_opcode (unsigned int opcode)
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Divide-by-zero clears only V, so N/Z/C must be live on entry. */
+	comprintf("\tmake_flags_live();\n");
 	comprintf("\tstart_needflags();\n");
 	comprintf("\tjff_DIVS(dst, src);\n");
 	comprintf("\tlive_flags();\n");
@@ -3347,14 +3354,35 @@ gen_opcode (unsigned int opcode)
 	   exactly as MULL does, then fetch the divisor through the real EA. */
 	comprintf("\tuae_u16 extra=%s;\n", gen_nextiword());
 	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Long divide-by-zero preserves the complete incoming CCR.  Save it even
+	   in the no-flags table because an exception frame is an external consumer. */
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	comprintf("\tint dq = (extra >> 12) & 7;\n");
 	comprintf("\tint dr = extra & 7;\n");
 	comprintf("\tif (extra & 0x0400) {\n");
-	/* 64-bit dividend: inline ARM64 via UDIV_xxx/SDIV_xxx */
+	/* 64-bit dividend: inline ARM64 via UDIV_xxx/SDIV_xxx.  Unlike the
+	   no-flags table, the flags table must publish the successful quotient
+	   flags and the defined overflow flags rather than leaving host CMP state. */
 	comprintf("\t  if (extra & 0x0800) {\n"); /* signed */
-	comprintf("\t    jnf_DIVLS64(dq, dr, src);\n");
+	if (noflags) {
+	    comprintf("\t    jnf_DIVLS64(dq, dr, src);\n");
+	} else {
+	    comprintf("\t    make_flags_live();\n");
+	    comprintf("\t    start_needflags();\n");
+	    comprintf("\t    jff_DIVLS64(dq, dr, src);\n");
+	    comprintf("\t    live_flags();\n");
+	    comprintf("\t    end_needflags();\n");
+	}
 	comprintf("\t  } else {\n"); /* unsigned */
-	comprintf("\t    jnf_DIVLU64(dq, dr, src);\n");
+	if (noflags) {
+	    comprintf("\t    jnf_DIVLU64(dq, dr, src);\n");
+	} else {
+	    comprintf("\t    make_flags_live();\n");
+	    comprintf("\t    start_needflags();\n");
+	    comprintf("\t    jff_DIVLU64(dq, dr, src);\n");
+	    comprintf("\t    live_flags();\n");
+	    comprintf("\t    end_needflags();\n");
+	}
 	comprintf("\t  }\n");
 	comprintf("\t} else {\n");
 	/* 32-bit dividend: use inline ARM64 mid-layer */

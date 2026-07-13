@@ -5782,17 +5782,32 @@ void register_branch(uintptr not_taken, uintptr taken, uae_u8 cond)
 
 void register_possible_exception(void)
 {
-    /* Native CHK reaches the common deferred-exception gate after its inline
-       comparison.  Carry the exact pc_hist[] opcode PC independently of PC_P:
-       compile cursor re-anchoring and block finalisation are not an architectural
-       source for the format-2 instruction-address field.  The store is harmless
-       on CHK's non-trapping path and is consumed only by its tagged request. */
+    /* A conditional native exception reaches the common deferred-exception gate
+       after its inline test.  Carry the exact pc_hist[] opcode PC independently
+       of PC_P: compile cursor re-anchoring and block finalisation are not an
+       architectural source for the format-2 instruction-address field.  The
+       store is harmless on the non-trapping path and is consumed only by a
+       request tagged JIT_EXCEPTION_OLDPC_VALID. */
     if (!jit_compile_current_op_host_pc)
         jit_abort("deferred exception: missing exact opcode PC");
     const uintptr oldpc_idx = (uintptr)(&regs.jit_exception_oldpc) - (uintptr)(&regs);
     LOAD_U32(REG_WORK3, jit_compile_current_op_m68k_pc);
     STR_wXi(REG_WORK3, R_REGSTRUCT, oldpc_idx);
     may_raise_exception = true;
+}
+
+void register_possible_exception_at_successor(void)
+{
+    /* Arithmetic traps use a format-2 frame with two distinct addresses: the
+       ordinary stacked PC is the post-instruction successor, while the extra
+       instruction-address field is the opcode PC published above.  At this
+       point genamode has consumed every extension word, so the compile cursor
+       is the canonical successor for register, memory and indexed EAs alike. */
+    register_possible_exception();
+    const uintptr next_host_pc = (uintptr)(comp_pc_p + m68k_pc_offset);
+    const uae_u32 next_m68k_pc = jit_compile_current_op_m68k_pc +
+        (uae_u32)(next_host_pc - jit_compile_current_op_host_pc);
+    compemu_raw_set_pc_full_i(next_m68k_pc, next_host_pc);
 }
 
 /* Note: get_handler may fail in 64 Bit environments, if direct_handler_to_use is

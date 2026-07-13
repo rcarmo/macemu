@@ -25131,13 +25131,22 @@ void REGPARAM2 op_4c40_0_comp_ff(uae_u32 opcode) /* DIVL */
 {	uae_u8 scratchie=S1;
 	uae_u16 extra=comp_get_iword((m68k_pc_offset+=2)-2);
 {	int src = dstreg;
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25176,13 +25185,22 @@ void REGPARAM2 op_4c50_0_comp_ff(uae_u32 opcode) /* DIVL */
 		mov_l_rr(srca, dstreg + 8);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25221,13 +25239,22 @@ void REGPARAM2 op_4c58_0_comp_ff(uae_u32 opcode) /* DIVL */
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
 	lea_l_brr(dstreg + 8, dstreg + 8, 4);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25267,13 +25294,22 @@ void REGPARAM2 op_4c60_0_comp_ff(uae_u32 opcode) /* DIVL */
 		mov_l_rr(srca, 8 + dstreg);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25312,13 +25348,22 @@ void REGPARAM2 op_4c68_0_comp_ff(uae_u32 opcode) /* DIVL */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25356,13 +25401,22 @@ void REGPARAM2 op_4c70_0_comp_ff(uae_u32 opcode) /* DIVL */
 	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25395,13 +25449,22 @@ void REGPARAM2 op_4c78_0_comp_ff(uae_u32 opcode) /* DIVL */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25434,13 +25497,22 @@ void REGPARAM2 op_4c79_0_comp_ff(uae_u32 opcode) /* DIVL */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25476,13 +25548,22 @@ void REGPARAM2 op_4c7a_0_comp_ff(uae_u32 opcode) /* DIVL */
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25519,13 +25600,22 @@ void REGPARAM2 op_4c7b_0_comp_ff(uae_u32 opcode) /* DIVL */
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -25556,13 +25646,22 @@ void REGPARAM2 op_4c7c_0_comp_ff(uae_u32 opcode) /* DIVL */
 	uae_u16 extra=comp_get_iword((m68k_pc_offset+=2)-2);
 {	int src = scratchie++;
 	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
 	  if (extra & 0x0800) {
-	    jnf_DIVLS64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLS64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  } else {
-	    jnf_DIVLU64(dq, dr, src);
+	    make_flags_live();
+	    start_needflags();
+	    jff_DIVLU64(dq, dr, src);
+	    live_flags();
+	    end_needflags();
 	  }
 	} else {
 	  if (extra & 0x0800) {
@@ -26133,6 +26232,7 @@ void REGPARAM2 op_4e76_0_comp_ff(uae_u32 opcode) /* TRAPV */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
+	make_flags_live();
 	jnf_TRAPV();
 }
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -33945,6 +34045,7 @@ void REGPARAM2 op_80c0_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -33978,6 +34079,7 @@ void REGPARAM2 op_80d0_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34011,6 +34113,7 @@ void REGPARAM2 op_80d8_0_comp_ff(uae_u32 opcode) /* DIVU */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34045,6 +34148,7 @@ void REGPARAM2 op_80e0_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34078,6 +34182,7 @@ void REGPARAM2 op_80e8_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34110,6 +34215,7 @@ void REGPARAM2 op_80f0_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34137,6 +34243,7 @@ void REGPARAM2 op_80f8_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34164,6 +34271,7 @@ void REGPARAM2 op_80f9_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34193,6 +34301,7 @@ void REGPARAM2 op_80fa_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34223,6 +34332,7 @@ void REGPARAM2 op_80fb_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -34248,6 +34358,7 @@ void REGPARAM2 op_80fc_0_comp_ff(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -35091,6 +35202,7 @@ void REGPARAM2 op_81c0_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35124,6 +35236,7 @@ void REGPARAM2 op_81d0_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35157,6 +35270,7 @@ void REGPARAM2 op_81d8_0_comp_ff(uae_u32 opcode) /* DIVS */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35191,6 +35305,7 @@ void REGPARAM2 op_81e0_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35224,6 +35339,7 @@ void REGPARAM2 op_81e8_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35256,6 +35372,7 @@ void REGPARAM2 op_81f0_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35283,6 +35400,7 @@ void REGPARAM2 op_81f8_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35310,6 +35428,7 @@ void REGPARAM2 op_81f9_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35339,6 +35458,7 @@ void REGPARAM2 op_81fa_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35369,6 +35489,7 @@ void REGPARAM2 op_81fb_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -35394,6 +35515,7 @@ void REGPARAM2 op_81fc_0_comp_ff(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -72018,6 +72140,7 @@ void REGPARAM2 op_4c40_0_comp_nf(uae_u32 opcode) /* DIVL */
 {	uae_u8 scratchie=S1;
 	uae_u16 extra=comp_get_iword((m68k_pc_offset+=2)-2);
 {	int src = dstreg;
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72055,6 +72178,7 @@ void REGPARAM2 op_4c50_0_comp_nf(uae_u32 opcode) /* DIVL */
 		mov_l_rr(srca, dstreg + 8);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72092,6 +72216,7 @@ void REGPARAM2 op_4c58_0_comp_nf(uae_u32 opcode) /* DIVL */
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
 	lea_l_brr(dstreg + 8, dstreg + 8, 4);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72130,6 +72255,7 @@ void REGPARAM2 op_4c60_0_comp_nf(uae_u32 opcode) /* DIVL */
 		mov_l_rr(srca, 8 + dstreg);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72167,6 +72293,7 @@ void REGPARAM2 op_4c68_0_comp_nf(uae_u32 opcode) /* DIVL */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72203,6 +72330,7 @@ void REGPARAM2 op_4c70_0_comp_nf(uae_u32 opcode) /* DIVL */
 	calc_disp_ea_020(dstreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72234,6 +72362,7 @@ void REGPARAM2 op_4c78_0_comp_nf(uae_u32 opcode) /* DIVL */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72265,6 +72394,7 @@ void REGPARAM2 op_4c79_0_comp_nf(uae_u32 opcode) /* DIVL */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72299,6 +72429,7 @@ void REGPARAM2 op_4c7a_0_comp_nf(uae_u32 opcode) /* DIVL */
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72334,6 +72465,7 @@ void REGPARAM2 op_4c7b_0_comp_nf(uae_u32 opcode) /* DIVL */
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72363,6 +72495,7 @@ void REGPARAM2 op_4c7c_0_comp_nf(uae_u32 opcode) /* DIVL */
 	uae_u16 extra=comp_get_iword((m68k_pc_offset+=2)-2);
 {	int src = scratchie++;
 	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
+	preserve_flags_before_nzcv_clobber();
 	int dq = (extra >> 12) & 7;
 	int dr = extra & 7;
 	if (extra & 0x0400) {
@@ -72932,6 +73065,7 @@ void REGPARAM2 op_4e76_0_comp_nf(uae_u32 opcode) /* TRAPV */
 	uae_u32 m68k_pc_offset_thisinst=m68k_pc_offset;
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
+	make_flags_live();
 	jnf_TRAPV();
 }
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -80506,6 +80640,7 @@ void REGPARAM2 op_80c0_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80539,6 +80674,7 @@ void REGPARAM2 op_80d0_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80572,6 +80708,7 @@ void REGPARAM2 op_80d8_0_comp_nf(uae_u32 opcode) /* DIVU */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80606,6 +80743,7 @@ void REGPARAM2 op_80e0_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80639,6 +80777,7 @@ void REGPARAM2 op_80e8_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80671,6 +80810,7 @@ void REGPARAM2 op_80f0_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80698,6 +80838,7 @@ void REGPARAM2 op_80f8_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80725,6 +80866,7 @@ void REGPARAM2 op_80f9_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80754,6 +80896,7 @@ void REGPARAM2 op_80fa_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80784,6 +80927,7 @@ void REGPARAM2 op_80fb_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -80809,6 +80953,7 @@ void REGPARAM2 op_80fc_0_comp_nf(uae_u32 opcode) /* DIVU */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVU(dst, src);
 	live_flags();
@@ -81659,6 +81804,7 @@ void REGPARAM2 op_81c0_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81692,6 +81838,7 @@ void REGPARAM2 op_81d0_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81725,6 +81872,7 @@ void REGPARAM2 op_81d8_0_comp_nf(uae_u32 opcode) /* DIVS */
 	readword(srca,src,scratchie);
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81759,6 +81907,7 @@ void REGPARAM2 op_81e0_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81792,6 +81941,7 @@ void REGPARAM2 op_81e8_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81824,6 +81974,7 @@ void REGPARAM2 op_81f0_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81851,6 +82002,7 @@ void REGPARAM2 op_81f8_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81878,6 +82030,7 @@ void REGPARAM2 op_81f9_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81907,6 +82060,7 @@ void REGPARAM2 op_81fa_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81937,6 +82091,7 @@ void REGPARAM2 op_81fb_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();
@@ -81962,6 +82117,7 @@ void REGPARAM2 op_81fc_0_comp_nf(uae_u32 opcode) /* DIVS */
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int dst = dstreg;
+	make_flags_live();
 	start_needflags();
 	jff_DIVS(dst, src);
 	live_flags();

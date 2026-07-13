@@ -399,3 +399,15 @@ movec_privilege_vector8
 rte_privilege_vector8
 cache_privilege_vector8
 cache_supervisor_successors
+divu_w_zero_frame
+divs_w_zero_frame
+divu_l_zero_frame
+divs_l_zero_frame
+divu_l64_zero_frame
+divs_l64_zero_frame
+divu_l64_same_dq_dr
+divs_l64_same_dq_dr
+divu_l64_same_dq_dr_nf
+divs_l64_same_dq_dr_nf
+trapv_taken_frame
+trapv_not_taken_preserve

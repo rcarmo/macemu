@@ -248,6 +248,14 @@ EOF
         echo "INFRA $name jit=$use_jit: D0 mismatch (expected $expected_d0)" >&2
         return 1
     fi
+    local expected_field
+    for expected_field in ${EXPECTED_REG_FIELDS[$name]:-}; do
+        if ! grep -qi " $expected_field\( \|$\)" "$outfile"; then
+            echo "semantic_reg_mismatch" > "$reason_file"
+            echo "INFRA $name jit=$use_jit: register dump missing $expected_field" >&2
+            return 1
+        fi
+    done
 
     return 0
 }
@@ -287,6 +295,8 @@ TEST_ORDER+=(fpp_semantic_successor fscc_false_byte fbcc_false_operand_lengths)
 # CHK exception-state vectors are kept beside the family audit rather than
 # rewriting the generated-style master ordering above.
 TEST_ORDER+=(chk_w_negative_trap_n chk_w_upper_trap_n_clear chk_l_negative_trap_n chk_l_upper_trap_n_clear chk_l_in_range_preserve_ccr)
+# Deferred arithmetic-exception and DIVL result-alias audit vectors.
+TEST_ORDER+=(divu_w_zero_frame divs_w_zero_frame divu_l_zero_frame divs_l_zero_frame divu_l64_zero_frame divs_l64_zero_frame divu_l64_same_dq_dr divs_l64_same_dq_dr divu_l64_same_dq_dr_nf divs_l64_same_dq_dr_nf trapv_taken_frame trapv_not_taken_preserve)
 # Shared SR/control/cache semantic-service coverage.
 TEST_ORDER+=(fullsr_orsr_privilege_vector8 fullsr_andsr_privilege_vector8 fullsr_eorsr_privilege_vector8 fullsr_mv2sr_privilege_vector8 fullsr_mvsr_privilege_vector8 system_usp_roundtrip reset_privilege_vector8 usp_privilege_vector8 stop_clear_s_vector8 stop_privilege_vector8 movec_privilege_vector8 rte_privilege_vector8 cache_privilege_vector8 cache_supervisor_successors)
 # Exact-PC bitfield service coverage spans every operation and each legal EA decoder.
@@ -295,6 +305,7 @@ TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves
 
 declare -A TESTS
 declare -A EXPECTED_D0
+declare -A EXPECTED_REG_FIELDS
 # Tests in this set replay from reset architectural state at an exact anchor.
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
@@ -307,6 +318,18 @@ declare -A NATIVE_REPLAY_TESTS=(
     [chk_l_negative_trap_n]=1
     [chk_l_upper_trap_n_clear]=1
     [chk_l_in_range_preserve_ccr]=1
+    [divu_w_zero_frame]=1
+    [divs_w_zero_frame]=1
+    [divu_l_zero_frame]=1
+    [divs_l_zero_frame]=1
+    [divu_l64_zero_frame]=1
+    [divs_l64_zero_frame]=1
+    [divu_l64_same_dq_dr]=1
+    [divs_l64_same_dq_dr]=1
+    [divu_l64_same_dq_dr_nf]=1
+    [divs_l64_same_dq_dr_nf]=1
+    [trapv_taken_frame]=1
+    [trapv_not_taken_preserve]=1
     [cas_b_predec]=1
     [moves_predec_store_alias]=1
     [bitfield_mem_an_family]=1
@@ -356,6 +379,18 @@ declare -A NATIVE_REPLAY_PC=(
     [chk_l_negative_trap_n]=0x1018
     [chk_l_upper_trap_n_clear]=0x1020
     [chk_l_in_range_preserve_ccr]=0x1010
+    [divu_w_zero_frame]=0x101c
+    [divs_w_zero_frame]=0x101c
+    [divu_l_zero_frame]=0x101c
+    [divs_l_zero_frame]=0x101c
+    [divu_l64_zero_frame]=0x1022
+    [divs_l64_zero_frame]=0x1022
+    [divu_l64_same_dq_dr]=0x1010
+    [divs_l64_same_dq_dr]=0x1010
+    [divu_l64_same_dq_dr_nf]=0x1010
+    [divs_l64_same_dq_dr_nf]=0x1010
+    [trapv_taken_frame]=0x1014
+    [trapv_not_taken_preserve]=0x1004
 )
 declare -A NATIVE_REPLAY_COUNT=(
     [chk_w_in_range]=2
@@ -366,6 +401,18 @@ declare -A NATIVE_REPLAY_COUNT=(
     [chk_l_negative_trap_n]=2
     [chk_l_upper_trap_n_clear]=2
     [chk_l_in_range_preserve_ccr]=2
+    [divu_w_zero_frame]=2
+    [divs_w_zero_frame]=2
+    [divu_l_zero_frame]=2
+    [divs_l_zero_frame]=2
+    [divu_l64_zero_frame]=2
+    [divs_l64_zero_frame]=2
+    [divu_l64_same_dq_dr]=2
+    [divs_l64_same_dq_dr]=2
+    [divu_l64_same_dq_dr_nf]=2
+    [divs_l64_same_dq_dr_nf]=2
+    [trapv_taken_frame]=2
+    [trapv_not_taken_preserve]=2
     [cache_disabled_selfmod_replay]=2
     [host_code_reuse_coherence]=2
 )
@@ -1301,6 +1348,53 @@ TESTS[chk_l_upper_trap_n_clear]="7000 4E7B 0801 23FC 0000 1026 0000 0018 203C 00
 # X/N/Z/C state after CHK to prove that the in-range path changes no flags.
 TESTS[chk_l_in_range_preserve_ccr]="203C 0001 0000 223C 0002 0000 44FC 001D 4101 40C6"
 
+# DIVU.W divide-by-zero: vector 5 copies stacked SR, frame PC, and format-2
+# instruction address to D6/D4/D5. The interpreter clears only V before entry;
+# the frame PC is the successor at $101e and the instruction address is $101c.
+TESTS[divu_w_zero_frame]="7000 4E7B 0801 23FC 0000 1022 0000 0014 203C 1234 5678 7200 44FC 001F 80C1 60FE 4E71 3C17 282F 0002 2A2F 0008 7E65"
+EXPECTED_REG_FIELDS[divu_w_zero_frame]="D0=12345678 D4=0000101e D5=0000101c D6=0000271d"
+# DIVS.W zero: preserve X/N/Z/C, clear V, retain D0, and publish the
+# successor/opcode pair in the vector-5 format-2 frame.
+TESTS[divs_w_zero_frame]="7000 4E7B 0801 23FC 0000 1022 0000 0014 203C 8765 4321 7200 44FC 001F 81C1 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+EXPECTED_REG_FIELDS[divs_w_zero_frame]="D0=87654321 D4=0000101e D5=0000101c D6=0000271d"
+# Unsigned DIVL zero: preserve the complete CCR and dividend registers; the
+# stacked PC follows the four-byte opcode+extension while oldpc names opcode.
+TESTS[divu_l_zero_frame]="7000 4E7B 0801 23FC 0000 1024 0000 0014 203C 1357 9BDF 7200 44FC 001F 4C41 0000 60FE 4E71 3C17 282F 0002 2A2F 0008 7E67"
+EXPECTED_REG_FIELDS[divu_l_zero_frame]="D0=13579bdf D4=00001020 D5=0000101c D6=0000271f"
+# Signed DIVL zero exercises the same four-byte frame/lifecycle contract via
+# the distinct signed midfunc family.
+TESTS[divs_l_zero_frame]="7000 4E7B 0801 23FC 0000 1024 0000 0014 203C 89AB CDEF 7200 44FC 001F 4C41 0800 60FE 4E71 3C17 282F 0002 2A2F 0008 7E68"
+EXPECTED_REG_FIELDS[divs_l_zero_frame]="D0=89abcdef D4=00001020 D5=0000101c D6=0000271f"
+# Unsigned 64/32 DIVL zero retains both dividend halves and observes the same
+# precise frame contract through jnf_DIVLU64.
+TESTS[divu_l64_zero_frame]="7000 4E7B 0801 23FC 0000 102A 0000 0014 243C 1357 9BDF 263C 2468 ACE0 7200 44FC 001F 4C41 2403 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6B"
+EXPECTED_REG_FIELDS[divu_l64_zero_frame]="D2=13579bdf D3=2468ace0 D4=00001026 D5=00001022 D6=0000271f"
+# Signed 64/32 DIVL zero closes the separate jnf_DIVLS64 path.
+TESTS[divs_l64_zero_frame]="7000 4E7B 0801 23FC 0000 102A 0000 0014 243C 89AB CDEF 263C FFFF FFFF 7200 44FC 001F 4C41 2C03 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6C"
+EXPECTED_REG_FIELDS[divs_l64_zero_frame]="D2=89abcdef D3=ffffffff D4=00001026 D5=00001022 D6=0000271f"
+# When quotient and remainder name the same register, m68k_divl writes the
+# remainder first and the quotient second. These native 64/32 paths must retain
+# that architectural quotient rather than accidentally leaving the remainder.
+TESTS[divu_l64_same_dq_dr]="203C 0000 0001 223C 0000 0002 44FC 001F 4C41 0400 40C6"
+EXPECTED_REG_FIELDS[divu_l64_same_dq_dr]="D0=80000000 D6=00002718"
+TESTS[divs_l64_same_dq_dr]="203C FFFF FFFF 223C 0000 0002 44FC 001F 4C41 0C00 40C6"
+EXPECTED_REG_FIELDS[divs_l64_same_dq_dr]="D0=00000000 D6=00002714"
+# MOVEQ overwrites NZVC before the block boundary, selecting the no-flags
+# DIVL form while preserving an observable, deterministic final CCR.
+TESTS[divu_l64_same_dq_dr_nf]="203C 0000 0001 223C 0000 0002 44FC 001F 4C41 0400 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l64_same_dq_dr_nf]="D0=80000000 D6=00002714 D7=00000000"
+TESTS[divs_l64_same_dq_dr_nf]="203C FFFF FFFF 223C 0000 0002 44FC 001F 4C41 0C00 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l64_same_dq_dr_nf]="D0=00000000 D6=00002714 D7=00000000"
+# Taken TRAPV preserves all CCR bits and uses the same successor/opcode
+# format-2 address split as vector-5 arithmetic traps.
+TESTS[trapv_taken_frame]="7000 4E7B 0801 23FC 0000 101A 0000 001C 44FC 001F 4E76 60FE 4E71 3C17 282F 0002 2A2F 0008 7E69"
+EXPECTED_REG_FIELDS[trapv_taken_frame]="D4=00001016 D5=00001014 D6=0000271f"
+# Non-taken TRAPV must suppress vector 7, clear no CCR bit, and retire its
+# sequential successor natively. MOVE SR,D6 snapshots the preserved CCR before
+# the test hook's terminal state transition.
+TESTS[trapv_not_taken_preserve]="44FC 001D 4E76 40C6 7E6A"
+EXPECTED_REG_FIELDS[trapv_not_taken_preserve]="D6=0000271d"
+
 # SBCD borrow chain: 0x00 - 0x01 with X=0 → 0x99, borrow
 # ANDI #$EF,CCR; MOVEQ #0,D0; MOVEQ #1,D1; SBCD D1,D0
 TESTS[sbcd_borrow_chain]="023C 00EF 7000 7201 8101"
@@ -1581,6 +1675,18 @@ INIT_REGS[chk_w_upper_trap_n_clear]="00000015 00000014 00000000 00000000 0000000
 INIT_REGS[chk_l_negative_trap_n]="FFFFFFFF 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
 INIT_REGS[chk_l_upper_trap_n_clear]="00010000 0000FFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
 INIT_REGS[chk_l_in_range_preserve_ccr]="00010000 00020000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+INIT_REGS[divu_w_zero_frame]="12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_w_zero_frame]="87654321 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l_zero_frame]="13579BDF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l_zero_frame]="89ABCDEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_zero_frame]="00000000 00000000 13579BDF 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l64_zero_frame]="00000000 00000000 89ABCDEF FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_same_dq_dr]="00000001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l64_same_dq_dr]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_same_dq_dr_nf]="00000001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l64_same_dq_dr_nf]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[trapv_taken_frame]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[trapv_not_taken_preserve]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
 # Fuzz vector initial register states
 INIT_REGS[io_byte_write_roundtrip]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 50001000 0A014100 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[fuzz_alu_0]="8878FDF6 80000000 00000000 637A51D3 7FFFFFFF 00000000 000000FF FFFFFFFF 0038D748 007BBF88 003C4A38 0023044C 003974BC 00072334 00000000 007EFF00"
@@ -2082,6 +2188,18 @@ SENTINEL_A6[chk_w_upper_trap_n_clear]="a6c6e002"
 SENTINEL_A6[chk_l_negative_trap_n]="a6c6e003"
 SENTINEL_A6[chk_l_upper_trap_n_clear]="a6c6e004"
 SENTINEL_A6[chk_l_in_range_preserve_ccr]="a6c6e005"
+SENTINEL_A6[divu_w_zero_frame]="a6d50001"
+SENTINEL_A6[divs_w_zero_frame]="a6d50002"
+SENTINEL_A6[divu_l_zero_frame]="a6d50003"
+SENTINEL_A6[divs_l_zero_frame]="a6d50004"
+SENTINEL_A6[divu_l64_zero_frame]="a6d50007"
+SENTINEL_A6[divs_l64_zero_frame]="a6d50008"
+SENTINEL_A6[divu_l64_same_dq_dr]="a6d50009"
+SENTINEL_A6[divs_l64_same_dq_dr]="a6d5000a"
+SENTINEL_A6[divu_l64_same_dq_dr_nf]="a6d5000b"
+SENTINEL_A6[divs_l64_same_dq_dr_nf]="a6d5000c"
+SENTINEL_A6[trapv_taken_frame]="a6d50005"
+SENTINEL_A6[trapv_not_taken_preserve]="a6d50006"
 SENTINEL_A6[sbcd_borrow_chain]="a6f03500"
 SENTINEL_A6[sbcd_zero_zero]="a6f03600"
 SENTINEL_A6[nbcd_zero_no_x]="a6f03700"
@@ -2281,6 +2399,18 @@ declare -A RISKY_TESTS=(
     [divs_overflow]=1
     [mulu_large]=1
     [divu_remainder]=1
+    [divu_w_zero_frame]=1
+    [divs_w_zero_frame]=1
+    [divu_l_zero_frame]=1
+    [divs_l_zero_frame]=1
+    [divu_l64_zero_frame]=1
+    [divs_l64_zero_frame]=1
+    [divu_l64_same_dq_dr]=1
+    [divs_l64_same_dq_dr]=1
+    [divu_l64_same_dq_dr_nf]=1
+    [divs_l64_same_dq_dr_nf]=1
+    [trapv_taken_frame]=1
+    [trapv_not_taken_preserve]=1
     [muldiv]=1
     [abcd_basic]=1
     [sbcd_basic]=1

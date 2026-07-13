@@ -378,15 +378,17 @@ extern uintptr get_const(int r);
 extern uae_u8* compemu_host_pc_from_const(uintptr pc_const);
 extern void register_branch(uintptr not_taken, uintptr taken, uae_u8 cond);
 extern void register_possible_exception(void);
+extern void register_possible_exception_at_successor(void);
 
-/* Deferred native exception requests normally contain only the vector.  CHK
-   additionally carries its architecturally selected N value; its exact opcode
-   PC is stored in regs.jit_exception_oldpc.  The common exception boundary
-   publishes N and supplies that PC immediately before building the format-2
-   frame. Plain vector-6 requests (for example CHK2) remain untagged. */
+/* Deferred native exception requests carry the vector in the low word.  Any
+   operation whose format-2 frame needs the exact faulting opcode PC adds
+   OLDPC_VALID and stores that PC in regs.jit_exception_oldpc.  CHK also tags
+   its architecturally selected N value for publication at the common boundary.
+   Plain legacy requests (for example CHK2) remain untagged. */
 #define JIT_EXCEPTION_VECTOR_MASK 0x0000ffffu
-#define JIT_EXCEPTION_CHK_N_VALID 0x80000000u
+#define JIT_EXCEPTION_OLDPC_VALID 0x20000000u
 #define JIT_EXCEPTION_CHK_N_SET   0x40000000u
+#define JIT_EXCEPTION_CHK_N_VALID 0x80000000u
 
 #define comp_get_ibyte(o) do_get_mem_byte((uae_u8 *)(comp_pc_p + (o) + 1))
 #define comp_get_iword(o) do_get_mem_word((uae_u16 *)(comp_pc_p + (o)))

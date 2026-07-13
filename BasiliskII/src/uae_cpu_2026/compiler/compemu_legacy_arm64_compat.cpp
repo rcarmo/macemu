@@ -1328,11 +1328,12 @@ void execute_exception(uae_u32 cycles)
 {
 	countdown -= cycles;
 	const uae_u32 request = regs.jit_exception;
+	const bool has_oldpc = (request & JIT_EXCEPTION_OLDPC_VALID) != 0;
 	const bool is_chk = (request & JIT_EXCEPTION_CHK_N_VALID) != 0;
 	if (is_chk)
 		SET_NFLG((request & JIT_EXCEPTION_CHK_N_SET) != 0);
 	Exception(request & JIT_EXCEPTION_VECTOR_MASK,
-		is_chk ? regs.jit_exception_oldpc : 0);
+		has_oldpc ? regs.jit_exception_oldpc : 0);
 	regs.jit_exception = 0;
 	regs.jit_exception_oldpc = 0;
 }

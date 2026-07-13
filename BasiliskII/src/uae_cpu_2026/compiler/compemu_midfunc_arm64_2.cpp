@@ -3079,6 +3079,23 @@ MIDFUNC(2,jff_DBCC,(RW4 d, IM8 cc))
 }
 MENDFUNC(2,jff_DBCC,(RW4 d, IM8 cc))
 
+/* Conditional arithmetic exceptions share one request lifecycle: publish the
+ * exact opcode PC, clear any stale helper parameter/request, and tag the
+ * eventual vector so the common format-2 boundary consumes that PC. */
+STATIC_INLINE void prepare_arithmetic_exception(uintptr exception_idx)
+{
+	register_possible_exception_at_successor();
+	MOV_wi(REG_WORK1, 0);
+	STR_wXi(REG_WORK1, R_REGSTRUCT, exception_idx);
+}
+
+STATIC_INLINE void emit_arithmetic_exception(uae_u32 vector, uintptr exception_idx)
+{
+	MOV_wi(REG_WORK1, vector);
+	SET_xxbit(REG_WORK1, REG_WORK1, 29); /* JIT_EXCEPTION_OLDPC_VALID */
+	STR_wXi(REG_WORK1, R_REGSTRUCT, exception_idx);
+}
+
 /*
  * DIVU
  *
@@ -3094,6 +3111,8 @@ MIDFUNC(2,jnf_DIVU,(RW4 d, RR4 s))
 	int init_regs_used = 0;
 	int targetIsReg;
 	int s_is_d;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	if (isconst(s) && (uae_u16)live.state[s].val != 0) {
 		uae_u16 tmp = (uae_u16)live.state[s].val;
 		d = rmw(d);
@@ -3109,12 +3128,9 @@ MIDFUNC(2,jnf_DIVU,(RW4 d, RR4 s))
 		init_regs_used = 1;
 
 		UNSIGNED16_REG_2_REG(REG_WORK3, s);
-		CBNZ_wi(REG_WORK3, 4);    // src is not 0
+		CBNZ_wi(REG_WORK3, 5);    // src is not 0
 
-		// Signal exception 5
-		MOV_wi(REG_WORK1, 5);
-		uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-		STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+		emit_arithmetic_exception(5, exception_idx);
 		B_i(7);        // end_of_op
 	}
 
@@ -3140,10 +3156,14 @@ MENDFUNC(2,jnf_DIVU,(RW4 d, R4 s))
 
 MIDFUNC(2,jff_DIVU,(RW4 d, RR4 s))
 {
-	uae_u32* branchadd;
+	uae_u32* branchadd = NULL;
+	uae_u32* branch_success;
+	uae_u32* branch_overflow_end;
 	int init_regs_used = 0;
 	int targetIsReg;
 	int s_is_d;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	if (isconst(s) && (uae_u16)live.state[s].val != 0) {
 		uae_u16 tmp = (uae_u16)live.state[s].val;
 		d = rmw(d);
@@ -3162,23 +3182,12 @@ MIDFUNC(2,jff_DIVU,(RW4 d, RR4 s))
 		uae_u32* branchadd_not0 = (uae_u32*)get_target();
 		CBNZ_wi(REG_WORK3, 0);     // src is not 0
 
-		// Signal exception 5
-		MOV_wi(REG_WORK1, 5);
-		uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-		STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+		emit_arithmetic_exception(5, exception_idx);
 
-		// flag handling like divbyzero_special()
-		if (currprefs.cpu_model == 68020 || currprefs.cpu_model == 68030) {
-			MOV_wish(REG_WORK1, 0x5000, 16); // Set V and Z (if d >=0)
-			TBZ_wii(d, 31, 2);
-			MOV_wish(REG_WORK1, 0x9000, 16); // Set V and N (if d < 0)
-		} else if (currprefs.cpu_model >= 68040) {
-			MRS_NZCV_x(REG_WORK1);
-			CLEAR_xxCflag(REG_WORK1, REG_WORK1);
-		} else {
-			// 68000/010
-			MOV_wish(REG_WORK1, 0x0000, 16);
-		}
+		/* Match the interpreter contract exactly: word divide by zero clears
+		 * only V. X/N/Z/C and the dividend remain unchanged in the frame. */
+		MRS_NZCV_x(REG_WORK1);
+		CLEAR_xxVflag(REG_WORK1, REG_WORK1);
 		MSR_NZCV_x(REG_WORK1);
 		branchadd = (uae_u32*)get_target();
 		B_i(0);        // end_of_op
@@ -3189,13 +3198,19 @@ MIDFUNC(2,jff_DIVU,(RW4 d, RR4 s))
 	UDIV_www(REG_WORK1, d, REG_WORK3);
 
 	LSR_wwi(REG_WORK2, REG_WORK1, 16); 							// if result of this is not 0, DIVU overflows
-	CBZ_wi(REG_WORK2, 4);
-	// Here we handle overflow
-	MOV_wish(REG_WORK1, 0x9000, 16); // set V and N
+	branch_success = (uae_u32*)get_target();
+	CBZ_wi(REG_WORK2, 0);
+	// Overflow sets N/V, clears C, and preserves the previous Z value.
+	MRS_NZCV_x(REG_WORK1);
+	SET_xxbit(REG_WORK1, REG_WORK1, 31);
+	SET_xxVflag(REG_WORK1, REG_WORK1);
+	CLEAR_xxCflag(REG_WORK1, REG_WORK1);
 	MSR_NZCV_x(REG_WORK1);
-	B_i(6);
+	branch_overflow_end = (uae_u32*)get_target();
+	B_i(0);
 
 	// Here we have to calc flags and remainder
+	write_jmp_target(branch_success, (uintptr)get_target());
 	LSL_wwi(REG_WORK2, REG_WORK1, 16);
 	TST_ww(REG_WORK2, REG_WORK2);    // N and Z ok, C and V cleared
 
@@ -3204,6 +3219,7 @@ MIDFUNC(2,jff_DIVU,(RW4 d, RR4 s))
 	BFI_wwii(d, REG_WORK1, 0, 16);
 
 	// end_of_op
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
 	flags_carry_inverted = false;
 	if (init_regs_used) {
 		write_jmp_target(branchadd, (uintptr)get_target());
@@ -3231,6 +3247,8 @@ MIDFUNC(2,jnf_DIVS,(RW4 d, RR4 s))
 	int targetIsReg;
 	int s_is_d;
 	uae_s16 tmp;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	if (isconst(s) && (uae_s16)live.state[s].val != 0) {
 		tmp = (uae_s16)live.state[s].val;
 		d = rmw(d);
@@ -3246,12 +3264,9 @@ MIDFUNC(2,jnf_DIVS,(RW4 d, RR4 s))
 		init_regs_used = 1;
 
 		SIGNED16_REG_2_REG(REG_WORK3, s);
-		CBNZ_wi(REG_WORK3, 4);     // src is not 0
+		CBNZ_wi(REG_WORK3, 5);     // src is not 0
 
-		// Signal exception 5
-		MOV_wi(REG_WORK1, 5);
-		uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-		STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+		emit_arithmetic_exception(5, exception_idx);
 		branchadd = (uae_u32*)get_target();
 		B_i(0);        // end_of_op
 	}
@@ -3292,11 +3307,16 @@ MENDFUNC(2,jnf_DIVS,(RW4 d, RR4 s))
 
 MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 {
-	uae_u32* branchadd;
+	uae_u32* branchadd = NULL;
+	uae_u32* branch_positive_fit;
+	uae_u32* branch_negative_fit;
+	uae_u32* branch_overflow_end;
 	int init_regs_used = 0;
 	int targetIsReg;
 	int s_is_d;
 	uae_s16 tmp;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	if (isconst(s) && (uae_s16)live.state[s].val != 0) {
 		tmp = (uae_s16)live.state[s].val;
 		d = rmw(d);
@@ -3315,22 +3335,11 @@ MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 		uae_u32* branchadd_not0 = (uae_u32*)get_target();
 		CBNZ_wi(REG_WORK3, 0);     // src is not 0
 
-		// Signal exception 5
-		MOV_wi(REG_WORK1, 5);
-		uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-		STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+		emit_arithmetic_exception(5, exception_idx);
 
-		// flag handling like divbyzero_special()
-		if (currprefs.cpu_model == 68020 || currprefs.cpu_model == 68030) {
-			MOV_wish(REG_WORK1, 0x4000, 16); // Set Z
-		} else if (currprefs.cpu_model >= 68040) {
-			MRS_NZCV_x(REG_WORK1);
-			CLEAR_xxCflag(REG_WORK1, REG_WORK1);
-		} else {
-			// 68000/010
-			MOV_wish(REG_WORK1, 0x0000, 16);
-		}
-
+		/* As for DIVU.W, the generated interpreter clears V only. */
+		MRS_NZCV_x(REG_WORK1);
+		CLEAR_xxVflag(REG_WORK1, REG_WORK1);
 		MSR_NZCV_x(REG_WORK1);
 		branchadd = (uae_u32*)get_target();
 		B_i(0);        // end_of_op
@@ -3343,16 +3352,24 @@ MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 	// check for overflow
 	MOVN_wi(REG_WORK2, 0x7fff);           // REG_WORK2 is now 0xffff8000
 	ANDS_www(REG_WORK3, REG_WORK1, REG_WORK2);
-	BEQ_i(6); 														// positive result, no overflow
+	branch_positive_fit = (uae_u32*)get_target();
+	BEQ_i(0); 														// positive result, no overflow
 	CMP_ww(REG_WORK3, REG_WORK2);
-	BEQ_i(4);															// no overflow
+	branch_negative_fit = (uae_u32*)get_target();
+	BEQ_i(0);															// no overflow
 
-	// Here we handle overflow
-	MOV_wish(REG_WORK1, 0x9000, 16); // set V and N
+	// Overflow sets N/V, clears C, and preserves the previous Z value.
+	MRS_NZCV_x(REG_WORK1);
+	SET_xxbit(REG_WORK1, REG_WORK1, 31);
+	SET_xxVflag(REG_WORK1, REG_WORK1);
+	CLEAR_xxCflag(REG_WORK1, REG_WORK1);
 	MSR_NZCV_x(REG_WORK1);
-	B_i(10);
+	branch_overflow_end = (uae_u32*)get_target();
+	B_i(0);
 
 	// calc flags
+	write_jmp_target(branch_positive_fit, (uintptr)get_target());
+	write_jmp_target(branch_negative_fit, (uintptr)get_target());
 	LSL_wwi(REG_WORK2, REG_WORK1, 16);
 	TST_ww(REG_WORK2, REG_WORK2);         // N and Z ok, C and V cleared
 
@@ -3371,6 +3388,7 @@ MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 	BFI_wwii(d, REG_WORK1, 0, 16);
 
 	// end_of_op
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
 	flags_carry_inverted = false;
 	if (init_regs_used) {
 		write_jmp_target(branchadd, (uintptr)get_target());
@@ -3383,16 +3401,15 @@ MENDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 
 MIDFUNC(3,jnf_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 {
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
 	rem = writereg(rem);
 
-	CBNZ_wi(s1, 4);     // src is not 0
+	CBNZ_wi(s1, 5);     // src is not 0
 
-	// Signal exception 5
-	MOV_wi(REG_WORK1, 5);
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	emit_arithmetic_exception(5, exception_idx);
 	B_i(4);        // end_of_op
 
 	// src is not 0
@@ -3412,16 +3429,15 @@ MENDFUNC(3,jnf_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 
 MIDFUNC(3,jff_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 {
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
 	rem = writereg(rem);
 
-	CBNZ_wi(s1, 4);     // src is not 0
+	CBNZ_wi(s1, 5);     // src is not 0
 
-	// Signal exception 5
-	MOV_wi(REG_WORK1, 5);
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	emit_arithmetic_exception(5, exception_idx);
 
 	B_i(5);        // end_of_op
 
@@ -3445,16 +3461,15 @@ MENDFUNC(3,jff_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 
 MIDFUNC(3,jnf_DIVLS32,(RW4 d, RR4 s1, W4 rem))
 {
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
 	rem = writereg(rem);
 
-	CBNZ_wi(s1, 4);     // src is not 0
+	CBNZ_wi(s1, 5);     // src is not 0
 
-	// Signal exception 5
-	MOV_wi(REG_WORK1, 5);
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	emit_arithmetic_exception(5, exception_idx);
 	B_i(7);        // end_of_op
 
 	// src is not 0
@@ -3479,16 +3494,15 @@ MENDFUNC(3,jnf_DIVLS32,(RW4 d, RR4 s1, W4 rem))
 
 MIDFUNC(3,jff_DIVLS32,(RW4 d, RR4 s1, W4 rem))
 {
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
 	rem = writereg(rem);
 
-	CBNZ_wi(s1, 4);     // src is not 0
+	CBNZ_wi(s1, 5);     // src is not 0
 
-	// Signal exception 5
-	MOV_wi(REG_WORK1, 5);
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	emit_arithmetic_exception(5, exception_idx);
 	B_i(8);        // end_of_op
 
 	// src is not 0
@@ -3520,15 +3534,15 @@ MENDFUNC(3,jff_DIVLS32,(RW4 d, RR4 s1, W4 rem))
  */
 MIDFUNC(3,jnf_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
 {
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	src = readreg(src);
 	dq = rmw(dq);
 	dr = rmw(dr);
 
 	// Division by zero check
-	CBNZ_wi(src, 4);
-	MOV_wi(REG_WORK1, 5);
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	CBNZ_wi(src, 5);
+	emit_arithmetic_exception(5, exception_idx);
 	B_i(9);  // skip to end_of_op
 
 	// Combine {dr, dq} into 64-bit dividend in REG_WORK1.x
@@ -3543,8 +3557,10 @@ MIDFUNC(3,jnf_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
 
 	// Remainder = dividend - quotient * divisor
 	MSUB_xxxx(REG_WORK3, src, REG_WORK2, REG_WORK1);
-	MOV_ww(dq, REG_WORK2);
+	/* Match m68k_divl's architecturally visible alias ordering: if dr and dq
+	 * name the same register, the quotient write wins. */
 	MOV_ww(dr, REG_WORK3);
+	MOV_ww(dq, REG_WORK2);
 
 	// end_of_op
 	unlock2(dr);
@@ -3553,6 +3569,58 @@ MIDFUNC(3,jnf_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
 }
 MENDFUNC(3,jnf_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
 
+MIDFUNC(3,jff_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
+{
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_success;
+	uae_u32 *branch_zero_end;
+	uae_u32 *branch_overflow_end;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
+	src = readreg(src);
+	dq = rmw(dq);
+	dr = rmw(dr);
+
+	/* A zero divisor leaves the complete incoming CCR and both dividend
+	 * registers unchanged.  The generator made that CCR live before entry. */
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(src, 0);
+	emit_arithmetic_exception(5, exception_idx);
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
+
+	ORR_xxxLSLi(REG_WORK1, dq, dr, 32);
+	UDIV_xxx(REG_WORK2, REG_WORK1, src);
+	LSR_xxi(REG_WORK3, REG_WORK2, 32);
+	branch_success = (uae_u32 *)get_target();
+	CBZ_xi(REG_WORK3, 0);
+
+	/* Overflow: N=V=1, C=0, Z preserved; no result registers change. */
+	MRS_NZCV_x(REG_WORK1);
+	SET_xxbit(REG_WORK1, REG_WORK1, 31);
+	SET_xxVflag(REG_WORK1, REG_WORK1);
+	CLEAR_xxCflag(REG_WORK1, REG_WORK1);
+	MSR_NZCV_x(REG_WORK1);
+	branch_overflow_end = (uae_u32 *)get_target();
+	B_i(0);
+
+	write_jmp_target(branch_success, (uintptr)get_target());
+	MSUB_xxxx(REG_WORK3, src, REG_WORK2, REG_WORK1);
+	/* The quotient is the final architectural value when dr aliases dq. */
+	MOV_ww(dr, REG_WORK3);
+	MOV_ww(dq, REG_WORK2);
+	TST_ww(REG_WORK2, REG_WORK2); /* N/Z from quotient; V=C=0 */
+
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
+	flags_carry_inverted = false;
+	unlock2(dr);
+	unlock2(dq);
+	unlock2(src);
+}
+MENDFUNC(3,jff_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
+
 /*
  * DIVLS64 — 64-bit signed divide
  * {dr:dq} / src → quotient in dq, remainder in dr
@@ -3560,15 +3628,15 @@ MENDFUNC(3,jnf_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
  */
 MIDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 {
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
 	src = readreg(src);
 	dq = rmw(dq);
 	dr = rmw(dr);
 
 	// Division by zero check
-	CBNZ_wi(src, 4);
-	MOV_wi(REG_WORK1, 5);
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	CBNZ_wi(src, 5);
+	emit_arithmetic_exception(5, exception_idx);
 	B_i(12); // skip to end_of_op
 
 	// Combine {dr, dq} into 64-bit signed dividend in REG_WORK1.x
@@ -3588,8 +3656,9 @@ MIDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 
 	// Remainder = dividend - quotient * divisor
 	MSUB_xxxx(REG_WORK3, REG_WORK4, REG_WORK2, REG_WORK1);
-	MOV_ww(dq, REG_WORK2);
+	/* Match m68k_divl's architecturally visible alias ordering. */
 	MOV_ww(dr, REG_WORK3);
+	MOV_ww(dq, REG_WORK2);
 
 	// end_of_op
 	unlock2(dr);
@@ -3597,6 +3666,58 @@ MIDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 	unlock2(src);
 }
 MENDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
+
+MIDFUNC(3,jff_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
+{
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_success;
+	uae_u32 *branch_zero_end;
+	uae_u32 *branch_overflow_end;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
+	src = readreg(src);
+	dq = rmw(dq);
+	dr = rmw(dr);
+
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(src, 0);
+	emit_arithmetic_exception(5, exception_idx);
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
+
+	ORR_xxxLSLi(REG_WORK1, dq, dr, 32);
+	SXTW_xw(REG_WORK4, src);
+	SDIV_xxx(REG_WORK2, REG_WORK1, REG_WORK4);
+	SXTW_xw(REG_WORK3, REG_WORK2);
+	CMP_xx(REG_WORK3, REG_WORK2);
+	branch_success = (uae_u32 *)get_target();
+	BEQ_i(0);
+
+	/* Signed overflow has the same defined CCR contract as unsigned. */
+	MRS_NZCV_x(REG_WORK1);
+	SET_xxbit(REG_WORK1, REG_WORK1, 31);
+	SET_xxVflag(REG_WORK1, REG_WORK1);
+	CLEAR_xxCflag(REG_WORK1, REG_WORK1);
+	MSR_NZCV_x(REG_WORK1);
+	branch_overflow_end = (uae_u32 *)get_target();
+	B_i(0);
+
+	write_jmp_target(branch_success, (uintptr)get_target());
+	MSUB_xxxx(REG_WORK3, REG_WORK4, REG_WORK2, REG_WORK1);
+	/* The quotient is the final architectural value when dr aliases dq. */
+	MOV_ww(dr, REG_WORK3);
+	MOV_ww(dq, REG_WORK2);
+	TST_ww(REG_WORK2, REG_WORK2); /* N/Z from quotient; V=C=0 */
+
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
+	flags_carry_inverted = false;
+	unlock2(dr);
+	unlock2(dq);
+	unlock2(src);
+}
+MENDFUNC(3,jff_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 
 /*
  * EOR
@@ -7900,7 +8021,8 @@ MENDFUNC(1,jnf_NBCD_b,(RW1 d))
  */
 STATIC_INLINE void emit_chk_trap(int negative, uintptr exception_idx)
 {
-	const uae_u32 request = 6 | JIT_EXCEPTION_CHK_N_VALID |
+	const uae_u32 request = 6 | JIT_EXCEPTION_OLDPC_VALID |
+		JIT_EXCEPTION_CHK_N_VALID |
 		(negative ? JIT_EXCEPTION_CHK_N_SET : 0);
 	LOAD_U32(REG_WORK3, request);
 	STR_wXi(REG_WORK3, R_REGSTRUCT, exception_idx);
@@ -7912,6 +8034,8 @@ MIDFUNC(2,jnf_CHK_w,(RR2 d, RR2 s))
 	s = readreg(s);
 
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	MOV_wi(REG_WORK3, 0);
+	STR_wXi(REG_WORK3, R_REGSTRUCT, exception_idx);
 
 	SXTH_ww(REG_WORK1, d);
 	SXTH_ww(REG_WORK2, s);
@@ -7943,6 +8067,8 @@ MIDFUNC(2,jnf_CHK_l,(RR4 d, RR4 s))
 	s = readreg(s);
 
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	MOV_wi(REG_WORK3, 0);
+	STR_wXi(REG_WORK3, R_REGSTRUCT, exception_idx);
 
 	CMP_wi(d, 0);
 	uae_u32 *nonnegative = (uae_u32 *)get_target();
@@ -8555,17 +8681,14 @@ MENDFUNC(1,jff_TAS,(RW1 d))
  */
 MIDFUNC(0,jnf_TRAPV,(void))
 {
-	/* Read NZCV, test V bit (bit 28), write exception number if set */
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
+	/* MRS does not alter NZCV. Test V without normalising carry in a temporary:
+	 * TRAPV preserves the complete incoming CCR in its exception frame and on
+	 * its non-trapping successor. */
 	MRS_NZCV_x(REG_WORK1);
-	if (flags_carry_inverted) {
-		EOR_xxCflag(REG_WORK1, REG_WORK1);
-		flags_carry_inverted = false;
-	}
-	/* V flag is bit 28 in NZCV */
-	TBZ_xii(REG_WORK1, 28, 3);   /* if V=0, skip next 3 instructions */
-	MOV_wi(REG_WORK2, 7);        /* exception number 7 */
-	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	STR_wXi(REG_WORK2, R_REGSTRUCT, idx);
+	TBZ_xii(REG_WORK1, 28, 4);   /* if V=0, skip the tagged request */
+	emit_arithmetic_exception(7, exception_idx);
 }
 MENDFUNC(0,jnf_TRAPV,(void))
 

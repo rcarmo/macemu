@@ -313,6 +313,10 @@ const compemuHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu.h",
   import.meta.url,
 )).text();
+const compemuArmHeaderSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_arm.h",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -401,10 +405,10 @@ const executeExceptionBody = functionBody(
 for (const contract of [
   "request & JIT_EXCEPTION_CHK_N_VALID",
   "SET_NFLG((request & JIT_EXCEPTION_CHK_N_SET) != 0)",
-  "is_chk ? regs.jit_exception_oldpc : 0",
+  "has_oldpc ? regs.jit_exception_oldpc : 0",
   "regs.jit_exception_oldpc = 0",
 ]) {
-  requireText(executeExceptionBody, contract, "CHK exception-entry N/PC publication");
+  requireText(executeExceptionBody, contract, "deferred exception-entry flag/PC publication");
 }
 requireText(
   generatedSource,
@@ -422,6 +426,143 @@ for (const replayState of [
   'INIT_REGS[chk_w_equal]="00000032 00000032',
 ]) {
   requireText(harnessSource, replayState, "CHK exact-anchor operand restoration");
+}
+
+/* DIVU.W/DIVS.W, every 68020 DIVL shape, and TRAPV share one tagged request
+ * lifecycle.  The frame's ordinary PC is the consumed successor while the
+ * format-2 instruction-address field comes from the exact pc_hist[] anchor. */
+for (const contract of [
+  "JIT_EXCEPTION_OLDPC_VALID 0x20000000u",
+  "JIT_EXCEPTION_VECTOR_MASK 0x0000ffffu",
+] as const) {
+  requireText(compemuArmHeaderSource, contract, "deferred arithmetic request encoding");
+}
+const arithmeticPreparationBody = functionBody(
+  midfunc2Source,
+  "STATIC_INLINE void prepare_arithmetic_exception",
+  "/*\n * DIVU",
+  "deferred arithmetic request helpers",
+);
+for (const contract of [
+  "register_possible_exception_at_successor();",
+  "MOV_wi(REG_WORK1, 0);",
+  "STR_wXi(REG_WORK1, R_REGSTRUCT, exception_idx);",
+  "SET_xxbit(REG_WORK1, REG_WORK1, 29)",
+] as const) {
+  requireText(arithmeticPreparationBody, contract, "deferred arithmetic request helpers");
+}
+const arithmeticSuccessorBody = functionBody(
+  allocatorSource,
+  "void register_possible_exception_at_successor(void)",
+  "/* Note: get_handler may fail",
+  "deferred arithmetic successor publication",
+);
+for (const contract of [
+  "register_possible_exception();",
+  "comp_pc_p + m68k_pc_offset",
+  "jit_compile_current_op_m68k_pc",
+  "next_host_pc - jit_compile_current_op_host_pc",
+  "compemu_raw_set_pc_full_i(next_m68k_pc, next_host_pc);",
+] as const) {
+  requireText(arithmeticSuccessorBody, contract, "deferred arithmetic successor publication");
+}
+const divisionMidfuncBody = functionBody(
+  midfunc2Source,
+  "MIDFUNC(2,jnf_DIVU",
+  "/*\n * EOR",
+  "native division exception family",
+);
+if (divisionMidfuncBody.split("prepare_arithmetic_exception(exception_idx);").length - 1 !== 12) {
+  fail("native division exception family: every word/long signed/unsigned shape must prepare the shared gate");
+}
+if (divisionMidfuncBody.split("emit_arithmetic_exception(5, exception_idx);").length - 1 !== 12) {
+  fail("native division exception family: every word/long signed/unsigned shape must tag vector 5");
+}
+/* Flag-publication sequences may grow without changing division control flow.
+ * Successful/overflow paths therefore use patched labels, never instruction
+ * counts embedded in conditional branches. */
+for (const [start, end, contracts, forbidden] of [
+  [
+    "MIDFUNC(2,jff_DIVU",
+    "MENDFUNC(2,jff_DIVU",
+    ["branch_success", "CBZ_wi(REG_WORK2, 0)", "write_jmp_target(branch_success", "write_jmp_target(branch_overflow_end"],
+    ["CBZ_wi(REG_WORK2, 4)", "B_i(6)"],
+  ],
+  [
+    "MIDFUNC(2,jff_DIVS",
+    "MENDFUNC(2,jff_DIVS",
+    ["branch_positive_fit", "branch_negative_fit", "BEQ_i(0)", "write_jmp_target(branch_overflow_end"],
+    ["BEQ_i(6)", "BEQ_i(4)", "B_i(10)"],
+  ],
+] as const) {
+  const body = functionBody(midfunc2Source, start, end, "word division structural branch targets");
+  for (const contract of contracts) {
+    requireText(body, contract, "word division structural branch targets");
+  }
+  for (const staleOffset of forbidden) {
+    if (body.includes(staleOffset)) {
+      fail(`word division structural branch targets: stale numeric offset ${staleOffset}`);
+    }
+  }
+}
+/* m68k_divl stores remainder before quotient.  The order is observable when
+ * dr==dq, so every native 64/32 implementation must make quotient the final
+ * write rather than treating the result registers as independent. */
+for (const [start, end] of [
+  ["MIDFUNC(3,jnf_DIVLU64", "MENDFUNC(3,jnf_DIVLU64"],
+  ["MIDFUNC(3,jff_DIVLU64", "MENDFUNC(3,jff_DIVLU64"],
+  ["MIDFUNC(3,jnf_DIVLS64", "MENDFUNC(3,jnf_DIVLS64"],
+  ["MIDFUNC(3,jff_DIVLS64", "MENDFUNC(3,jff_DIVLS64"],
+] as const) {
+  const body = functionBody(midfunc2Source, start, end, "DIVL same-register result ordering");
+  const remainderWrite = body.lastIndexOf("MOV_ww(dr, REG_WORK3);");
+  const quotientWrite = body.lastIndexOf("MOV_ww(dq, REG_WORK2);");
+  if (remainderWrite < 0 || quotientWrite < remainderWrite) {
+    fail(`DIVL same-register result ordering: quotient must follow remainder in ${start}`);
+  }
+}
+const trapvMidfuncBody = functionBody(
+  midfunc2Source,
+  "MIDFUNC(0,jnf_TRAPV",
+  "/*\n * ROXLW",
+  "native TRAPV exception family",
+);
+for (const contract of [
+  "prepare_arithmetic_exception(exception_idx);",
+  "TBZ_xii(REG_WORK1, 28, 4)",
+  "emit_arithmetic_exception(7, exception_idx);",
+] as const) {
+  requireText(trapvMidfuncBody, contract, "native TRAPV exception family");
+}
+if (trapvMidfuncBody.includes("flags_carry_inverted = false")) {
+  fail("native TRAPV exception family: TRAPV must not mutate the carry representation");
+}
+for (const contract of [
+  "make_flags_live();\n\tjnf_TRAPV();",
+  "make_flags_live();\n\tstart_needflags();\n\tjff_DIVU(dst, src);",
+  "make_flags_live();\n\tstart_needflags();\n\tjff_DIVS(dst, src);",
+  "make_flags_live();\n\t    start_needflags();\n\t    jff_DIVLU64(dq, dr, src);",
+  "make_flags_live();\n\t    start_needflags();\n\t    jff_DIVLS64(dq, dr, src);",
+  "preserve_flags_before_nzcv_clobber();\n\tint dq = (extra >> 12) & 7;",
+] as const) {
+  requireText(generatedSource, contract, "generated deferred arithmetic flag contract");
+}
+for (const vector of [
+  "divu_w_zero_frame",
+  "divs_w_zero_frame",
+  "divu_l_zero_frame",
+  "divs_l_zero_frame",
+  "divu_l64_zero_frame",
+  "divs_l64_zero_frame",
+  "divu_l64_same_dq_dr",
+  "divs_l64_same_dq_dr",
+  "divu_l64_same_dq_dr_nf",
+  "divs_l64_same_dq_dr_nf",
+  "trapv_taken_frame",
+  "trapv_not_taken_preserve",
+] as const) {
+  requireText(harnessSource, `[${vector}]=1`, "deferred arithmetic native replay coverage");
+  requireText(harnessSource, `[${vector}]=2`, "deferred arithmetic three-pass replay coverage");
 }
 
 /* Ordered whole-instruction helpers receive an exact pc_hist[] opcode PC and
