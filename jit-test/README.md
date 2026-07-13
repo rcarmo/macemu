@@ -47,10 +47,11 @@ Each passing invariant emits a `METRIC structural_*=1` line. A structural failur
 
 ## Current deterministic vectors
 
-`run.sh` currently covers 394 vectors across:
+`run.sh` currently covers 421 vectors across:
 - Decode/dispatch sanity (`nop`, `nop_triplet`)
 - Bit manipulation boundary behavior (`bitops`, `bitops_chg`, high-bit immediate `bitops_highbit`, high-bit toggle `bitops_chg_highbit`)
 - Core arithmetic/data movement (`move` + `moveq_signext` + moveq edge sign-extension checks, `alu` + negative roundtrip check, `addi/subi` incl. byte/word/long plus byte/word/long-boundary-wrap checks, `quick_ops` incl. long-negative roundtrip + word+word-wrap+long-wrap+byte+byte-wrap+address-register variants, `compare` + `cmpi` size coverage for both non-zero and zero immediates plus negative byte/word/long boundary forms, `muldiv`, `movem`, `misc` + `swap_roundtrip`, `not` size forms (`not_sizes`) plus explicit NOT.W/NOT.B upper-bit preservation checks, `clr` size forms (`clr_sizes`) plus byte/word partial-clear upper-bit preservation checks, `neg` size forms (`neg_sizes`) plus explicit zero-input NEG size path, `flags` incl. OR/AND/EOR-CCR path, `exg`, `imm_logic` incl. byte+word+long variants plus explicit byte/word/long high-bit edge logic checks, `tst` size forms on negative, zero, and positive inputs)
+- Shift/rotate contracts, including register-count ROXL/ROXR in both directions and all widths, low-six-bit modulo 9/17/33 effective-zero paths, C=X with unchanged X/data, size-correct N/Z, cleared V, partial-register preservation, and populated guest-register mappings
 - Ordered semantic services: CAS byte/word/long success and failure, predecrement/postincrement/displacement modes, CAS2 success/failure and aliasing, MOVES privilege/fetch ordering and register/EA aliasing, all eight bitfield operations across register and memory EAs, and width/offset/fault-order edges
 - System-control services: RESET, STOP, RTE, USP moves, MOVEC, and cache operations with privilege, extension-fetch, exact fault-PC, and successor-PC vectors
 - Branch condition behavior (`bra` short+word, `bne/beq` short+word, both short + `.W` displacement forms for `bpl/bmi`, `bvc/bvs`, `bge/blt`, `bgt/ble`, `bcc/bcs`, `bhi/bls`, plus chained-condition branch sequencing with explicit Z-clear, Z-set, carry-clear, carry-set, and overflow-set chain behaviors)

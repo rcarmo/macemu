@@ -173,10 +173,10 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 **Current structural-audit gate (2026-07-13):** ✅
 **Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible
-**JIT harness:** ✅ 365/365 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**JIT harness:** ✅ 421/421 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
-**Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in both ordinary and strict tables. With FPU translation enabled: 46,343 native-generated, 1,871 semantic services, and 68 architectural traps.
-**Finder retirement gate:** ✅ ordinary and strict runs each reached twelve `DiskStatus 43` events and captured 24,000,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 da5b5d0a98b945ff7540dbc8a62197c877b8d61d8947e7c66f1e03c98c7cd466`), with no host signal.
+**Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
+**Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
 
 This gate was run host-native on the Orange Pi 6 Plus (`CIX P1`/`CD8180` or `CD8160`, 12 AArch64 CPU cores, 16 GB-class RAM with about 14 GiB visible, Debian Trixie, NVMe root storage). It covers structural opcode-family repairs, helper and exception boundaries, guest-memory coherency, translated-source revalidation, cache-state separation, retirement-clock ownership, register-allocation pressure, and partial JIT initialization/teardown. `MV2SR.W` intentionally remains on its exact legacy semantic-service path pending stronger native proof.
 
@@ -208,6 +208,18 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 **301 total vectors, all risky, score=100**
 
 ### Recent bug fixes (2026-07)
+
+- **Register-count ROXL/ROXR effective-zero flags and structural branches** (2026-07-13):
+  the AArch64 byte/word/long flag-setting helpers used numeric `CBNZ`/`B` instruction
+  displacements around variable-length flag emission. Their effective-zero path also
+  derived N/Z and cleared V but left C clear instead of copying unchanged X as required
+  by the 68040 contract. All six helpers now patch symbolic rotate/end targets and merge
+  X into NZCV.C after the size-correct result test. Forced-native vectors cover both
+  directions and all widths, the deepest low-six-bit modulo reductions (63→0 mod 9,
+  51→0 mod 17, 33→0 mod 33), raw count zero, zero/negative size results, stale-V clearing,
+  C=X, upper-bit preservation, and populated guest-register mappings. The generated
+  opcode surface has no separate no-flags ROX path: all 24 handlers call the flag-setting
+  family. Full validation passes 421/421 with zero fallback/null legal encodings.
 
 - **ARM64 native DBF exits use the runtime PC** (2026-07-04):
   the remaining post-`151b1853` bad video/resource wall was narrowed to the

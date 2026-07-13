@@ -6509,7 +6509,8 @@ MENDFUNC(1,jff_ROLW,(RW2 d))
  * N Set if the most significant bit of the result is set. Cleared otherwise.
  * Z Set if the result is zero. Cleared otherwise.
  * V Always cleared.
- * C Set according to the last bit rotated out of the operand. Cleared when the rotate count is zero.
+ * C Set according to the last bit rotated out of the operand. For an effective
+ *   count of zero, X is unchanged and copied to C.
  *
  */
 MIDFUNC(2,jnf_ROXL_b,(RW1 d, RR4 i))
@@ -6634,14 +6635,19 @@ MIDFUNC(2,jff_ROXL_b,(RW1 d, RR4 i))
 	CMP_wi(REG_WORK1, 8);
 	BLE_i(2);
 	SUB_wwi(REG_WORK1, REG_WORK1, 9);
-	CBNZ_wi(REG_WORK1, 4);			// need to rotate
+	uae_u32* rotate_branch = (uae_u32*)get_target();
+	CBNZ_wi(REG_WORK1, 0);			// need to rotate (patched below)
 
 	LSL_wwi(REG_WORK1, d, 24);
 	TST_ww(REG_WORK1, REG_WORK1);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);			// end of op
+	MRS_NZCV_x(REG_WORK4);
+	BFI_wwii(REG_WORK4, x, 29, 1); // effective count zero: C = unchanged X
+	MSR_NZCV_x(REG_WORK4);
+	uae_u32* end_branch = (uae_u32*)get_target();
+	B_i(0);			// end of op (patched below)
 
 	// need to rotate
+	write_jmp_target(rotate_branch, (uintptr)get_target());
 	MOV_ww(REG_WORK2, d);
 	BFI_wwii(REG_WORK2, x, 8, 1);         // move x to left side of d
 	BFI_wwii(REG_WORK2, REG_WORK2, 9, 9); // duplicate 9 bits
@@ -6662,7 +6668,7 @@ MIDFUNC(2,jff_ROXL_b,(RW1 d, RR4 i))
 	MSR_NZCV_x(REG_WORK4);
 
 	// end of op
-	write_jmp_target(branchadd, (uintptr)get_target());
+	write_jmp_target(end_branch, (uintptr)get_target());
 
 	flags_carry_inverted = false;
 	unlock2(x);
@@ -6682,14 +6688,19 @@ MIDFUNC(2,jff_ROXL_w,(RW2 d, RR4 i))
 	CMP_wi(REG_WORK1, 16);
 	BLE_i(2);
 	SUB_wwi(REG_WORK1, REG_WORK1, 17);
-	CBNZ_wi(REG_WORK1, 4);			// need to rotate
+	uae_u32* rotate_branch = (uae_u32*)get_target();
+	CBNZ_wi(REG_WORK1, 0);			// need to rotate (patched below)
 
 	LSL_wwi(REG_WORK1, d, 16);
 	TST_ww(REG_WORK1, REG_WORK1);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);			// end of op
+	MRS_NZCV_x(REG_WORK4);
+	BFI_wwii(REG_WORK4, x, 29, 1); // effective count zero: C = unchanged X
+	MSR_NZCV_x(REG_WORK4);
+	uae_u32* end_branch = (uae_u32*)get_target();
+	B_i(0);			// end of op (patched below)
 
 	// need to rotate
+	write_jmp_target(rotate_branch, (uintptr)get_target());
 	MOV_ww(REG_WORK2, d);
 	BFI_wwii(REG_WORK2, x, 16, 1);          // move x to left side of d
 	BFI_xxii(REG_WORK2, REG_WORK2, 17, 17); // duplicate 17 bits
@@ -6711,7 +6722,7 @@ MIDFUNC(2,jff_ROXL_w,(RW2 d, RR4 i))
 	MSR_NZCV_x(REG_WORK4);
 
 	// end of op
-	write_jmp_target(branchadd, (uintptr)get_target());
+	write_jmp_target(end_branch, (uintptr)get_target());
 
 	flags_carry_inverted = false;
 	unlock2(x);
@@ -6728,13 +6739,18 @@ MIDFUNC(2,jff_ROXL_l,(RW4 d, RR4 i))
 	CMP_wi(REG_WORK1, 32);
 	BLE_i(2);
 	SUB_wwi(REG_WORK1, REG_WORK1, 33);
-	CBNZ_wi(REG_WORK1, 3);			// need to rotate
+	uae_u32* rotate_branch = (uae_u32*)get_target();
+	CBNZ_wi(REG_WORK1, 0);			// need to rotate (patched below)
 
 	TST_ww(d, d);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);			// end of op
+	MRS_NZCV_x(REG_WORK4);
+	BFI_wwii(REG_WORK4, x, 29, 1); // effective count zero: C = unchanged X
+	MSR_NZCV_x(REG_WORK4);
+	uae_u32* end_branch = (uae_u32*)get_target();
+	B_i(0);			// end of op (patched below)
 
 	// need to rotate
+	write_jmp_target(rotate_branch, (uintptr)get_target());
 	MOV_ww(REG_WORK2, d);
 	BFI_xxii(REG_WORK2, x, 32, 1);          // move x to left side of d
 	BFI_xxii(REG_WORK2, REG_WORK2, 33, 31); // duplicate 31 bits
@@ -6756,7 +6772,7 @@ MIDFUNC(2,jff_ROXL_l,(RW4 d, RR4 i))
 	MSR_NZCV_x(REG_WORK4);
 
 	// end of op
-	write_jmp_target(branchadd, (uintptr)get_target());
+	write_jmp_target(end_branch, (uintptr)get_target());
 
 	flags_carry_inverted = false;
 	unlock2(x);
@@ -7088,7 +7104,8 @@ MENDFUNC(1,jff_RORW,(RW2 d))
  * N Set if the most significant bit of the result is set. Cleared otherwise.
  * Z Set if the result is zero. Cleared otherwise.
  * V Always cleared.
- * C Set according to the last bit rotated out of the operand. Cleared when the rotate count is zero.
+ * C Set according to the last bit rotated out of the operand. For an effective
+ *   count of zero, X is unchanged and copied to C.
  *
  */
 MIDFUNC(2,jnf_ROXR_b,(RW1 d, RR4 i))
@@ -7205,14 +7222,19 @@ MIDFUNC(2,jff_ROXR_b,(RW1 d, RR4 i))
 	CMP_wi(REG_WORK1, 8);
 	BLE_i(2);
 	SUB_wwi(REG_WORK1, REG_WORK1, 9);
-	CBNZ_wi(REG_WORK1, 4);			// need to rotate
+	uae_u32* rotate_branch = (uae_u32*)get_target();
+	CBNZ_wi(REG_WORK1, 0);			// need to rotate (patched below)
 
 	LSL_wwi(REG_WORK1, d, 24);
 	TST_ww(REG_WORK1, REG_WORK1);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);			// end of op
+	MRS_NZCV_x(REG_WORK4);
+	BFI_wwii(REG_WORK4, x, 29, 1); // effective count zero: C = unchanged X
+	MSR_NZCV_x(REG_WORK4);
+	uae_u32* end_branch = (uae_u32*)get_target();
+	B_i(0);			// end of op (patched below)
 
 	// need to rotate
+	write_jmp_target(rotate_branch, (uintptr)get_target());
 	MOV_ww(REG_WORK2, d);
 	BFI_wwii(REG_WORK2, x, 8, 1);         // move x to left side of d
 	BFI_wwii(REG_WORK2, REG_WORK2, 9, 9); // duplicate 9 bits
@@ -7234,7 +7256,7 @@ MIDFUNC(2,jff_ROXR_b,(RW1 d, RR4 i))
 	MSR_NZCV_x(REG_WORK4);
 
 	// end of op
-	write_jmp_target(branchadd, (uintptr)get_target());
+	write_jmp_target(end_branch, (uintptr)get_target());
 
 	flags_carry_inverted = false;
 	unlock2(x);
@@ -7254,14 +7276,19 @@ MIDFUNC(2,jff_ROXR_w,(RW2 d, RR4 i))
 	CMP_wi(REG_WORK1, 16);
 	BLE_i(2);
 	SUB_wwi(REG_WORK1, REG_WORK1, 17);
-	CBNZ_wi(REG_WORK1, 4);			// need to rotate
+	uae_u32* rotate_branch = (uae_u32*)get_target();
+	CBNZ_wi(REG_WORK1, 0);			// need to rotate (patched below)
 
 	LSL_wwi(REG_WORK1, d, 16);
 	TST_ww(REG_WORK1, REG_WORK1);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);			// end of op
+	MRS_NZCV_x(REG_WORK4);
+	BFI_wwii(REG_WORK4, x, 29, 1); // effective count zero: C = unchanged X
+	MSR_NZCV_x(REG_WORK4);
+	uae_u32* end_branch = (uae_u32*)get_target();
+	B_i(0);			// end of op (patched below)
 
 	// need to rotate
+	write_jmp_target(rotate_branch, (uintptr)get_target());
 	MOV_ww(REG_WORK2, d);
 	BFI_wwii(REG_WORK2, x, 16, 1);          // move x to left side of d
 	BFI_xxii(REG_WORK2, REG_WORK2, 17, 17); // duplicate 17 bits
@@ -7283,7 +7310,7 @@ MIDFUNC(2,jff_ROXR_w,(RW2 d, RR4 i))
 	MSR_NZCV_x(REG_WORK4);
 
 	// end of op
-	write_jmp_target(branchadd, (uintptr)get_target());
+	write_jmp_target(end_branch, (uintptr)get_target());
 
 	flags_carry_inverted = false;
 	unlock2(x);
@@ -7300,13 +7327,18 @@ MIDFUNC(2,jff_ROXR_l,(RW4 d, RR4 i))
 	CMP_wi(REG_WORK1, 32);
 	BLE_i(2);
 	SUB_wwi(REG_WORK1, REG_WORK1, 33);
-	CBNZ_wi(REG_WORK1, 3);			// need to rotate
+	uae_u32* rotate_branch = (uae_u32*)get_target();
+	CBNZ_wi(REG_WORK1, 0);			// need to rotate (patched below)
 
 	TST_ww(d, d);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);			// end of op
+	MRS_NZCV_x(REG_WORK4);
+	BFI_wwii(REG_WORK4, x, 29, 1); // effective count zero: C = unchanged X
+	MSR_NZCV_x(REG_WORK4);
+	uae_u32* end_branch = (uae_u32*)get_target();
+	B_i(0);			// end of op (patched below)
 
 	// need to rotate
+	write_jmp_target(rotate_branch, (uintptr)get_target());
 	MOV_ww(REG_WORK2, d);
 	BFI_xxii(REG_WORK2, x, 32, 1);          // move x to left side of d
 	BFI_xxii(REG_WORK2, REG_WORK2, 33, 31); // duplicate 31 bits
@@ -7327,7 +7359,7 @@ MIDFUNC(2,jff_ROXR_l,(RW4 d, RR4 i))
 	MSR_NZCV_x(REG_WORK4);
 
 	// end of op
-	write_jmp_target(branchadd, (uintptr)get_target());
+	write_jmp_target(end_branch, (uintptr)get_target());
 
 	flags_carry_inverted = false;
 	unlock2(x);

@@ -302,6 +302,11 @@ TEST_ORDER+=(fullsr_orsr_privilege_vector8 fullsr_andsr_privilege_vector8 fullsr
 # Exact-PC bitfield service coverage spans every operation and each legal EA decoder.
 TEST_ORDER+=(bitfield_mem_an_family bitfield_d16_an bitfield_indexed_an bitfield_absw bitfield_absl bitfield_pc_d16 bitfield_pc_indexed)
 TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves_predec_store_alias moves_predec_read_alias moves_l_indexed_store)
+# Register-count ROX must copy unchanged X into C when the effective ring count is zero.
+# Cover both directions and all widths, including each width's deepest low-six-bit
+# modulo-reduction path, the unreduced source-count-zero path, and both directions
+# with the remaining guest register mappings populated before the rotate.
+TEST_ORDER+=(roxl_b_reg_count_63_copies_x roxr_b_reg_count_63_copies_x roxl_w_reg_count_51_copies_x roxr_w_reg_count_51_copies_x roxl_l_reg_count_33_copies_x roxr_l_reg_count_33_copies_x roxl_l_reg_count_0_copies_x roxr_reg_count_0_copies_x roxl_l_reg_count_33_pressure roxr_l_reg_count_33_pressure)
 
 declare -A TESTS
 declare -A EXPECTED_D0
@@ -310,6 +315,16 @@ declare -A EXPECTED_REG_FIELDS
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
 declare -A NATIVE_REPLAY_TESTS=(
+    [roxl_l_reg_count_33_pressure]=1
+    [roxr_l_reg_count_33_pressure]=1
+    [roxl_b_reg_count_63_copies_x]=1
+    [roxr_b_reg_count_63_copies_x]=1
+    [roxl_w_reg_count_51_copies_x]=1
+    [roxr_w_reg_count_51_copies_x]=1
+    [roxl_l_reg_count_33_copies_x]=1
+    [roxr_l_reg_count_33_copies_x]=1
+    [roxl_l_reg_count_0_copies_x]=1
+    [roxr_reg_count_0_copies_x]=1
     [chk_w_in_range]=1
     [chk_w_zero]=1
     [chk_w_equal]=1
@@ -604,6 +619,35 @@ TESTS[roxr_reg_count_32]="003C 0010 7001 7220 E2B0"
 # Count=0 semantics are special (no data rotation, flag handling edge).
 # ORI.B #$10,CCR = 003C 0010; MOVE.L #$12345678,D0 = 203C 1234 5678; MOVEQ #0,D1 = 7200; ROXR.L D1,D0 = E2B0
 TESTS[roxr_reg_count_0]="003C 0010 203C 1234 5678 7200 E2B0"
+# Effective-zero register-count ROX paths. ORI.CCR seeds X=1 and stale V=1;
+# SCS makes C architecturally observable. The full REGDUMP additionally proves
+# unchanged X/data, size-correct N/Z, and cleared V. Alternating zero and
+# negative operands exercises both Z outcomes without weakening upper-bit checks.
+TESTS[roxl_b_reg_count_63_copies_x]="003C 0012 203C 89AB CD00 727F 7C00 E330 55C6"
+EXPECTED_REG_FIELDS[roxl_b_reg_count_63_copies_x]="D0=89abcd00 D6=000000ff"
+TESTS[roxr_b_reg_count_63_copies_x]="003C 0012 203C 89AB CDEF 727F 7C00 E230 55C6"
+EXPECTED_REG_FIELDS[roxr_b_reg_count_63_copies_x]="D0=89abcdef D6=000000ff"
+TESTS[roxl_w_reg_count_51_copies_x]="003C 0012 203C 89AB 0000 7233 7C00 E370 55C6"
+EXPECTED_REG_FIELDS[roxl_w_reg_count_51_copies_x]="D0=89ab0000 D6=000000ff"
+TESTS[roxr_w_reg_count_51_copies_x]="003C 0012 203C 89AB CDEF 7233 7C00 E270 55C6"
+EXPECTED_REG_FIELDS[roxr_w_reg_count_51_copies_x]="D0=89abcdef D6=000000ff"
+TESTS[roxl_l_reg_count_33_copies_x]="003C 0012 203C 0000 0000 7221 7C00 E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_reg_count_33_copies_x]="D0=00000000 D6=000000ff"
+TESTS[roxr_l_reg_count_33_copies_x]="003C 0012 203C 89AB CDEF 7221 7C00 E2B0 55C6"
+EXPECTED_REG_FIELDS[roxr_l_reg_count_33_copies_x]="D0=89abcdef D6=000000ff"
+TESTS[roxl_l_reg_count_0_copies_x]="003C 0012 203C 1234 5678 7200 7C00 E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_reg_count_0_copies_x]="D0=12345678 D6=000000ff"
+TESTS[roxr_reg_count_0_copies_x]="003C 0012 203C 1234 5678 7200 7C00 E2B0 55C6"
+EXPECTED_REG_FIELDS[roxr_reg_count_0_copies_x]="D0=12345678 D6=000000ff"
+# Keep D0-D7 and A0-A5 populated in the allocator before the effective-zero
+# rotate. MOVEA does not disturb the CCR; ORI.CCR is deliberately last so X=1
+# and stale V=1 must be replaced by the rotate's V=0 result.
+ROX_PRESSURE_PREFIX="203C 89AB CDEF 7221 7402 7603 7804 7A05 7C06 7E07 207C 0000 2000 227C 0000 2100 247C 0000 2200 267C 0000 2300 287C 0000 2400 2A7C 0000 2500 003C 0012"
+TESTS[roxl_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
+TESTS[roxr_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E2B0 55C6"
+EXPECTED_REG_FIELDS[roxr_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
+unset ROX_PRESSURE_PREFIX
 # ROXL_REG_COUNT_63: ORI #$10,CCR (set X); MOVE.L #$A5A55A5A,D0; MOVEQ #63,D1; ROXL.L D1,D0
 # Stresses masked high register-count behavior near the 6-bit limit.
 # ORI.B #$10,CCR = 003C 0010; MOVE.L #$A5A55A5A,D0 = 203C A5A5 5A5A; MOVEQ #63,D1 = 723F; ROXL.L D1,D0 = E3B0
@@ -1775,6 +1819,16 @@ SENTINEL_A6[roxl_reg_count_33]="a60100ed"
 SENTINEL_A6[roxr_reg_count_33]="a60100ea"
 SENTINEL_A6[roxr_reg_count_32]="a60100eb"
 SENTINEL_A6[roxr_reg_count_0]="a60100ee"
+SENTINEL_A6[roxr_reg_count_0_copies_x]="a60100f3"
+SENTINEL_A6[roxl_b_reg_count_63_copies_x]="a60100f4"
+SENTINEL_A6[roxr_b_reg_count_63_copies_x]="a60100f5"
+SENTINEL_A6[roxl_w_reg_count_51_copies_x]="a60100f6"
+SENTINEL_A6[roxr_w_reg_count_51_copies_x]="a60100f7"
+SENTINEL_A6[roxl_l_reg_count_33_copies_x]="a60100f8"
+SENTINEL_A6[roxr_l_reg_count_33_copies_x]="a60100f9"
+SENTINEL_A6[roxl_l_reg_count_0_copies_x]="a60100fa"
+SENTINEL_A6[roxl_l_reg_count_33_pressure]="a60100fb"
+SENTINEL_A6[roxr_l_reg_count_33_pressure]="a60100fc"
 SENTINEL_A6[roxl_reg_count_63]="a60100ef"
 SENTINEL_A6[roxr_reg_count_63]="a60100f0"
 SENTINEL_A6[roxr_roxl_chain_x]="a60100f1"
@@ -2329,6 +2383,16 @@ declare -A RISKY_TESTS=(
     [roxr_reg_count_33]=1
     [roxr_reg_count_32]=1
     [roxr_reg_count_0]=1
+    [roxl_b_reg_count_63_copies_x]=1
+    [roxr_b_reg_count_63_copies_x]=1
+    [roxl_w_reg_count_51_copies_x]=1
+    [roxr_w_reg_count_51_copies_x]=1
+    [roxl_l_reg_count_33_copies_x]=1
+    [roxr_l_reg_count_33_copies_x]=1
+    [roxl_l_reg_count_0_copies_x]=1
+    [roxr_reg_count_0_copies_x]=1
+    [roxl_l_reg_count_33_pressure]=1
+    [roxr_l_reg_count_33_pressure]=1
     [roxl_reg_count_63]=1
     [roxr_reg_count_63]=1
     [roxr_roxl_chain_x]=1
