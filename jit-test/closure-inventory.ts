@@ -169,13 +169,16 @@ const riskOf = (name: string, layer: Layer): number => {
   if (is("ADD", "SUB", "AND", "EOR", "OR")) return 80;
   return layer === "generator" ? 72 : layer === "midfunc" ? 68 : 60;
 };
+const emitterAuditRules: Array<[RegExp, string]> = [
+  [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
+];
 const familyOf = (name: string) => name
   .replace(/^i_/, "")
   .replace(/^j(?:ff|nf)_/, "")
   .replace(/_(?:b|w|l|q)$/, "")
   .replace(/(?:32|64)$/, "");
 
-for (const [, reports] of auditFamilyRules) {
+for (const [, reports] of [...auditFamilyRules, ...emitterAuditRules]) {
   for (const report of reports.split(";").map((item) => item.trim())) {
     if (!existsSync(resolve(root, "BasiliskII/docs", report)))
       throw new Error(`accepted audit report is missing: ${report}`);
@@ -183,6 +186,8 @@ for (const [, reports] of auditFamilyRules) {
 }
 const acceptedAudit = (name: string): string | undefined =>
   auditFamilyRules.find(([pattern]) => pattern.test(name))?.[1];
+const acceptedEmitterAudit = (name: string): string | undefined =>
+  emitterAuditRules.find(([pattern]) => pattern.test(name))?.[1];
 
 interface MidDef { name: string; file: string; line: number; body: string; }
 const midDefs: MidDef[] = [];
@@ -420,10 +425,13 @@ for (const name of structuralUnreachableEmitter.keys()) {
 }
 for (const [name, def] of emitterDefinitions) {
   const references = countToken(emitterRootText, name) + countToken(source.codegenHeader, name) - 1;
-  const status: Status = reachableEmitter.has(name) ? "unreviewed" : "unreachable";
+  const report = acceptedEmitterAudit(name);
+  const status: Status = reachableEmitter.has(name) ? (report ? "audited" : "unreviewed") : "unreachable";
   rows.push({
     layer: "emitter_api", name, status,
-    evidence: status === "unreachable" ? (structuralUnreachableEmitter.get(name) ?? "no path from reachable AArch64 compiler/emitter roots") : "reachable encoder API; requires opcode/width/branch-range contract classification",
+    evidence: status === "audited" ? report!
+      : status === "unreachable" ? (structuralUnreachableEmitter.get(name) ?? "no path from reachable AArch64 compiler/emitter roots")
+      : "reachable encoder API; requires opcode/width/branch-range contract classification",
     file: paths.codegenHeader, line: def.line, references, risk: riskOf(name, "emitter_api"), family: familyOf(name),
   });
 }

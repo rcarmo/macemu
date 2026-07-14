@@ -99,6 +99,9 @@ echo "METRIC build_ok=1"
 if ! bun "$SCRIPT_DIR/structural-audit.ts"; then
     emit_failure_metrics 1 "ARM64 JIT structural audit failed" 0
 fi
+if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh"; then
+    emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
+fi
 
 # Use a fresh copy-on-write clone of the base disk for this harness run so the
 # shared fixture is never mutated (clone shares extents; only deltas stored).

@@ -331,6 +331,18 @@ const midfuncArm2HeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm2.h",
   import.meta.url,
 )).text();
+const codegenHeaderSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h",
+  import.meta.url,
+)).text();
+const compareEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-compare-conformance.cpp",
+  import.meta.url,
+)).text();
+const compareEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-compare-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -1206,6 +1218,52 @@ for (const contract of [
 ]) requireText(regallocPressureSource, contract, "compare allocator pressure");
 for (const active of ["cmpm_core_b_distinct_native", "cmpa_core_w_postinc_alias_native"])
   requireText(activeRiskySource, active, `compare active-risky ${active}`);
+
+/* The generic CMP encoders are a separate cross-caller layer. Prove their
+ * exact A64 aliases, every configured caller, and direct native NZCV behavior. */
+for (const contract of [
+  "#define _W(c) emit_long((uae_u32)(c))",
+  "#define CMP_wi(Wn,i12)            _W((0b0111000100 << 22) | (((i12) & 0xfff) << 10) | ((Wn) << 5) | (0b11111))",
+  "#define CMP_xi(Xn,i12)            _W((0b1111000100 << 22) | (((i12) & 0xfff) << 10) | ((Xn) << 5) | (0b11111))",
+  "#define CMP_ww(Wn,Wm)             _W((0b01101011000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (0b11111))",
+  "#define CMP_xx(Xn,Xm)             _W((0b11101011000 << 21) | ((Xm) << 16) | (0 << 10) | ((Xn) << 5) | (0b11111))",
+  "#define CMP_wwLSLi(Wn,Wm,i)       _W((0b01101011000 << 21) | ((Wm) << 16) | (((i) & 0x1f) << 10) | ((Wn) << 5) | (0b11111))",
+]) requireText(codegenHeaderSource, contract, "generic CMP emitter encoding");
+
+const compareEmitterCallers = `${midfunc2Source}\n${compatSource}\n${source}`;
+for (const [name, expected] of [
+  ["CMP_wi", 49], ["CMP_xi", 2], ["CMP_ww", 23], ["CMP_xx", 6], ["CMP_wwLSLi", 6],
+] as const) {
+  const found = (compareEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== expected) fail(`generic ${name} caller census: expected ${expected}, found ${found}`);
+}
+const cmpWiArgs = [...compareEmitterCallers.matchAll(/\bCMP_wi\([^,]+,\s*([^)]+)\)/g)].map((match) => match[1].trim());
+if (cmpWiArgs.filter((arg) => arg === "i").length !== 3)
+  fail("CMP_wi dynamic immediate caller census changed");
+for (const arg of cmpWiArgs) {
+  if (arg === "i") continue;
+  const value = Number(arg);
+  if (!Number.isInteger(value) || value < 0 || value > 0xfff)
+    fail(`CMP_wi caller exceeds imm12 contract: ${arg}`);
+}
+if ((midfunc2Source.match(/COMPCALL\(jff_ASL_[bwl]_imm\)\(d, live\.state\[i\]\.val & 0x3f\)/g) || []).length !== 3)
+  fail("CMP_wi dynamic immediate is not bounded by the six-bit ASL contract");
+const cmpXiArgs = [...compareEmitterCallers.matchAll(/\bCMP_xi\([^,]+,\s*([^)]+)\)/g)].map((match) => Number(match[1].trim()));
+if (cmpXiArgs.length !== 2 || cmpXiArgs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xfff))
+  fail(`CMP_xi caller exceeds imm12 contract: ${cmpXiArgs.join(",")}`);
+const cmpShiftArgs = [...compareEmitterCallers.matchAll(/\bCMP_wwLSLi\([^,]+,[^,]+,\s*([^)]+)\)/g)].map((match) => Number(match[1].trim()));
+if (cmpShiftArgs.length !== 6 || cmpShiftArgs.some((value) => ![16, 24].includes(value)))
+  fail(`CMP_wwLSLi configured shift contract changed: ${cmpShiftArgs.join(",")}`);
+for (const contract of [
+  "0x7100013fu", "0xf13ffd7fu", "0x6b0a013fu", "0xeb0c017fu", "0x6b0a7d3fu",
+  "CMP_wi imm12-max", "CMP_xi width64", "CMP_ww overflow", "CMP_xx width64",
+  "CMP_wwLSLi shift0", "CMP_wwLSLi shift31", "PROT_READ | PROT_WRITE",
+  "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "return vectors == 20 ? 0 : 1;",
+]) requireText(compareEmitterProbeSource, contract, "generic CMP native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-compare-conformance.cpp"])
+  requireText(compareEmitterHarnessSource, contract, "generic CMP conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh"', "generic CMP bounded acceptance gate");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
@@ -3364,4 +3422,7 @@ console.log("METRIC structural_compare_exact_native_vectors=31");
 console.log("METRIC structural_cmp_cmpm_source_locks=136");
 console.log("METRIC structural_cmpa_source_locks=48");
 console.log("METRIC structural_compare_allocator_pressure=2");
+console.log("METRIC structural_compare_emitter_apis=5");
+console.log("METRIC structural_compare_emitter_callsites=86");
+console.log("METRIC structural_compare_emitter_native_vectors=20");
 console.log("METRIC structural_runtime_helper_logical_opcode=1");
