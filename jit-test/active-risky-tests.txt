@@ -599,6 +599,16 @@ rolw_mem_native
 rolw_mem_native_nf
 rorw_mem_native
 rorw_mem_native_nf
+aslw_mem_native
+aslw_mem_native_nf
+asrw_mem_native
+asrw_mem_native_nf
+lslw_mem_native
+lslw_mem_native_nf
+lsrw_mem_native
+lsrw_mem_native_nf
+roxlw_mem_x_native
+roxrw_mem_x_native
 asl_b_reg_count32_nf
 asl_w_reg_count32_nf
 asl_l_reg_count32_nf

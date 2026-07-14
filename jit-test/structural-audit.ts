@@ -74,6 +74,7 @@ const shiftSource = await Bun.file(new URL(
   import.meta.url,
 )).text();
 const strictHarnessSource = await Bun.file(new URL("./strict-full-jit.sh", import.meta.url)).text();
+const regallocPressureSource = await Bun.file(new URL("./regalloc-pressure.sh", import.meta.url)).text();
 requireText(harnessSource, "rm -f obj/compemu*.o", "JIT object layout epoch");
 
 const callEmitter = bodyBetween(
@@ -952,6 +953,115 @@ if (!activeRiskyNames.has("asl_l_reg_count63_boundary")) {
   fail("register-count adjacent-boundary matrix: count-63 priority vector is not active");
 }
 
+/* Fixed-count memory shifts are a separate generator lifecycle from register
+ * shifts: ff wrappers publish X/N/Z/V/C, nf wrappers perform only the memory
+ * RMW, and carry/V publication must not depend on fixed code geometry. */
+const fixedMemoryShiftContracts = [
+  ["ASLW", "PUBLISH_CARRY_FROM_BIT(d, 15, REG_WORK2)"],
+  ["ASRW", "PUBLISH_CARRY_FROM_BIT(REG_WORK1, 0, REG_WORK2)"],
+  ["LSLW", "PUBLISH_CARRY_FROM_BIT(d, 15, REG_WORK2)"],
+  ["LSRW", "PUBLISH_CARRY_FROM_BIT(REG_WORK3, 0, REG_WORK2)"],
+] as const;
+for (const [helper, carryContract] of fixedMemoryShiftContracts) {
+  const ffBody = functionBody(
+    shiftSource,
+    `MIDFUNC(1,jff_${helper},`,
+    `MENDFUNC(1,jff_${helper},`,
+    `jff_${helper} fixed-count memory shift`,
+  );
+  const nfBody = functionBody(
+    shiftSource,
+    `MIDFUNC(1,jnf_${helper},`,
+    `MENDFUNC(1,jnf_${helper},`,
+    `jnf_${helper} fixed-count memory shift`,
+  );
+  for (const [body, lifecycle] of [[ffBody, "jff"], [nfBody, "jnf"]] as const) {
+    requireText(body, "d = rmw(d);", `${lifecycle}_${helper} memory RMW`);
+    requireText(body, "unlock2(d);", `${lifecycle}_${helper} destination lifecycle`);
+  }
+  requireText(ffBody, carryContract, `jff_${helper} branchless carry publication`);
+  requireText(ffBody, "DUPLICACTE_CARRY", `jff_${helper} X publication`);
+  if (/\b(?:TBZ|TBNZ)_[wx]ii\s*\([^;\n]*,\s*[1-9][0-9]*\s*\);/.test(ffBody)) {
+    fail(`jff_${helper}: fixed-displacement flag branch reintroduced`);
+  }
+  if (nfBody.includes("PUBLISH_CARRY_FROM_BIT") || nfBody.includes("DUPLICACTE_CARRY") ||
+      nfBody.includes("needed_flags")) {
+    fail(`jnf_${helper}: no-flags memory shift publishes flags`);
+  }
+}
+const fixedAslMemoryBody = functionBody(
+  shiftSource,
+  "MIDFUNC(1,jff_ASLW,",
+  "MENDFUNC(1,jff_ASLW,",
+  "jff_ASLW fixed-count overflow",
+);
+for (const contract of [
+  "BFI_xxii(REG_WORK4, REG_WORK2, 29, 1)",
+  "BFI_xxii(REG_WORK4, REG_WORK2, 28, 1)",
+]) {
+  requireText(fixedAslMemoryBody, contract, "jff_ASLW branchless C/V publication");
+}
+for (const [opcode, helper] of [
+  ["e1d0", "ASLW"], ["e0d0", "ASRW"], ["e3d0", "LSLW"], ["e2d0", "LSRW"],
+] as const) {
+  for (const suffix of ["ff", "nf"] as const) {
+    const body = functionBody(
+      generatedSource,
+      `void REGPARAM2 op_${opcode}_0_comp_${suffix}`,
+      "\n/*",
+      `generated fixed-count memory shift ${opcode}/${suffix}`,
+    );
+    requireText(body, `${suffix === "ff" ? "jff" : "jnf"}_${helper}(src);`, `generated fixed-count memory shift ${opcode}/${suffix}`);
+    requireText(body, "writeword(srca, src, scratchie);", `generated fixed-count memory shift ${opcode}/${suffix}`);
+    if (suffix === "ff") {
+      requireBefore(body, "start_needflags();", `jff_${helper}(src);`, `generated fixed-count memory shift ${opcode}/ff`);
+      requireBefore(body, `jff_${helper}(src);`, "live_flags();", `generated fixed-count memory shift ${opcode}/ff`);
+    } else if (body.includes("start_needflags();") || body.includes("live_flags();")) {
+      fail(`generated fixed-count memory shift ${opcode}/nf: flag lifecycle reintroduced`);
+    }
+  }
+}
+
+/* Memory ROX consumes and replaces X.  One RMW binding must own both actions;
+ * reacquiring it through DUPLICACTE_CARRY creates an allocator double-unlock. */
+for (const helper of ["ROXLW", "ROXRW"] as const) {
+  const body = functionBody(
+    shiftSource,
+    `MIDFUNC(1,jff_${helper},`,
+    `MENDFUNC(1,jff_${helper},`,
+    `jff_${helper} X ownership`,
+  );
+  requireText(body, "int x = rmw(FLAGX);", `jff_${helper} X RMW ownership`);
+  requireText(body, "PUBLISH_CARRY_FROM_BIT(", `jff_${helper} branchless carry publication`);
+  if (body.includes("readreg(FLAGX)") || body.includes("DUPLICACTE_CARRY")) {
+    fail(`jff_${helper}: X binding is reacquired instead of updated in place`);
+  }
+  if ((body.match(/unlock2\(x\);/g) ?? []).length !== 1) {
+    fail(`jff_${helper}: X binding must have exactly one unlock`);
+  }
+  if (/\b(?:TBZ|TBNZ)_[wx]ii\s*\([^;\n]*,\s*[1-9][0-9]*\s*\);/.test(body)) {
+    fail(`jff_${helper}: fixed-displacement carry branch reintroduced`);
+  }
+}
+for (const width of ["b", "w", "l"] as const) {
+  const body = shiftFunctionBody(`jff_ROXR_${width}`);
+  requireText(body, "PUBLISH_CARRY_FROM_BIT(x, 0, REG_WORK3);", `jff_ROXR_${width} branchless carry publication`);
+  if (/\b(?:TBZ|TBNZ)_[wx]ii\s*\([^;\n]*,\s*[1-9][0-9]*\s*\);/.test(body)) {
+    fail(`jff_ROXR_${width}: fixed-displacement carry branch reintroduced`);
+  }
+}
+for (const witness of [
+  "[roxrw_mem_x_live_all]=\"2042 30BC 8000 44FC 0010 E4D0",
+  "DD85 51CF FFDE",
+  "[roxrw_mem_x_live_all]=21",
+  "[roxrw_mem_x_live_all]=1",
+  "B2_NATIVE_ASSERT_PC=\"$pc\"",
+  "[[ \"$NAT\" -gt 0 ]] || RESULT=2",
+  "[[ \"${CELL_REQUIRE_PIN[$cell]}\" == 0 || \"$PIN\" -gt 0 ]] || RESULT=3",
+] as const) {
+  requireText(regallocPressureSource, witness, "memory ROXR X allocator-pressure witness");
+}
+
 /* ROL/ROR register counts are architectural six-bit values even though the
  * result is periodic at the operand width. The AArch64 helper owns count-zero
  * C clearing, X preservation, and N/Z/V publication before the generated
@@ -1124,6 +1234,30 @@ for (const name of rotateSupplementalVectors) {
 }
 for (const memoryName of ["rolw_mem_native", "rolw_mem_native_nf", "rorw_mem_native", "rorw_mem_native_nf"] as const) {
   requireText(nativeReplayBytesSection, `[${memoryName}]=\"A000 80 A001 01\"`, `${memoryName} exact memory replay`);
+}
+const fixedMemoryVectors = [
+  ["aslw_mem_native", "A000 40 A001 00"],
+  ["aslw_mem_native_nf", "A000 40 A001 00"],
+  ["asrw_mem_native", "A000 80 A001 01"],
+  ["asrw_mem_native_nf", "A000 80 A001 01"],
+  ["lslw_mem_native", "A000 80 A001 01"],
+  ["lslw_mem_native_nf", "A000 80 A001 01"],
+  ["lsrw_mem_native", "A000 80 A001 01"],
+  ["lsrw_mem_native_nf", "A000 80 A001 01"],
+  ["roxlw_mem_x_native", "A000 80 A001 01"],
+  ["roxrw_mem_x_native", "A000 80 A001 00"],
+] as const;
+for (const [name, replayBytes] of fixedMemoryVectors) {
+  requireText(harnessSource, `TESTS[${name}]=`, `${name} forced-native vector`);
+  requireText(nativeReplayTestsSection, `[${name}]=1`, `${name} exact-native replay`);
+  requireText(nativeReplayPcSection, `[${name}]=0x1000`, `${name} exact opcode PC`);
+  requireText(nativeReplayBytesSection, `[${name}]=\"${replayBytes}\"`, `${name} deterministic memory replay`);
+  requireText(nativeReplayCountSection, `[${name}]=2`, `${name} exact-native execution count`);
+  requireText(harnessSource, `SENTINEL_A6[${name}]=`, `${name} register sentinel`);
+  if (!activeRiskyNames.has(name)) fail(`${name}: missing from active risky corpus`);
+}
+for (const name of ["aslw_mem_native_nf", "asrw_mem_native_nf", "lslw_mem_native_nf", "lsrw_mem_native_nf"] as const) {
+  requireText(harnessSource, `TESTS[${name}]=\"${name.startsWith("aslw") ? "E1D0" : name.startsWith("asrw") ? "E0D0" : name.startsWith("lslw") ? "E3D0" : "E2D0"} 44FC 0015 3010 40C6\"`, `${name} complete-CCR kill`);
 }
 if (rotateExactVectorNames.size !== 92) {
   fail(`rotate exact-native inventory: expected 92, got ${rotateExactVectorNames.size}`);
@@ -2190,6 +2324,12 @@ console.log("METRIC structural_register_shift_alias_native=1");
 console.log("METRIC structural_register_shift_long_immediate_saturation=1");
 console.log(`METRIC structural_register_shift_exact_native_vectors=${shiftExactVectorNames.size}`);
 console.log(`METRIC structural_register_shift_active_vectors=${activeShiftVectorCount}`);
+console.log("METRIC structural_fixed_memory_shift_flag_lifecycle=1");
+console.log("METRIC structural_fixed_memory_shift_exact_native_vectors=8");
+console.log("METRIC structural_memory_rox_x_ownership=1");
+console.log("METRIC structural_memory_rox_exact_native_vectors=2");
+console.log("METRIC structural_memory_rox_allocator_pressure=1");
+console.log("METRIC structural_shift_rotate_fixed_flag_branches_removed=11");
 console.log("METRIC structural_register_rotate_six_bit_count=1");
 console.log("METRIC structural_register_rotate_alias_native=1");
 console.log("METRIC structural_register_rotate_flag_lifecycle=1");

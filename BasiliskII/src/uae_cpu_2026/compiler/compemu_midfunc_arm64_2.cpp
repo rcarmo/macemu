@@ -1219,23 +1219,17 @@ MIDFUNC(1,jff_ASLW,(RW2 d))
 	TST_ww(REG_WORK1, REG_WORK1);
 
 	if (needed_flags & FLAG_V) {
-		// Calculate C flag
+		/* Publish V = old bit 15 xor old bit 14 and C = old bit 15
+		 * without fixed-displacement control flow. */
 		MRS_NZCV_x(REG_WORK4);
-		TBZ_wii(d, 15, 2);
-		SET_xxCflag(REG_WORK4, REG_WORK4);
-
-		// Calculate V flag
-		EOR_wwwLSLi(REG_WORK1, d, d, 1); // eor bit15 and bit14 of source
-		TBZ_wii(REG_WORK1, 15, 2);
-		SET_xxVflag(REG_WORK4, REG_WORK4);
-
+		EOR_wwwLSLi(REG_WORK1, d, d, 1);
+		UBFX_xxii(REG_WORK2, d, 15, 1);
+		BFI_xxii(REG_WORK4, REG_WORK2, 29, 1);
+		UBFX_xxii(REG_WORK2, REG_WORK1, 15, 1);
+		BFI_xxii(REG_WORK4, REG_WORK2, 28, 1);
 		MSR_NZCV_x(REG_WORK4);
 	} else {
-		// Calculate C flag
-		TBZ_wii(d, 15, 4);
-		MRS_NZCV_x(REG_WORK4);
-		SET_xxCflag(REG_WORK4, REG_WORK4);
-		MSR_NZCV_x(REG_WORK4);
+		PUBLISH_CARRY_FROM_BIT(d, 15, REG_WORK2);
 	}
 	LSL_wwi(d, d, 1);
 
@@ -1625,11 +1619,7 @@ MIDFUNC(1,jff_ASRW,(RW2 d))
 	ASR_wwi(d, REG_WORK1, 1);
 	TST_ww(d, d);
 
-	// Calculate C flag
-	TBZ_wii(REG_WORK1, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(REG_WORK1, 0, REG_WORK2);
 
 	flags_carry_inverted = false;
 	DUPLICACTE_CARRY
@@ -4515,11 +4505,7 @@ MIDFUNC(1,jff_LSLW,(RW2 d))
 	LSL_wwi(REG_WORK1, d, 17);
 	TST_ww(REG_WORK1, REG_WORK1);
 
-	// Calculate C flag
-	TBZ_wii(d, 15, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(d, 15, REG_WORK2);
 
 	LSL_wwi(d, d, 1);
 
@@ -4909,11 +4895,7 @@ MIDFUNC(1,jff_LSRW,(RW2 d))
 	LSR_wwi(d, REG_WORK3, 1);
 	TST_ww(d, d);
 
-	// Calculate C Flag
-	TBZ_wii(REG_WORK3, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(REG_WORK3, 0, REG_WORK2);
 
 	flags_carry_inverted = false;
 	DUPLICACTE_CARRY
@@ -7324,10 +7306,7 @@ MIDFUNC(2,jff_ROXR_b,(RW1 d, RR4 i))
 	SUB_wwi(REG_WORK1, REG_WORK1, 1);
 	LSR_www(REG_WORK3, REG_WORK2, REG_WORK1);
 	UBFIZ_wwii(x, REG_WORK3, 0, 1);
-	TBZ_wii(x, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(x, 0, REG_WORK3);
 
 	// end of op
 	write_jmp_target(end_branch, (uintptr)get_target());
@@ -7378,10 +7357,7 @@ MIDFUNC(2,jff_ROXR_w,(RW2 d, RR4 i))
 	SUB_wwi(REG_WORK1, REG_WORK1, 1);
 	LSR_www(REG_WORK3, REG_WORK2, REG_WORK1);
 	UBFIZ_wwii(x, REG_WORK3, 0, 1);
-	TBZ_wii(x, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(x, 0, REG_WORK3);
 
 	// end of op
 	write_jmp_target(end_branch, (uintptr)get_target());
@@ -7427,10 +7403,7 @@ MIDFUNC(2,jff_ROXR_l,(RW4 d, RR4 i))
 	SUB_wwi(REG_WORK1, REG_WORK1, 1);
 	LSR_xxx(REG_WORK3, REG_WORK2, REG_WORK1);
 	UBFIZ_wwii(x, REG_WORK3, 0, 1);
-	TBZ_wii(x, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(x, 0, REG_WORK3);
 
 	// end of op
 	write_jmp_target(end_branch, (uintptr)get_target());
@@ -8846,7 +8819,7 @@ MENDFUNC(0,jnf_TRAPV,(void))
 MIDFUNC(1,jff_ROXLW,(RW2 d))
 {
 	d = rmw(d);
-	int x = readreg(FLAGX);
+	int x = rmw(FLAGX);
 
 	UNSIGNED16_REG_2_REG(REG_WORK1, d);
 	/* Shift left by 1, insert old X into bit 0 */
@@ -8859,21 +8832,17 @@ MIDFUNC(1,jff_ROXLW,(RW2 d))
 	/* Store result back into low 16 bits */
 	BFI_wwii(d, REG_WORK2, 0, 16);
 
-	/* Set X flag = old MSB */
+	/* Set X flag = old MSB.  The RMW binding records exactly one write and
+	 * remains owned until the single unlock below. */
 	MOV_ww(x, REG_WORK3);
 
 	/* Set N, Z flags from result (16-bit) */
 	SIGNED16_REG_2_REG(REG_WORK1, REG_WORK2);
 	TST_ww(REG_WORK1, REG_WORK1);
 
-	/* Set C = X */
-	TBZ_wii(REG_WORK3, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(REG_WORK3, 0, REG_WORK1);
 
 	flags_carry_inverted = false;
-	DUPLICACTE_CARRY
 
 	unlock2(x);
 	unlock2(d);
@@ -8887,7 +8856,7 @@ MENDFUNC(1,jff_ROXLW,(RW2 d))
 MIDFUNC(1,jff_ROXRW,(RW2 d))
 {
 	d = rmw(d);
-	int x = readreg(FLAGX);
+	int x = rmw(FLAGX);
 
 	UNSIGNED16_REG_2_REG(REG_WORK1, d);
 	/* Extract LSB for new X/C */
@@ -8901,21 +8870,17 @@ MIDFUNC(1,jff_ROXRW,(RW2 d))
 	/* Store result back */
 	BFI_wwii(d, REG_WORK2, 0, 16);
 
-	/* Set X flag = old LSB */
+	/* Set X flag = old LSB.  The RMW binding records exactly one write and
+	 * remains owned until the single unlock below. */
 	MOV_ww(x, REG_WORK3);
 
 	/* Set N, Z from result */
 	SIGNED16_REG_2_REG(REG_WORK1, REG_WORK2);
 	TST_ww(REG_WORK1, REG_WORK1);
 
-	/* Set C = X */
-	TBZ_wii(REG_WORK3, 0, 4);
-	MRS_NZCV_x(REG_WORK4);
-	SET_xxCflag(REG_WORK4, REG_WORK4);
-	MSR_NZCV_x(REG_WORK4);
+	PUBLISH_CARRY_FROM_BIT(REG_WORK3, 0, REG_WORK1);
 
 	flags_carry_inverted = false;
-	DUPLICACTE_CARRY
 
 	unlock2(x);
 	unlock2(d);

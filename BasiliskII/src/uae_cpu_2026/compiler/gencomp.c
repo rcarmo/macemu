@@ -3278,10 +3278,14 @@ gen_opcode (unsigned int opcode)
      case i_ASRW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_ASRW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_ASRW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_ASRW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3291,10 +3295,14 @@ gen_opcode (unsigned int opcode)
      case i_ASLW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_ASLW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_ASLW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_ASLW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3304,10 +3312,14 @@ gen_opcode (unsigned int opcode)
      case i_LSRW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_LSRW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_LSRW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_LSRW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3317,10 +3329,14 @@ gen_opcode (unsigned int opcode)
      case i_LSLW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_LSLW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_LSLW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_LSLW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;

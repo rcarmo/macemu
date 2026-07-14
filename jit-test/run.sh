@@ -338,6 +338,8 @@ TEST_ORDER+=(rol_l_reg_const_count64 rol_l_reg_const_count64_nf ror_l_reg_const_
 TEST_ORDER+=(rol_b_imm_count8 rol_b_imm_count8_nf rol_w_imm_count8 rol_w_imm_count8_nf rol_l_imm_count8 rol_l_imm_count8_nf)
 TEST_ORDER+=(ror_b_imm_count8 ror_b_imm_count8_nf ror_w_imm_count8 ror_w_imm_count8_nf ror_l_imm_count8 ror_l_imm_count8_nf)
 TEST_ORDER+=(rolw_mem_native rolw_mem_native_nf rorw_mem_native rorw_mem_native_nf)
+TEST_ORDER+=(aslw_mem_native aslw_mem_native_nf asrw_mem_native asrw_mem_native_nf lslw_mem_native lslw_mem_native_nf lsrw_mem_native lsrw_mem_native_nf)
+TEST_ORDER+=(roxlw_mem_x_native roxrw_mem_x_native)
 TEST_ORDER+=(asl_b_reg_count32_nf asl_w_reg_count32_nf asl_l_reg_count32_nf asr_b_reg_count32_nf asr_w_reg_count32_nf asr_l_reg_count32_nf lsl_b_reg_count32_nf lsl_w_reg_count32_nf lsl_l_reg_count32_nf lsr_b_reg_count32_nf lsr_w_reg_count32_nf lsr_l_reg_count32_nf)
 TEST_ORDER+=(asl_b_reg_same_count_data asl_w_reg_same_count_data asl_l_reg_same_count_data asr_b_reg_same_count_data asr_w_reg_same_count_data asr_l_reg_same_count_data lsl_b_reg_same_count_data lsl_w_reg_same_count_data lsl_l_reg_same_count_data lsr_b_reg_same_count_data lsr_w_reg_same_count_data lsr_l_reg_same_count_data)
 TEST_ORDER+=(asl_b_reg_same_count_data_nf asl_w_reg_same_count_data_nf asl_l_reg_same_count_data_nf asr_b_reg_same_count_data_nf asr_w_reg_same_count_data_nf asr_l_reg_same_count_data_nf lsl_b_reg_same_count_data_nf lsl_w_reg_same_count_data_nf lsl_l_reg_same_count_data_nf lsr_b_reg_same_count_data_nf lsr_w_reg_same_count_data_nf lsr_l_reg_same_count_data_nf)
@@ -405,6 +407,16 @@ declare -A NATIVE_REPLAY_TESTS=(
     [rolw_mem_native_nf]=1
     [rorw_mem_native]=1
     [rorw_mem_native_nf]=1
+    [aslw_mem_native]=1
+    [aslw_mem_native_nf]=1
+    [asrw_mem_native]=1
+    [asrw_mem_native_nf]=1
+    [lslw_mem_native]=1
+    [lslw_mem_native_nf]=1
+    [lsrw_mem_native]=1
+    [lsrw_mem_native_nf]=1
+    [roxlw_mem_x_native]=1
+    [roxrw_mem_x_native]=1
     [asl_l_reg_zero_count32_const_v_clear]=1
     [lsr_l_reg_const_count32]=1
     [asr_l_reg_count0_pressure_preserves_x]=1
@@ -653,6 +665,16 @@ declare -A NATIVE_REPLAY_PC=(
     [rolw_mem_native_nf]=0x1000
     [rorw_mem_native]=0x1000
     [rorw_mem_native_nf]=0x1000
+    [aslw_mem_native]=0x1000
+    [aslw_mem_native_nf]=0x1000
+    [asrw_mem_native]=0x1000
+    [asrw_mem_native_nf]=0x1000
+    [lslw_mem_native]=0x1000
+    [lslw_mem_native_nf]=0x1000
+    [lsrw_mem_native]=0x1000
+    [lsrw_mem_native_nf]=0x1000
+    [roxlw_mem_x_native]=0x1000
+    [roxrw_mem_x_native]=0x1000
     [chk_w_in_range]=0x1004
     [chk_w_zero]=0x1004
     [chk_w_equal]=0x1004
@@ -781,6 +803,16 @@ declare -A NATIVE_REPLAY_BYTES=(
     [rolw_mem_native_nf]="A000 80 A001 01"
     [rorw_mem_native]="A000 80 A001 01"
     [rorw_mem_native_nf]="A000 80 A001 01"
+    [aslw_mem_native]="A000 40 A001 00"
+    [aslw_mem_native_nf]="A000 40 A001 00"
+    [asrw_mem_native]="A000 80 A001 01"
+    [asrw_mem_native_nf]="A000 80 A001 01"
+    [lslw_mem_native]="A000 80 A001 01"
+    [lslw_mem_native_nf]="A000 80 A001 01"
+    [lsrw_mem_native]="A000 80 A001 01"
+    [lsrw_mem_native_nf]="A000 80 A001 01"
+    [roxlw_mem_x_native]="A000 80 A001 01"
+    [roxrw_mem_x_native]="A000 80 A001 00"
     [bcd_abcd_predec_src_a7]="2080 01 2040 99"
     [bcd_abcd_predec_dst_a7]="2080 01 2040 99"
     [bcd_abcd_predec_a7_alias]="2082 01 2080 99"
@@ -810,6 +842,16 @@ declare -A NATIVE_REPLAY_COUNT=(
     [rolw_mem_native_nf]=2
     [rorw_mem_native]=2
     [rorw_mem_native_nf]=2
+    [aslw_mem_native]=2
+    [aslw_mem_native_nf]=2
+    [asrw_mem_native]=2
+    [asrw_mem_native_nf]=2
+    [lslw_mem_native]=2
+    [lslw_mem_native_nf]=2
+    [lsrw_mem_native]=2
+    [lsrw_mem_native_nf]=2
+    [roxlw_mem_x_native]=2
+    [roxrw_mem_x_native]=2
     [chk_w_in_range]=2
     [chk_w_zero]=2
     [chk_w_equal]=2
@@ -2337,10 +2379,32 @@ TESTS[rolw_mem_native]="E7D0 40C6 3010"
 TESTS[rolw_mem_native_nf]="E7D0 7E00 3010 40C6"
 TESTS[rorw_mem_native]="E6D0 40C6 3010"
 TESTS[rorw_mem_native_nf]="E6D0 7E00 3010 40C6"
+# Fixed-count memory shifts have distinct flag-producing and no-flags wrappers.
+# The nf forms overwrite the complete CCR, including X, before observing state.
+TESTS[aslw_mem_native]="E1D0 40C6 3010"
+TESTS[aslw_mem_native_nf]="E1D0 44FC 0015 3010 40C6"
+TESTS[asrw_mem_native]="E0D0 40C6 3010"
+TESTS[asrw_mem_native_nf]="E0D0 44FC 0015 3010 40C6"
+TESTS[lslw_mem_native]="E3D0 40C6 3010"
+TESTS[lslw_mem_native_nf]="E3D0 44FC 0015 3010 40C6"
+TESTS[lsrw_mem_native]="E2D0 40C6 3010"
+TESTS[lsrw_mem_native_nf]="E2D0 44FC 0015 3010 40C6"
+TESTS[roxlw_mem_x_native]="E5D0 40C6 3010"
+TESTS[roxrw_mem_x_native]="E4D0 40C6 3010"
 EXPECTED_REG_FIELDS[rol_l_reg_const_count64]="D0=80000001 D6=00002718"
 EXPECTED_REG_FIELDS[ror_l_reg_const_count64]="D0=80000001 D6=00002718"
 EXPECTED_REG_FIELDS[rolw_mem_native]="D0=00000003 D6=00002711"
 EXPECTED_REG_FIELDS[rorw_mem_native]="D0=0000C000 D6=00002719"
+EXPECTED_REG_FIELDS[aslw_mem_native]="D0=00008000 D6=0000270A"
+EXPECTED_REG_FIELDS[aslw_mem_native_nf]="D0=00008000 D6=00002718"
+EXPECTED_REG_FIELDS[asrw_mem_native]="D0=0000C000 D6=00002719"
+EXPECTED_REG_FIELDS[asrw_mem_native_nf]="D0=0000C000 D6=00002718"
+EXPECTED_REG_FIELDS[lslw_mem_native]="D0=00000002 D6=00002711"
+EXPECTED_REG_FIELDS[lslw_mem_native_nf]="D0=00000002 D6=00002710"
+EXPECTED_REG_FIELDS[lsrw_mem_native]="D0=00004000 D6=00002711"
+EXPECTED_REG_FIELDS[lsrw_mem_native_nf]="D0=00004000 D6=00002710"
+EXPECTED_REG_FIELDS[roxlw_mem_x_native]="D0=00000003 D6=00002711"
+EXPECTED_REG_FIELDS[roxrw_mem_x_native]="D0=0000C000 D6=00002708"
 EXPECTED_REG_FIELDS[rol_l_reg_count32_boundary]="D0=80000001 D6=00002719"
 EXPECTED_REG_FIELDS[rol_l_reg_same_count_data]="D0=00000043 D6=00002711"
 unset _rotate_op _rotate_width _rotate_key _rotate_opcode _rotate_alias_opcode
@@ -2739,6 +2803,16 @@ INIT_REGS[rolw_mem_native]="$_ROTATE_MEMORY_INIT"
 INIT_REGS[rolw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
 INIT_REGS[rorw_mem_native]="$_ROTATE_MEMORY_INIT"
 INIT_REGS[rorw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[aslw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[aslw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[asrw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[asrw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lslw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lslw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lsrw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lsrw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[roxlw_mem_x_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[roxrw_mem_x_native]="$_ROTATE_MEMORY_INIT"
 unset _rotate_op _rotate_width _rotate_immediate_data _rotate_immediate_name _rotate_immediate_init _ROTATE_MEMORY_INIT
 for _rotate_op in rol ror; do
     for _rotate_width in b w l; do
@@ -3505,6 +3579,16 @@ SENTINEL_A6[rolw_mem_native]="a6d60270"
 SENTINEL_A6[rolw_mem_native_nf]="a6d60271"
 SENTINEL_A6[rorw_mem_native]="a6d60272"
 SENTINEL_A6[rorw_mem_native_nf]="a6d60273"
+SENTINEL_A6[aslw_mem_native]="a6d60274"
+SENTINEL_A6[aslw_mem_native_nf]="a6d60275"
+SENTINEL_A6[asrw_mem_native]="a6d60276"
+SENTINEL_A6[asrw_mem_native_nf]="a6d60277"
+SENTINEL_A6[lslw_mem_native]="a6d60278"
+SENTINEL_A6[lslw_mem_native_nf]="a6d60279"
+SENTINEL_A6[lsrw_mem_native]="a6d6027a"
+SENTINEL_A6[lsrw_mem_native_nf]="a6d6027b"
+SENTINEL_A6[roxlw_mem_x_native]="a6d6027c"
+SENTINEL_A6[roxrw_mem_x_native]="a6d6027d"
 SENTINEL_A6[divu_l_zero_frame]="a6d50003"
 SENTINEL_A6[divs_l_zero_frame]="a6d50004"
 SENTINEL_A6[divu_l32_zero_distinct]="a6d5000f"
@@ -3654,6 +3738,16 @@ declare -A RISKY_TESTS=(
     [rolw_mem_native_nf]=1
     [rorw_mem_native]=1
     [rorw_mem_native_nf]=1
+    [aslw_mem_native]=1
+    [aslw_mem_native_nf]=1
+    [asrw_mem_native]=1
+    [asrw_mem_native_nf]=1
+    [lslw_mem_native]=1
+    [lslw_mem_native_nf]=1
+    [lsrw_mem_native]=1
+    [lsrw_mem_native_nf]=1
+    [roxlw_mem_x_native]=1
+    [roxrw_mem_x_native]=1
     [asl_l_reg_zero_count32_const_v_clear]=1
     [lsr_l_reg_const_count32]=1
     [asr_l_reg_count0_pressure_preserves_x]=1

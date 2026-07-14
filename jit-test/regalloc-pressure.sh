@@ -31,38 +31,66 @@ nogui true
 ignoresegv true
 EOF
 sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
-HEX="2042 20BC 1122 3344 43F9 0000 2040 337C 0005 0012 3E3C 003F 2042 2244 3005 C0E9 0012 2658 51CF FFF2 2C7C A6AA 55CC"
-# Mask asynchronous guest interrupts: this vector proves allocator state, not
+# Mask asynchronous guest interrupts: these vectors prove allocator state, not
 # host-timer scheduling, and interpreter/JIT runs otherwise race the first 60 Hz
 # tick independently.
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
+declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all)
+declare -A CELL_HEX=(
+  [mulu_w_d16_a0_live_a0]="2042 20BC 1122 3344 43F9 0000 2040 337C 0005 0012 3E3C 003F 2042 2244 3005 C0E9 0012 2658 51CF FFF2 2C7C A6AA 55CC"
+  # Establish X=1 and 0x8000 at (A0), then keep every non-SP source register
+  # live through ROXR.W.  MOVE preserves X; the final ADDX consumes the new
+  # X=0, distinguishing a correct in-place X write from a stale binding.  DBF
+  # makes the pressure block hot enough that exact native execution is required.
+  [roxrw_mem_x_live_all]="2042 30BC 8000 44FC 0010 E4D0 2001 2002 2003 2004 2005 2006 2007 2008 2009 200A 200B 200C 200D 200E DD85 51CF FFDE 3010 2C7C A6AA 55CD"
+)
+declare -A CELL_PC=(
+  [mulu_w_d16_a0_live_a0]=0x00001018
+  [roxrw_mem_x_live_all]=0x0000100a
+)
+declare -A CELL_SCRATCH_VREG=(
+  [mulu_w_d16_a0_live_a0]=22
+  [roxrw_mem_x_live_all]=21
+)
+declare -A CELL_REQUIRE_PIN=(
+  [mulu_w_d16_a0_live_a0]=0
+  [roxrw_mem_x_live_all]=1
+)
 run_one(){
-  local mode="$1"
+  local cell="$1"
+  local mode="$2"
   local pref="$RUN_DIR/prefs-$mode"
-  local log="$RUN_DIR/$mode.log"
-  local -a extra=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC=0x00001018)
+  local log="$RUN_DIR/$cell-$mode.log"
+  local pc="${CELL_PC[$cell]}"
+  local -a extra=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC="$pc")
   if [[ "$mode" == jit ]]; then
-    extra+=(B2_JIT_FORCE_TRANSLATE=1 B2_TEST_FORCE_L2_RAM=1 B2_NATIVE_ASSERT_PC=0x00001018 B2_INTERPOP_PC=0x00001018)
+    extra+=(B2_JIT_FORCE_TRANSLATE=1 B2_TEST_FORCE_L2_RAM=1 B2_NATIVE_ASSERT_PC="$pc" B2_INTERPOP_PC="$pc")
     extra+=(B2_FORCE_SCRATCH_ALIAS_VREG="${B2_FORCE_SCRATCH_ALIAS_VREG:-8}")
-    extra+=(B2_FORCE_SCRATCH_VREG="${B2_FORCE_SCRATCH_VREG:-22}")
+    extra+=(B2_FORCE_SCRATCH_VREG="${B2_FORCE_SCRATCH_VREG:-${CELL_SCRATCH_VREG[$cell]}}")
   fi
   env SDL_VIDEODRIVER=x11 DISPLAY="$DNUM" HOME="$RUN_DIR/home" \
-    B2_TEST_HEX="$HEX" B2_TEST_DUMP=1 B2_TEST_INIT="$INIT" "${extra[@]}" \
+    B2_TEST_HEX="${CELL_HEX[$cell]}" B2_TEST_DUMP=1 B2_TEST_INIT="$INIT" "${extra[@]}" \
     timeout -k 5s 80s "$BIN" --config "$pref" >"$log" 2>&1 || true
 }
-run_one int
-run_one jit
+RESULT=0
+for cell in "${CELLS[@]}"; do
+  run_one "$cell" int
+  run_one "$cell" jit
+  pc_hex="${CELL_PC[$cell]#0x0000}"
+  PIN=$(grep -ac 'REGPRESSURE_PIN_HIT' "$RUN_DIR/$cell-jit.log" || true)
+  NAT=$(grep -aci "NATEXEC pc=0000${pc_hex}" "$RUN_DIR/$cell-jit.log" || true)
+  INTERP=$(grep -aci "INTERPOP pc=0000${pc_hex}" "$RUN_DIR/$cell-jit.log" || true)
+  INT_DUMP=$(grep -a '^REGDUMP:' "$RUN_DIR/$cell-int.log" | tail -1 || true)
+  JIT_DUMP=$(grep -a '^REGDUMP:' "$RUN_DIR/$cell-jit.log" | tail -1 || true)
+  STATUS=PASS
+  [[ -n "$INT_DUMP" && "$INT_DUMP" == "$JIT_DUMP" ]] || STATUS=FAIL
+  printf 'REGPRESSURE cell=%s status=%s pin=%s natexec=%s interpop=%s\n' "$cell" "$STATUS" "$PIN" "$NAT" "$INTERP"
+  printf 'INTERP %s\n' "$INT_DUMP"
+  printf 'JIT    %s\n' "$JIT_DUMP"
+  [[ "$NAT" -gt 0 ]] || RESULT=2
+  [[ "${CELL_REQUIRE_PIN[$cell]}" == 0 || "$PIN" -gt 0 ]] || RESULT=3
+  [[ "$STATUS" == PASS ]] || RESULT=1
+done
 kill -9 "$XV" 2>/dev/null || true
 wait "$XV" 2>/dev/null || true
-PIN=$(grep -ac 'REGPRESSURE_PIN_HIT' "$RUN_DIR/jit.log" || true)
-NAT=$(grep -ac 'NATEXEC pc=00001018' "$RUN_DIR/jit.log" || true)
-INTERP=$(grep -ac 'INTERPOP pc=00001018' "$RUN_DIR/jit.log" || true)
-INT_DUMP=$(grep -a '^REGDUMP:' "$RUN_DIR/int.log" | tail -1 || true)
-JIT_DUMP=$(grep -a '^REGDUMP:' "$RUN_DIR/jit.log" | tail -1 || true)
-STATUS=PASS
-[[ "$INT_DUMP" == "$JIT_DUMP" ]] || STATUS=FAIL
-printf 'REGPRESSURE cell=mulu_w_d16_a0_live_a0 status=%s pin=%s natexec=%s interpop=%s\n' "$STATUS" "$PIN" "$NAT" "$INTERP"
-printf 'INTERP %s\n' "$INT_DUMP"
-printf 'JIT    %s\n' "$JIT_DUMP"
-[[ "$NAT" -gt 0 ]] || exit 2
-if [[ "$STATUS" == FAIL ]]; then exit 1; fi
+exit "$RESULT"
