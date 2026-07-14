@@ -952,6 +952,187 @@ if (!activeRiskyNames.has("asl_l_reg_count63_boundary")) {
   fail("register-count adjacent-boundary matrix: count-63 priority vector is not active");
 }
 
+/* ROL/ROR register counts are architectural six-bit values even though the
+ * result is periodic at the operand width. The AArch64 helper owns count-zero
+ * C clearing, X preservation, and N/Z/V publication before the generated
+ * wrapper marks flags live. */
+for (const op of ["ROL", "ROR"] as const) {
+  for (const width of ["b", "w", "l"] as const) {
+    for (const lifecycle of ["jnf", "jff"] as const) {
+      const name = `${lifecycle}_${op}_${width}`;
+      const body = shiftFunctionBody(name);
+      requireText(body, "live.state[i].val & 0x3f", `${name} constant six-bit count`);
+      requireText(body, "i = readreg(i);", `${name} count-before-writeback ordering`);
+      requireText(body, "d = rmw(d);", `${name} destination writeback ordering`);
+      requireText(body, "unlock2(d);", `${name} destination lifecycle`);
+      requireText(body, "unlock2(i);", `${name} count lifecycle`);
+      if (body.includes("FLAGX") || body.includes("DUPLICACTE_CARRY")) {
+        fail(`${name}: plain rotate must preserve X`);
+      }
+      if (lifecycle === "jnf") {
+        requireText(body, "AND_ww3f(", `${name} runtime six-bit count`);
+      } else if (op === "ROL") {
+        requireText(body, "ANDS_ww3f(", `${name} runtime six-bit count`);
+        requireText(body, "branch_rotate_nonzero", `${name} count-zero carry join`);
+        requireText(body, "B_i(0); // <end>", `${name} count-zero carry join`);
+        requireText(body, "write_jmp_target(branchadd, (uintptr)get_target());", `${name} count-zero carry join`);
+      } else {
+        requireText(body, "AND_ww3f(", `${name} runtime six-bit count`);
+        requireText(body, "branch_count_zero", `${name} count-zero carry join`);
+        requireText(body, "CBZ_wi(", `${name} count-zero carry join`);
+        requireText(body, "PUBLISH_CARRY_FROM_BIT(", `${name} non-zero carry publication`);
+      }
+    }
+  }
+}
+
+const rotateGeneratorStart = requireText(gencompSource, " case i_ROL:", "rotate generator family");
+const rotateGeneratorEnd = requireText(gencompSource, "     case i_ROXL:", "rotate generator family");
+const rotateGeneratorBody = gencompSource.slice(rotateGeneratorStart, rotateGeneratorEnd);
+for (const contract of [
+  "encoded source/destination alias is legal and must stay native",
+  "if ((uae_u32)srcreg==(uae_u32)dstreg)",
+  "AArch64 rotate helpers own the complete N/Z/V/C lifecycle",
+  'comprintf("\\tstart_needflags();\\n");',
+  'comprintf("\\tlive_flags();\\n");',
+  'comprintf("\\tend_needflags();\\n");',
+]) {
+  requireText(rotateGeneratorBody, contract, "rotate generator family");
+}
+
+for (const [name, carryContract] of [
+  ["jff_ROLW", "BFI_wwii(REG_WORK4, d, 29, 1)"],
+  ["jff_RORW", "PUBLISH_CARRY_FROM_BIT(d, 31, REG_WORK3)"],
+] as const) {
+  const body = functionBody(shiftSource, `MIDFUNC(1,${name},`, `MENDFUNC(1,${name},`, `${name} memory rotate`);
+  requireText(body, "d = rmw(d);", `${name} memory writeback`);
+  requireText(body, "TST_ww(d, d);", `${name} memory N/Z/V flags`);
+  requireText(body, carryContract, `${name} memory carry`);
+  if (body.includes("FLAGX") || body.includes("DUPLICACTE_CARRY")) fail(`${name}: memory rotate must preserve X`);
+}
+
+const generatedRotateOpcodes = [
+  ["e138", "rol_b_rr"], ["e178", "rol_w_rr"], ["e1b8", "rol_l_rr"],
+  ["e038", "ror_b_rr"], ["e078", "ror_w_rr"], ["e0b8", "ror_l_rr"],
+  ["e118", "rol_b_rr"], ["e158", "rol_w_rr"], ["e198", "rol_l_rr"],
+  ["e018", "ror_b_rr"], ["e058", "ror_w_rr"], ["e098", "ror_l_rr"],
+] as const;
+for (const [opcode, helper] of generatedRotateOpcodes) {
+  for (const suffix of ["ff", "nf"] as const) {
+    const body = functionBody(
+      generatedSource,
+      `void REGPARAM2 op_${opcode}_0_comp_${suffix}`,
+      "\n/*",
+      `generated register-count rotate ${opcode}/${suffix}`,
+    );
+    if (/srcreg\s*==\s*dstreg/.test(body) || body.includes("FAIL(1)")) {
+      fail(`generated register-count rotate ${opcode}/${suffix}: alias fallback reintroduced`);
+    }
+    requireText(body, `${helper}(data,cnt);`, `generated register-count rotate ${opcode}/${suffix}`);
+    if (suffix === "ff") {
+      requireBefore(body, "start_needflags();", `${helper}(data,cnt);`, `generated register-count rotate ${opcode}/ff`);
+      requireBefore(body, `${helper}(data,cnt);`, "live_flags();", `generated register-count rotate ${opcode}/ff`);
+      if (body.includes("bt_l_ri(data") || body.includes("test_b_rr(data,data)") ||
+          body.includes("test_w_rr(data,data)") || body.includes("test_l_rr(data,data)")) {
+        fail(`generated register-count rotate ${opcode}/ff: wrapper overwrites helper count-zero flags`);
+      }
+    } else if (body.includes("start_needflags();") || body.includes("live_flags();")) {
+      fail(`generated register-count rotate ${opcode}/nf: no-flags wrapper publishes flags`);
+    }
+  }
+}
+for (const [opcode, helper] of [["e7d0", "ROLW"], ["e6d0", "RORW"]] as const) {
+  for (const suffix of ["ff", "nf"] as const) {
+    const body = functionBody(
+      generatedSource,
+      `void REGPARAM2 op_${opcode}_0_comp_${suffix}`,
+      "\n/*",
+      `generated memory rotate ${opcode}/${suffix}`,
+    );
+    requireText(body, `${suffix === "ff" ? "jff" : "jnf"}_${helper}(src);`, `generated memory rotate ${opcode}/${suffix}`);
+    requireText(body, "writeword(srca, src, scratchie);", `generated memory rotate ${opcode}/${suffix}`);
+    if (suffix === "ff") {
+      requireBefore(body, "start_needflags();", `jff_${helper}(src);`, `generated memory rotate ${opcode}/ff`);
+      requireBefore(body, `jff_${helper}(src);`, "live_flags();", `generated memory rotate ${opcode}/ff`);
+    } else if (body.includes("start_needflags();") || body.includes("live_flags();")) {
+      fail(`generated memory rotate ${opcode}/nf: no-flags wrapper publishes flags`);
+    }
+  }
+}
+
+for (const contract of [
+  "declare -a ROTATE_REGISTER_MATRIX_NAMES=()",
+  "for _rotate_count in 0 31 32 33 63; do",
+  "ROTATE_REGISTER_MATRIX_NAMES+=(\"$_rotate_name\" \"${_rotate_name}_nf\")",
+  "NATIVE_REPLAY_TESTS[\"$_rotate_name\"]=1",
+  "NATIVE_REPLAY_PC[\"$_rotate_name\"]=0x1000",
+  "TESTS[\"$_rotate_name\"]=\"${_rotate_opcode} 40C6\"",
+  "TESTS[\"${_rotate_name}_nf\"]=\"${_rotate_opcode} 7E00 40C6\"",
+  "TESTS[\"$_rotate_alias_name\"]=\"${_rotate_alias_opcode} 40C6\"",
+]) {
+  requireText(harnessSource, contract, "register-count rotate matrix");
+}
+const rotateExactVectorNames = new Set<string>();
+for (const op of ["rol", "ror"] as const) {
+  for (const width of ["b", "w", "l"] as const) {
+    for (const count of [0, 31, 32, 33, 63] as const) {
+      const name = `${op}_${width}_reg_count${count}_boundary`;
+      rotateExactVectorNames.add(name);
+      rotateExactVectorNames.add(`${name}_nf`);
+    }
+    rotateExactVectorNames.add(`${op}_${width}_reg_same_count_data`);
+    rotateExactVectorNames.add(`${op}_${width}_reg_same_count_data_nf`);
+  }
+}
+const nativeReplayTestsSection = harnessSource.slice(
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_TESTS=(", "native replay test inventory"),
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_PC=(", "native replay PC inventory"),
+);
+const nativeReplayPcSection = harnessSource.slice(
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_PC=(", "native replay PC inventory"),
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_BYTES=(", "native replay memory inventory"),
+);
+const nativeReplayBytesSection = harnessSource.slice(
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_BYTES=(", "native replay memory inventory"),
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_COUNT=(", "native replay count inventory"),
+);
+const nativeReplayCountSection = harnessSource.slice(
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_COUNT=(", "native replay count inventory"),
+  requireText(harnessSource, "declare -A _SHIFT_BOUNDARY_OPCODES=(", "generated shift test inventory"),
+);
+
+const rotateSupplementalVectors = [
+  "rol_l_reg_const_count64", "rol_l_reg_const_count64_nf",
+  "ror_l_reg_const_count64", "ror_l_reg_const_count64_nf",
+  "rol_b_imm_count8", "rol_b_imm_count8_nf",
+  "rol_w_imm_count8", "rol_w_imm_count8_nf",
+  "rol_l_imm_count8", "rol_l_imm_count8_nf",
+  "ror_b_imm_count8", "ror_b_imm_count8_nf",
+  "ror_w_imm_count8", "ror_w_imm_count8_nf",
+  "ror_l_imm_count8", "ror_l_imm_count8_nf",
+  "rolw_mem_native", "rolw_mem_native_nf",
+  "rorw_mem_native", "rorw_mem_native_nf",
+] as const;
+for (const name of rotateSupplementalVectors) {
+  rotateExactVectorNames.add(name);
+  requireText(harnessSource, `TESTS[${name}]=`, `${name} rotate-path vector`);
+  requireText(nativeReplayTestsSection, `[${name}]=1`, `${name} exact-native replay`);
+  requireText(nativeReplayPcSection, `[${name}]=0x${name.includes("reg_const_count64") ? "100c" : "1000"}`, `${name} exact replay PC`);
+  requireText(nativeReplayCountSection, `[${name}]=2`, `${name} exact replay count`);
+  requireText(harnessSource, `SENTINEL_A6[${name}]=`, `${name} register sentinel`);
+  if (!activeRiskyNames.has(name)) fail(`${name}: missing from active risky corpus`);
+}
+for (const memoryName of ["rolw_mem_native", "rolw_mem_native_nf", "rorw_mem_native", "rorw_mem_native_nf"] as const) {
+  requireText(nativeReplayBytesSection, `[${memoryName}]=\"A000 80 A001 01\"`, `${memoryName} exact memory replay`);
+}
+if (rotateExactVectorNames.size !== 92) {
+  fail(`rotate exact-native inventory: expected 92, got ${rotateExactVectorNames.size}`);
+}
+const activeRotateVectorCount = [...rotateExactVectorNames].filter((name) => activeRiskyNames.has(name)).length;
+if (activeRotateVectorCount !== 68) {
+  fail(`rotate active inventory: expected 68, got ${activeRotateVectorCount}`);
+}
+
 const trapvMidfuncBody = functionBody(
   midfunc2Source,
   "MIDFUNC(0,jnf_TRAPV",
@@ -2009,6 +2190,11 @@ console.log("METRIC structural_register_shift_alias_native=1");
 console.log("METRIC structural_register_shift_long_immediate_saturation=1");
 console.log(`METRIC structural_register_shift_exact_native_vectors=${shiftExactVectorNames.size}`);
 console.log(`METRIC structural_register_shift_active_vectors=${activeShiftVectorCount}`);
+console.log("METRIC structural_register_rotate_six_bit_count=1");
+console.log("METRIC structural_register_rotate_alias_native=1");
+console.log("METRIC structural_register_rotate_flag_lifecycle=1");
+console.log(`METRIC structural_register_rotate_exact_native_vectors=${rotateExactVectorNames.size}`);
+console.log(`METRIC structural_register_rotate_active_vectors=${activeRotateVectorCount}`);
 console.log("METRIC structural_fullsr_ea_mode_decode=1");
 console.log("METRIC structural_complete_mvsr2_helper_family=1");
 console.log("METRIC structural_complete_legacy_condition_mapping=1");

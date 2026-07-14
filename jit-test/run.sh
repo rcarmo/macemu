@@ -317,6 +317,27 @@ TEST_ORDER+=(asl_b_reg_count_0_preserves_x asl_w_reg_count_0_preserves_x asl_l_r
 # Register-count shift boundaries must use the guest low-six-bit count without
 # wrapping count 32 through AArch64 W-form variable shifts.
 TEST_ORDER+=(asl_b_reg_count32_boundary asl_w_reg_count32_boundary asl_l_reg_count32_boundary asl_l_reg_zero_count32_v_clear asl_l_reg_zero_count32_const_v_clear asl_b_reg_zero_count63_v_clear asl_w_reg_zero_count33_v_clear asr_b_reg_count32_boundary asr_w_reg_count32_boundary asr_l_reg_count32_boundary lsl_b_reg_count32_boundary lsl_w_reg_count32_boundary lsl_l_reg_count32_boundary lsr_b_reg_count32_boundary lsr_w_reg_count32_boundary lsr_l_reg_count32_boundary lsr_l_reg_count33_boundary lsr_l_reg_const_count32)
+# ROL/ROR use the low six register-count bits even though the rotation result
+# itself is periodic at the operand width. Cover zero, both sides of 32, the
+# maximal six-bit count, both flag lifecycles, and legal count/data aliasing.
+declare -a ROTATE_REGISTER_MATRIX_NAMES=()
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        for _rotate_count in 0 31 32 33 63; do
+            _rotate_name="${_rotate_op}_${_rotate_width}_reg_count${_rotate_count}_boundary"
+            ROTATE_REGISTER_MATRIX_NAMES+=("$_rotate_name" "${_rotate_name}_nf")
+            TEST_ORDER+=("$_rotate_name" "${_rotate_name}_nf")
+        done
+        _rotate_alias_name="${_rotate_op}_${_rotate_width}_reg_same_count_data"
+        ROTATE_REGISTER_MATRIX_NAMES+=("$_rotate_alias_name" "${_rotate_alias_name}_nf")
+        TEST_ORDER+=("$_rotate_alias_name" "${_rotate_alias_name}_nf")
+    done
+done
+unset _rotate_op _rotate_width _rotate_count _rotate_name _rotate_alias_name
+TEST_ORDER+=(rol_l_reg_const_count64 rol_l_reg_const_count64_nf ror_l_reg_const_count64 ror_l_reg_const_count64_nf)
+TEST_ORDER+=(rol_b_imm_count8 rol_b_imm_count8_nf rol_w_imm_count8 rol_w_imm_count8_nf rol_l_imm_count8 rol_l_imm_count8_nf)
+TEST_ORDER+=(ror_b_imm_count8 ror_b_imm_count8_nf ror_w_imm_count8 ror_w_imm_count8_nf ror_l_imm_count8 ror_l_imm_count8_nf)
+TEST_ORDER+=(rolw_mem_native rolw_mem_native_nf rorw_mem_native rorw_mem_native_nf)
 TEST_ORDER+=(asl_b_reg_count32_nf asl_w_reg_count32_nf asl_l_reg_count32_nf asr_b_reg_count32_nf asr_w_reg_count32_nf asr_l_reg_count32_nf lsl_b_reg_count32_nf lsl_w_reg_count32_nf lsl_l_reg_count32_nf lsr_b_reg_count32_nf lsr_w_reg_count32_nf lsr_l_reg_count32_nf)
 TEST_ORDER+=(asl_b_reg_same_count_data asl_w_reg_same_count_data asl_l_reg_same_count_data asr_b_reg_same_count_data asr_w_reg_same_count_data asr_l_reg_same_count_data lsl_b_reg_same_count_data lsl_w_reg_same_count_data lsl_l_reg_same_count_data lsr_b_reg_same_count_data lsr_w_reg_same_count_data lsr_l_reg_same_count_data)
 TEST_ORDER+=(asl_b_reg_same_count_data_nf asl_w_reg_same_count_data_nf asl_l_reg_same_count_data_nf asr_b_reg_same_count_data_nf asr_w_reg_same_count_data_nf asr_l_reg_same_count_data_nf lsl_b_reg_same_count_data_nf lsl_w_reg_same_count_data_nf lsl_l_reg_same_count_data_nf lsr_b_reg_same_count_data_nf lsr_w_reg_same_count_data_nf lsr_l_reg_same_count_data_nf)
@@ -364,6 +385,26 @@ declare -A EXPECTED_REG_FIELDS
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
 declare -A NATIVE_REPLAY_TESTS=(
+    [rol_l_reg_const_count64]=1
+    [rol_l_reg_const_count64_nf]=1
+    [ror_l_reg_const_count64]=1
+    [ror_l_reg_const_count64_nf]=1
+    [rol_b_imm_count8]=1
+    [rol_b_imm_count8_nf]=1
+    [rol_w_imm_count8]=1
+    [rol_w_imm_count8_nf]=1
+    [rol_l_imm_count8]=1
+    [rol_l_imm_count8_nf]=1
+    [ror_b_imm_count8]=1
+    [ror_b_imm_count8_nf]=1
+    [ror_w_imm_count8]=1
+    [ror_w_imm_count8_nf]=1
+    [ror_l_imm_count8]=1
+    [ror_l_imm_count8_nf]=1
+    [rolw_mem_native]=1
+    [rolw_mem_native_nf]=1
+    [rorw_mem_native]=1
+    [rorw_mem_native_nf]=1
     [asl_l_reg_zero_count32_const_v_clear]=1
     [lsr_l_reg_const_count32]=1
     [asr_l_reg_count0_pressure_preserves_x]=1
@@ -592,6 +633,26 @@ declare -A NATIVE_REPLAY_TESTS=(
 # A setup prefix may install architectural state before the audited instruction.
 # Replay and native-entry proof then start at the exact family opcode PC.
 declare -A NATIVE_REPLAY_PC=(
+    [rol_l_reg_const_count64]=0x100c
+    [rol_l_reg_const_count64_nf]=0x100c
+    [ror_l_reg_const_count64]=0x100c
+    [ror_l_reg_const_count64_nf]=0x100c
+    [rol_b_imm_count8]=0x1000
+    [rol_b_imm_count8_nf]=0x1000
+    [rol_w_imm_count8]=0x1000
+    [rol_w_imm_count8_nf]=0x1000
+    [rol_l_imm_count8]=0x1000
+    [rol_l_imm_count8_nf]=0x1000
+    [ror_b_imm_count8]=0x1000
+    [ror_b_imm_count8_nf]=0x1000
+    [ror_w_imm_count8]=0x1000
+    [ror_w_imm_count8_nf]=0x1000
+    [ror_l_imm_count8]=0x1000
+    [ror_l_imm_count8_nf]=0x1000
+    [rolw_mem_native]=0x1000
+    [rolw_mem_native_nf]=0x1000
+    [rorw_mem_native]=0x1000
+    [rorw_mem_native_nf]=0x1000
     [chk_w_in_range]=0x1004
     [chk_w_zero]=0x1004
     [chk_w_equal]=0x1004
@@ -716,6 +777,10 @@ declare -A NATIVE_REPLAY_PC=(
 # exact-PC replay. This keeps memory-EA vectors deterministic across the trace
 # pass and the later native-entry pass.
 declare -A NATIVE_REPLAY_BYTES=(
+    [rolw_mem_native]="A000 80 A001 01"
+    [rolw_mem_native_nf]="A000 80 A001 01"
+    [rorw_mem_native]="A000 80 A001 01"
+    [rorw_mem_native_nf]="A000 80 A001 01"
     [bcd_abcd_predec_src_a7]="2080 01 2040 99"
     [bcd_abcd_predec_dst_a7]="2080 01 2040 99"
     [bcd_abcd_predec_a7_alias]="2082 01 2080 99"
@@ -725,6 +790,26 @@ declare -A NATIVE_REPLAY_BYTES=(
     [bcd_nbcd_predec_a7]="2040 01"
 )
 declare -A NATIVE_REPLAY_COUNT=(
+    [rol_l_reg_const_count64]=2
+    [rol_l_reg_const_count64_nf]=2
+    [ror_l_reg_const_count64]=2
+    [ror_l_reg_const_count64_nf]=2
+    [rol_b_imm_count8]=2
+    [rol_b_imm_count8_nf]=2
+    [rol_w_imm_count8]=2
+    [rol_w_imm_count8_nf]=2
+    [rol_l_imm_count8]=2
+    [rol_l_imm_count8_nf]=2
+    [ror_b_imm_count8]=2
+    [ror_b_imm_count8_nf]=2
+    [ror_w_imm_count8]=2
+    [ror_w_imm_count8_nf]=2
+    [ror_l_imm_count8]=2
+    [ror_l_imm_count8_nf]=2
+    [rolw_mem_native]=2
+    [rolw_mem_native_nf]=2
+    [rorw_mem_native]=2
+    [rorw_mem_native_nf]=2
     [chk_w_in_range]=2
     [chk_w_zero]=2
     [chk_w_equal]=2
@@ -851,6 +936,12 @@ for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_shift_name"]=2
 done
 unset _shift_name
+for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_rotate_name"]=1
+    NATIVE_REPLAY_PC["$_rotate_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_rotate_name"]=2
+done
+unset _rotate_name
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -2202,6 +2293,59 @@ for _shift_op in asl asr lsl lsr; do
 done
 unset _shift_op _shift_width _shift_opcode _shift_data _shift_count _shift_count_hex _shift_name
 unset _SHIFT_BOUNDARY_OPCODES _SHIFT_BOUNDARY_DATA
+
+declare -A _ROTATE_REGISTER_OPCODES=(
+    [rol_b]=E338 [rol_w]=E378 [rol_l]=E3B8
+    [ror_b]=E238 [ror_w]=E278 [ror_l]=E2B8
+)
+declare -A _ROTATE_ALIAS_OPCODES=(
+    [rol_b]=E138 [rol_w]=E178 [rol_l]=E1B8
+    [ror_b]=E038 [ror_w]=E078 [ror_l]=E0B8
+)
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        _rotate_key="${_rotate_op}_${_rotate_width}"
+        _rotate_opcode="${_ROTATE_REGISTER_OPCODES[$_rotate_key]}"
+        _rotate_alias_opcode="${_ROTATE_ALIAS_OPCODES[$_rotate_key]}"
+        for _rotate_count in 0 31 32 33 63; do
+            _rotate_name="${_rotate_op}_${_rotate_width}_reg_count${_rotate_count}_boundary"
+            TESTS["$_rotate_name"]="${_rotate_opcode} 40C6"
+            TESTS["${_rotate_name}_nf"]="${_rotate_opcode} 7E00 40C6"
+        done
+        _rotate_alias_name="${_rotate_op}_${_rotate_width}_reg_same_count_data"
+        TESTS["$_rotate_alias_name"]="${_rotate_alias_opcode} 40C6"
+        TESTS["${_rotate_alias_name}_nf"]="${_rotate_alias_opcode} 7E00 40C6"
+    done
+done
+TESTS[rol_l_reg_const_count64]="203C 8000 0001 7240 44FC 0015 E3B8 40C6"
+TESTS[rol_l_reg_const_count64_nf]="203C 8000 0001 7240 44FC 0015 E3B8 7E00 40C6"
+TESTS[ror_l_reg_const_count64]="203C 8000 0001 7240 44FC 0015 E2B8 40C6"
+TESTS[ror_l_reg_const_count64_nf]="203C 8000 0001 7240 44FC 0015 E2B8 7E00 40C6"
+TESTS[rol_b_imm_count8]="E118 40C6"
+TESTS[rol_b_imm_count8_nf]="E118 7E00 40C6"
+TESTS[rol_w_imm_count8]="E158 40C6"
+TESTS[rol_w_imm_count8_nf]="E158 7E00 40C6"
+TESTS[rol_l_imm_count8]="E198 40C6"
+TESTS[rol_l_imm_count8_nf]="E198 7E00 40C6"
+TESTS[ror_b_imm_count8]="E018 40C6"
+TESTS[ror_b_imm_count8_nf]="E018 7E00 40C6"
+TESTS[ror_w_imm_count8]="E058 40C6"
+TESTS[ror_w_imm_count8_nf]="E058 7E00 40C6"
+TESTS[ror_l_imm_count8]="E098 40C6"
+TESTS[ror_l_imm_count8_nf]="E098 7E00 40C6"
+TESTS[rolw_mem_native]="E7D0 40C6 3010"
+TESTS[rolw_mem_native_nf]="E7D0 7E00 3010 40C6"
+TESTS[rorw_mem_native]="E6D0 40C6 3010"
+TESTS[rorw_mem_native_nf]="E6D0 7E00 3010 40C6"
+EXPECTED_REG_FIELDS[rol_l_reg_const_count64]="D0=80000001 D6=00002718"
+EXPECTED_REG_FIELDS[ror_l_reg_const_count64]="D0=80000001 D6=00002718"
+EXPECTED_REG_FIELDS[rolw_mem_native]="D0=00000003 D6=00002711"
+EXPECTED_REG_FIELDS[rorw_mem_native]="D0=0000C000 D6=00002719"
+EXPECTED_REG_FIELDS[rol_l_reg_count32_boundary]="D0=80000001 D6=00002719"
+EXPECTED_REG_FIELDS[rol_l_reg_same_count_data]="D0=00000043 D6=00002711"
+unset _rotate_op _rotate_width _rotate_key _rotate_opcode _rotate_alias_opcode
+unset _rotate_count _rotate_name _rotate_alias_name
+unset _ROTATE_REGISTER_OPCODES _ROTATE_ALIAS_OPCODES
 # Taken TRAPV preserves all CCR bits and uses the same successor/opcode
 # format-2 address split as vector-5 arithmetic traps.
 TESTS[trapv_taken_frame]="7000 4E7B 0801 23FC 0000 101A 0000 001C 44FC 001F 4E76 60FE 4E71 3C17 282F 0002 2A2F 0008 7E69"
@@ -2566,7 +2710,54 @@ for _shift_op in asl asr lsl lsr; do
     done
 done
 unset _shift_op _shift_width _shift_count _shift_count_init _shift_name _shift_init
-unset _SHIFT_BOUNDARY_INIT_DATA _SHIFT_COUNT32_INIT_TAIL
+unset _SHIFT_BOUNDARY_INIT_DATA
+declare -A _ROTATE_REGISTER_INIT_DATA=(
+    [b]=A5A50081 [w]=A5A58001 [l]=80000001
+)
+declare -A _ROTATE_ALIAS_INIT_DATA=(
+    [b]=A5A500A1 [w]=A5A58021 [l]=80000021
+)
+INIT_REGS[rol_l_reg_const_count64]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[rol_l_reg_const_count64_nf]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[ror_l_reg_const_count64]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[ror_l_reg_const_count64_nf]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        case "$_rotate_width" in
+            b) _rotate_immediate_data=A5A50081 ;;
+            w) _rotate_immediate_data=A5A58001 ;;
+            l) _rotate_immediate_data=80000001 ;;
+        esac
+        _rotate_immediate_name="${_rotate_op}_${_rotate_width}_imm_count8"
+        _rotate_immediate_init="${_rotate_immediate_data} 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+        INIT_REGS["$_rotate_immediate_name"]="$_rotate_immediate_init"
+        INIT_REGS["${_rotate_immediate_name}_nf"]="$_rotate_immediate_init"
+    done
+done
+_ROTATE_MEMORY_INIT="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[rolw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[rolw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[rorw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[rorw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+unset _rotate_op _rotate_width _rotate_immediate_data _rotate_immediate_name _rotate_immediate_init _ROTATE_MEMORY_INIT
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        for _rotate_count in 0 31 32 33 63; do
+            printf -v _rotate_count_init '%08X' "$_rotate_count"
+            _rotate_name="${_rotate_op}_${_rotate_width}_reg_count${_rotate_count}_boundary"
+            _rotate_init="${_ROTATE_REGISTER_INIT_DATA[$_rotate_width]} ${_rotate_count_init} $_SHIFT_COUNT32_INIT_TAIL"
+            INIT_REGS["$_rotate_name"]="$_rotate_init"
+            INIT_REGS["${_rotate_name}_nf"]="$_rotate_init"
+        done
+        _rotate_alias_name="${_rotate_op}_${_rotate_width}_reg_same_count_data"
+        _rotate_alias_init="${_ROTATE_ALIAS_INIT_DATA[$_rotate_width]} 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+        INIT_REGS["$_rotate_alias_name"]="$_rotate_alias_init"
+        INIT_REGS["${_rotate_alias_name}_nf"]="$_rotate_alias_init"
+    done
+done
+unset _rotate_op _rotate_width _rotate_count _rotate_count_init _rotate_name _rotate_init
+unset _rotate_alias_name _rotate_alias_init _ROTATE_REGISTER_INIT_DATA _ROTATE_ALIAS_INIT_DATA
+unset _SHIFT_COUNT32_INIT_TAIL
 INIT_REGS[divu_l_zero_frame]="13579BDF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_l_zero_frame]="89ABCDEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divu_l32_zero_distinct]="13579BDF 00000000 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
@@ -3287,6 +3478,33 @@ for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
     ((_shift_sentinel_index += 1))
 done
 unset _shift_name _shift_sentinel _shift_sentinel_index
+_rotate_sentinel_index=512
+for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
+    printf -v _rotate_sentinel 'a6d6%04x' "$_rotate_sentinel_index"
+    SENTINEL_A6["$_rotate_name"]="$_rotate_sentinel"
+    ((_rotate_sentinel_index += 1))
+done
+unset _rotate_name _rotate_sentinel _rotate_sentinel_index
+SENTINEL_A6[rol_l_reg_const_count64]="a6d60260"
+SENTINEL_A6[rol_l_reg_const_count64_nf]="a6d60261"
+SENTINEL_A6[ror_l_reg_const_count64]="a6d60262"
+SENTINEL_A6[ror_l_reg_const_count64_nf]="a6d60263"
+SENTINEL_A6[rol_b_imm_count8]="a6d60264"
+SENTINEL_A6[rol_b_imm_count8_nf]="a6d60265"
+SENTINEL_A6[rol_w_imm_count8]="a6d60266"
+SENTINEL_A6[rol_w_imm_count8_nf]="a6d60267"
+SENTINEL_A6[rol_l_imm_count8]="a6d60268"
+SENTINEL_A6[rol_l_imm_count8_nf]="a6d60269"
+SENTINEL_A6[ror_b_imm_count8]="a6d6026a"
+SENTINEL_A6[ror_b_imm_count8_nf]="a6d6026b"
+SENTINEL_A6[ror_w_imm_count8]="a6d6026c"
+SENTINEL_A6[ror_w_imm_count8_nf]="a6d6026d"
+SENTINEL_A6[ror_l_imm_count8]="a6d6026e"
+SENTINEL_A6[ror_l_imm_count8_nf]="a6d6026f"
+SENTINEL_A6[rolw_mem_native]="a6d60270"
+SENTINEL_A6[rolw_mem_native_nf]="a6d60271"
+SENTINEL_A6[rorw_mem_native]="a6d60272"
+SENTINEL_A6[rorw_mem_native_nf]="a6d60273"
 SENTINEL_A6[divu_l_zero_frame]="a6d50003"
 SENTINEL_A6[divs_l_zero_frame]="a6d50004"
 SENTINEL_A6[divu_l32_zero_distinct]="a6d5000f"
@@ -3416,6 +3634,26 @@ SENTINEL_A6[branch_flush_bgt_zero]="a6c0e003"
 # Risk-focused subset used for strict mismatch-first autoresearch.
 # Only these vectors count toward risky_total progression.
 declare -A RISKY_TESTS=(
+    [rol_l_reg_const_count64]=1
+    [rol_l_reg_const_count64_nf]=1
+    [ror_l_reg_const_count64]=1
+    [ror_l_reg_const_count64_nf]=1
+    [rol_b_imm_count8]=1
+    [rol_b_imm_count8_nf]=1
+    [rol_w_imm_count8]=1
+    [rol_w_imm_count8_nf]=1
+    [rol_l_imm_count8]=1
+    [rol_l_imm_count8_nf]=1
+    [ror_b_imm_count8]=1
+    [ror_b_imm_count8_nf]=1
+    [ror_w_imm_count8]=1
+    [ror_w_imm_count8_nf]=1
+    [ror_l_imm_count8]=1
+    [ror_l_imm_count8_nf]=1
+    [rolw_mem_native]=1
+    [rolw_mem_native_nf]=1
+    [rorw_mem_native]=1
+    [rorw_mem_native_nf]=1
     [asl_l_reg_zero_count32_const_v_clear]=1
     [lsr_l_reg_const_count32]=1
     [asr_l_reg_count0_pressure_preserves_x]=1
@@ -4001,6 +4239,10 @@ for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_shift_name"]=1
 done
 unset _shift_name
+for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_rotate_name"]=1
+done
+unset _rotate_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

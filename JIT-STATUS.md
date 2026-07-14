@@ -172,8 +172,8 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 ## BasiliskII 68K JIT
 
 **Current structural-audit gate (2026-07-14):** ✅
-**Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible at SHA-256 `09758be160430afd9222fe57499207eb361093e7f036d4fba63ff2e31aecefea`
-**JIT harness:** ✅ 523/523 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible at SHA-256 `2ab571a7bb6ba26e4c37a19e2cfeb8604f51333c17504b164c55c2ad69f6d1b0`
+**JIT harness:** ✅ 647/647 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -205,9 +205,36 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**523 total vectors, all risky, score=100**
+**647 active risky vectors, score=100**
+
+The larger exact-native family inventories remain available as focused gates;
+the current `ROL`/`ROR` inventory is 92/92 and the accepted register-count
+`ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138.
 
 ### Recent bug fixes (2026-07)
+
+- **ROL/ROR six-bit counts, carry lifecycle, aliases, and no-flags memory paths**
+  (2026-07-14): AArch64 register wrappers now preserve the 68040 low-six-bit
+  count before width-periodic rotation, distinguish count zero from non-zero
+  multiples for C, and support legal count/data aliases through explicit
+  `readreg()` then destination `rmw()` ownership. The generator selects
+  flag-producing helpers before emission instead of reconstructing flags from
+  a no-flags result, while memory `ROLW`/`RORW` no-flags handlers now call their
+  `jnf` helpers across every addressing mode. Patched runtime joins and
+  branchless carry publication replace fixed emitted skip distances. Focused
+  exact-native coverage passes 92/92; the complete active gate passes 647/647.
+  Full evidence is in `BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md`.
+
+- **Register-count ASL/ASR/LSL/LSR counts, overflow, X lifecycle, and aliases**
+  (2026-07-14): all register helpers implement the guest low-six-bit domain
+  rather than AArch64 W-form modulo-32 shifts. Runtime joins materialise old X
+  before branching, non-zero carry publication no longer creates unmatched
+  allocator ownership, and ASL overflow uses the complete sign-transition
+  contract including zero at large counts. AArch64 generated handlers accept
+  legal count/data aliases and retain other-backend containment. The focused
+  exact-native gate passes 138/138 and the accepted full corpus passed 579/579.
+  Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md`.
 
 - **DIVS/DIVL zero, overflow, flags, aliases, and branch geometry**
   (2026-07-14): signed 32/32 DIVL now widens before division so

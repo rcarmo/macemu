@@ -3106,17 +3106,29 @@ gen_opcode (unsigned int opcode)
 #endif
 	mayfail;
 	if (curi->smode==Dreg) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* AArch64 helpers lock the count before destination writeback, so an
+	     * encoded source/destination alias is legal and must stay native. */
+	    start_brace();
+#else
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
 			"        FAIL(1);\n"
 			"        " RETURN "\n"
 			"    }\n");
 	    start_brace();
+#endif
 	}
 	comprintf("\tdont_care_flags();\n");
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace ();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64 rotate helpers own the complete N/Z/V/C lifecycle, including
+	 * low-six-bit count zero. Select their jff form before emitting the op. */
+	if (!noflags)
+	    comprintf("\tstart_needflags();\n");
+#endif
 
 	switch(curi->size) {
 	 case sz_long: comprintf("\trol_l_rr(data,cnt);\n"); break;
@@ -3125,6 +3137,10 @@ gen_opcode (unsigned int opcode)
 	}
 
 	if (!noflags) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
+#else
 	    comprintf("\tstart_needflags();\n");
 	    /*
 	     * x86 ROL instruction does not set ZF/SF, so we need extra checks here
@@ -3138,6 +3154,7 @@ gen_opcode (unsigned int opcode)
 	    comprintf("\tbt_l_ri(data,0x00);\n"); /* Set C */
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
+#endif
 	}
 	genastore ("data", curi->dmode, "dstreg", curi->size, "data");
 	break;
@@ -3148,17 +3165,29 @@ gen_opcode (unsigned int opcode)
 #endif
 	mayfail;
 	if (curi->smode==Dreg) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* AArch64 helpers lock the count before destination writeback, so an
+	     * encoded source/destination alias is legal and must stay native. */
+	    start_brace();
+#else
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
 			"        FAIL(1);\n"
 			"        " RETURN "\n"
 			"    }\n");
 	    start_brace();
+#endif
 	}
 	comprintf("\tdont_care_flags();\n");
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace ();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64 rotate helpers own the complete N/Z/V/C lifecycle, including
+	 * low-six-bit count zero. Select their jff form before emitting the op. */
+	if (!noflags)
+	    comprintf("\tstart_needflags();\n");
+#endif
 
 	switch(curi->size) {
 	 case sz_long: comprintf("\tror_l_rr(data,cnt);\n"); break;
@@ -3167,6 +3196,10 @@ gen_opcode (unsigned int opcode)
 	}
 
 	if (!noflags) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
+#else
 	    comprintf("\tstart_needflags();\n");
 	    /*
 	     * x86 ROR instruction does not set ZF/SF, so we need extra checks here
@@ -3184,6 +3217,7 @@ gen_opcode (unsigned int opcode)
 	    }
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
+#endif
 	}
 	genastore ("data", curi->dmode, "dstreg", curi->size, "data");
 	break;
@@ -3296,10 +3330,14 @@ gen_opcode (unsigned int opcode)
      case i_ROLW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_ROLW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_ROLW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_ROLW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3309,10 +3347,14 @@ gen_opcode (unsigned int opcode)
      case i_RORW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_RORW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_RORW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_RORW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
