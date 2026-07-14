@@ -3869,6 +3869,11 @@ static int readreg_specific(int r, int spec)
  * - hard (physical, x86 here) register allocated to virtual register r
  */
 extern int g_jvlock_reg; extern int g_jvlock_active;
+/* Diagnostic-only forced-alias controls.  The original pressure cells target
+   scratch destinations from architectural sources.  Family-level ownership
+   audits also need the inverse direction (a scratch source crossing a write to
+   an architectural destination), so both selectors accept every integer vreg.
+   With no explicit target, retain the historical scratch-only behaviour. */
 static int b2_force_scratch_alias_vreg(void)
 {
     static int cached = -2;
@@ -3879,7 +3884,7 @@ static int b2_force_scratch_alias_vreg(void)
     if (env && *env) {
         char *end = NULL;
         long v = strtol(env, &end, 0);
-        if (end != env && v >= 0 && v < 16)
+        if (end != env && v >= 0 && v < VREGS)
             cached = (int)v;
     }
     return cached;
@@ -3895,7 +3900,7 @@ static int b2_force_scratch_target_vreg(void)
     if (env && *env) {
         char *end = NULL;
         long v = strtol(env, &end, 0);
-        if (end != env && v >= S1)
+        if (end != env && v >= 0 && v < VREGS)
             cached = (int)v;
     }
     return cached;
@@ -3906,7 +3911,8 @@ static int writereg(int r)
     int answer = -1;
 
 #if defined(CPU_AARCH64)
-    if (r >= S1 && (b2_force_scratch_target_vreg() < 0 || r == b2_force_scratch_target_vreg())) {
+    const int force_target = b2_force_scratch_target_vreg();
+    if ((force_target < 0 ? r >= S1 : r == force_target)) {
         int pin_vreg = b2_force_scratch_alias_vreg();
         if (pin_vreg >= 0 && isinreg(pin_vreg)) {
             int pin_host = live.state[pin_vreg].realreg;
@@ -3968,13 +3974,16 @@ static int rmw(int r)
     int answer = -1;
 
 #if defined(CPU_AARCH64)
-    /* The pressure hook normally intercepts write-only scratch allocation in
-       writereg().  Constant-backed read/modify/write scratches (such as the
-       zero destination used by NEGX) enter through rmw() instead.  Exercise
-       the same forced-collision contract here: a correctly ordered MIDFUNC
-       has already locked its live source, so the attempted alias must skip. */
-    if (r >= S1 && isconst(r) &&
-        (b2_force_scratch_target_vreg() < 0 || r == b2_force_scratch_target_vreg())) {
+    /* The pressure hook normally intercepts write-only allocation in
+       writereg(). Constant-backed scratch RMW values (NEGX) and explicitly
+       selected architectural RMW destinations (MOVE.B/W) enter here instead.
+       A correctly ordered operation has already pinned every crossing source,
+       so the attempted host alias must be rejected. */
+    const int force_target = b2_force_scratch_target_vreg();
+    const bool historical_const_scratch = r >= S1 && isconst(r) &&
+        (force_target < 0 || r == force_target);
+    const bool explicit_target = force_target >= 0 && force_target < S1 && r == force_target;
+    if (historical_const_scratch || explicit_target) {
         int pin_vreg = b2_force_scratch_alias_vreg();
         if (pin_vreg >= 0 && isinreg(pin_vreg)) {
             int pin_host = live.state[pin_vreg].realreg;

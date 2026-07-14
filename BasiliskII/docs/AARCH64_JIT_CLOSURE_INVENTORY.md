@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 34 | 44 | 0 | 52 |
-| midfunc | 422 | 153 | 0 | 119 | 150 |
+| generator | 130 | 37 | 44 | 0 | 49 |
+| midfunc | 422 | 161 | 0 | 119 | 142 |
 | emitter_api | 294 | 0 | 0 | 91 | 203 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,11 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 94 | `MOVE` | generator:`i_MOVE`, midfunc:`jff_MOVE_b`, midfunc:`jff_MOVE_w`, midfunc:`jnf_MOVE_b`, midfunc:`jnf_MOVE_w` |
-| 94 | `MOVE_b_imm` | midfunc:`jff_MOVE_b_imm`, midfunc:`jnf_MOVE_b_imm` |
-| 94 | `MOVE_w_imm` | midfunc:`jff_MOVE_w_imm`, midfunc:`jnf_MOVE_w_imm` |
-| 94 | `MOVE16` | generator:`i_MOVE16` |
-| 94 | `MOVEA` | generator:`i_MOVEA` |
 | 92 | `DBcc` | generator:`i_DBcc` |
 | 92 | `Scc` | generator:`i_Scc` |
 | 90 | `BCHG` | generator:`i_BCHG`, midfunc:`jff_BCHG_b`, midfunc:`jff_BCHG_l`, midfunc:`jnf_BCHG_b`, midfunc:`jnf_BCHG_l` |
@@ -62,6 +57,11 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 90 | `BTST_b_imm` | midfunc:`jff_BTST_b_imm` |
 | 90 | `BTST_l_imm` | midfunc:`jff_BTST_l_imm` |
 | 88 | `CMP` | generator:`i_CMP`, midfunc:`jff_CMP_b`, midfunc:`jff_CMP_l`, midfunc:`jff_CMP_w` |
+| 88 | `CMP_b_imm` | midfunc:`jff_CMP_b_imm` |
+| 88 | `CMP_l_imm` | midfunc:`jff_CMP_l_imm` |
+| 88 | `CMP_w_imm` | midfunc:`jff_CMP_w_imm` |
+| 88 | `CMP_wi` | emitter_api:`CMP_wi` |
+| 88 | `CMP_ww` | emitter_api:`CMP_ww` |
 
 ## Accepted closure targets
 
@@ -70,7 +70,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`MOVE` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_MOVE`, midfunc:`jff_MOVE_b`, midfunc:`jff_MOVE_w`, midfunc:`jnf_MOVE_b`, midfunc:`jnf_MOVE_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`DBcc` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_DBcc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

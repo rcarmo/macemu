@@ -299,130 +299,130 @@ generator,i_ADDA,unreviewed,ADDA,72,1,BasiliskII/src/uae_cpu_2026/compiler/genco
 generator,i_ADDX,audited,ADDX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1690,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 generator,i_AND,unreviewed,AND,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1518,native generator case; no accepted family-level closure report
 generator,i_ANDSR,audited,ANDSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1575,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_ASL,audited,ASL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2816,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ASLW,audited,ASLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3290,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ASR,audited,ASR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2710,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ASRW,audited,ASRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3273,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_Bcc,unreviewed,Bcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2298,native generator case; no accepted family-level closure report
+generator,i_ASL,audited,ASL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2821,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ASLW,audited,ASLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3295,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ASR,audited,ASR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2715,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ASRW,audited,ASRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3278,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_Bcc,unreviewed,Bcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2303,native generator case; no accepted family-level closure report
 generator,i_BCHG,unreviewed,BCHG,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1821,native generator case; no accepted family-level closure report
 generator,i_BCLR,unreviewed,BCLR,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1822,native generator case; no accepted family-level closure report
-generator,i_BFCHG,serviced,BFCHG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3615,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFCLR,serviced,BFCLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3617,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFEXTS,serviced,BFEXTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3616,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFEXTU,serviced,BFEXTU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3614,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFFFO,serviced,BFFFO,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3618,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFINS,serviced,BFINS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3620,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFSET,serviced,BFSET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3619,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFTST,serviced,BFTST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3612,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BKPT,serviced,BKPT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3422,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFCHG,serviced,BFCHG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3620,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFCLR,serviced,BFCLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3622,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFEXTS,serviced,BFEXTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3621,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFEXTU,serviced,BFEXTU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3619,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFFFO,serviced,BFFFO,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3623,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFINS,serviced,BFINS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3625,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFSET,serviced,BFSET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3624,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFTST,serviced,BFTST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3617,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BKPT,serviced,BKPT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3427,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_BSET,unreviewed,BSET,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1823,native generator case; no accepted family-level closure report
-generator,i_BSR,serviced,BSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2269,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BSR,serviced,BSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2274,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_BTST,unreviewed,BTST,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1824,native generator case; no accepted family-level closure report
-generator,i_CALLM,serviced,CALLM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3427,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CAS,serviced,CAS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3408,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CAS2,serviced,CAS2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3412,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CHK,audited,CHK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2668,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
-generator,i_CHK2,serviced,CHK2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2687,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CINVA,serviced,CINVA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3742,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CINVL,serviced,CINVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3739,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CINVP,serviced,CINVP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3741,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CALLM,serviced,CALLM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3432,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CAS,serviced,CAS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3413,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CAS2,serviced,CAS2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3417,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CHK,audited,CHK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2673,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
+generator,i_CHK2,serviced,CHK2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2692,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CINVA,serviced,CINVA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3747,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CINVL,serviced,CINVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3744,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CINVP,serviced,CINVP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3746,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_CLR,unreviewed,CLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1785,native generator case; no accepted family-level closure report
 generator,i_CMP,unreviewed,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1898,native generator case; no accepted family-level closure report
 generator,i_CMPA,unreviewed,CMPA,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1907,native generator case; no accepted family-level closure report
 generator,i_CMPM,unreviewed,CMPM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1896,native generator case; no accepted family-level closure report
-generator,i_CPUSHA,serviced,CPUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3753,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CPUSHL,serviced,CPUSHL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3750,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CPUSHP,serviced,CPUSHP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3752,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_DBcc,unreviewed,DBcc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2401,native generator case; no accepted family-level closure report
-generator,i_DIVL,audited,DIVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3442,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_DIVS,audited,DIVS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2624,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_DIVU,audited,DIVU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2608,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_EMULOP,serviced,EMULOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3787,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_EMULOP_RETURN,serviced,EMULOP_RETURN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3783,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CPUSHA,serviced,CPUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3758,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CPUSHL,serviced,CPUSHL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3755,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CPUSHP,serviced,CPUSHP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3757,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_DBcc,unreviewed,DBcc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2406,native generator case; no accepted family-level closure report
+generator,i_DIVL,audited,DIVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3447,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_DIVS,audited,DIVS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2629,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_DIVU,audited,DIVU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2613,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_EMULOP,serviced,EMULOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3792,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_EMULOP_RETURN,serviced,EMULOP_RETURN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3788,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_EOR,unreviewed,EOR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1519,native generator case; no accepted family-level closure report
 generator,i_EORSR,audited,EORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1555,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_EXG,unreviewed,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2035,native generator case; no accepted family-level closure report
-generator,i_EXT,unreviewed,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2048,native generator case; no accepted family-level closure report
-generator,i_FBcc,unreviewed,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3685,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
-generator,i_FDBcc,serviced,FDBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3701,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FPP,unreviewed,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3670,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
-generator,i_FRESTORE,serviced,FRESTORE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3734,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FSAVE,serviced,FSAVE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3729,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FScc,unreviewed,FScc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3707,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
-generator,i_FTRAPcc,serviced,FTRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3723,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_JMP,unreviewed,JMP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2255,native generator case; no accepted family-level closure report
-generator,i_JSR,unreviewed,JSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2235,native generator case; no accepted family-level closure report
-generator,i_LEA,unreviewed,LEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2375,native generator case; no accepted family-level closure report
-generator,i_LINK,unreviewed,LINK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2156,native generator case; no accepted family-level closure report
-generator,i_LPSTOP,unreviewed,LPSTOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3776,native generator case; no accepted family-level closure report
-generator,i_LSL,audited,LSL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3009,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_LSLW,audited,LSLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3324,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_LSR,audited,LSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2921,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_LSRW,audited,LSRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3307,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_MMUOP,unreviewed,MMUOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3796,native generator case; no accepted family-level closure report
-generator,i_MMUOP030,unreviewed,MMUOP030,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3767,native generator case; no accepted family-level closure report
-generator,i_MOVE,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1961,native generator case; no accepted family-level closure report
-generator,i_MOVE16,unreviewed,MOVE16,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3758,native generator case; no accepted family-level closure report
-generator,i_MOVE2C,serviced,MOVE2C,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3403,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MOVEA,unreviewed,MOVEA,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1984,native generator case; no accepted family-level closure report
-generator,i_MOVEC2,serviced,MOVEC2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3401,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MOVES,serviced,MOVES,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3416,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MULL,audited,MULL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3510,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-generator,i_MULS,unreviewed,MULS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2655,native generator case; no accepted family-level closure report
-generator,i_MULU,unreviewed,MULU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2640,native generator case; no accepted family-level closure report
-generator,i_MV2SR,serviced,MV2SR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2006,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVMEL,audited,MVMEL,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2078,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
-generator,i_MVMLE,audited,MVMLE,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2085,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
+generator,i_EXG,unreviewed,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2040,native generator case; no accepted family-level closure report
+generator,i_EXT,unreviewed,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2053,native generator case; no accepted family-level closure report
+generator,i_FBcc,unreviewed,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3690,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
+generator,i_FDBcc,serviced,FDBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3706,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_FPP,unreviewed,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3675,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
+generator,i_FRESTORE,serviced,FRESTORE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3739,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_FSAVE,serviced,FSAVE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3734,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_FScc,unreviewed,FScc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3712,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
+generator,i_FTRAPcc,serviced,FTRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3728,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_JMP,unreviewed,JMP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2260,native generator case; no accepted family-level closure report
+generator,i_JSR,unreviewed,JSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2240,native generator case; no accepted family-level closure report
+generator,i_LEA,unreviewed,LEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2380,native generator case; no accepted family-level closure report
+generator,i_LINK,unreviewed,LINK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2161,native generator case; no accepted family-level closure report
+generator,i_LPSTOP,unreviewed,LPSTOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3781,native generator case; no accepted family-level closure report
+generator,i_LSL,audited,LSL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3014,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_LSLW,audited,LSLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3329,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_LSR,audited,LSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2926,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_LSRW,audited,LSRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3312,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_MMUOP,unreviewed,MMUOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3801,native generator case; no accepted family-level closure report
+generator,i_MMUOP030,unreviewed,MMUOP030,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3772,native generator case; no accepted family-level closure report
+generator,i_MOVE,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1961,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+generator,i_MOVE16,audited,MOVE16,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3763,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+generator,i_MOVE2C,serviced,MOVE2C,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3408,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MOVEA,audited,MOVEA,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1989,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+generator,i_MOVEC2,serviced,MOVEC2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3406,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MOVES,serviced,MOVES,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3421,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MULL,audited,MULL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3515,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
+generator,i_MULS,unreviewed,MULS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2660,native generator case; no accepted family-level closure report
+generator,i_MULU,unreviewed,MULU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2645,native generator case; no accepted family-level closure report
+generator,i_MV2SR,serviced,MV2SR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2011,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVMEL,audited,MVMEL,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2083,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
+generator,i_MVMLE,audited,MVMLE,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2090,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
 generator,i_MVPMR,serviced,MVPMR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1944,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_MVPRM,serviced,MVPRM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1926,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVR2USP,serviced,MVR2USP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2121,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVSR2,serviced,MVSR2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2000,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVUSP2R,serviced,MVUSP2R,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2123,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVR2USP,serviced,MVR2USP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2126,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVSR2,serviced,MVSR2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2005,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVUSP2R,serviced,MVUSP2R,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2128,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_NBCD,audited,NBCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1758,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
 generator,i_NEG,unreviewed,NEG,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1733,native generator case; no accepted family-level closure report
 generator,i_NEGX,audited,NEGX,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1745,BasiliskII/docs/AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md
-generator,i_NOP,unreviewed,NOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2134,native generator case; no accepted family-level closure report
+generator,i_NOP,unreviewed,NOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2139,native generator case; no accepted family-level closure report
 generator,i_NOT,unreviewed,NOT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1801,native generator case; no accepted family-level closure report
 generator,i_OR,unreviewed,OR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1517,native generator case; no accepted family-level closure report
 generator,i_ORSR,audited,ORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1532,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_PACK,serviced,PACK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3626,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_PEA,unreviewed,PEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2384,native generator case; no accepted family-level closure report
-generator,i_PFLUSH,unreviewed,PFLUSH,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3769,native generator case; no accepted family-level closure report
-generator,i_PFLUSHA,unreviewed,PFLUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3771,native generator case; no accepted family-level closure report
-generator,i_PFLUSHAN,unreviewed,PFLUSHAN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3770,native generator case; no accepted family-level closure report
-generator,i_PFLUSHN,unreviewed,PFLUSHN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3768,native generator case; no accepted family-level closure report
-generator,i_PLPAR,unreviewed,PLPAR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3772,native generator case; no accepted family-level closure report
-generator,i_PLPAW,unreviewed,PLPAW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3773,native generator case; no accepted family-level closure report
-generator,i_PTESTR,unreviewed,PTESTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3774,native generator case; no accepted family-level closure report
-generator,i_PTESTW,unreviewed,PTESTW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3775,native generator case; no accepted family-level closure report
-generator,i_RESET,serviced,RESET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2124,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_ROL,audited,ROL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3098,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_ROLW,audited,ROLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3341,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_ROR,audited,ROR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3157,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_RORW,audited,RORW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3358,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_ROXL,audited,ROXL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3220,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ROXLW,audited,ROXLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3375,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ROXR,audited,ROXR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3239,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ROXRW,audited,ROXRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3388,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_RTD,unreviewed,RTD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2137,native generator case; no accepted family-level closure report
-generator,i_RTE,serviced,RTE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2126,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_RTM,serviced,RTM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3432,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_RTR,unreviewed,RTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2210,native generator case; no accepted family-level closure report
-generator,i_RTS,serviced,RTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2182,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_PACK,serviced,PACK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3631,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_PEA,unreviewed,PEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2389,native generator case; no accepted family-level closure report
+generator,i_PFLUSH,unreviewed,PFLUSH,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3774,native generator case; no accepted family-level closure report
+generator,i_PFLUSHA,unreviewed,PFLUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3776,native generator case; no accepted family-level closure report
+generator,i_PFLUSHAN,unreviewed,PFLUSHAN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3775,native generator case; no accepted family-level closure report
+generator,i_PFLUSHN,unreviewed,PFLUSHN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3773,native generator case; no accepted family-level closure report
+generator,i_PLPAR,unreviewed,PLPAR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3777,native generator case; no accepted family-level closure report
+generator,i_PLPAW,unreviewed,PLPAW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3778,native generator case; no accepted family-level closure report
+generator,i_PTESTR,unreviewed,PTESTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3779,native generator case; no accepted family-level closure report
+generator,i_PTESTW,unreviewed,PTESTW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3780,native generator case; no accepted family-level closure report
+generator,i_RESET,serviced,RESET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2129,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_ROL,audited,ROL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3103,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_ROLW,audited,ROLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3346,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_ROR,audited,ROR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3162,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_RORW,audited,RORW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3363,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_ROXL,audited,ROXL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3225,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ROXLW,audited,ROXLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3380,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ROXR,audited,ROXR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3244,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ROXRW,audited,ROXRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3393,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_RTD,unreviewed,RTD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2142,native generator case; no accepted family-level closure report
+generator,i_RTE,serviced,RTE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2131,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_RTM,serviced,RTM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3437,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_RTR,unreviewed,RTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2215,native generator case; no accepted family-level closure report
+generator,i_RTS,serviced,RTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2187,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_SBCD,audited,SBCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1634,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
-generator,i_Scc,unreviewed,Scc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2562,native generator case; no accepted family-level closure report
-generator,i_STOP,serviced,STOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2125,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_Scc,unreviewed,Scc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2567,native generator case; no accepted family-level closure report
+generator,i_STOP,serviced,STOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2130,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_SUB,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1595,native generator case; no accepted family-level closure report
 generator,i_SUBA,unreviewed,SUBA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1605,native generator case; no accepted family-level closure report
 generator,i_SUBX,audited,SUBX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1623,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_SWAP,unreviewed,SWAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2024,native generator case; no accepted family-level closure report
-generator,i_TAS,audited,TAS,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3657,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
-generator,i_TRAP,serviced,TRAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2092,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_TRAPcc,serviced,TRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3437,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_TRAPV,audited,TRAPV,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2198,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_SWAP,unreviewed,SWAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2029,native generator case; no accepted family-level closure report
+generator,i_TAS,audited,TAS,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3662,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
+generator,i_TRAP,serviced,TRAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2097,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_TRAPcc,serviced,TRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3442,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_TRAPV,audited,TRAPV,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2203,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 generator,i_TST,unreviewed,TST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1813,native generator case; no accepted family-level closure report
-generator,i_UNLK,unreviewed,UNLK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2171,native generator case; no accepted family-level closure report
-generator,i_UNPK,serviced,UNPK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3643,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_UNLK,unreviewed,UNLK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2176,native generator case; no accepted family-level closure report
+generator,i_UNPK,serviced,UNPK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3648,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 midfunc,arm_ADD_l,unreviewed,arm_ADD,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,592,reachable; no accepted family-level closure report
 midfunc,arm_ADD_l_ri,audited,arm_ADD_l_ri,68,5,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,688,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,arm_ADD_l_ri_hostptr,audited,arm_ADD_l_ri_hostptr,68,122,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,649,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
@@ -582,12 +582,12 @@ midfunc,jff_LSR_l_reg,audited,LSR_l_reg,68,1,BasiliskII/src/uae_cpu_2026/compile
 midfunc,jff_LSR_w_imm,audited,LSR_w_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4627,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jff_LSR_w_reg,audited,LSR_w_reg,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4780,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jff_LSRW,audited,LSRW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4890,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_MOVE_b,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5051,reachable; no accepted family-level closure report
-midfunc,jff_MOVE_b_imm,unreviewed,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4993,reachable; no accepted family-level closure report
+midfunc,jff_MOVE_b,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5051,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+midfunc,jff_MOVE_b_imm,audited,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4993,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 midfunc,jff_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5101,i_MOVE routes long flags through genflags and storage through genastore; the legacy MOVE.L MIDFUNC is not selected
 midfunc,jff_MOVE_l_imm,unreachable,MOVE_l_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5036,no path from configured generated/support/FPU compiler roots
-midfunc,jff_MOVE_w,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5076,reachable; no accepted family-level closure report
-midfunc,jff_MOVE_w_imm,unreviewed,MOVE_w_imm,94,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5010,reachable; no accepted family-level closure report
+midfunc,jff_MOVE_w,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5076,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+midfunc,jff_MOVE_w_imm,audited,MOVE_w_imm,94,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5010,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 midfunc,jff_MULS,unreachable,MULS,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5313,no path from configured generated/support/FPU compiler roots
 midfunc,jff_MULS32,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5339,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jff_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5398,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
@@ -753,11 +753,11 @@ midfunc,jnf_MEM_WRITE24_OFF_b,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cp
 midfunc,jnf_MEM_WRITE24_OFF_l,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8580,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE24_OFF_w,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8565,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITEMEMBANK,audited,MEM_WRITEMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8736,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MOVE_b,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4953,reachable; no accepted family-level closure report
-midfunc,jnf_MOVE_b_imm,unreviewed,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4920,reachable; no accepted family-level closure report
+midfunc,jnf_MOVE_b,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4953,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+midfunc,jnf_MOVE_b_imm,audited,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4920,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 midfunc,jnf_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4987,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_MOVE_w,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4970,reachable; no accepted family-level closure report
-midfunc,jnf_MOVE_w_imm,unreviewed,MOVE_w_imm,94,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4936,reachable; no accepted family-level closure report
+midfunc,jnf_MOVE_w,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4970,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+midfunc,jnf_MOVE_w_imm,audited,MOVE_w_imm,94,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4936,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 midfunc,jnf_MOVE16,unreachable,MOVE16,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5217,i_MOVE16 selects genmov16 and its direct/special-memory primitives; the legacy MOVE16 MIDFUNC is not selected
 midfunc,jnf_MOVEA_l,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5270,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_MOVEA_w,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5255,no path from configured generated/support/FPU compiler roots
@@ -969,30 +969,30 @@ runtime_boundary,jit_op_trap,unreachable,jit_op_trap,60,1,BasiliskII/src/uae_cpu
 runtime_boundary,jit_op_trapcc,unreachable,jit_op_trapcc,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2391,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_trapv,unreachable,jit_op_trapv,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1822,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_unpk,serviced,jit_op_unpk,60,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1982,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_aline_trap,serviced,jit_runtime_aline_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5017,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_andsr_word,serviced,jit_runtime_andsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4241,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_bitfield,serviced,jit_runtime_bitfield,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4704,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_bsr,serviced,jit_runtime_bsr,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4434,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_cache_control,serviced,jit_runtime_cache_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4548,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_cas,serviced,jit_runtime_cas,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4783,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_cas2,serviced,jit_runtime_cas2,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4882,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_emulop,serviced,jit_runtime_emulop,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5144,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_eorsr_word,serviced,jit_runtime_eorsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4253,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fbcc,serviced,jit_runtime_fbcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5041,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fdbcc,serviced,jit_runtime_fdbcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5056,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fpp,serviced,jit_runtime_fpp,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5027,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fpu_semantic,serviced,jit_runtime_fpu_semantic,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5114,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_frestore,serviced,jit_runtime_frestore,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5104,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fsave,serviced,jit_runtime_fsave,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5092,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fscc,serviced,jit_runtime_fscc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5034,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_ftrapcc,serviced,jit_runtime_ftrapcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5065,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_illegal_advanced,serviced,jit_runtime_illegal_advanced,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4563,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_illegal_trap,serviced,jit_runtime_illegal_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5022,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_moves,serviced,jit_runtime_moves,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4572,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_mv2sr_word_full,serviced,jit_runtime_mv2sr_word_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4326,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_mvsr2_full,serviced,jit_runtime_mvsr2_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4265,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_orsr_word,serviced,jit_runtime_orsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4229,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_rts,serviced,jit_runtime_rts,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4428,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_system_control,serviced,jit_runtime_system_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4486,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_trap,serviced,jit_runtime_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4454,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_trapcc,serviced,jit_runtime_trapcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4462,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_aline_trap,serviced,jit_runtime_aline_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5026,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_andsr_word,serviced,jit_runtime_andsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4250,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_bitfield,serviced,jit_runtime_bitfield,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4713,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_bsr,serviced,jit_runtime_bsr,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4443,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_cache_control,serviced,jit_runtime_cache_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4557,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_cas,serviced,jit_runtime_cas,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4792,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_cas2,serviced,jit_runtime_cas2,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4891,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_emulop,serviced,jit_runtime_emulop,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5153,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_eorsr_word,serviced,jit_runtime_eorsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4262,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fbcc,serviced,jit_runtime_fbcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5050,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fdbcc,serviced,jit_runtime_fdbcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5065,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fpp,serviced,jit_runtime_fpp,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5036,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fpu_semantic,serviced,jit_runtime_fpu_semantic,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5123,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_frestore,serviced,jit_runtime_frestore,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5113,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fsave,serviced,jit_runtime_fsave,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5101,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fscc,serviced,jit_runtime_fscc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5043,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_ftrapcc,serviced,jit_runtime_ftrapcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5074,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_illegal_advanced,serviced,jit_runtime_illegal_advanced,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4572,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_illegal_trap,serviced,jit_runtime_illegal_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5031,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_moves,serviced,jit_runtime_moves,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4581,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_mv2sr_word_full,serviced,jit_runtime_mv2sr_word_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4335,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_mvsr2_full,serviced,jit_runtime_mvsr2_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4274,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_orsr_word,serviced,jit_runtime_orsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4238,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_rts,serviced,jit_runtime_rts,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4437,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_system_control,serviced,jit_runtime_system_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4495,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_trap,serviced,jit_runtime_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4463,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_trapcc,serviced,jit_runtime_trapcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4471,explicit flushed/end-block runtime semantic boundary

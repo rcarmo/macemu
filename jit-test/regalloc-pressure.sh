@@ -36,7 +36,7 @@ sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 # tick independently.
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
 MOVEM_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007ef000 2700"
-declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision tas_b_ea_value_collision)
+declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision tas_b_ea_value_collision move_b_mem_source_dst_collision)
 if [[ -n "${B2_REGPRESSURE_CELLS:-}" ]]; then
   read -r -a CELLS <<<"${B2_REGPRESSURE_CELLS//,/ }"
 fi
@@ -66,6 +66,11 @@ declare -A CELL_HEX=(
   # while readbyte still owns the live EA; the allocator must reject the alias
   # before the RMW and store.
   [tas_b_ea_value_collision]="4AD0 40C2 1010 2C7C A6AA 55D3"
+  # MOVE.B (A1),D0 keeps its fetched S1 value live while flag generation first
+  # performs a low-lane RMW of D0. Force D0 toward that S1 host mapping: a
+  # complete MOVE ownership contract must reject the collision before zero/OR
+  # lowering can clobber src or D0's preserved upper lane.
+  [move_b_mem_source_dst_collision]="1011 40C2 1239 0000 1000 2C7C A6AA 55D4"
 )
 declare -A CELL_MEMORY_BYTES=(
   [tas_b_ea_value_collision]="A000 00"
@@ -79,6 +84,7 @@ declare -A CELL_INIT=(
   [negx_w_source_dst_collision]="A5A58000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2704"
   [negx_l_source_dst_collision]="80000000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2704"
   [tas_b_ea_value_collision]="A5A50000 11111111 00000000 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
+  [move_b_mem_source_dst_collision]="A5A50000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00001000 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
 )
 declare -A CELL_PC=(
   [mulu_w_d16_a0_live_a0]=0x00001018
@@ -89,6 +95,7 @@ declare -A CELL_PC=(
   [negx_w_source_dst_collision]=0x00001000
   [negx_l_source_dst_collision]=0x00001000
   [tas_b_ea_value_collision]=0x00001000
+  [move_b_mem_source_dst_collision]=0x00001000
 )
 declare -A CELL_ALIAS_VREG=(
   [mulu_w_d16_a0_live_a0]=8
@@ -99,6 +106,7 @@ declare -A CELL_ALIAS_VREG=(
   [negx_w_source_dst_collision]=0
   [negx_l_source_dst_collision]=0
   [tas_b_ea_value_collision]=8
+  [move_b_mem_source_dst_collision]=20
 )
 declare -A CELL_SCRATCH_VREG=(
   [mulu_w_d16_a0_live_a0]=22
@@ -109,6 +117,7 @@ declare -A CELL_SCRATCH_VREG=(
   [negx_w_source_dst_collision]=20
   [negx_l_source_dst_collision]=20
   [tas_b_ea_value_collision]=20
+  [move_b_mem_source_dst_collision]=0
 )
 declare -A CELL_REQUIRE_PIN=(
   [mulu_w_d16_a0_live_a0]=0
@@ -119,6 +128,7 @@ declare -A CELL_REQUIRE_PIN=(
   [negx_w_source_dst_collision]=0
   [negx_l_source_dst_collision]=0
   [tas_b_ea_value_collision]=0
+  [move_b_mem_source_dst_collision]=0
 )
 declare -A CELL_REQUIRE_SKIP=(
   [mulu_w_d16_a0_live_a0]=0
@@ -129,6 +139,7 @@ declare -A CELL_REQUIRE_SKIP=(
   [negx_w_source_dst_collision]=1
   [negx_l_source_dst_collision]=1
   [tas_b_ea_value_collision]=1
+  [move_b_mem_source_dst_collision]=1
 )
 run_one(){
   local cell="$1"

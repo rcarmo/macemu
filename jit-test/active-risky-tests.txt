@@ -688,3 +688,6 @@ movem_l_all_live_special_native
 movem_zero_mask_native
 movem_l_control_modes_native
 movem_l_pc_modes_native
+move_core_b_aind_to_dn_special_native
+movea_core_w_postinc_alias_native
+move16_core_postpost_special_native

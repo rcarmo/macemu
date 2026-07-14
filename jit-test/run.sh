@@ -194,6 +194,10 @@ EOF
     if [ -n "$init_regs" ]; then
         env_vars+=(B2_TEST_INIT="$init_regs")
     fi
+    local memory_bytes="${TEST_MEMORY_BYTES[$name]:-}"
+    if [ -n "$memory_bytes" ]; then
+        env_vars+=(B2_TEST_MEMORY_BYTES="$memory_bytes")
+    fi
     if ! env "${env_vars[@]}" \
       timeout -k 5s 30s "$UNIX_DIR/BasiliskII" --config "$td/prefs" \
       > "$td/emu.log" 2>&1; then
@@ -395,6 +399,50 @@ declare -a TAS_NATIVE_MATRIX_NAMES=(
     tas_b_absl_special_native tas_b_a7_postinc_native tas_b_a7_predec_native
 )
 TEST_ORDER+=("${TAS_NATIVE_MATRIX_NAMES[@]}")
+# MOVE owns a fetched source through destination allocation, flags and storage.
+# Cover every source/destination EA class, all widths, narrow-lane preservation,
+# same-register/base aliases, A7 byte geometry, immediate/constant lowering,
+# normal and forced-special memory, and exact native entry.
+declare -a MOVE_NATIVE_MATRIX_NAMES=(
+    move_core_b_reg_negative_native move_core_b_reg_zero_native
+    move_core_w_reg_negative_native move_core_w_reg_zero_native
+    move_core_l_reg_negative_native move_core_l_reg_zero_native
+    move_core_b_self_alias_native move_core_w_self_alias_native
+    move_core_b_imm_negative_native move_core_w_imm_negative_native
+    move_core_l_imm_zero_native
+    move_core_b_aind_to_dn_special_native move_core_w_postinc_to_dn_native
+    move_core_l_predec_to_dn_native move_core_b_d16_to_dn_native
+    move_core_w_index_to_dn_special_native move_core_l_absw_to_dn_native
+    move_core_b_absl_to_dn_special_native move_core_w_pc16_to_dn_native
+    move_core_l_pcindex_to_dn_native
+    move_core_b_dn_to_aind_special_native move_core_w_dn_to_postinc_native
+    move_core_l_dn_to_predec_native move_core_b_dn_to_d16_native
+    move_core_w_dn_to_index_special_native move_core_l_dn_to_absw_native
+    move_core_b_dn_to_absl_special_native move_core_l_areg_postinc_alias_native
+    move_core_l_memmem_postinc_alias_native move_core_b_a7_postinc_dst_native
+    move_core_b_a7_postinc_src_native
+)
+TEST_ORDER+=("${MOVE_NATIVE_MATRIX_NAMES[@]}")
+# MOVEA never publishes flags. Word sources sign-extend to 32 bits; source EA
+# writeback precedes the destination assignment, so same-An aliases deliberately
+# let the assignment win.
+declare -a MOVEA_NATIVE_MATRIX_NAMES=(
+    movea_core_w_dreg_native movea_core_w_imm_native movea_core_l_dreg_native
+    movea_core_w_aind_special_native movea_core_w_postinc_alias_native
+    movea_core_w_predec_alias_native movea_core_l_postinc_alias_native
+    movea_core_l_a7_postinc_native movea_core_w_index_special_native
+    movea_core_w_pc16_native
+)
+TEST_ORDER+=("${MOVEA_NATIVE_MATRIX_NAMES[@]}")
+# MOVE16 is a distinct no-flags 16-byte transaction. Exercise all five encodings,
+# aligned-address masking, postincrement aliases, direct and special-memory paths.
+declare -a MOVE16_NATIVE_MATRIX_NAMES=(
+    move16_core_postinc_to_absl_native move16_core_absl_to_postinc_native
+    move16_core_aind_to_absl_native move16_core_absl_to_aind_native
+    move16_core_postpost_distinct_native move16_core_postpost_same_native
+    move16_core_postpost_special_native
+)
+TEST_ORDER+=("${MOVE16_NATIVE_MATRIX_NAMES[@]}")
 # Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
@@ -426,6 +474,9 @@ TEST_ORDER+=(movem_zero_mask_native movem_l_control_modes_native movem_l_pc_mode
 declare -A TESTS
 declare -A EXPECTED_D0
 declare -A EXPECTED_REG_FIELDS
+# Optional RAM-relative address/byte pairs installed before the first pass and,
+# unless NATIVE_REPLAY_BYTES overrides them, restored before every exact replay.
+declare -A TEST_MEMORY_BYTES
 declare -A SPECIAL_MEMORY_TESTS=(
     [movem_l_all_live_special_native]=1
 )
@@ -1120,6 +1171,33 @@ NATIVE_REPLAY_BYTES[tas_b_a7_predec_native]="A000 7F"
 SPECIAL_MEMORY_TESTS[tas_b_aind_special_native]=1
 SPECIAL_MEMORY_TESTS[tas_b_indexed_special_native]=1
 SPECIAL_MEMORY_TESTS[tas_b_absl_special_native]=1
+for _move_name in "${MOVE_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_move_name"]=1
+    NATIVE_REPLAY_PC["$_move_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_move_name"]=2
+done
+unset _move_name
+for _movea_name in "${MOVEA_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_movea_name"]=1
+    NATIVE_REPLAY_PC["$_movea_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_movea_name"]=2
+done
+unset _movea_name
+for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_move16_name"]=1
+    NATIVE_REPLAY_PC["$_move16_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_move16_name"]=2
+done
+unset _move16_name
+SPECIAL_MEMORY_TESTS[move_core_b_aind_to_dn_special_native]=1
+SPECIAL_MEMORY_TESTS[move_core_w_index_to_dn_special_native]=1
+SPECIAL_MEMORY_TESTS[move_core_b_absl_to_dn_special_native]=1
+SPECIAL_MEMORY_TESTS[move_core_b_dn_to_aind_special_native]=1
+SPECIAL_MEMORY_TESTS[move_core_w_dn_to_index_special_native]=1
+SPECIAL_MEMORY_TESTS[move_core_b_dn_to_absl_special_native]=1
+SPECIAL_MEMORY_TESTS[movea_core_w_aind_special_native]=1
+SPECIAL_MEMORY_TESTS[movea_core_w_index_special_native]=1
+SPECIAL_MEMORY_TESTS[move16_core_postpost_special_native]=1
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -1308,6 +1386,149 @@ EXPECTED_REG_FIELDS[tas_b_absw_native]="D0=A5A50081 D2=00002710 SR=2718"
 EXPECTED_REG_FIELDS[tas_b_absl_special_native]="D0=A5A50080 D2=00002718 SR=2718"
 EXPECTED_REG_FIELDS[tas_b_a7_postinc_native]="D0=A5A50080 D2=00002714 A7=0000A002 SR=2718"
 EXPECTED_REG_FIELDS[tas_b_a7_predec_native]="D0=A5A500FF D2=00002700 A7=0000A000 SR=2708"
+
+# Exact-native MOVE lifecycle matrix. Register/immediate forms publish NZ from
+# the selected width, clear VC, preserve X and retain untouched Dn upper lanes.
+TESTS[move_core_b_reg_negative_native]="1001"
+TESTS[move_core_b_reg_zero_native]="1001"
+TESTS[move_core_w_reg_negative_native]="3001"
+TESTS[move_core_w_reg_zero_native]="3001"
+TESTS[move_core_l_reg_negative_native]="2001"
+TESTS[move_core_l_reg_zero_native]="2001"
+TESTS[move_core_b_self_alias_native]="1000"
+TESTS[move_core_w_self_alias_native]="3000"
+TESTS[move_core_b_imm_negative_native]="103C 0080"
+TESTS[move_core_w_imm_negative_native]="303C 8001"
+TESTS[move_core_l_imm_zero_native]="203C 0000 0000"
+EXPECTED_REG_FIELDS[move_core_b_reg_negative_native]="D0=A5A50080 SR=2718"
+EXPECTED_REG_FIELDS[move_core_b_reg_zero_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[move_core_w_reg_negative_native]="D0=A5A58001 SR=2718"
+EXPECTED_REG_FIELDS[move_core_w_reg_zero_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[move_core_l_reg_negative_native]="D0=80000001 SR=2718"
+EXPECTED_REG_FIELDS[move_core_l_reg_zero_native]="D0=00000000 SR=2714"
+EXPECTED_REG_FIELDS[move_core_b_self_alias_native]="D0=A5A50080 SR=2718"
+EXPECTED_REG_FIELDS[move_core_w_self_alias_native]="D0=A5A58001 SR=2718"
+EXPECTED_REG_FIELDS[move_core_b_imm_negative_native]="D0=A5A50080 SR=2718"
+EXPECTED_REG_FIELDS[move_core_w_imm_negative_native]="D0=A5A58001 SR=2718"
+EXPECTED_REG_FIELDS[move_core_l_imm_zero_native]="D0=00000000 SR=2714"
+
+# Every readable source EA is represented. Memory forms snapshot SR before any
+# later verification access; forced-special duplicates exercise helper routing.
+TESTS[move_core_b_aind_to_dn_special_native]="1011 40C2"
+TESTS[move_core_w_postinc_to_dn_native]="3019 40C2"
+TESTS[move_core_l_predec_to_dn_native]="2021 40C2"
+TESTS[move_core_b_d16_to_dn_native]="1029 0010 40C2"
+TESTS[move_core_w_index_to_dn_special_native]="3031 2000 40C3"
+TESTS[move_core_l_absw_to_dn_native]="2038 6000 40C2"
+TESTS[move_core_b_absl_to_dn_special_native]="1039 0000 A000 40C2"
+TESTS[move_core_w_pc16_to_dn_native]="303A 0002 40C2"
+TESTS[move_core_l_pcindex_to_dn_native]="203B 2002 40C3 4E71"
+EXPECTED_REG_FIELDS[move_core_b_aind_to_dn_special_native]="D0=A5A50080 D2=00002718 A1=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[move_core_w_postinc_to_dn_native]="D0=A5A50000 D2=00002714 A1=0000A002 SR=2714"
+EXPECTED_REG_FIELDS[move_core_l_predec_to_dn_native]="D0=80000001 D2=00002718 A1=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[move_core_b_d16_to_dn_native]="D0=A5A5007F D2=00002710 A1=0000A000 SR=2710"
+EXPECTED_REG_FIELDS[move_core_w_index_to_dn_special_native]="D0=A5A58001 D2=00000002 D3=00002718 A1=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[move_core_l_absw_to_dn_native]="D0=00000000 D2=00002714 SR=2714"
+EXPECTED_REG_FIELDS[move_core_b_absl_to_dn_special_native]="D0=A5A500FF D2=00002718 SR=2718"
+EXPECTED_REG_FIELDS[move_core_w_pc16_to_dn_native]="D0=A5A540C2 D2=00002710 SR=2710"
+EXPECTED_REG_FIELDS[move_core_l_pcindex_to_dn_native]="D0=40C34E71 D2=00000000 D3=00002710 SR=2710"
+TEST_MEMORY_BYTES[move_core_b_aind_to_dn_special_native]="A000 80"
+TEST_MEMORY_BYTES[move_core_w_postinc_to_dn_native]="A000 00 A001 00"
+TEST_MEMORY_BYTES[move_core_l_predec_to_dn_native]="A000 80 A001 00 A002 00 A003 01"
+TEST_MEMORY_BYTES[move_core_b_d16_to_dn_native]="A010 7F"
+TEST_MEMORY_BYTES[move_core_w_index_to_dn_special_native]="A002 80 A003 01"
+TEST_MEMORY_BYTES[move_core_l_absw_to_dn_native]="6000 00 6001 00 6002 00 6003 00"
+TEST_MEMORY_BYTES[move_core_b_absl_to_dn_special_native]="A000 FF"
+
+# Every writable destination EA is represented, including source/base aliases
+# and A7's two-byte byte stride. Verification loads occur only after SR capture.
+TESTS[move_core_b_dn_to_aind_special_native]="1080 40C2 1239 0000 A000"
+TESTS[move_core_w_dn_to_postinc_native]="30C0 40C2 3239 0000 A000"
+TESTS[move_core_l_dn_to_predec_native]="2100 40C2 2239 0000 A000"
+TESTS[move_core_b_dn_to_d16_native]="1140 0010 40C2 1228 0010"
+TESTS[move_core_w_dn_to_index_special_native]="3180 1000 40C2 3230 1000"
+TESTS[move_core_l_dn_to_absw_native]="21C0 6000 40C2 2238 6000"
+TESTS[move_core_b_dn_to_absl_special_native]="13C0 0000 A000 40C2 1239 0000 A000"
+TESTS[move_core_l_areg_postinc_alias_native]="20C8 40C2 2239 0000 A000"
+TESTS[move_core_l_memmem_postinc_alias_native]="20D8 40C2 2039 0000 A000 2239 0000 A004"
+TESTS[move_core_b_a7_postinc_dst_native]="1EC0 40C2 122F FFFE"
+TESTS[move_core_b_a7_postinc_src_native]="101F 40C2"
+EXPECTED_REG_FIELDS[move_core_b_dn_to_aind_special_native]="D0=A5A50080 D1=00000080 D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[move_core_w_dn_to_postinc_native]="D0=A5A58001 D1=11118001 D2=00002718 A0=0000A002 SR=2718"
+EXPECTED_REG_FIELDS[move_core_l_dn_to_predec_native]="D0=DEADBEEF D1=DEADBEEF D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[move_core_b_dn_to_d16_native]="D0=A5A5007F D1=1111007F D2=00002710 A0=0000A000 SR=2710"
+EXPECTED_REG_FIELDS[move_core_w_dn_to_index_special_native]="D0=A5A58001 D1=00008001 D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[move_core_l_dn_to_absw_native]="D0=DEADBEEF D1=DEADBEEF D2=00002718 SR=2718"
+EXPECTED_REG_FIELDS[move_core_b_dn_to_absl_special_native]="D0=A5A50080 D1=11110080 D2=00002718 SR=2718"
+EXPECTED_REG_FIELDS[move_core_l_areg_postinc_alias_native]="D1=0000A000 D2=00002710 A0=0000A004 SR=2710"
+EXPECTED_REG_FIELDS[move_core_l_memmem_postinc_alias_native]="D0=11223344 D1=11223344 D2=00002710 A0=0000A008 SR=2710"
+EXPECTED_REG_FIELDS[move_core_b_a7_postinc_dst_native]="D0=A5A50080 D1=11110080 D2=00002718 A7=0000A002 SR=2718"
+EXPECTED_REG_FIELDS[move_core_b_a7_postinc_src_native]="D0=A5A50000 D2=00002714 A7=0000A002 SR=2714"
+TEST_MEMORY_BYTES[move_core_b_dn_to_aind_special_native]="A000 00"
+TEST_MEMORY_BYTES[move_core_w_dn_to_postinc_native]="A000 00 A001 00"
+TEST_MEMORY_BYTES[move_core_l_dn_to_predec_native]="A000 00 A001 00 A002 00 A003 00"
+TEST_MEMORY_BYTES[move_core_b_dn_to_d16_native]="A010 00"
+TEST_MEMORY_BYTES[move_core_w_dn_to_index_special_native]="A002 00 A003 00"
+TEST_MEMORY_BYTES[move_core_l_dn_to_absw_native]="6000 00 6001 00 6002 00 6003 00"
+TEST_MEMORY_BYTES[move_core_b_dn_to_absl_special_native]="A000 00"
+TEST_MEMORY_BYTES[move_core_l_areg_postinc_alias_native]="A000 DE A001 AD A002 BE A003 EF"
+TEST_MEMORY_BYTES[move_core_l_memmem_postinc_alias_native]="A000 11 A001 22 A002 33 A003 44 A004 AA A005 BB A006 CC A007 DD"
+TEST_MEMORY_BYTES[move_core_b_a7_postinc_dst_native]="A000 00"
+TEST_MEMORY_BYTES[move_core_b_a7_postinc_src_native]="A000 00"
+
+# MOVEA word/long extension, no-flags and writeback-alias contracts.
+TESTS[movea_core_w_dreg_native]="3040"
+TESTS[movea_core_w_imm_native]="307C 8001"
+TESTS[movea_core_l_dreg_native]="2040"
+TESTS[movea_core_w_aind_special_native]="3051"
+TESTS[movea_core_w_postinc_alias_native]="3058"
+TESTS[movea_core_w_predec_alias_native]="3060"
+TESTS[movea_core_l_postinc_alias_native]="2058"
+TESTS[movea_core_l_a7_postinc_native]="205F"
+TESTS[movea_core_w_index_special_native]="3071 2000"
+TESTS[movea_core_w_pc16_native]="307A 0002 4E71"
+EXPECTED_REG_FIELDS[movea_core_w_dreg_native]="A0=FFFF8001 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_w_imm_native]="A0=FFFF8001 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_l_dreg_native]="A0=DEADBEEF SR=271F"
+EXPECTED_REG_FIELDS[movea_core_w_aind_special_native]="A0=00007FFF A1=0000A000 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_w_postinc_alias_native]="A0=FFFF8001 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_w_predec_alias_native]="A0=00007FFF SR=271F"
+EXPECTED_REG_FIELDS[movea_core_l_postinc_alias_native]="A0=12345678 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_l_a7_postinc_native]="A0=DEADBEEF A7=0000A004 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_w_index_special_native]="D2=00000002 A0=FFFF8001 A1=0000A000 SR=271F"
+EXPECTED_REG_FIELDS[movea_core_w_pc16_native]="A0=00004E71 SR=271F"
+TEST_MEMORY_BYTES[movea_core_w_aind_special_native]="A000 7F A001 FF"
+TEST_MEMORY_BYTES[movea_core_w_postinc_alias_native]="A000 80 A001 01"
+TEST_MEMORY_BYTES[movea_core_w_predec_alias_native]="A000 7F A001 FF"
+TEST_MEMORY_BYTES[movea_core_l_postinc_alias_native]="A000 12 A001 34 A002 56 A003 78"
+TEST_MEMORY_BYTES[movea_core_l_a7_postinc_native]="A000 DE A001 AD A002 BE A003 EF"
+TEST_MEMORY_BYTES[movea_core_w_index_special_native]="A002 80 A003 01"
+
+# MOVE16 copies four ordered longwords from aligned addresses. D4 snapshots the
+# untouched CCR before the verification loads; register updates use unaligned
+# architectural values, while transfer addresses mask low four bits.
+_MOVE16_PATTERN="A000 11 A001 22 A002 33 A003 44 A004 55 A005 66 A006 77 A007 88 A008 99 A009 AA A00A BB A00B CC A00C DD A00D EE A00E FF A00F 00 B000 00 B001 00 B002 00 B003 00 B004 00 B005 00 B006 00 B007 00 B008 00 B009 00 B00A 00 B00B 00 B00C 00 B00D 00 B00E 00 B00F 00"
+_MOVE16_VERIFY_B="40C4 2039 0000 B000 2239 0000 B004 2439 0000 B008 2639 0000 B00C"
+_MOVE16_VERIFY_A="40C4 2039 0000 A000 2239 0000 A004 2439 0000 A008 2639 0000 A00C"
+TESTS[move16_core_postinc_to_absl_native]="F600 0000 B007 $_MOVE16_VERIFY_B"
+TESTS[move16_core_absl_to_postinc_native]="F609 0000 A003 $_MOVE16_VERIFY_B"
+TESTS[move16_core_aind_to_absl_native]="F610 0000 B007 $_MOVE16_VERIFY_B"
+TESTS[move16_core_absl_to_aind_native]="F619 0000 A003 $_MOVE16_VERIFY_B"
+TESTS[move16_core_postpost_distinct_native]="F620 1000 $_MOVE16_VERIFY_B"
+TESTS[move16_core_postpost_same_native]="F620 0000 $_MOVE16_VERIFY_A"
+TESTS[move16_core_postpost_special_native]="F620 1000 $_MOVE16_VERIFY_B"
+for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
+    TEST_MEMORY_BYTES["$_move16_name"]="$_MOVE16_PATTERN"
+done
+unset _move16_name _MOVE16_PATTERN _MOVE16_VERIFY_A _MOVE16_VERIFY_B
+EXPECTED_REG_FIELDS[move16_core_postinc_to_absl_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A0=0000A013 SR=2718"
+EXPECTED_REG_FIELDS[move16_core_absl_to_postinc_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A1=0000B017 SR=2718"
+EXPECTED_REG_FIELDS[move16_core_aind_to_absl_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A0=0000A003 SR=2718"
+EXPECTED_REG_FIELDS[move16_core_absl_to_aind_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A1=0000B007 SR=2718"
+EXPECTED_REG_FIELDS[move16_core_postpost_distinct_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A0=0000A013 A1=0000B017 SR=2718"
+EXPECTED_REG_FIELDS[move16_core_postpost_same_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A0=0000A013 SR=2718"
+EXPECTED_REG_FIELDS[move16_core_postpost_special_native]="D0=11223344 D1=55667788 D2=99AABBCC D3=DDEEFF00 D4=4444271F A0=0000A013 A1=0000B017 SR=2718"
+
 # ADDX_BASIC: ORI #0x10,CCR (set X); MOVEQ #5,D0; MOVEQ #3,D1; ADDX.L D1,D0
 # 5 + 3 + X(1) = 9
 # ORI.B #0x10,CCR = 003C 0010; MOVEQ #5,D0 = 7005; MOVEQ #3,D1 = 7203; ADDX.L D1,D0 = D181
@@ -3039,6 +3260,65 @@ INIT_REGS[tas_b_absl_special_native]="A5A50000 $_TAS_INIT_ZERO_TAIL 0000271F"
 INIT_REGS[tas_b_a7_postinc_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
 INIT_REGS[tas_b_a7_predec_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 00002707"
 unset _TAS_INIT_ZERO_TAIL
+
+_MOVE_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[move_core_b_reg_negative_native]="A5A50000 00000080 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_b_reg_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_w_reg_negative_native]="A5A50000 00008001 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_w_reg_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_l_reg_negative_native]="A5A50000 80000001 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_l_reg_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_b_self_alias_native]="A5A50080 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_w_self_alias_native]="A5A58001 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_b_imm_negative_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_w_imm_negative_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_l_imm_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[move_core_b_aind_to_dn_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_w_postinc_to_dn_native]="A5A5BEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_predec_to_dn_native]="A5A5BEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A004 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_b_d16_to_dn_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_w_index_to_dn_special_native]="A5A50000 00000000 00000002 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_absw_to_dn_native]="A5A5BEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_b_absl_to_dn_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_w_pc16_to_dn_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_pcindex_to_dn_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_b_dn_to_aind_special_native]="A5A50080 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_w_dn_to_postinc_native]="A5A58001 11110000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_dn_to_predec_native]="DEADBEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A004 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_b_dn_to_d16_native]="A5A5007F 11110000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_w_dn_to_index_special_native]="A5A58001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_dn_to_absw_native]="DEADBEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_b_dn_to_absl_special_native]="A5A50080 11110000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_areg_postinc_alias_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_l_memmem_postinc_alias_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
+INIT_REGS[move_core_b_a7_postinc_dst_native]="A5A50080 11110000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00002717"
+INIT_REGS[move_core_b_a7_postinc_src_native]="A5A500FF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00002717"
+unset _MOVE_ZERO_TAIL
+
+_MOVEA_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[movea_core_w_dreg_native]="12348001 00000000 $_MOVEA_ZERO_TAIL 0000271F"
+INIT_REGS[movea_core_w_imm_native]="00000000 00000000 $_MOVEA_ZERO_TAIL 0000271F"
+INIT_REGS[movea_core_l_dreg_native]="DEADBEEF 00000000 $_MOVEA_ZERO_TAIL 0000271F"
+INIT_REGS[movea_core_w_aind_special_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[movea_core_w_postinc_alias_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[movea_core_w_predec_alias_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[movea_core_l_postinc_alias_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[movea_core_l_a7_postinc_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[movea_core_w_index_special_native]="00000000 00000000 00000002 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[movea_core_w_pc16_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+unset _MOVEA_ZERO_TAIL
+
+_MOVE16_DREGS="00000000 00000000 00000000 00000000 44440000 00000000 00000000 00000000"
+_MOVE16_A2_TAIL="00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[move16_core_postinc_to_absl_native]="$_MOVE16_DREGS 0000A003 00000000 $_MOVE16_A2_TAIL 0000271F"
+INIT_REGS[move16_core_absl_to_postinc_native]="$_MOVE16_DREGS 00000000 0000B007 $_MOVE16_A2_TAIL 0000271F"
+INIT_REGS[move16_core_aind_to_absl_native]="$_MOVE16_DREGS 0000A003 00000000 $_MOVE16_A2_TAIL 0000271F"
+INIT_REGS[move16_core_absl_to_aind_native]="$_MOVE16_DREGS 00000000 0000B007 $_MOVE16_A2_TAIL 0000271F"
+INIT_REGS[move16_core_postpost_distinct_native]="$_MOVE16_DREGS 0000A003 0000B007 $_MOVE16_A2_TAIL 0000271F"
+INIT_REGS[move16_core_postpost_same_native]="$_MOVE16_DREGS 0000A003 00000000 $_MOVE16_A2_TAIL 0000271F"
+INIT_REGS[move16_core_postpost_special_native]="$_MOVE16_DREGS 0000A003 0000B007 $_MOVE16_A2_TAIL 0000271F"
+unset _MOVE16_DREGS _MOVE16_A2_TAIL
+
 # Exact-anchor replay skips each setup prefix, so restore the audited operands
 # explicitly rather than collapsing every pre-existing CHK.W case to 0 <= 0.
 INIT_REGS[chk_w_in_range]="00000008 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
@@ -3355,6 +3635,24 @@ for _tas_name in "${TAS_NATIVE_MATRIX_NAMES[@]}"; do
     ((_tas_sentinel_id+=1))
 done
 unset _tas_name _tas_sentinel_id
+_move_sentinel_id=1
+for _move_name in "${MOVE_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_move_name"] 'a608%04x' "$_move_sentinel_id"
+    ((_move_sentinel_id+=1))
+done
+unset _move_name _move_sentinel_id
+_movea_sentinel_id=1
+for _movea_name in "${MOVEA_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_movea_name"] 'a609%04x' "$_movea_sentinel_id"
+    ((_movea_sentinel_id+=1))
+done
+unset _movea_name _movea_sentinel_id
+_move16_sentinel_id=1
+for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_move16_name"] 'a60a%04x' "$_move16_sentinel_id"
+    ((_move16_sentinel_id+=1))
+done
+unset _move16_name _move16_sentinel_id
 SENTINEL_A6[addx_basic]="a60100d4"
 SENTINEL_A6[subx_basic]="a60100d5"
 SENTINEL_A6[ext_word]="a60100d6"
@@ -4789,6 +5087,18 @@ for _tas_name in "${TAS_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_tas_name"]=1
 done
 unset _tas_name
+for _move_name in "${MOVE_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_move_name"]=1
+done
+unset _move_name
+for _movea_name in "${MOVEA_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_movea_name"]=1
+done
+unset _movea_name
+for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_move16_name"]=1
+done
+unset _move16_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

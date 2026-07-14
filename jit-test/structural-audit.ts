@@ -643,8 +643,8 @@ for (const width of ["b", "w", "l"]) {
   }
 }
 for (const contract of [
-  "Constant-backed read/modify/write scratches",
-  "r >= S1 && isconst(r)",
+  "Constant-backed scratch RMW values (NEGX)",
+  "historical_const_scratch = r >= S1 && isconst(r)",
   "REGPRESSURE_PIN_SKIP scratch_vreg=%d pin_vreg=%d",
 ]) {
   requireText(allocatorSource, contract, "NEGX constant-backed RMW pressure hook");
@@ -753,6 +753,141 @@ for (const contract of [
   '[tas_b_ea_value_collision]="A000 00"',
 ]) {
   requireText(regallocPressureSource, contract, "TAS EA/value allocator ownership");
+}
+
+/* MOVE, MOVEA and MOVE16 form the transfer/ownership cluster, but retain three
+ * distinct architectural contracts. MOVE owns one fetched value until flags
+ * and storage consume it; MOVEA sign-extends word sources without touching CCR;
+ * MOVE16 masks transfer addresses, copies four ordered longwords, and publishes
+ * only the architecturally selected postincrements. */
+const moveGenerator = functionBody(
+  gencompSource,
+  "     case i_MOVE:",
+  "     case i_MOVEA:",
+  "MOVE source ownership generator",
+);
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __srclk=jit_value_lock(src);\\n");',
+  'genflags (flag_mov, curi->size, "", "src", "dst");',
+  'genflags (flag_logical, curi->size, "src", "", "");',
+  'genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");',
+  'genastore ("src", curi->dmode, "dstreg", curi->size, "dst");',
+  'comprintf("\\tjit_value_unlock(__srclk);\\n");',
+]) {
+  requireText(moveGenerator, contract, "MOVE complete source ownership");
+}
+requireBefore(moveGenerator, 'genamode (curi->smode', "jit_value_lock(src)", "MOVE fetch-before-lock");
+requireBefore(moveGenerator, "jit_value_lock(src)", "switch(curi->dmode)", "MOVE lock-before-destination");
+requireBefore(moveGenerator, "switch(curi->dmode)", "jit_value_unlock(__srclk)", "MOVE unlock-after-destination");
+const generatedMoveFunctions = (generatedSource.match(/void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^{]*\/\* MOVE \*\//g) || []).length;
+const generatedMoveLocks = (generatedSource.match(/int __srclk=jit_value_lock\(src\);/g) || []).length;
+const generatedMoveUnlocks = (generatedSource.match(/jit_value_unlock\(__srclk\);/g) || []).length;
+if (generatedMoveFunctions !== 562 || generatedMoveLocks !== generatedMoveFunctions || generatedMoveUnlocks !== generatedMoveFunctions) {
+  fail(`generated MOVE ownership: functions=${generatedMoveFunctions} locks=${generatedMoveLocks} unlocks=${generatedMoveUnlocks}`);
+}
+
+const moveJnfByte = functionBody(midfunc2Source, "MIDFUNC(2,jnf_MOVE_b,(W1 d, RR1 s))", "MENDFUNC(2,jnf_MOVE_b,(W1 d, RR1 s))", "MOVE.B no-flags MIDFUNC");
+const moveJnfWord = functionBody(midfunc2Source, "MIDFUNC(2,jnf_MOVE_w,(W2 d, RR2 s))", "MENDFUNC(2,jnf_MOVE_w,(W2 d, RR2 s))", "MOVE.W no-flags MIDFUNC");
+const moveJffByte = functionBody(midfunc2Source, "MIDFUNC(2,jff_MOVE_b,(W1 d, RR1 s))", "MENDFUNC(2,jff_MOVE_b,(W1 d, RR1 s))", "MOVE.B flag-live MIDFUNC");
+const moveJffWord = functionBody(midfunc2Source, "MIDFUNC(2,jff_MOVE_w,(W2 d, RR2 s))", "MENDFUNC(2,jff_MOVE_w,(W2 d, RR2 s))", "MOVE.W flag-live MIDFUNC");
+for (const [body, width] of [[moveJnfByte, 8], [moveJnfWord, 16]] as const) {
+  requireText(body, "if(s == d)", `MOVE.${width} no-flags self alias`);
+  requireText(body, `BFI_wwii(d, s, 0, ${width});`, `MOVE.${width} no-flags lane preservation`);
+}
+for (const [body, signed, width] of [
+  [moveJffByte, "SIGNED8_REG_2_REG(REG_WORK1, s);", 8],
+  [moveJffWord, "SIGNED16_REG_2_REG(REG_WORK1, s);", 16],
+] as const) {
+  requireBefore(body, "s = readreg(s);", "d = rmw(d);", `MOVE.${width} source-before-destination ownership`);
+  requireBefore(body, signed, "TST_ww(REG_WORK1, REG_WORK1);", `MOVE.${width} signed NZ sampling`);
+  requireBefore(body, "TST_ww(REG_WORK1, REG_WORK1);", `BFI_wwii(d, REG_WORK1, 0, ${width});`, `MOVE.${width} flags-before-write`);
+  requireText(body, "flags_carry_inverted = false;", `MOVE.${width} carry lifecycle`);
+}
+for (const wrapper of [
+  "void mov_b_rr(W1 d, RR1 s) { if (legacy_needflags_enabled()) jff_MOVE_b(d, s); else jnf_MOVE_b(d, s); }",
+  "void mov_w_rr(W2 d, RR2 s) { if (legacy_needflags_enabled()) jff_MOVE_w(d, s); else jnf_MOVE_w(d, s); }",
+  "void mov_w_ri(W2 d, uae_s32 i) { if (legacy_needflags_enabled()) jff_MOVE_w_imm(d, i); else jnf_MOVE_w_imm(d, i); }",
+]) {
+  requireText(compatSource, wrapper, "MOVE flag-liveness wrapper");
+}
+for (const forbidden of ["jff_MOVE_l(", "jnf_MOVE_l(", "jnf_MOVE16(", "jnf_MOVEA_w(", "jnf_MOVEA_l("]) {
+  if (generatedSource.includes(forbidden)) fail(`generated transfer path calls unreachable MIDFUNC ${forbidden}`);
+}
+
+const moveaGenerator = functionBody(gencompSource, "     case i_MOVEA:", "     case i_MVSR2:", "MOVEA direct generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'case sz_word: comprintf("\\tsign_extend_16_rr(dstreg + 8,src);\\n");',
+  'case sz_long: comprintf("\\tmov_l_rr(dstreg + 8,src);\\n");',
+  'comprintf("\\tforget_about(src);\\n");',
+]) {
+  requireText(moveaGenerator, contract, "MOVEA extension/no-flags routing");
+}
+if (moveaGenerator.includes("genflags") || moveaGenerator.includes("jff_MOVEA") || moveaGenerator.includes("jnf_MOVEA")) {
+  fail("MOVEA direct generator: legacy MIDFUNC or flag publication became reachable");
+}
+
+const move16Generator = functionBody(gencompSource, "static void genmov16", "static void\ngenmovemel", "MOVE16 direct generator");
+for (const contract of [
+  'if ((opcode & 0xfff8) == 0xf620)',
+  'comprintf("\\tand_l_ri(src,~15);\\n");',
+  'comprintf("\\tand_l_ri(dst,~15);\\n");',
+  'comprintf("\\tif (srcreg != dstreg)\\n");',
+  'comprintf("\\tadd_l_ri(srcreg+8,16);\\n");',
+  'comprintf("\\tadd_l_ri(dstreg+8,16);\\n");',
+  'comprintf("\\tif (special_mem) {\\n");',
+  "readlong(src,tmp,scratchie);",
+  "writelong_clobber(dst,tmp,scratchie);",
+  "get_n_addr(src,src,scratchie);",
+  "get_n_addr(dst,dst,scratchie);",
+  "mov_l_rR(tmp,src,12);",
+  "mov_l_Rr(dst,tmp,12);",
+]) {
+  requireText(move16Generator, contract, "MOVE16 aligned ordered transfer");
+}
+if ((move16Generator.match(/readlong\(src,tmp,scratchie\);/g) || []).length !== 4 ||
+    (move16Generator.match(/writelong_clobber\(dst,tmp,scratchie\);/g) || []).length !== 4 ||
+    (move16Generator.match(/mov_l_rR\(tmp,src,/g) || []).length !== 4 ||
+    (move16Generator.match(/mov_l_Rr\(dst,tmp,/g) || []).length !== 4) {
+  fail("MOVE16 ordered transfer: expected four helper and four direct longword pairs");
+}
+
+for (const [prefix, count] of [["move_core_", 31], ["movea_core_", 10], ["move16_core_", 7]] as const) {
+  const found = (harnessSource.match(new RegExp(`^TESTS\\[${prefix}`, "gm")) || []).length;
+  if (found !== count) fail(`${prefix} exact-native matrix: expected ${count}, found ${found}`);
+}
+for (const contract of [
+  'for _move_name in "${MOVE_NATIVE_MATRIX_NAMES[@]}"',
+  'for _movea_name in "${MOVEA_NATIVE_MATRIX_NAMES[@]}"',
+  'for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"',
+  "SPECIAL_MEMORY_TESTS[move_core_b_aind_to_dn_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[movea_core_w_aind_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[move16_core_postpost_special_native]=1",
+  'env_vars+=(B2_TEST_MEMORY_BYTES="$memory_bytes")',
+]) {
+  requireText(harnessSource, contract, "MOVE cluster exact-native/memory gate");
+}
+for (const active of [
+  "move_core_b_aind_to_dn_special_native",
+  "movea_core_w_postinc_alias_native",
+  "move16_core_postpost_special_native",
+]) requireText(activeRiskySource, active, `MOVE cluster active-risky ${active}`);
+for (const contract of [
+  'restore_test_bytes_glue("B2_TEST_MEMORY_BYTES")',
+  'replay && *replay',
+  '? "B2_TEST_REPLAY_BYTES" : "B2_TEST_MEMORY_BYTES"',
+]) requireText(basiliskGlueSource, contract, "initial/exact-replay memory fixture");
+for (const contract of [
+  "v >= 0 && v < VREGS",
+  "force_target < S1 && r == force_target",
+  "move_b_mem_source_dst_collision",
+  "[move_b_mem_source_dst_collision]=20",
+  "[move_b_mem_source_dst_collision]=0",
+  "[move_b_mem_source_dst_collision]=1",
+]) {
+  const body = contract.startsWith("move_") || contract.startsWith("[") ? regallocPressureSource : allocatorSource;
+  requireText(body, contract, "MOVE inverse source/destination pressure contract");
 }
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
@@ -2886,4 +3021,9 @@ console.log("METRIC structural_coverage_taxonomy=1");
 console.log("METRIC structural_trace_source_coherency=1");
 console.log("METRIC structural_native_fpu_state_boundary=1");
 console.log("METRIC structural_disabled_fpu_semantic_service=1");
+console.log("METRIC structural_move_complete_source_ownership=1");
+console.log("METRIC structural_move_exact_native_vectors=31");
+console.log("METRIC structural_movea_exact_native_vectors=10");
+console.log("METRIC structural_move16_exact_native_vectors=7");
+console.log("METRIC structural_move_inverse_allocator_pressure=1");
 console.log("METRIC structural_runtime_helper_logical_opcode=1");

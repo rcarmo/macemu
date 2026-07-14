@@ -1963,23 +1963,28 @@ gen_opcode (unsigned int opcode)
 #ifdef DISABLE_I_MOVE
     failure;
 #endif
+	/* The fetched source owns one value for the complete transfer.  Destination
+	 * allocation is allowed to update an EA/base or RMW a narrow Dn, but neither
+	 * may reuse the source host register before flags and storage have consumed
+	 * it.  Apply the ownership rule to register and memory destinations alike;
+	 * limiting it to stores left MOVE.B/W <memory>,Dn vulnerable to the inverse
+	 * scratch-source/architectural-destination collision. */
+	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tint __srclk=jit_value_lock(src);\n");
 	switch(curi->dmode) {
 	 case Dreg:
 	 case Areg:
-	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
 	    genflags (flag_mov, curi->size, "", "src", "dst");
 	    genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");
 	    break;
 	 default: /* It goes to memory, not a register */
-	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	    comprintf("\tint __srclk=jit_value_lock(src);\n");
 	    genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
 	    genflags (flag_logical, curi->size, "src", "", "");
 	    genastore ("src", curi->dmode, "dstreg", curi->size, "dst");
-	    comprintf("\tjit_value_unlock(__srclk);\n");
 	    break;
 	}
+	comprintf("\tjit_value_unlock(__srclk);\n");
 	break;
 
      case i_MOVEA:

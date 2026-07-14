@@ -228,9 +228,9 @@ static bool parse_test_hex_longs_glue(const char *hex, uint32 *out_longs, size_t
 	return n > 0;
 }
 
-static bool restore_test_replay_bytes_glue()
+static bool restore_test_bytes_glue(const char *env_name)
 {
-	const char *env = getenv("B2_TEST_REPLAY_BYTES");
+	const char *env = getenv(env_name);
 	if (!(env && *env))
 		return true;
 
@@ -238,20 +238,30 @@ static bool restore_test_replay_bytes_glue()
 	size_t count = 0;
 	if (!parse_test_hex_longs_glue(env, pairs, lengthof(pairs), &count) ||
 		(count & 1) != 0) {
-		fprintf(stderr, "B2_TEST_REPLAY_BYTES parse failed (need address/value pairs)\n");
+		fprintf(stderr, "%s parse failed (need address/value pairs)\n", env_name);
 		return false;
 	}
 	for (size_t i = 0; i < count; i += 2) {
 		const uint32 offset = pairs[i];
 		const uint32 value = pairs[i + 1];
 		if (offset >= RAMSize || value > 0xff) {
-			fprintf(stderr, "B2_TEST_REPLAY_BYTES range failed at pair %lu\n",
+			fprintf(stderr, "%s range failed at pair %lu\n", env_name,
 				(unsigned long)(i / 2));
 			return false;
 		}
 		put_byte(RAMBaseMac + (uaecptr)offset, (uint8)value);
 	}
 	return true;
+}
+
+static bool restore_test_replay_bytes_glue()
+{
+	/* A dedicated replay image may override the initial byte fixture.  Otherwise
+	   restore that fixture before every exact-PC pass so RMW/copy vectors cannot
+	   consume state left by the trace pass. */
+	const char *replay = getenv("B2_TEST_REPLAY_BYTES");
+	return restore_test_bytes_glue(replay && *replay
+		? "B2_TEST_REPLAY_BYTES" : "B2_TEST_MEMORY_BYTES");
 }
 
 static void dump_test_mem_ranges_glue()
@@ -302,6 +312,10 @@ static bool run_opcode_test_mode_glue()
 	for (size_t i = 0; i < n_words; i++)
 		put_word(test_addr + (uaecptr)(i * 2), words[i]);
 	put_word(test_addr + (uaecptr)(n_words * 2), M68K_EXEC_RETURN);
+	if (!restore_test_bytes_glue("B2_TEST_MEMORY_BYTES")) {
+		quit_program = 1;
+		return true;
+	}
 #if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 	jit_invalidate_host_code_write(test_addr, (uae_u32)((n_words + 1) * 2));
 #endif
