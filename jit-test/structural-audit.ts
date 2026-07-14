@@ -68,6 +68,11 @@ for (const layoutDependency of [
   requireText(makefileTemplate, layoutDependency, "JIT object layout epoch");
 }
 const harnessSource = await Bun.file(new URL("./run.sh", import.meta.url)).text();
+const activeRiskySource = await Bun.file(new URL("./active-risky-tests.txt", import.meta.url)).text();
+const shiftSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp",
+  import.meta.url,
+)).text();
 const strictHarnessSource = await Bun.file(new URL("./strict-full-jit.sh", import.meta.url)).text();
 requireText(harnessSource, "rm -f obj/compemu*.o", "JIT object layout epoch");
 
@@ -704,6 +709,249 @@ for (const [start, end] of [
     fail(`DIVL same-register result ordering: quotient must follow remainder in ${start}`);
   }
 }
+const shiftFunctionBody = (name: string): string => functionBody(
+  shiftSource,
+  `MIDFUNC(2,${name},`,
+  `MENDFUNC(2,${name},`,
+  `register-count ${name}`,
+);
+
+const shiftResultContracts = [
+  ["jff_ASL_b_reg", "LSL_xxx"],
+  ["jff_ASL_w_reg", "LSL_xxx"],
+  ["jff_ASL_l_reg", "LSL_xxx"],
+  ["jnf_ASR_b_reg", "ASR_xxx"],
+  ["jnf_ASR_w_reg", "ASR_xxx"],
+  ["jnf_ASR_l_reg", "ASR_xxx"],
+  ["jff_ASR_b_reg", "ASR_xxx"],
+  ["jff_ASR_w_reg", "ASR_xxx"],
+  ["jff_ASR_l_reg", "ASR_xxx"],
+  ["jnf_LSL_b_reg", "LSL_xxx"],
+  ["jnf_LSL_w_reg", "LSL_xxx"],
+  ["jnf_LSL_l_reg", "LSL_xxx"],
+  ["jff_LSL_b_reg", "LSL_xxx"],
+  ["jff_LSL_w_reg", "LSL_xxx"],
+  ["jff_LSL_l_reg", "LSL_xxx"],
+  ["jnf_LSR_b_reg", "LSR_xxx"],
+  ["jnf_LSR_w_reg", "LSR_xxx"],
+  ["jnf_LSR_l_reg", "LSR_xxx"],
+  ["jff_LSR_b_reg", "LSR_xxx"],
+  ["jff_LSR_w_reg", "LSR_xxx"],
+  ["jff_LSR_l_reg", "LSR_xxx"],
+] as const;
+for (const [name, hostShift] of shiftResultContracts) {
+  const body = shiftFunctionBody(name);
+  requireText(body, `${hostShift}(`, `${name} six-bit-count result`);
+  if (/\b(?:ASR|LSL|LSR)_www\s*\(/.test(body)) {
+    fail(`${name}: 32-bit modulo-32 host shift reintroduced`);
+  }
+}
+for (const name of [
+  "jff_ASL_b_reg", "jff_ASL_w_reg", "jff_ASL_l_reg",
+  "jff_ASR_b_reg", "jff_ASR_w_reg", "jff_ASR_l_reg",
+]) {
+  const body = shiftFunctionBody(name);
+  requireText(body, "branch_shift_nonzero = (uae_u32*)get_target();", `${name} count-zero join`);
+  requireText(body, "BNE_i(0);", `${name} count-zero join`);
+  requireText(body, "write_jmp_target(branch_shift_nonzero, (uintptr)get_target());", `${name} count-zero join`);
+  if (body.includes("BNE_i(3)")) fail(`${name}: numeric count-zero join reintroduced`);
+}
+for (const name of ["jff_ASL_b_reg", "jff_ASL_w_reg", "jff_ASL_l_reg"] as const) {
+  const body = shiftFunctionBody(name);
+  requireText(body, "MOV_wi(REG_WORK3, 63);", `${name} zero-source overflow guard`);
+  requireText(body, "CSEL_wwwc(REG_WORK2, REG_WORK3, REG_WORK2, NATIVE_CC_EQ);", `${name} zero-source overflow guard`);
+  requireText(body, "CSEL_xxxc(REG_WORK4, REG_WORK4, REG_WORK3, NATIVE_CC_GE);", `${name} branchless overflow publication`);
+  if (body.includes("BGE_i(2)")) fail(`${name}: numeric overflow join reintroduced`);
+}
+for (const name of ["jff_ASL_b_imm", "jff_ASL_w_imm", "jff_ASL_l_imm"] as const) {
+  const body = shiftFunctionBody(name);
+  requireText(body, "MOV_wi(REG_WORK2, 63);", `${name} constant-count zero-source overflow guard`);
+  requireText(body, "CSEL_wwwc(REG_WORK1, REG_WORK2, REG_WORK1, NATIVE_CC_EQ);", `${name} constant-count zero-source overflow guard`);
+  requireText(body, "CSEL_xxxc(REG_WORK4, REG_WORK4, REG_WORK3, NATIVE_CC_GE);", `${name} branchless overflow publication`);
+  if (body.includes("BGE_i(2)")) fail(`${name}: numeric overflow join reintroduced`);
+}
+for (const [name, hostShift] of [
+  ["jnf_LSL_l_imm", "LSL_wwi"],
+  ["jnf_LSR_l_imm", "LSR_wwi"],
+  ["jff_LSR_l_imm", "LSR_wwi"],
+] as const) {
+  const body = shiftFunctionBody(name);
+  let order = -1;
+  for (const token of ["if(i >= 32)", "MOV_wi(d, 0);", "else", `${hostShift}(d, d, i);`]) {
+    order = body.indexOf(token, order + 1);
+    if (order < 0) fail(`${name} long immediate saturation: missing or out-of-order ${token}`);
+  }
+}
+const lslLongImmediateBody = shiftFunctionBody("jff_LSL_l_imm");
+let lslLongImmediateOrder = -1;
+for (const token of ["if(i >= 32)", "MOV_wi(REG_WORK3, 0);", "else", "LSL_wwi(REG_WORK3, d, i);"]) {
+  lslLongImmediateOrder = lslLongImmediateBody.indexOf(token, lslLongImmediateOrder + 1);
+  if (lslLongImmediateOrder < 0) {
+    fail(`jff_LSL_l_imm long immediate saturation: missing or out-of-order ${token}`);
+  }
+}
+requireText(shiftSource, "#define PUBLISH_CARRY_FROM_BIT", "shift-family branchless carry publication");
+const shiftFlagHelpers = [
+  "jff_ASL_b_imm", "jff_ASL_w_imm", "jff_ASL_l_imm",
+  "jff_ASL_b_reg", "jff_ASL_w_reg", "jff_ASL_l_reg",
+  "jff_ASR_b_imm", "jff_ASR_w_imm", "jff_ASR_l_imm",
+  "jff_ASR_b_reg", "jff_ASR_w_reg", "jff_ASR_l_reg",
+  "jff_LSL_b_imm", "jff_LSL_w_imm", "jff_LSL_l_imm",
+  "jff_LSL_b_reg", "jff_LSL_w_reg", "jff_LSL_l_reg",
+  "jff_LSR_b_imm", "jff_LSR_w_imm", "jff_LSR_l_imm",
+  "jff_LSR_b_reg", "jff_LSR_w_reg", "jff_LSR_l_reg",
+] as const;
+const emittedBranchCall = /\b(B(?:[A-Z]{2})?_i|(?:TBZ|TBNZ)_[wx]ii|(?:CBZ|CBNZ)_[wx]i)\s*\(([^;\n]*)\);/g;
+for (const name of shiftFlagHelpers) {
+  const body = shiftFunctionBody(name);
+  requireText(body, "PUBLISH_CARRY_FROM_BIT(", `${name} branchless carry publication`);
+  for (const match of body.matchAll(emittedBranchCall)) {
+    const finalArgument = match[2].split(",").at(-1)?.trim();
+    if (finalArgument && /^-?[1-9][0-9]*$/.test(finalArgument)) {
+      fail(`${name}: fixed non-zero emitter branch reintroduced: ${match[0]}`);
+    }
+  }
+}
+for (const name of [
+  "jff_LSL_b_reg", "jff_LSL_w_reg",
+  "jff_LSR_b_reg", "jff_LSR_w_reg", "jff_LSR_l_reg",
+]) {
+  const body = shiftFunctionBody(name);
+  requireText(body, "branch_shift_end = (uae_u32*)get_target();", `${name} carry-range join`);
+  requireText(body, "B_i(0);", `${name} carry-range join`);
+  requireText(body, "write_jmp_target(branch_shift_end, (uintptr)get_target());", `${name} carry-range join`);
+  if (/\bB_i\s*\([23]\)/.test(body)) fail(`${name}: numeric carry-range join reintroduced`);
+}
+requireText(
+  midfunc2Source,
+  "runtime_join_x = rmw(FLAGX)",
+  "register-shift runtime-join X materialisation",
+);
+for (const name of [
+  "jff_ASL_b_reg", "jff_ASL_w_reg", "jff_ASL_l_reg",
+  "jff_ASR_b_reg", "jff_ASR_w_reg", "jff_ASR_l_reg",
+  "jff_LSL_b_reg", "jff_LSL_w_reg",
+  "jff_LSR_b_reg", "jff_LSR_w_reg", "jff_LSR_l_reg",
+]) {
+  const body = shiftFunctionBody(name);
+  requireText(body, "LOCK_X_FOR_RUNTIME_JOIN;", `${name} count-zero X allocator join`);
+  requireText(body, "UNLOCK_X_FOR_RUNTIME_JOIN;", `${name} count-zero X allocator join`);
+}
+
+const generatedShiftOpcodes = [
+  ["e120", "jff_ASL_b_reg"], ["e160", "jff_ASL_w_reg"], ["e1a0", "jff_ASL_l_reg"],
+  ["e020", "shra_b_rr"], ["e060", "shra_w_rr"], ["e0a0", "shra_l_rr"],
+  ["e128", "shll_b_rr"], ["e168", "shll_w_rr"], ["e1a8", "shll_l_rr"],
+  ["e028", "shrl_b_rr"], ["e068", "shrl_w_rr"], ["e0a8", "shrl_l_rr"],
+] as const;
+for (const [opcode, flagLiveHelper] of generatedShiftOpcodes) {
+  for (const suffix of ["ff", "nf"] as const) {
+    const body = functionBody(
+      generatedSource,
+      `void REGPARAM2 op_${opcode}_0_comp_${suffix}`,
+      "\n/*",
+      `generated register-count ${opcode}/${suffix}`,
+    );
+    if (/srcreg\s*==\s*dstreg/.test(body)) {
+      fail(`generated register-count ${opcode}/${suffix}: source/destination alias fallback reintroduced`);
+    }
+    if (suffix === "ff") requireText(body, `${flagLiveHelper}(`, `generated register-count ${opcode}/ff`);
+  }
+}
+for (const opcode of ["e120", "e160", "e1a0"] as const) {
+  const body = functionBody(
+    generatedSource,
+    `void REGPARAM2 op_${opcode}_0_comp_ff`,
+    "\n/*",
+    `generated register-count ASL ${opcode}`,
+  );
+  if (body.includes("needed_flags & FLAG_V")) {
+    fail(`generated register-count ASL ${opcode}: V-live interpreter fallback reintroduced`);
+  }
+}
+
+const activeRiskyNames = new Set(
+  activeRiskySource.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#")),
+);
+const shiftVectorNames: string[] = [];
+for (const op of ["asl", "asr", "lsl", "lsr"] as const) {
+  for (const width of ["b", "w", "l"] as const) {
+    shiftVectorNames.push(`${op}_${width}_reg_count32_boundary`);
+    shiftVectorNames.push(`${op}_${width}_reg_count32_nf`);
+    shiftVectorNames.push(`${op}_${width}_reg_same_count_data`);
+    shiftVectorNames.push(`${op}_${width}_reg_same_count_data_nf`);
+    shiftVectorNames.push(`${op}_${width}_reg_count_0_preserves_x`);
+  }
+}
+shiftVectorNames.push(
+  "asl_l_reg_zero_count32_v_clear",
+  "asl_l_reg_zero_count32_const_v_clear",
+  "lsr_l_reg_const_count32",
+  "asl_b_reg_zero_count63_v_clear",
+  "asl_w_reg_zero_count33_v_clear",
+  "asr_l_reg_count0_pressure_preserves_x",
+);
+for (const name of shiftVectorNames) {
+  requireText(harnessSource, `TESTS[${name}]=`, `${name} forced-native vector`);
+  requireText(harnessSource, `[${name}]=1`, `${name} exact-native replay`);
+  requireText(harnessSource, `SENTINEL_A6[${name}]=`, `${name} register sentinel`);
+  if (!activeRiskyNames.has(name)) fail(`${name}: missing from active risky corpus`);
+}
+const shiftExactVectorNames = new Set(shiftVectorNames);
+for (const op of ["asl", "asr", "lsl", "lsr"] as const) {
+  for (const width of ["b", "w", "l"] as const) {
+    for (const count of [31, 33, 63] as const) {
+      const name = `${op}_${width}_reg_count${count}_boundary`;
+      shiftExactVectorNames.add(name);
+      shiftExactVectorNames.add(`${name}_nf`);
+    }
+  }
+}
+if (shiftExactVectorNames.size !== 138) {
+  fail(`register-count shift exact-native inventory: expected 138, got ${shiftExactVectorNames.size}`);
+}
+const activeShiftVectorCount = [...shiftExactVectorNames].filter((name) => activeRiskyNames.has(name)).length;
+if (activeShiftVectorCount !== 68) {
+  fail(`register-count shift active inventory: expected 68, got ${activeShiftVectorCount}`);
+}
+requireText(
+  harnessSource,
+  'TESTS[asl_l_reg_zero_count32_const_v_clear]="7000 7220 E3A0 6804 7401 6002 7402"',
+  "in-block constant ASL overflow branch witness",
+);
+requireText(
+  harnessSource,
+  'EXPECTED_REG_FIELDS[asl_l_reg_zero_count32_const_v_clear]="D0=00000000 D2=00000002"',
+  "in-block constant ASL overflow branch witness",
+);
+requireText(
+  harnessSource,
+  'TESTS[lsr_l_reg_const_count32]="70FF 7220 E2A8 6504 7401 6002 7402"',
+  "in-block constant LSR generated-path witness",
+);
+requireText(
+  harnessSource,
+  'EXPECTED_REG_FIELDS[lsr_l_reg_const_count32]="D0=00000000 D2=00000002"',
+  "in-block constant LSR generated-path witness",
+);
+for (const contract of [
+  "declare -a SHIFT_BOUNDARY_MATRIX_NAMES=()",
+  "for _shift_count in 31 33 63; do",
+  "SHIFT_BOUNDARY_MATRIX_NAMES+=(\"$_shift_name\" \"${_shift_name}_nf\")",
+  "NATIVE_REPLAY_TESTS[\"$_shift_name\"]=1",
+  "NATIVE_REPLAY_PC[\"$_shift_name\"]=0x100c",
+  "NATIVE_REPLAY_COUNT[\"$_shift_name\"]=2",
+  "TESTS[\"$_shift_name\"]=\"203C ${_shift_data} 72${_shift_count_hex} 44FC 0015 ${_shift_opcode} 40C6\"",
+  "TESTS[\"${_shift_name}_nf\"]=\"203C ${_shift_data} 72${_shift_count_hex} 44FC 0015 ${_shift_opcode} 2400\"",
+  "for name in \"${TEST_ORDER[@]}\"; do",
+  'if [ -n "${_wanted_tests[$name]+x}" ] && [ -n "${RISKY_TESTS[$name]+x}" ]; then',
+]) {
+  requireText(harnessSource, contract, "register-count adjacent-boundary matrix");
+}
+if (!activeRiskyNames.has("asl_l_reg_count63_boundary")) {
+  fail("register-count adjacent-boundary matrix: count-63 priority vector is not active");
+}
+
 const trapvMidfuncBody = functionBody(
   midfunc2Source,
   "MIDFUNC(0,jnf_TRAPV",
@@ -1754,6 +2002,13 @@ console.log("METRIC structural_bcd_a7_predecrement_geometry=1");
 console.log("METRIC structural_bcd_exact_pc_memory_replay=1");
 console.log("METRIC structural_division_patched_branch_joins=28");
 console.log("METRIC structural_division_overflow_flags=1");
+console.log("METRIC structural_register_shift_six_bit_count=1");
+console.log("METRIC structural_register_shift_patched_joins=11");
+console.log("METRIC structural_register_shift_branchless_carry_sites=24");
+console.log("METRIC structural_register_shift_alias_native=1");
+console.log("METRIC structural_register_shift_long_immediate_saturation=1");
+console.log(`METRIC structural_register_shift_exact_native_vectors=${shiftExactVectorNames.size}`);
+console.log(`METRIC structural_register_shift_active_vectors=${activeShiftVectorCount}`);
 console.log("METRIC structural_fullsr_ea_mode_decode=1");
 console.log("METRIC structural_complete_mvsr2_helper_family=1");
 console.log("METRIC structural_complete_legacy_condition_mapping=1");

@@ -313,7 +313,30 @@ TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves
 TEST_ORDER+=(roxl_b_reg_count_63_copies_x roxr_b_reg_count_63_copies_x roxl_w_reg_count_51_copies_x roxr_w_reg_count_51_copies_x roxl_l_reg_count_33_copies_x roxr_l_reg_count_33_copies_x roxl_l_reg_count_0_copies_x roxr_reg_count_0_copies_x roxl_l_reg_count_33_pressure roxr_l_reg_count_33_pressure)
 # Register-count AS/LS effective-zero paths must preserve X while clearing C/V
 # and deriving N/Z from the unchanged size-specific result.
-TEST_ORDER+=(asl_b_reg_count_0_preserves_x asl_w_reg_count_0_preserves_x asl_l_reg_count_0_preserves_x asr_b_reg_count_0_preserves_x asr_w_reg_count_0_preserves_x asr_l_reg_count_0_preserves_x lsl_b_reg_count_0_preserves_x lsl_w_reg_count_0_preserves_x lsl_l_reg_count_0_preserves_x lsr_b_reg_count_0_preserves_x lsr_w_reg_count_0_preserves_x lsr_l_reg_count_0_preserves_x)
+TEST_ORDER+=(asl_b_reg_count_0_preserves_x asl_w_reg_count_0_preserves_x asl_l_reg_count_0_preserves_x asr_b_reg_count_0_preserves_x asr_w_reg_count_0_preserves_x asr_l_reg_count_0_preserves_x asr_l_reg_count0_pressure_preserves_x lsl_b_reg_count_0_preserves_x lsl_w_reg_count_0_preserves_x lsl_l_reg_count_0_preserves_x lsr_b_reg_count_0_preserves_x lsr_w_reg_count_0_preserves_x lsr_l_reg_count_0_preserves_x)
+# Register-count shift boundaries must use the guest low-six-bit count without
+# wrapping count 32 through AArch64 W-form variable shifts.
+TEST_ORDER+=(asl_b_reg_count32_boundary asl_w_reg_count32_boundary asl_l_reg_count32_boundary asl_l_reg_zero_count32_v_clear asl_l_reg_zero_count32_const_v_clear asl_b_reg_zero_count63_v_clear asl_w_reg_zero_count33_v_clear asr_b_reg_count32_boundary asr_w_reg_count32_boundary asr_l_reg_count32_boundary lsl_b_reg_count32_boundary lsl_w_reg_count32_boundary lsl_l_reg_count32_boundary lsr_b_reg_count32_boundary lsr_w_reg_count32_boundary lsr_l_reg_count32_boundary lsr_l_reg_count33_boundary lsr_l_reg_const_count32)
+TEST_ORDER+=(asl_b_reg_count32_nf asl_w_reg_count32_nf asl_l_reg_count32_nf asr_b_reg_count32_nf asr_w_reg_count32_nf asr_l_reg_count32_nf lsl_b_reg_count32_nf lsl_w_reg_count32_nf lsl_l_reg_count32_nf lsr_b_reg_count32_nf lsr_w_reg_count32_nf lsr_l_reg_count32_nf)
+TEST_ORDER+=(asl_b_reg_same_count_data asl_w_reg_same_count_data asl_l_reg_same_count_data asr_b_reg_same_count_data asr_w_reg_same_count_data asr_l_reg_same_count_data lsl_b_reg_same_count_data lsl_w_reg_same_count_data lsl_l_reg_same_count_data lsr_b_reg_same_count_data lsr_w_reg_same_count_data lsr_l_reg_same_count_data)
+TEST_ORDER+=(asl_b_reg_same_count_data_nf asl_w_reg_same_count_data_nf asl_l_reg_same_count_data_nf asr_b_reg_same_count_data_nf asr_w_reg_same_count_data_nf asr_l_reg_same_count_data_nf lsl_b_reg_same_count_data_nf lsl_w_reg_same_count_data_nf lsl_l_reg_same_count_data_nf lsr_b_reg_same_count_data_nf lsr_w_reg_same_count_data_nf lsr_l_reg_same_count_data_nf)
+# Adjacent and maximal low-six-bit counts close both sides of the count-32
+# boundary.  Generate the regular/no-flags family matrix from one inventory so
+# an opcode or width cannot silently drop out of one lifecycle.
+declare -a SHIFT_BOUNDARY_MATRIX_NAMES=()
+for _shift_op in asl asr lsl lsr; do
+    for _shift_width in b w l; do
+        for _shift_count in 31 33 63; do
+            _shift_name="${_shift_op}_${_shift_width}_reg_count${_shift_count}_boundary"
+            SHIFT_BOUNDARY_MATRIX_NAMES+=("$_shift_name" "${_shift_name}_nf")
+            if [ "$_shift_name" != "lsr_l_reg_count33_boundary" ]; then
+                TEST_ORDER+=("$_shift_name")
+            fi
+            TEST_ORDER+=("${_shift_name}_nf")
+        done
+    done
+done
+unset _shift_op _shift_width _shift_count _shift_name
 TEST_ORDER+=(addx_b_same_reg_consumes_x addx_w_same_reg_consumes_x addx_l_same_reg_consumes_x subx_b_same_reg_consumes_x subx_w_same_reg_consumes_x subx_l_same_reg_consumes_x)
 TEST_ORDER+=(addx_b_distinct_reg_consumes_x addx_w_distinct_reg_consumes_x addx_l_distinct_reg_consumes_x subx_b_distinct_reg_consumes_x subx_w_distinct_reg_consumes_x subx_l_distinct_reg_consumes_x)
 TEST_ORDER+=(addx_b_zero_sticky_z_set addx_w_zero_sticky_z_set addx_l_zero_sticky_z_set addx_b_zero_without_x_sticky_z_set addx_w_zero_without_x_sticky_z_set addx_l_zero_without_x_sticky_z_set roxl_l_zero_count_copies_cleared_x subx_b_zero_sticky_z_set subx_w_zero_sticky_z_set subx_l_zero_sticky_z_set)
@@ -341,6 +364,61 @@ declare -A EXPECTED_REG_FIELDS
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
 declare -A NATIVE_REPLAY_TESTS=(
+    [asl_l_reg_zero_count32_const_v_clear]=1
+    [lsr_l_reg_const_count32]=1
+    [asr_l_reg_count0_pressure_preserves_x]=1
+    [asl_b_reg_count32_boundary]=1
+    [asl_w_reg_count32_boundary]=1
+    [asl_l_reg_count32_boundary]=1
+    [asl_l_reg_zero_count32_v_clear]=1
+    [asl_b_reg_zero_count63_v_clear]=1
+    [asl_w_reg_zero_count33_v_clear]=1
+    [asr_b_reg_count32_boundary]=1
+    [asr_w_reg_count32_boundary]=1
+    [asr_l_reg_count32_boundary]=1
+    [lsl_b_reg_count32_boundary]=1
+    [lsl_w_reg_count32_boundary]=1
+    [lsl_l_reg_count32_boundary]=1
+    [lsr_b_reg_count32_boundary]=1
+    [lsr_w_reg_count32_boundary]=1
+    [lsr_l_reg_count32_boundary]=1
+    [lsr_l_reg_count33_boundary]=1
+    [asl_b_reg_count32_nf]=1
+    [asl_w_reg_count32_nf]=1
+    [asl_l_reg_count32_nf]=1
+    [asr_b_reg_count32_nf]=1
+    [asr_w_reg_count32_nf]=1
+    [asr_l_reg_count32_nf]=1
+    [lsl_b_reg_count32_nf]=1
+    [lsl_w_reg_count32_nf]=1
+    [lsl_l_reg_count32_nf]=1
+    [lsr_b_reg_count32_nf]=1
+    [lsr_w_reg_count32_nf]=1
+    [lsr_l_reg_count32_nf]=1
+    [asl_b_reg_same_count_data]=1
+    [asl_w_reg_same_count_data]=1
+    [asl_l_reg_same_count_data]=1
+    [asr_b_reg_same_count_data]=1
+    [asr_w_reg_same_count_data]=1
+    [asr_l_reg_same_count_data]=1
+    [lsl_b_reg_same_count_data]=1
+    [lsl_w_reg_same_count_data]=1
+    [lsl_l_reg_same_count_data]=1
+    [lsr_b_reg_same_count_data]=1
+    [lsr_w_reg_same_count_data]=1
+    [lsr_l_reg_same_count_data]=1
+    [asl_b_reg_same_count_data_nf]=1
+    [asl_w_reg_same_count_data_nf]=1
+    [asl_l_reg_same_count_data_nf]=1
+    [asr_b_reg_same_count_data_nf]=1
+    [asr_w_reg_same_count_data_nf]=1
+    [asr_l_reg_same_count_data_nf]=1
+    [lsl_b_reg_same_count_data_nf]=1
+    [lsl_w_reg_same_count_data_nf]=1
+    [lsl_l_reg_same_count_data_nf]=1
+    [lsr_b_reg_same_count_data_nf]=1
+    [lsr_w_reg_same_count_data_nf]=1
+    [lsr_l_reg_same_count_data_nf]=1
     [divs_w_imm_overflow_preserve_z]=1
     [divu_l32_same_dq_dr_nf]=1
     [divs_l32_same_dq_dr_nf]=1
@@ -526,6 +604,58 @@ declare -A NATIVE_REPLAY_PC=(
     [divs_w_zero_frame]=0x101c
     [divs_w_overflow_preserve_z]=0x100c
     [divs_w_imm_overflow_preserve_z]=0x100a
+    [asl_b_reg_count32_boundary]=0x100c
+    [asl_w_reg_count32_boundary]=0x100c
+    [asl_l_reg_count32_boundary]=0x100c
+    [asl_l_reg_zero_count32_v_clear]=0x100c
+    [asl_b_reg_zero_count63_v_clear]=0x100c
+    [asl_w_reg_zero_count33_v_clear]=0x100c
+    [asr_b_reg_count32_boundary]=0x100c
+    [asr_w_reg_count32_boundary]=0x100c
+    [asr_l_reg_count32_boundary]=0x100c
+    [lsl_b_reg_count32_boundary]=0x100c
+    [lsl_w_reg_count32_boundary]=0x100c
+    [lsl_l_reg_count32_boundary]=0x100c
+    [lsr_b_reg_count32_boundary]=0x100c
+    [lsr_w_reg_count32_boundary]=0x100c
+    [lsr_l_reg_count32_boundary]=0x100c
+    [lsr_l_reg_count33_boundary]=0x100c
+    [asl_b_reg_count32_nf]=0x100c
+    [asl_w_reg_count32_nf]=0x100c
+    [asl_l_reg_count32_nf]=0x100c
+    [asr_b_reg_count32_nf]=0x100c
+    [asr_w_reg_count32_nf]=0x100c
+    [asr_l_reg_count32_nf]=0x100c
+    [lsl_b_reg_count32_nf]=0x100c
+    [lsl_w_reg_count32_nf]=0x100c
+    [lsl_l_reg_count32_nf]=0x100c
+    [lsr_b_reg_count32_nf]=0x100c
+    [lsr_w_reg_count32_nf]=0x100c
+    [lsr_l_reg_count32_nf]=0x100c
+    [asl_b_reg_same_count_data]=0x100a
+    [asl_w_reg_same_count_data]=0x100a
+    [asl_l_reg_same_count_data]=0x100a
+    [asr_b_reg_same_count_data]=0x100a
+    [asr_w_reg_same_count_data]=0x100a
+    [asr_l_reg_same_count_data]=0x100a
+    [lsl_b_reg_same_count_data]=0x100a
+    [lsl_w_reg_same_count_data]=0x100a
+    [lsl_l_reg_same_count_data]=0x100a
+    [lsr_b_reg_same_count_data]=0x100a
+    [lsr_w_reg_same_count_data]=0x100a
+    [lsr_l_reg_same_count_data]=0x100a
+    [asl_b_reg_same_count_data_nf]=0x100a
+    [asl_w_reg_same_count_data_nf]=0x100a
+    [asl_l_reg_same_count_data_nf]=0x100a
+    [asr_b_reg_same_count_data_nf]=0x100a
+    [asr_w_reg_same_count_data_nf]=0x100a
+    [asr_l_reg_same_count_data_nf]=0x100a
+    [lsl_b_reg_same_count_data_nf]=0x100a
+    [lsl_w_reg_same_count_data_nf]=0x100a
+    [lsl_l_reg_same_count_data_nf]=0x100a
+    [lsr_b_reg_same_count_data_nf]=0x100a
+    [lsr_w_reg_same_count_data_nf]=0x100a
+    [lsr_l_reg_same_count_data_nf]=0x100a
     [divu_l_zero_frame]=0x101c
     [divs_l_zero_frame]=0x101c
     [divu_l32_zero_distinct]=0x1022
@@ -607,6 +737,58 @@ declare -A NATIVE_REPLAY_COUNT=(
     [divs_w_zero_frame]=2
     [divs_w_overflow_preserve_z]=2
     [divs_w_imm_overflow_preserve_z]=2
+    [asl_b_reg_count32_boundary]=2
+    [asl_w_reg_count32_boundary]=2
+    [asl_l_reg_count32_boundary]=2
+    [asl_l_reg_zero_count32_v_clear]=2
+    [asl_b_reg_zero_count63_v_clear]=2
+    [asl_w_reg_zero_count33_v_clear]=2
+    [asr_b_reg_count32_boundary]=2
+    [asr_w_reg_count32_boundary]=2
+    [asr_l_reg_count32_boundary]=2
+    [lsl_b_reg_count32_boundary]=2
+    [lsl_w_reg_count32_boundary]=2
+    [lsl_l_reg_count32_boundary]=2
+    [lsr_b_reg_count32_boundary]=2
+    [lsr_w_reg_count32_boundary]=2
+    [lsr_l_reg_count32_boundary]=2
+    [lsr_l_reg_count33_boundary]=2
+    [asl_b_reg_count32_nf]=2
+    [asl_w_reg_count32_nf]=2
+    [asl_l_reg_count32_nf]=2
+    [asr_b_reg_count32_nf]=2
+    [asr_w_reg_count32_nf]=2
+    [asr_l_reg_count32_nf]=2
+    [lsl_b_reg_count32_nf]=2
+    [lsl_w_reg_count32_nf]=2
+    [lsl_l_reg_count32_nf]=2
+    [lsr_b_reg_count32_nf]=2
+    [lsr_w_reg_count32_nf]=2
+    [lsr_l_reg_count32_nf]=2
+    [asl_b_reg_same_count_data]=2
+    [asl_w_reg_same_count_data]=2
+    [asl_l_reg_same_count_data]=2
+    [asr_b_reg_same_count_data]=2
+    [asr_w_reg_same_count_data]=2
+    [asr_l_reg_same_count_data]=2
+    [lsl_b_reg_same_count_data]=2
+    [lsl_w_reg_same_count_data]=2
+    [lsl_l_reg_same_count_data]=2
+    [lsr_b_reg_same_count_data]=2
+    [lsr_w_reg_same_count_data]=2
+    [lsr_l_reg_same_count_data]=2
+    [asl_b_reg_same_count_data_nf]=2
+    [asl_w_reg_same_count_data_nf]=2
+    [asl_l_reg_same_count_data_nf]=2
+    [asr_b_reg_same_count_data_nf]=2
+    [asr_w_reg_same_count_data_nf]=2
+    [asr_l_reg_same_count_data_nf]=2
+    [lsl_b_reg_same_count_data_nf]=2
+    [lsl_w_reg_same_count_data_nf]=2
+    [lsl_l_reg_same_count_data_nf]=2
+    [lsr_b_reg_same_count_data_nf]=2
+    [lsr_w_reg_same_count_data_nf]=2
+    [lsr_l_reg_same_count_data_nf]=2
     [divu_l_zero_frame]=2
     [divs_l_zero_frame]=2
     [divu_l32_zero_distinct]=2
@@ -663,6 +845,12 @@ declare -A NATIVE_REPLAY_COUNT=(
     [cache_disabled_selfmod_replay]=2
     [host_code_reuse_coherence]=2
 )
+for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_shift_name"]=1
+    NATIVE_REPLAY_PC["$_shift_name"]=0x100c
+    NATIVE_REPLAY_COUNT["$_shift_name"]=2
+done
+unset _shift_name
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -879,7 +1067,12 @@ TESTS[roxl_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E3B0 55C6"
 EXPECTED_REG_FIELDS[roxl_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
 TESTS[roxr_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E2B0 55C6"
 EXPECTED_REG_FIELDS[roxr_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
-unset ROX_PRESSURE_PREFIX
+# Keep the allocator populated across a runtime count-zero ASR. The JIT must
+# preserve the incoming X binding on the branch that skips carry publication.
+SHIFT_COUNT0_PRESSURE_PREFIX="203C 89AB CDEF 7200 7402 7603 7804 7A05 7C06 7E07 207C 0000 2000 227C 0000 2100 247C 0000 2200 267C 0000 2300 287C 0000 2400 2A7C 0000 2500 003C 0012"
+TESTS[asr_l_reg_count0_pressure_preserves_x]="$SHIFT_COUNT0_PRESSURE_PREFIX E2A0 40C6"
+EXPECTED_REG_FIELDS[asr_l_reg_count0_pressure_preserves_x]="D0=89abcdef D6=00002718"
+unset ROX_PRESSURE_PREFIX SHIFT_COUNT0_PRESSURE_PREFIX
 
 # Register-count shift effective-zero contract. Seed X=1 and stale V=1,
 # materialise the shift's required C=0 into D5, then consume X with a
@@ -1921,6 +2114,94 @@ TESTS[divs_l64_overflow]="203C 8000 0000 223C 0000 0001 243C 0000 0000 44FC 0015
 EXPECTED_REG_FIELDS[divs_l64_overflow]="D0=80000000 D2=00000000 D6=0000271e"
 TESTS[divs_l64_overflow_nf]="203C 8000 0000 223C 0000 0001 243C 0000 0000 44FC 0015 4C41 0C02 7E00 40C6"
 EXPECTED_REG_FIELDS[divs_l64_overflow_nf]="D0=80000000 D2=00000000 D6=00002714 D7=00000000"
+# Register-count shifts use the low six count bits. Counts at and above the
+# operand width saturate ASR and zero logical shifts; they must not wrap modulo
+# the host W-form variable-shift width.
+TESTS[asl_b_reg_count32_boundary]="203C A5A5 0081 7220 44FC 0015 E320 40C6"
+TESTS[asl_w_reg_count32_boundary]="203C A5A5 8001 7220 44FC 0015 E360 40C6"
+TESTS[asl_l_reg_count32_boundary]="203C 8000 0001 7220 44FC 0015 E3A0 40C6"
+TESTS[asl_l_reg_zero_count32_v_clear]="203C 0000 0000 7220 44FC 0015 E3A0 40C6"
+# Replay the complete generated block with an in-block constant producer.  This
+# guards the generated path if constant propagation reaches the register helper;
+# the structural audit separately owns the helper's constant-count contract.
+TESTS[asl_l_reg_zero_count32_const_v_clear]="7000 7220 E3A0 6804 7401 6002 7402"
+EXPECTED_REG_FIELDS[asl_l_reg_zero_count32_const_v_clear]="D0=00000000 D2=00000002"
+TESTS[asl_b_reg_zero_count63_v_clear]="203C A5A5 0000 723F 44FC 0015 E320 40C6"
+TESTS[asl_w_reg_zero_count33_v_clear]="203C A5A5 0000 7221 44FC 0015 E360 40C6"
+TESTS[asr_b_reg_count32_boundary]="203C A5A5 007F 7220 44FC 0015 E220 40C6"
+TESTS[asr_w_reg_count32_boundary]="203C A5A5 7FFF 7220 44FC 0015 E260 40C6"
+TESTS[asr_l_reg_count32_boundary]="203C 7FFF FFFF 7220 44FC 0015 E2A0 40C6"
+TESTS[lsl_b_reg_count32_boundary]="203C A5A5 0081 7220 44FC 0015 E328 40C6"
+TESTS[lsl_w_reg_count32_boundary]="203C A5A5 8001 7220 44FC 0015 E368 40C6"
+TESTS[lsl_l_reg_count32_boundary]="203C 8000 0001 7220 44FC 0015 E3A8 40C6"
+TESTS[lsr_b_reg_count32_boundary]="203C A5A5 0081 7220 44FC 0015 E228 40C6"
+TESTS[lsr_w_reg_count32_boundary]="203C A5A5 8001 7220 44FC 0015 E268 40C6"
+TESTS[lsr_l_reg_count32_boundary]="203C 8000 0001 7220 44FC 0015 E2A8 40C6"
+TESTS[lsr_l_reg_count33_boundary]="203C 8000 0001 7221 44FC 0015 E2A8 40C6"
+# Replay the corresponding in-block constant producer for LSR.L.  Current
+# allocation may still materialise the count; the source audit independently
+# requires the immediate helper to saturate count 32.
+TESTS[lsr_l_reg_const_count32]="70FF 7220 E2A8 6504 7401 6002 7402"
+EXPECTED_REG_FIELDS[lsr_l_reg_const_count32]="D0=00000000 D2=00000002"
+TESTS[asl_b_reg_count32_nf]="203C A5A5 0081 7220 44FC 0015 E320 2400"
+TESTS[asl_w_reg_count32_nf]="203C A5A5 8001 7220 44FC 0015 E360 2400"
+TESTS[asl_l_reg_count32_nf]="203C 8000 0001 7220 44FC 0015 E3A0 2400"
+TESTS[asr_b_reg_count32_nf]="203C A5A5 007F 7220 44FC 0015 E220 2400"
+TESTS[asr_w_reg_count32_nf]="203C A5A5 7FFF 7220 44FC 0015 E260 2400"
+TESTS[asr_l_reg_count32_nf]="203C 8000 0001 7220 44FC 0015 E2A0 2400"
+TESTS[lsl_b_reg_count32_nf]="203C A5A5 0081 7220 44FC 0015 E328 2400"
+TESTS[lsl_w_reg_count32_nf]="203C A5A5 8001 7220 44FC 0015 E368 2400"
+TESTS[lsl_l_reg_count32_nf]="203C 0000 0001 7220 44FC 0015 E3A8 2400"
+TESTS[lsr_b_reg_count32_nf]="203C A5A5 0081 7220 44FC 0015 E228 2400"
+TESTS[lsr_w_reg_count32_nf]="203C A5A5 8001 7220 44FC 0015 E268 2400"
+TESTS[lsr_l_reg_count32_nf]="203C 8000 0001 7220 44FC 0015 E2A8 2400"
+TESTS[asl_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E120 40C6"
+TESTS[asl_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E160 40C6"
+TESTS[asl_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E1A0 40C6"
+TESTS[asr_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E020 40C6"
+TESTS[asr_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E060 40C6"
+TESTS[asr_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E0A0 40C6"
+TESTS[lsl_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E128 40C6"
+TESTS[lsl_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E168 40C6"
+TESTS[lsl_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E1A8 40C6"
+TESTS[lsr_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E028 40C6"
+TESTS[lsr_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E068 40C6"
+TESTS[lsr_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E0A8 40C6"
+TESTS[asl_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E120 2400"
+TESTS[asl_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E160 2400"
+TESTS[asl_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E1A0 2400"
+TESTS[asr_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E020 2400"
+TESTS[asr_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E060 2400"
+TESTS[asr_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E0A0 2400"
+TESTS[lsl_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E128 2400"
+TESTS[lsl_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E168 2400"
+TESTS[lsl_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E1A8 2400"
+TESTS[lsr_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E028 2400"
+TESTS[lsr_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E068 2400"
+TESTS[lsr_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E0A8 2400"
+declare -A _SHIFT_BOUNDARY_OPCODES=(
+    [asl_b]=E320 [asl_w]=E360 [asl_l]=E3A0
+    [asr_b]=E220 [asr_w]=E260 [asr_l]=E2A0
+    [lsl_b]=E328 [lsl_w]=E368 [lsl_l]=E3A8
+    [lsr_b]=E228 [lsr_w]=E268 [lsr_l]=E2A8
+)
+declare -A _SHIFT_BOUNDARY_DATA=(
+    [b]="A5A5 0081" [w]="A5A5 8001" [l]="8000 0001"
+)
+for _shift_op in asl asr lsl lsr; do
+    for _shift_width in b w l; do
+        _shift_opcode="${_SHIFT_BOUNDARY_OPCODES[${_shift_op}_${_shift_width}]}"
+        _shift_data="${_SHIFT_BOUNDARY_DATA[$_shift_width]}"
+        for _shift_count in 31 33 63; do
+            printf -v _shift_count_hex '%02X' "$_shift_count"
+            _shift_name="${_shift_op}_${_shift_width}_reg_count${_shift_count}_boundary"
+            TESTS["$_shift_name"]="203C ${_shift_data} 72${_shift_count_hex} 44FC 0015 ${_shift_opcode} 40C6"
+            TESTS["${_shift_name}_nf"]="203C ${_shift_data} 72${_shift_count_hex} 44FC 0015 ${_shift_opcode} 2400"
+        done
+    done
+done
+unset _shift_op _shift_width _shift_opcode _shift_data _shift_count _shift_count_hex _shift_name
+unset _SHIFT_BOUNDARY_OPCODES _SHIFT_BOUNDARY_DATA
 # Taken TRAPV preserves all CCR bits and uses the same successor/opcode
 # format-2 address split as vector-5 arithmetic traps.
 TESTS[trapv_taken_frame]="7000 4E7B 0801 23FC 0000 101A 0000 001C 44FC 001F 4E76 60FE 4E71 3C17 282F 0002 2A2F 0008 7E69"
@@ -2215,6 +2496,77 @@ INIT_REGS[divu_w_zero_frame]="12345678 00000000 00000000 00000000 00000000 00000
 INIT_REGS[divs_w_zero_frame]="87654321 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_w_overflow_preserve_z]="00010000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
 INIT_REGS[divs_w_imm_overflow_preserve_z]="00010000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+_SHIFT_COUNT32_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[asl_b_reg_count32_boundary]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_count32_boundary]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_count32_boundary]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_zero_count32_v_clear]="00000000 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_zero_count32_const_v_clear]="DEADBEEF 00000001 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_zero_count63_v_clear]="A5A50000 0000003F $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_zero_count33_v_clear]="A5A50000 00000021 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_count32_boundary]="A5A5007F 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_count32_boundary]="A5A57FFF 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_count32_boundary]="7FFFFFFF 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_count32_boundary]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_count32_boundary]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_count32_boundary]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_count32_boundary]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_count32_boundary]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_count32_boundary]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_count33_boundary]="80000001 00000021 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_const_count32]="DEADBEEF 00000001 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_count32_nf]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_count32_nf]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_count32_nf]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_count32_nf]="A5A5007F 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_count32_nf]="A5A57FFF 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_count32_nf]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_count32_nf]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_count32_nf]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_count32_nf]="00000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_count32_nf]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_count32_nf]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_count32_nf]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+declare -A _SHIFT_BOUNDARY_INIT_DATA=(
+    [b]=A5A50081 [w]=A5A58001 [l]=80000001
+)
+for _shift_op in asl asr lsl lsr; do
+    for _shift_width in b w l; do
+        for _shift_count in 31 33 63; do
+            printf -v _shift_count_init '%08X' "$_shift_count"
+            _shift_name="${_shift_op}_${_shift_width}_reg_count${_shift_count}_boundary"
+            _shift_init="${_SHIFT_BOUNDARY_INIT_DATA[$_shift_width]} ${_shift_count_init} $_SHIFT_COUNT32_INIT_TAIL"
+            INIT_REGS["$_shift_name"]="$_shift_init"
+            INIT_REGS["${_shift_name}_nf"]="$_shift_init"
+        done
+    done
+done
+unset _shift_op _shift_width _shift_count _shift_count_init _shift_name _shift_init
+unset _SHIFT_BOUNDARY_INIT_DATA _SHIFT_COUNT32_INIT_TAIL
 INIT_REGS[divu_l_zero_frame]="13579BDF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_l_zero_frame]="89ABCDEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divu_l32_zero_distinct]="13579BDF 00000000 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
@@ -2370,6 +2722,7 @@ SENTINEL_A6[roxr_l_reg_count_33_copies_x]="a60100f9"
 SENTINEL_A6[roxl_l_reg_count_0_copies_x]="a60100fa"
 SENTINEL_A6[roxl_l_reg_count_33_pressure]="a60100fb"
 SENTINEL_A6[roxr_l_reg_count_33_pressure]="a60100fc"
+SENTINEL_A6[asr_l_reg_count0_pressure_preserves_x]="a6d6014b"
 SENTINEL_A6[addx_b_zero_sticky_z_set]="a6030221"
 SENTINEL_A6[addx_w_zero_sticky_z_set]="a6030222"
 SENTINEL_A6[addx_b_zero_without_x_sticky_z_set]="a6030223"
@@ -2873,6 +3226,67 @@ SENTINEL_A6[divu_w_zero_frame]="a6d50001"
 SENTINEL_A6[divs_w_zero_frame]="a6d50002"
 SENTINEL_A6[divs_w_overflow_preserve_z]="a6d50017"
 SENTINEL_A6[divs_w_imm_overflow_preserve_z]="a6d5001c"
+SENTINEL_A6[asl_b_reg_count32_boundary]="a6d60001"
+SENTINEL_A6[asl_w_reg_count32_boundary]="a6d60002"
+SENTINEL_A6[asl_l_reg_count32_boundary]="a6d60003"
+SENTINEL_A6[asl_l_reg_zero_count32_v_clear]="a6d60148"
+SENTINEL_A6[asl_l_reg_zero_count32_const_v_clear]="a6d6014c"
+SENTINEL_A6[lsr_l_reg_const_count32]="a6d6014d"
+SENTINEL_A6[asl_b_reg_zero_count63_v_clear]="a6d60149"
+SENTINEL_A6[asl_w_reg_zero_count33_v_clear]="a6d6014a"
+SENTINEL_A6[asr_b_reg_count32_boundary]="a6d60004"
+SENTINEL_A6[asr_w_reg_count32_boundary]="a6d60005"
+SENTINEL_A6[asr_l_reg_count32_boundary]="a6d60006"
+SENTINEL_A6[lsl_b_reg_count32_boundary]="a6d60007"
+SENTINEL_A6[lsl_w_reg_count32_boundary]="a6d60008"
+SENTINEL_A6[lsl_l_reg_count32_boundary]="a6d60009"
+SENTINEL_A6[lsr_b_reg_count32_boundary]="a6d6000a"
+SENTINEL_A6[lsr_w_reg_count32_boundary]="a6d6000b"
+SENTINEL_A6[lsr_l_reg_count32_boundary]="a6d6000c"
+SENTINEL_A6[lsr_l_reg_count33_boundary]="a6d6000d"
+SENTINEL_A6[asl_b_reg_count32_nf]="a6d6000e"
+SENTINEL_A6[asl_w_reg_count32_nf]="a6d6000f"
+SENTINEL_A6[asl_l_reg_count32_nf]="a6d60010"
+SENTINEL_A6[asr_b_reg_count32_nf]="a6d60011"
+SENTINEL_A6[asr_w_reg_count32_nf]="a6d60012"
+SENTINEL_A6[asr_l_reg_count32_nf]="a6d60013"
+SENTINEL_A6[lsl_b_reg_count32_nf]="a6d60014"
+SENTINEL_A6[lsl_w_reg_count32_nf]="a6d60015"
+SENTINEL_A6[lsl_l_reg_count32_nf]="a6d60016"
+SENTINEL_A6[lsr_b_reg_count32_nf]="a6d60017"
+SENTINEL_A6[lsr_w_reg_count32_nf]="a6d60018"
+SENTINEL_A6[lsr_l_reg_count32_nf]="a6d60019"
+SENTINEL_A6[asl_b_reg_same_count_data]="a6d6001a"
+SENTINEL_A6[asl_w_reg_same_count_data]="a6d6001b"
+SENTINEL_A6[asl_l_reg_same_count_data]="a6d6001c"
+SENTINEL_A6[asr_b_reg_same_count_data]="a6d6001d"
+SENTINEL_A6[asr_w_reg_same_count_data]="a6d6001e"
+SENTINEL_A6[asr_l_reg_same_count_data]="a6d6001f"
+SENTINEL_A6[lsl_b_reg_same_count_data]="a6d60020"
+SENTINEL_A6[lsl_w_reg_same_count_data]="a6d60021"
+SENTINEL_A6[lsl_l_reg_same_count_data]="a6d60022"
+SENTINEL_A6[lsr_b_reg_same_count_data]="a6d60023"
+SENTINEL_A6[lsr_w_reg_same_count_data]="a6d60024"
+SENTINEL_A6[lsr_l_reg_same_count_data]="a6d60025"
+SENTINEL_A6[asl_b_reg_same_count_data_nf]="a6d60026"
+SENTINEL_A6[asl_w_reg_same_count_data_nf]="a6d60027"
+SENTINEL_A6[asl_l_reg_same_count_data_nf]="a6d60028"
+SENTINEL_A6[asr_b_reg_same_count_data_nf]="a6d60029"
+SENTINEL_A6[asr_w_reg_same_count_data_nf]="a6d6002a"
+SENTINEL_A6[asr_l_reg_same_count_data_nf]="a6d6002b"
+SENTINEL_A6[lsl_b_reg_same_count_data_nf]="a6d6002c"
+SENTINEL_A6[lsl_w_reg_same_count_data_nf]="a6d6002d"
+SENTINEL_A6[lsl_l_reg_same_count_data_nf]="a6d6002e"
+SENTINEL_A6[lsr_b_reg_same_count_data_nf]="a6d6002f"
+SENTINEL_A6[lsr_w_reg_same_count_data_nf]="a6d60030"
+SENTINEL_A6[lsr_l_reg_same_count_data_nf]="a6d60031"
+_shift_sentinel_index=256
+for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
+    printf -v _shift_sentinel 'a6d6%04x' "$_shift_sentinel_index"
+    SENTINEL_A6["$_shift_name"]="$_shift_sentinel"
+    ((_shift_sentinel_index += 1))
+done
+unset _shift_name _shift_sentinel _shift_sentinel_index
 SENTINEL_A6[divu_l_zero_frame]="a6d50003"
 SENTINEL_A6[divs_l_zero_frame]="a6d50004"
 SENTINEL_A6[divu_l32_zero_distinct]="a6d5000f"
@@ -3002,6 +3416,61 @@ SENTINEL_A6[branch_flush_bgt_zero]="a6c0e003"
 # Risk-focused subset used for strict mismatch-first autoresearch.
 # Only these vectors count toward risky_total progression.
 declare -A RISKY_TESTS=(
+    [asl_l_reg_zero_count32_const_v_clear]=1
+    [lsr_l_reg_const_count32]=1
+    [asr_l_reg_count0_pressure_preserves_x]=1
+    [asl_b_reg_count32_boundary]=1
+    [asl_w_reg_count32_boundary]=1
+    [asl_l_reg_count32_boundary]=1
+    [asl_l_reg_zero_count32_v_clear]=1
+    [asl_b_reg_zero_count63_v_clear]=1
+    [asl_w_reg_zero_count33_v_clear]=1
+    [asr_b_reg_count32_boundary]=1
+    [asr_w_reg_count32_boundary]=1
+    [asr_l_reg_count32_boundary]=1
+    [lsl_b_reg_count32_boundary]=1
+    [lsl_w_reg_count32_boundary]=1
+    [lsl_l_reg_count32_boundary]=1
+    [lsr_b_reg_count32_boundary]=1
+    [lsr_w_reg_count32_boundary]=1
+    [lsr_l_reg_count32_boundary]=1
+    [lsr_l_reg_count33_boundary]=1
+    [asl_b_reg_count32_nf]=1
+    [asl_w_reg_count32_nf]=1
+    [asl_l_reg_count32_nf]=1
+    [asr_b_reg_count32_nf]=1
+    [asr_w_reg_count32_nf]=1
+    [asr_l_reg_count32_nf]=1
+    [lsl_b_reg_count32_nf]=1
+    [lsl_w_reg_count32_nf]=1
+    [lsl_l_reg_count32_nf]=1
+    [lsr_b_reg_count32_nf]=1
+    [lsr_w_reg_count32_nf]=1
+    [lsr_l_reg_count32_nf]=1
+    [asl_b_reg_same_count_data]=1
+    [asl_w_reg_same_count_data]=1
+    [asl_l_reg_same_count_data]=1
+    [asr_b_reg_same_count_data]=1
+    [asr_w_reg_same_count_data]=1
+    [asr_l_reg_same_count_data]=1
+    [lsl_b_reg_same_count_data]=1
+    [lsl_w_reg_same_count_data]=1
+    [lsl_l_reg_same_count_data]=1
+    [lsr_b_reg_same_count_data]=1
+    [lsr_w_reg_same_count_data]=1
+    [lsr_l_reg_same_count_data]=1
+    [asl_b_reg_same_count_data_nf]=1
+    [asl_w_reg_same_count_data_nf]=1
+    [asl_l_reg_same_count_data_nf]=1
+    [asr_b_reg_same_count_data_nf]=1
+    [asr_w_reg_same_count_data_nf]=1
+    [asr_l_reg_same_count_data_nf]=1
+    [lsl_b_reg_same_count_data_nf]=1
+    [lsl_w_reg_same_count_data_nf]=1
+    [lsl_l_reg_same_count_data_nf]=1
+    [lsr_b_reg_same_count_data_nf]=1
+    [lsr_w_reg_same_count_data_nf]=1
+    [lsr_l_reg_same_count_data_nf]=1
     [divs_w_imm_overflow_preserve_z]=1
     [divu_l32_same_dq_dr_nf]=1
     [divs_l32_same_dq_dr_nf]=1
@@ -3528,6 +3997,10 @@ declare -A RISKY_TESTS=(
     [bcd_sbcd_predec_a7_alias]=1
     [bcd_nbcd_predec_a7]=1
 )
+for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_shift_name"]=1
+done
+unset _shift_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()
@@ -3594,7 +4067,9 @@ if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
 fi
 
 # Optional exact-name subset for focused debug loops while still using the
-# normal harness machinery and metrics contract.
+# normal harness machinery and metrics contract.  Explicit selection may run a
+# staged risky vector before it is promoted into active-risky-tests.txt; default
+# runs remain limited to the one-vector-at-a-time active campaign inventory.
 if [ -n "${B2_TEST_NAMES:-}" ]; then
     declare -A _wanted_tests=()
     while IFS= read -r _name; do
@@ -3602,14 +4077,14 @@ if [ -n "${B2_TEST_NAMES:-}" ]; then
     done < <(printf '%s\n' "$B2_TEST_NAMES" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sed '/^$/d')
 
     declare -a _filtered_active=()
-    for name in "${ACTIVE_TEST_ORDER[@]}"; do
-        if [ -n "${_wanted_tests[$name]+x}" ]; then
+    for name in "${TEST_ORDER[@]}"; do
+        if [ -n "${_wanted_tests[$name]+x}" ] && [ -n "${RISKY_TESTS[$name]+x}" ]; then
             _filtered_active+=("$name")
         fi
     done
     ACTIVE_TEST_ORDER=("${_filtered_active[@]}")
     if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
-        emit_failure_metrics 1 "B2_TEST_NAMES selected no active risky vectors" 1
+        emit_failure_metrics 1 "B2_TEST_NAMES selected no known risky vectors" 1
     fi
 fi
 

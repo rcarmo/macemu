@@ -2717,6 +2717,7 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2725,6 +2726,7 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 	    start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -2821,6 +2823,7 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2829,16 +2832,8 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 	    start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
-	/* Register-count ASL still lacks complete V handling in this generic path.
-	   Immediate ASL uses ARM64 jff_ASL_*_imm helpers below, which do calculate V. */
-	if (curi->smode != immi) {
-		comprintf(
-			"    if (needed_flags & FLAG_V) {\n"
-			"        FAIL(1);\n"
-			"        " RETURN "\n"
-			"    }\n");
-	}
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -2850,15 +2845,26 @@ gen_opcode (unsigned int opcode)
 		uses_cmov;
 		start_brace();
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-		/* cont92: aliasing-immune in-place shift (see i_ASR note). */
+		/* Register-count ASL requires its dedicated semantic helper when flags
+		   are live: unlike logical LSL, ASL must report whether the sign changed
+		   at any point.  Copy the count first so source==destination is safe. */
 		comprintf("\tint tmpcnt=scratchie++;\n");
 		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
 		comprintf("\tand_l_ri(tmpcnt,63);\n");
-		switch(curi->size) {
-		 case sz_byte: comprintf("\tshll_b_rr(data,tmpcnt);\n"); break;
-		 case sz_word: comprintf("\tshll_w_rr(data,tmpcnt);\n"); break;
-		 case sz_long: comprintf("\tshll_l_rr(data,tmpcnt);\n"); break;
-		 default: assert(0);
+		if (!noflags) {
+			switch(curi->size) {
+			 case sz_byte: comprintf("\tjff_ASL_b_reg(data,tmpcnt);\n"); break;
+			 case sz_word: comprintf("\tjff_ASL_w_reg(data,tmpcnt);\n"); break;
+			 case sz_long: comprintf("\tjff_ASL_l_reg(data,tmpcnt);\n"); break;
+			 default: assert(0);
+			}
+		} else {
+			switch(curi->size) {
+			 case sz_byte: comprintf("\tshll_b_rr(data,tmpcnt);\n"); break;
+			 case sz_word: comprintf("\tshll_w_rr(data,tmpcnt);\n"); break;
+			 case sz_long: comprintf("\tshll_l_rr(data,tmpcnt);\n"); break;
+			 default: assert(0);
+			}
 		}
 #else
 		comprintf("\tint cdata = scratchie++;\n");
@@ -2901,13 +2907,16 @@ gen_opcode (unsigned int opcode)
 	     default: assert(0);
 	    }
 	}
-	/* And create the flags */
+	/* And create the flags.  The AArch64 register-count helper already owns
+	   count-zero X preservation and full X/N/Z/V/C publication. */
 	if (!noflags) {
 		comprintf("\tlive_flags();\n");
 		comprintf("\tend_needflags();\n");
-		if (curi->smode!=immi)
+		if (curi->smode!=immi) {
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 			comprintf("\tsetcc_for_cntzero(tmpcnt, data, %d);\n", curi->size == sz_byte ? 1 : curi->size == sz_word ? 2 : 4);
-		else
+#endif
+		} else
 			comprintf("\tduplicate_carry();\n");
 		comprintf("if (!(needed_flags & FLAG_CZNV)) dont_care_flags();\n");
 	}
@@ -2919,6 +2928,7 @@ gen_opcode (unsigned int opcode)
 	failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2927,6 +2937,7 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 	    start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -3005,6 +3016,7 @@ gen_opcode (unsigned int opcode)
 	failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 		comprintf(
 			"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -3013,6 +3025,7 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 		start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
