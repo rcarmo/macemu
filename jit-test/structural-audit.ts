@@ -525,6 +525,131 @@ for (const generatedCall of ["adc_b(dst,src);", "adc_w(dst,src);", "sbb_b(dst,sr
   requireText(generatedSource, generatedCall, "generated ADDX/SUBX legacy-helper reachability");
 }
 
+/* NEGX does not call the similarly named jff_/jnf_NEGX_* legacy MIDFUNCs.
+ * Its live generator creates zero - source - X through flag_subx and the
+ * shared sbb_b/w/l compatibility layer. Lock both generated flag lifecycles,
+ * narrow-lane publication, exact-native coverage, memory RMW geometry, and
+ * forced source/destination allocator ownership to that executable path. */
+const negxGenerator = functionBody(
+  gencompSource,
+  "     case i_NEGX:",
+  "     case i_NBCD:",
+  "NEGX generator",
+);
+for (const contract of [
+  "isaddx;",
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint dst=scratchie++;\\n");',
+  'comprintf("\\tmov_l_ri(dst,0);\\n");',
+  'genflags (flag_subx, curi->size, "", "src", "dst");',
+  'genastore ("dst", curi->smode, "srcreg", curi->size, "src");',
+]) {
+  requireText(negxGenerator, contract, "NEGX shared SUBX lowering");
+}
+for (const [opcode, nextOpcode, width, move] of [
+  ["4000", "4010", "b", "mov_b_rr"],
+  ["4040", "4050", "w", "mov_w_rr"],
+  ["4080", "4090", "l", "mov_l_rr"],
+] as const) {
+  const liveBody = functionBody(
+    generatedSource,
+    `void REGPARAM2 op_${opcode}_0_comp_ff`,
+    `void REGPARAM2 op_${nextOpcode}_0_comp_ff`,
+    `generated NEGX.${width} flag-live`,
+  );
+  for (const contract of [
+    "mov_l_ri(dst,0)",
+    "restore_carry()",
+    `sbb_${width}(dst,src)`,
+    "set_zero(zero, one)",
+    "duplicate_carry()",
+    `${move}(srcreg, dst)`,
+  ]) {
+    requireText(liveBody, contract, `generated NEGX.${width} flag-live`);
+  }
+  const deadBody = functionBody(
+    generatedSource,
+    `void REGPARAM2 op_${opcode}_0_comp_nf`,
+    `void REGPARAM2 op_${nextOpcode}_0_comp_nf`,
+    `generated NEGX.${width} no-flags`,
+  );
+  for (const contract of [
+    "mov_l_ri(dst,0)",
+    "dont_care_flags()",
+    "restore_carry()",
+    `sbb_${width}(dst,src)`,
+    `${move}(srcreg, dst)`,
+  ]) {
+    requireText(deadBody, contract, `generated NEGX.${width} no-flags`);
+  }
+  if (deadBody.includes("set_zero(") || deadBody.includes("duplicate_carry()")) {
+    fail(`generated NEGX.${width} no-flags path still publishes dead flags`);
+  }
+}
+const legacySbbLBody = functionBody(compatSource, "void sbb_l(", "static inline void legacy_load_rr4_to_work", "legacy SBB.L");
+for (const [body, width, shift, insert] of [
+  [legacySbbBBody, 8, 24, "BFXIL_xxii(d, REG_WORK1, 24, 8)"],
+  [legacySbbWBody, 16, 16, "BFXIL_xxii(d, REG_WORK1, 16, 16)"],
+] as const) {
+  for (const contract of [
+    "legacy_invert_carry_in_pstate()",
+    `LSL_wwi(REG_WORK1, d, ${shift})`,
+    `LSL_wwi(REG_WORK3, s, ${shift})`,
+    "SBCS_www(REG_WORK1, REG_WORK1, REG_WORK3)",
+    insert,
+    `legacy_set_z_from_narrow_result(d, ${width})`,
+    "flags_carry_inverted = true",
+  ]) {
+    requireText(body, contract, `NEGX/SUBX ${width}-bit lane lifecycle`);
+  }
+}
+for (const contract of [
+  "legacy_invert_carry_in_pstate()",
+  "SBCS_www(d, d, s)",
+  "flags_carry_inverted = true",
+]) {
+  requireText(legacySbbLBody, contract, "NEGX/SUBX 32-bit lifecycle");
+}
+const negxExactVectors = [
+  "negx_b_zero_x0_z1_native", "negx_w_zero_x0_z1_native", "negx_l_zero_x0_z1_native",
+  "negx_b_zero_x0_z0_native", "negx_w_zero_x0_z0_native", "negx_l_zero_x0_z0_native",
+  "negx_b_zero_x1_z1_native", "negx_w_zero_x1_z1_native", "negx_l_zero_x1_z1_native",
+  "negx_b_min_x0_overflow_native", "negx_w_min_x0_overflow_native", "negx_l_min_x0_overflow_native",
+  "negx_b_min_x1_native", "negx_w_min_x1_native", "negx_l_min_x1_native",
+  "negx_b_min_x1_nf_native", "negx_w_min_x1_nf_native", "negx_l_min_x1_nf_native",
+  "negx_b_aind_special_native", "negx_w_postinc_native", "negx_l_predec_native",
+  "negx_b_d16_native", "negx_w_indexed_special_native", "negx_l_absw_native",
+  "negx_b_absl_special_native", "negx_b_a7_postinc_native", "negx_b_a7_predec_native",
+];
+for (const name of negxExactVectors) {
+  requireText(harnessSource, name, `NEGX exact-native vector ${name}`);
+}
+for (const contract of [
+  'for _negx_name in "${NEGX_NATIVE_MATRIX_NAMES[@]}"',
+  'NATIVE_REPLAY_TESTS["$_negx_name"]=1',
+  'NATIVE_REPLAY_PC["$_negx_name"]=0x1000',
+  'NATIVE_REPLAY_COUNT["$_negx_name"]=2',
+  "SPECIAL_MEMORY_TESTS[negx_b_aind_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[negx_w_indexed_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[negx_b_absl_special_native]=1",
+]) {
+  requireText(harnessSource, contract, "NEGX exact-native/memory gate");
+}
+requireText(activeRiskySource, "negx_l_min_x0_overflow_native", "NEGX active-risky sentinel");
+for (const width of ["b", "w", "l"]) {
+  const name = `negx_${width}_source_dst_collision`;
+  for (const contract of [name, `[${name}]=20`, `[${name}]=1`]) {
+    requireText(regallocPressureSource, contract, `NEGX.${width} forced source/destination collision`);
+  }
+}
+for (const contract of [
+  "Constant-backed read/modify/write scratches",
+  "r >= S1 && isconst(r)",
+  "REGPRESSURE_PIN_SKIP scratch_vreg=%d pin_vreg=%d",
+]) {
+  requireText(allocatorSource, contract, "NEGX constant-backed RMW pressure hook");
+}
+
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
 // immediate; lock the family to direct instruction-stream decoding.
@@ -2572,6 +2697,12 @@ requireText(harnessSource, "TESTS[branch_flush_bgt_zero]", "cross-op BGT regress
 
 console.log("METRIC structural_jit_object_layout_epoch=1");
 console.log("METRIC structural_bcd_flag_lifecycle=1");
+console.log("METRIC structural_negx_shared_subx_lowering=1");
+console.log("METRIC structural_negx_narrow_lane_flags=1");
+console.log("METRIC structural_negx_no_flags_lifecycle=1");
+console.log(`METRIC structural_negx_exact_native_vectors=${negxExactVectors.length}`);
+console.log("METRIC structural_negx_memory_ea_classes=9");
+console.log("METRIC structural_negx_allocator_pressure_widths=3");
 console.log("METRIC structural_bcd_patched_branch_joins=7");
 console.log("METRIC structural_bcd_a7_predecrement_geometry=1");
 console.log("METRIC structural_bcd_exact_pc_memory_replay=1");

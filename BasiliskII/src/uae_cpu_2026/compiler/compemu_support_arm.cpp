@@ -3967,6 +3967,41 @@ static int rmw(int r)
 {
     int answer = -1;
 
+#if defined(CPU_AARCH64)
+    /* The pressure hook normally intercepts write-only scratch allocation in
+       writereg().  Constant-backed read/modify/write scratches (such as the
+       zero destination used by NEGX) enter through rmw() instead.  Exercise
+       the same forced-collision contract here: a correctly ordered MIDFUNC
+       has already locked its live source, so the attempted alias must skip. */
+    if (r >= S1 && isconst(r) &&
+        (b2_force_scratch_target_vreg() < 0 || r == b2_force_scratch_target_vreg())) {
+        int pin_vreg = b2_force_scratch_alias_vreg();
+        if (pin_vreg >= 0 && isinreg(pin_vreg)) {
+            int pin_host = live.state[pin_vreg].realreg;
+            if (pin_host >= 0 && pin_host < N_REGS && !live.nat[pin_host].locked) {
+                if (isinreg(r) && live.state[r].realreg != pin_host)
+                    disassociate(r);
+                if (!isinreg(r)) {
+                    live.state[r].realreg = pin_host;
+                    live.state[r].realind = live.nat[pin_host].nholds;
+                    live.nat[pin_host].holds[live.nat[pin_host].nholds++] = r;
+                }
+                live.nat[pin_host].locked++;
+                live.nat[pin_host].touched = touchcnt++;
+                live.state[r].val = 0;
+                set_status(r, DIRTY);
+                fprintf(stderr, "REGPRESSURE_PIN_HIT scratch_vreg=%d pin_vreg=%d host=%d pc=%08x\n",
+                    r, pin_vreg, pin_host, get_virtual_address(comp_pc_p));
+                return pin_host;
+            }
+            fprintf(stderr, "REGPRESSURE_PIN_SKIP scratch_vreg=%d pin_vreg=%d host=%d locked=%d pc=%08x\n",
+                r, pin_vreg, pin_host,
+                (pin_host >= 0 && pin_host < N_REGS) ? live.nat[pin_host].locked : -1,
+                get_virtual_address(comp_pc_p));
+        }
+    }
+#endif
+
     if (live.state[r].status == UNDEF) {
         jit_log("WARNING: Unexpected read of undefined register %d", r);
     }

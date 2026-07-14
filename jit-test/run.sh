@@ -368,6 +368,22 @@ TEST_ORDER+=(addx_b_distinct_reg_consumes_x addx_w_distinct_reg_consumes_x addx_
 TEST_ORDER+=(addx_b_zero_sticky_z_set addx_w_zero_sticky_z_set addx_l_zero_sticky_z_set addx_b_zero_without_x_sticky_z_set addx_w_zero_without_x_sticky_z_set addx_l_zero_without_x_sticky_z_set roxl_l_zero_count_copies_cleared_x subx_b_zero_sticky_z_set subx_w_zero_sticky_z_set subx_l_zero_sticky_z_set)
 TEST_ORDER+=(addx_b_zero_sticky_z_clear addx_w_zero_sticky_z_clear addx_l_zero_sticky_z_clear subx_b_zero_sticky_z_clear subx_w_zero_sticky_z_clear subx_l_zero_sticky_z_clear)
 TEST_ORDER+=(addx_b_overflow_with_x addx_w_overflow_with_x addx_l_overflow_with_x subx_b_overflow_with_x subx_w_overflow_with_x subx_l_overflow_with_x subx_b_without_x subx_w_without_x subx_l_without_x)
+# NEGX is generated through the shared SUBX flag lifecycle, not through the
+# unreachable jff_/jnf_NEGX_* legacy MIDFUNC names.  Audit every width across
+# incoming X/sticky-Z quadrants, signed-overflow minima, each memory-EA class,
+# A7 byte geometry, forced special-memory helpers, and exact native entry.
+declare -a NEGX_NATIVE_MATRIX_NAMES=(
+    negx_b_zero_x0_z1_native negx_w_zero_x0_z1_native negx_l_zero_x0_z1_native
+    negx_b_zero_x0_z0_native negx_w_zero_x0_z0_native negx_l_zero_x0_z0_native
+    negx_b_zero_x1_z1_native negx_w_zero_x1_z1_native negx_l_zero_x1_z1_native
+    negx_b_min_x0_overflow_native negx_w_min_x0_overflow_native negx_l_min_x0_overflow_native
+    negx_b_min_x1_native negx_w_min_x1_native negx_l_min_x1_native
+    negx_b_min_x1_nf_native negx_w_min_x1_nf_native negx_l_min_x1_nf_native
+    negx_b_aind_special_native negx_w_postinc_native negx_l_predec_native
+    negx_b_d16_native negx_w_indexed_special_native negx_l_absw_native
+    negx_b_absl_special_native negx_b_a7_postinc_native negx_b_a7_predec_native
+)
+TEST_ORDER+=("${NEGX_NATIVE_MATRIX_NAMES[@]}")
 # Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
@@ -1057,6 +1073,24 @@ for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_rotate_name"]=2
 done
 unset _rotate_name
+for _negx_name in "${NEGX_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_negx_name"]=1
+    NATIVE_REPLAY_PC["$_negx_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_negx_name"]=2
+done
+unset _negx_name
+NATIVE_REPLAY_BYTES[negx_b_aind_special_native]="A000 80"
+NATIVE_REPLAY_BYTES[negx_w_postinc_native]="A000 00 A001 00"
+NATIVE_REPLAY_BYTES[negx_l_predec_native]="A000 00 A001 00 A002 00 A003 00"
+NATIVE_REPLAY_BYTES[negx_b_d16_native]="A010 80"
+NATIVE_REPLAY_BYTES[negx_w_indexed_special_native]="A002 80 A003 00"
+NATIVE_REPLAY_BYTES[negx_l_absw_native]="6000 80 6001 00 6002 00 6003 00"
+NATIVE_REPLAY_BYTES[negx_b_absl_special_native]="A000 00"
+NATIVE_REPLAY_BYTES[negx_b_a7_postinc_native]="A000 80"
+NATIVE_REPLAY_BYTES[negx_b_a7_predec_native]="A000 00"
+SPECIAL_MEMORY_TESTS[negx_b_aind_special_native]=1
+SPECIAL_MEMORY_TESTS[negx_w_indexed_special_native]=1
+SPECIAL_MEMORY_TESTS[negx_b_absl_special_native]=1
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -1156,6 +1190,66 @@ TESTS[negx_with_x]="003C 0010 7005 4080"
 # ANDI #0xEF,CCR clears X; MOVEQ #0,D0; NEGX.L D0
 # ANDI.B #imm,CCR = 023C 00EF; MOVEQ #0,D0 = 7000; NEGX.L D0 = 4080
 TESTS[negx_zero]="023C 00EF 7000 4080"
+# Exact-opcode NEGX matrix. Register forms contain only the audited opcode;
+# B2_TEST_INIT supplies the operand and X/Z state so exact-PC replay is honest.
+TESTS[negx_b_zero_x0_z1_native]="4000"
+TESTS[negx_w_zero_x0_z1_native]="4040"
+TESTS[negx_l_zero_x0_z1_native]="4080"
+TESTS[negx_b_zero_x0_z0_native]="4000"
+TESTS[negx_w_zero_x0_z0_native]="4040"
+TESTS[negx_l_zero_x0_z0_native]="4080"
+TESTS[negx_b_zero_x1_z1_native]="4000"
+TESTS[negx_w_zero_x1_z1_native]="4040"
+TESTS[negx_l_zero_x1_z1_native]="4080"
+TESTS[negx_b_min_x0_overflow_native]="4000"
+TESTS[negx_w_min_x0_overflow_native]="4040"
+TESTS[negx_l_min_x0_overflow_native]="4080"
+TESTS[negx_b_min_x1_native]="4000"
+TESTS[negx_w_min_x1_native]="4040"
+TESTS[negx_l_min_x1_native]="4080"
+# Full-SR replacement kills every NEGX output flag, selecting flag_subx's
+# no-flags lowering while the data result still consumes the incoming X bit.
+TESTS[negx_b_min_x1_nf_native]="4000 46FC 2700"
+TESTS[negx_w_min_x1_nf_native]="4040 46FC 2700"
+TESTS[negx_l_min_x1_nf_native]="4080 46FC 2700"
+# Memory RMW forms append a load from the modified address so the dump proves
+# both the stored result and the architectural address-register writeback.
+TESTS[negx_b_aind_special_native]="4010 40C2 1010"
+TESTS[negx_w_postinc_native]="4058 40C2 3028 FFFE"
+TESTS[negx_l_predec_native]="40A0 40C2 2010"
+TESTS[negx_b_d16_native]="4028 0010 40C2 1028 0010"
+TESTS[negx_w_indexed_special_native]="4070 1000 40C2 3030 1000"
+TESTS[negx_l_absw_native]="40B8 6000 40C2 2038 6000"
+TESTS[negx_b_absl_special_native]="4039 0000 A000 40C2 1039 0000 A000"
+TESTS[negx_b_a7_postinc_native]="401F 40C2 102F FFFE"
+TESTS[negx_b_a7_predec_native]="4027 40C2 1017"
+EXPECTED_REG_FIELDS[negx_b_zero_x0_z1_native]="D0=A5A50000 SR=2704"
+EXPECTED_REG_FIELDS[negx_w_zero_x0_z1_native]="D0=A5A50000 SR=2704"
+EXPECTED_REG_FIELDS[negx_l_zero_x0_z1_native]="D0=00000000 SR=2704"
+EXPECTED_REG_FIELDS[negx_b_zero_x0_z0_native]="D0=A5A50000 SR=2700"
+EXPECTED_REG_FIELDS[negx_w_zero_x0_z0_native]="D0=A5A50000 SR=2700"
+EXPECTED_REG_FIELDS[negx_l_zero_x0_z0_native]="D0=00000000 SR=2700"
+EXPECTED_REG_FIELDS[negx_b_zero_x1_z1_native]="D0=A5A500FF SR=2719"
+EXPECTED_REG_FIELDS[negx_w_zero_x1_z1_native]="D0=A5A5FFFF SR=2719"
+EXPECTED_REG_FIELDS[negx_l_zero_x1_z1_native]="D0=FFFFFFFF SR=2719"
+EXPECTED_REG_FIELDS[negx_b_min_x0_overflow_native]="D0=A5A50080 SR=271B"
+EXPECTED_REG_FIELDS[negx_w_min_x0_overflow_native]="D0=A5A58000 SR=271B"
+EXPECTED_REG_FIELDS[negx_l_min_x0_overflow_native]="D0=80000000 SR=271B"
+EXPECTED_REG_FIELDS[negx_b_min_x1_native]="D0=A5A5007F SR=2711"
+EXPECTED_REG_FIELDS[negx_w_min_x1_native]="D0=A5A57FFF SR=2711"
+EXPECTED_REG_FIELDS[negx_l_min_x1_native]="D0=7FFFFFFF SR=2711"
+EXPECTED_REG_FIELDS[negx_b_min_x1_nf_native]="D0=A5A5007F SR=2700"
+EXPECTED_REG_FIELDS[negx_w_min_x1_nf_native]="D0=A5A57FFF SR=2700"
+EXPECTED_REG_FIELDS[negx_l_min_x1_nf_native]="D0=7FFFFFFF SR=2700"
+EXPECTED_REG_FIELDS[negx_b_aind_special_native]="D0=A5A50080 D2=0000271B A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[negx_w_postinc_native]="D0=A5A50000 D2=00002704 A0=0000A002 SR=2704"
+EXPECTED_REG_FIELDS[negx_l_predec_native]="D0=FFFFFFFF D2=00002719 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[negx_b_d16_native]="D0=A5A5007F D2=00002711 A0=0000A000 SR=2710"
+EXPECTED_REG_FIELDS[negx_w_indexed_special_native]="D0=A5A58000 D1=00000002 D2=0000271B A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[negx_l_absw_native]="D0=80000000 D2=0000271B SR=2718"
+EXPECTED_REG_FIELDS[negx_b_absl_special_native]="D0=A5A50000 D2=00002700 SR=2704"
+EXPECTED_REG_FIELDS[negx_b_a7_postinc_native]="D0=A5A50080 D2=0000271B A7=0000A002 SR=2718"
+EXPECTED_REG_FIELDS[negx_b_a7_predec_native]="D0=A5A500FF D2=00002719 A7=0000A000 SR=2718"
 # ADDX_BASIC: ORI #0x10,CCR (set X); MOVEQ #5,D0; MOVEQ #3,D1; ADDX.L D1,D0
 # 5 + 3 + X(1) = 9
 # ORI.B #0x10,CCR = 003C 0010; MOVEQ #5,D0 = 7005; MOVEQ #3,D1 = 7203; ADDX.L D1,D0 = D181
@@ -2844,6 +2938,34 @@ TESTS[fuzz_flags_4]="003C 001A D584 4A82"
 
 declare -A SENTINEL_A6
 declare -A INIT_REGS   # optional initial register state (D0-D7 A0-A7 [SR])
+_NEGX_INIT_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+for _negx_width in b w; do
+    INIT_REGS["negx_${_negx_width}_zero_x0_z1_native"]="A5A50000 $_NEGX_INIT_ZERO_TAIL 00002704"
+    INIT_REGS["negx_${_negx_width}_zero_x0_z0_native"]="A5A50000 $_NEGX_INIT_ZERO_TAIL 00002700"
+    INIT_REGS["negx_${_negx_width}_zero_x1_z1_native"]="A5A50000 $_NEGX_INIT_ZERO_TAIL 00002714"
+done
+INIT_REGS[negx_l_zero_x0_z1_native]="00000000 $_NEGX_INIT_ZERO_TAIL 00002704"
+INIT_REGS[negx_l_zero_x0_z0_native]="00000000 $_NEGX_INIT_ZERO_TAIL 00002700"
+INIT_REGS[negx_l_zero_x1_z1_native]="00000000 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_b_min_x0_overflow_native]="A5A50080 $_NEGX_INIT_ZERO_TAIL 00002704"
+INIT_REGS[negx_w_min_x0_overflow_native]="A5A58000 $_NEGX_INIT_ZERO_TAIL 00002704"
+INIT_REGS[negx_l_min_x0_overflow_native]="80000000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00002100 00002200 00002300 00002400 00002500 00002600 007EFF00 00002704"
+INIT_REGS[negx_b_min_x1_native]="A5A50080 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_w_min_x1_native]="A5A58000 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_l_min_x1_native]="80000000 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_b_min_x1_nf_native]="A5A50080 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_w_min_x1_nf_native]="A5A58000 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_l_min_x1_nf_native]="80000000 $_NEGX_INIT_ZERO_TAIL 00002714"
+INIT_REGS[negx_b_aind_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[negx_w_postinc_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[negx_l_predec_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A004 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[negx_b_d16_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[negx_w_indexed_special_native]="A5A50000 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[negx_l_absw_native]="00000000 $_NEGX_INIT_ZERO_TAIL 00002704"
+INIT_REGS[negx_b_absl_special_native]="A5A50000 $_NEGX_INIT_ZERO_TAIL 00002700"
+INIT_REGS[negx_b_a7_postinc_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00002704"
+INIT_REGS[negx_b_a7_predec_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 00002714"
+unset _negx_width _NEGX_INIT_ZERO_TAIL
 # Exact-anchor replay skips each setup prefix, so restore the audited operands
 # explicitly rather than collapsing every pre-existing CHK.W case to 0 <= 0.
 INIT_REGS[chk_w_in_range]="00000008 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
@@ -3148,6 +3270,12 @@ SENTINEL_A6[abcd_basic]="a60100d0"
 SENTINEL_A6[sbcd_basic]="a60100d1"
 SENTINEL_A6[negx_with_x]="a60100d2"
 SENTINEL_A6[negx_zero]="a60100d3"
+_negx_sentinel_id=1
+for _negx_name in "${NEGX_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_negx_name"] 'a606%04x' "$_negx_sentinel_id"
+    ((_negx_sentinel_id+=1))
+done
+unset _negx_name _negx_sentinel_id
 SENTINEL_A6[addx_basic]="a60100d4"
 SENTINEL_A6[subx_basic]="a60100d5"
 SENTINEL_A6[ext_word]="a60100d6"
@@ -4574,6 +4702,10 @@ for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_rotate_name"]=1
 done
 unset _rotate_name
+for _negx_name in "${NEGX_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_negx_name"]=1
+done
+unset _negx_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

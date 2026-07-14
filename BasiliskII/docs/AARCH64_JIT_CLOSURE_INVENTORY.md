@@ -17,7 +17,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 32 | 44 | 0 | 54 |
+| generator | 130 | 33 | 44 | 0 | 53 |
 | midfunc | 422 | 152 | 0 | 119 | 151 |
 | emitter_api | 294 | 0 | 0 | 91 | 203 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 97 | `NEGX` | generator:`i_NEGX` |
 | 97 | `TAS` | generator:`i_TAS`, midfunc:`jff_TAS` |
 | 94 | `MOVE` | generator:`i_MOVE`, midfunc:`jff_MOVE_b`, midfunc:`jff_MOVE_w`, midfunc:`jnf_MOVE_b`, midfunc:`jnf_MOVE_w` |
 | 94 | `MOVE_b_imm` | midfunc:`jff_MOVE_b_imm`, midfunc:`jnf_MOVE_b_imm` |
@@ -62,14 +61,16 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 90 | `BSET_l_imm` | midfunc:`jff_BSET_l_imm`, midfunc:`jnf_BSET_l_imm` |
 | 90 | `BTST` | generator:`i_BTST`, midfunc:`jff_BTST_b`, midfunc:`jff_BTST_l` |
 | 90 | `BTST_b_imm` | midfunc:`jff_BTST_b_imm` |
+| 90 | `BTST_l_imm` | midfunc:`jff_BTST_l_imm` |
 
-## Accepted closure target
+## Accepted closure targets
 
-`MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
+- `MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
+- `NEGX` (`i_NEGX`) is closed by `AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md`. Its six `jff_/jnf_NEGX_{b,w,l}` namesakes remain unreachable; the live generator uses the shared repaired `flag_subx` -> `sbb_b/w/l` lifecycle.
 
 ## Next selected family
 
-`NEGX` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_NEGX`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`TAS` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_TAS`, midfunc:`jff_TAS`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

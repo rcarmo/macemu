@@ -36,7 +36,10 @@ sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 # tick independently.
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
 MOVEM_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007ef000 2700"
-declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked)
+declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision)
+if [[ -n "${B2_REGPRESSURE_CELLS:-}" ]]; then
+  read -r -a CELLS <<<"${B2_REGPRESSURE_CELLS//,/ }"
+fi
 declare -A CELL_HEX=(
   [mulu_w_d16_a0_live_a0]="2042 20BC 1122 3344 43F9 0000 2040 337C 0005 0012 3E3C 003F 2042 2244 3005 C0E9 0012 2658 51CF FFF2 2C7C A6AA 55CC"
   # Establish X=1 and 0x8000 at (A0), then keep every non-SP source register
@@ -53,42 +56,66 @@ declare -A CELL_HEX=(
   # toward its A5 base v13 while mov_l_rr copies the original base; the source
   # lock must reject that collision before predecrement transfer begins.
   [movem_predec_cursor_base_locked]="48E5 FFFE 4CDD 7FFF 2C7C A6AA 55CF"
+  # TST first materialises D0 in a host register. Force NEGX's zero-valued S1
+  # destination scratch toward that still-live source mapping; each shared
+  # sbb_b/w/l MIDFUNC must pin the original source while acquiring its RMW dst.
+  [negx_b_source_dst_collision]="4A00 4000 40C2 2C7C A6AA 55D0"
+  [negx_w_source_dst_collision]="4A40 4040 40C2 2C7C A6AA 55D1"
+  [negx_l_source_dst_collision]="4A80 4080 40C2 2C7C A6AA 55D2"
 )
 declare -A CELL_INIT=(
   [mulu_w_d16_a0_live_a0]="$INIT"
   [roxrw_mem_x_live_all]="$INIT"
   [mullu64_mem_source_locked_dl]="$INIT"
   [movem_predec_cursor_base_locked]="$MOVEM_INIT"
+  [negx_b_source_dst_collision]="A5A50080 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2704"
+  [negx_w_source_dst_collision]="A5A58000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2704"
+  [negx_l_source_dst_collision]="80000000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2704"
 )
 declare -A CELL_PC=(
   [mulu_w_d16_a0_live_a0]=0x00001018
   [roxrw_mem_x_live_all]=0x0000100a
   [mullu64_mem_source_locked_dl]=0x00001012
   [movem_predec_cursor_base_locked]=0x00001000
+  [negx_b_source_dst_collision]=0x00001000
+  [negx_w_source_dst_collision]=0x00001000
+  [negx_l_source_dst_collision]=0x00001000
 )
 declare -A CELL_ALIAS_VREG=(
   [mulu_w_d16_a0_live_a0]=8
   [roxrw_mem_x_live_all]=8
   [mullu64_mem_source_locked_dl]=0
   [movem_predec_cursor_base_locked]=13
+  [negx_b_source_dst_collision]=0
+  [negx_w_source_dst_collision]=0
+  [negx_l_source_dst_collision]=0
 )
 declare -A CELL_SCRATCH_VREG=(
   [mulu_w_d16_a0_live_a0]=22
   [roxrw_mem_x_live_all]=21
   [mullu64_mem_source_locked_dl]=20
   [movem_predec_cursor_base_locked]=22
+  [negx_b_source_dst_collision]=20
+  [negx_w_source_dst_collision]=20
+  [negx_l_source_dst_collision]=20
 )
 declare -A CELL_REQUIRE_PIN=(
   [mulu_w_d16_a0_live_a0]=0
   [roxrw_mem_x_live_all]=1
   [mullu64_mem_source_locked_dl]=0
   [movem_predec_cursor_base_locked]=1
+  [negx_b_source_dst_collision]=0
+  [negx_w_source_dst_collision]=0
+  [negx_l_source_dst_collision]=0
 )
 declare -A CELL_REQUIRE_SKIP=(
   [mulu_w_d16_a0_live_a0]=0
   [roxrw_mem_x_live_all]=0
   [mullu64_mem_source_locked_dl]=1
   [movem_predec_cursor_base_locked]=1
+  [negx_b_source_dst_collision]=1
+  [negx_w_source_dst_collision]=1
+  [negx_l_source_dst_collision]=1
 )
 run_one(){
   local cell="$1"

@@ -113,6 +113,7 @@ mulu_large
 nbcd_basic
 negx_with_x
 negx_zero
+negx_l_min_x0_overflow_native
 sbcd_basic
 subx_basic
 dbne_loop_cmpi
