@@ -3317,6 +3317,8 @@ MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 	uae_s16 tmp;
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	prepare_arithmetic_exception(exception_idx);
+	/* Signed overflow detection uses ANDS/CMP; preserve incoming Z first. */
+	MRS_NZCV_x(REG_WORK4);
 	if (isconst(s) && (uae_s16)live.state[s].val != 0) {
 		tmp = (uae_s16)live.state[s].val;
 		d = rmw(d);
@@ -3356,10 +3358,11 @@ MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 	BEQ_i(0); 														// positive result, no overflow
 	CMP_ww(REG_WORK3, REG_WORK2);
 	branch_negative_fit = (uae_u32*)get_target();
+	/* REG_WORK4 still carries the pre-division NZCV snapshot. */
 	BEQ_i(0);															// no overflow
 
 	// Overflow sets N/V, clears C, and preserves the previous Z value.
-	MRS_NZCV_x(REG_WORK1);
+	MOV_xx(REG_WORK1, REG_WORK4);
 	SET_xxbit(REG_WORK1, REG_WORK1, 31);
 	SET_xxVflag(REG_WORK1, REG_WORK1);
 	CLEAR_xxCflag(REG_WORK1, REG_WORK1);
@@ -3401,26 +3404,28 @@ MENDFUNC(2,jff_DIVS,(RW4 d, RR4 s))
 
 MIDFUNC(3,jnf_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 {
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_zero_end;
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
-	rem = writereg(rem);
+	/* Divide-by-zero must leave both architectural destinations unchanged. */
+	rem = rmw(rem);
 
-	CBNZ_wi(s1, 5);     // src is not 0
-
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(s1, 0);
 	emit_arithmetic_exception(5, exception_idx);
-	B_i(4);        // end_of_op
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
 
-	// src is not 0
 	UDIV_www(REG_WORK1, d, s1);
-
-	// Here we have to calc remainder
 	MSUB_wwww(rem, s1, REG_WORK1, d);
+	/* The quotient is architecturally last when rem aliases d. */
 	MOV_ww(d, REG_WORK1);
 
-// end_of_op
-
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
 	unlock2(rem);
 	unlock2(d);
 	unlock2(s1);
@@ -3429,29 +3434,27 @@ MENDFUNC(3,jnf_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 
 MIDFUNC(3,jff_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 {
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_zero_end;
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
-	rem = writereg(rem);
+	rem = rmw(rem);
 
-	CBNZ_wi(s1, 5);     // src is not 0
-
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(s1, 0);
 	emit_arithmetic_exception(5, exception_idx);
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
 
-	B_i(5);        // end_of_op
-
-	// src is not 0
 	UDIV_www(REG_WORK1, d, s1);
-
-	// Here we have to calc flags and remainder
-	TST_ww(REG_WORK1, REG_WORK1);
-
 	MSUB_wwww(rem, s1, REG_WORK1, d);
 	MOV_ww(d, REG_WORK1);
+	TST_ww(REG_WORK1, REG_WORK1);
 
-	// end_of_op
-
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
 	flags_carry_inverted = false;
 	unlock2(rem);
 	unlock2(d);
@@ -3461,31 +3464,43 @@ MENDFUNC(3,jff_DIVLU32,(RW4 d, RR4 s1, W4 rem))
 
 MIDFUNC(3,jnf_DIVLS32,(RW4 d, RR4 s1, W4 rem))
 {
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_success;
+	uae_u32 *branch_zero_end;
+	uae_u32 *branch_overflow_end;
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
-	rem = writereg(rem);
+	rem = rmw(rem);
 
-	CBNZ_wi(s1, 5);     // src is not 0
-
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(s1, 0);
 	emit_arithmetic_exception(5, exception_idx);
-	B_i(7);        // end_of_op
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
 
-	// src is not 0
-	SDIV_www(REG_WORK1, d, s1);
+	/* Divide in 64-bit signed space so INT32_MIN / -1 remains +0x80000000
+	 * and can be rejected instead of inheriting AArch64 SDIV.W saturation. */
+	SXTW_xw(REG_WORK3, d);
+	SXTW_xw(REG_WORK4, s1);
+	SDIV_xxx(REG_WORK1, REG_WORK3, REG_WORK4);
+	SXTW_xw(REG_WORK2, REG_WORK1);
+	CMP_xx(REG_WORK2, REG_WORK1);
+	branch_success = (uae_u32 *)get_target();
+	BEQ_i(0);
+	branch_overflow_end = (uae_u32 *)get_target();
+	B_i(0);
 
-	// Here we have to calc remainder
-	MSUB_wwww(rem, s1, REG_WORK1, d);
-
-	EOR_www(REG_WORK3, rem, d);	// If sign of remainder and first operand differs, change sign of remainder
-	TBZ_wii(REG_WORK3, 31, 2);
-	NEG_ww(rem, rem);
-
+	write_jmp_target(branch_success, (uintptr)get_target());
+	MSUB_xxxx(REG_WORK2, REG_WORK4, REG_WORK1, REG_WORK3);
+	MOV_ww(rem, REG_WORK2);
+	/* m68k_divl stores remainder first and quotient second. */
 	MOV_ww(d, REG_WORK1);
 
-	// end_of_op
-
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
 	unlock2(rem);
 	unlock2(d);
 	unlock2(s1);
@@ -3494,33 +3509,55 @@ MENDFUNC(3,jnf_DIVLS32,(RW4 d, RR4 s1, W4 rem))
 
 MIDFUNC(3,jff_DIVLS32,(RW4 d, RR4 s1, W4 rem))
 {
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_success;
+	uae_u32 *branch_zero_end;
+	uae_u32 *branch_overflow_end;
+	int saved_flags;
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	prepare_arithmetic_exception(exception_idx);
 	s1 = readreg(s1);
 	d = rmw(d);
-	rem = writereg(rem);
+	rem = rmw(rem);
+	/* gencomp preserved the incoming CCR in FLAGTMP before DIVL. Keep that
+	 * value available after the signed fit comparison clobbers host NZCV. */
+	saved_flags = readreg(FLAGTMP);
 
-	CBNZ_wi(s1, 5);     // src is not 0
-
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(s1, 0);
 	emit_arithmetic_exception(5, exception_idx);
-	B_i(8);        // end_of_op
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
 
-	// src is not 0
-	SDIV_www(REG_WORK1, d, s1);
+	SXTW_xw(REG_WORK3, d);
+	SXTW_xw(REG_WORK4, s1);
+	SDIV_xxx(REG_WORK1, REG_WORK3, REG_WORK4);
+	SXTW_xw(REG_WORK2, REG_WORK1);
+	CMP_xx(REG_WORK2, REG_WORK1);
+	branch_success = (uae_u32 *)get_target();
+	BEQ_i(0);
 
-	// Here we have to calc remainder
-	MSUB_wwww(rem, s1, REG_WORK1, d);
+	/* Signed overflow leaves both destinations unchanged, sets N/V, clears C,
+	 * and preserves the incoming Z and X values. */
+	MOV_ww(REG_WORK2, saved_flags);
+	SET_xxbit(REG_WORK2, REG_WORK2, 31);
+	SET_xxVflag(REG_WORK2, REG_WORK2);
+	CLEAR_xxCflag(REG_WORK2, REG_WORK2);
+	MSR_NZCV_x(REG_WORK2);
+	branch_overflow_end = (uae_u32 *)get_target();
+	B_i(0);
 
-	EOR_www(REG_WORK3, rem, d);	// If sign of remainder and first operand differs, change sign of remainder
-	TBZ_wii(REG_WORK3, 31, 2);
-	NEG_ww(REG_WORK2, REG_WORK2);
-
+	write_jmp_target(branch_success, (uintptr)get_target());
+	MSUB_xxxx(REG_WORK2, REG_WORK4, REG_WORK1, REG_WORK3);
+	MOV_ww(rem, REG_WORK2);
 	MOV_ww(d, REG_WORK1);
 	TST_ww(d, d);
 
-	// end_of_op
-
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
 	flags_carry_inverted = false;
+	unlock2(saved_flags);
 	unlock2(rem);
 	unlock2(d);
 	unlock2(s1);
@@ -3534,35 +3571,40 @@ MENDFUNC(3,jff_DIVLS32,(RW4 d, RR4 s1, W4 rem))
  */
 MIDFUNC(3,jnf_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
 {
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_success;
+	uae_u32 *branch_zero_end;
+	uae_u32 *branch_overflow_end;
 	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	prepare_arithmetic_exception(exception_idx);
 	src = readreg(src);
 	dq = rmw(dq);
 	dr = rmw(dr);
 
-	// Division by zero check
-	CBNZ_wi(src, 5);
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(src, 0);
 	emit_arithmetic_exception(5, exception_idx);
-	B_i(9);  // skip to end_of_op
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
 
-	// Combine {dr, dq} into 64-bit dividend in REG_WORK1.x
 	ORR_xxxLSLi(REG_WORK1, dq, dr, 32);
-
-	// 64-bit unsigned divide
-	UDIV_xxx(REG_WORK2, REG_WORK1, src);  // quotient in WORK2.x
-
-	// Check overflow: quotient must fit in 32 bits
+	UDIV_xxx(REG_WORK2, REG_WORK1, src);
 	LSR_xxi(REG_WORK3, REG_WORK2, 32);
-	CBNZ_xi(REG_WORK3, 4);  // overflow → skip store
+	branch_success = (uae_u32 *)get_target();
+	CBZ_xi(REG_WORK3, 0);
+	branch_overflow_end = (uae_u32 *)get_target();
+	B_i(0);
 
-	// Remainder = dividend - quotient * divisor
+	write_jmp_target(branch_success, (uintptr)get_target());
 	MSUB_xxxx(REG_WORK3, src, REG_WORK2, REG_WORK1);
 	/* Match m68k_divl's architecturally visible alias ordering: if dr and dq
 	 * name the same register, the quotient write wins. */
 	MOV_ww(dr, REG_WORK3);
 	MOV_ww(dq, REG_WORK2);
 
-	// end_of_op
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
 	unlock2(dr);
 	unlock2(dq);
 	unlock2(src);
@@ -3628,47 +3670,6 @@ MENDFUNC(3,jff_DIVLU64,(RW4 dq, RW4 dr, RR4 src))
  */
 MIDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 {
-	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
-	prepare_arithmetic_exception(exception_idx);
-	src = readreg(src);
-	dq = rmw(dq);
-	dr = rmw(dr);
-
-	// Division by zero check
-	CBNZ_wi(src, 5);
-	emit_arithmetic_exception(5, exception_idx);
-	B_i(12); // skip to end_of_op
-
-	// Combine {dr, dq} into 64-bit signed dividend in REG_WORK1.x
-	ORR_xxxLSLi(REG_WORK1, dq, dr, 32);
-
-	// Sign-extend src to 64 bits: SXTW
-	SXTW_xw(REG_WORK4, src);
-
-	// 64-bit signed divide
-	SDIV_xxx(REG_WORK2, REG_WORK1, REG_WORK4);  // quotient in WORK2.x
-
-	// Check overflow: quotient must fit in signed 32 bits
-	// SXTW(quotient) must equal quotient
-	SXTW_xw(REG_WORK3, REG_WORK2);  // sign-extend low 32
-	CMP_xx(REG_WORK3, REG_WORK2);    // compare with full 64
-	BNE_i(4);                         // overflow → skip store
-
-	// Remainder = dividend - quotient * divisor
-	MSUB_xxxx(REG_WORK3, REG_WORK4, REG_WORK2, REG_WORK1);
-	/* Match m68k_divl's architecturally visible alias ordering. */
-	MOV_ww(dr, REG_WORK3);
-	MOV_ww(dq, REG_WORK2);
-
-	// end_of_op
-	unlock2(dr);
-	unlock2(dq);
-	unlock2(src);
-}
-MENDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
-
-MIDFUNC(3,jff_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
-{
 	uae_u32 *branch_nonzero;
 	uae_u32 *branch_success;
 	uae_u32 *branch_zero_end;
@@ -3693,9 +3694,54 @@ MIDFUNC(3,jff_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 	CMP_xx(REG_WORK3, REG_WORK2);
 	branch_success = (uae_u32 *)get_target();
 	BEQ_i(0);
+	branch_overflow_end = (uae_u32 *)get_target();
+	B_i(0);
 
-	/* Signed overflow has the same defined CCR contract as unsigned. */
-	MRS_NZCV_x(REG_WORK1);
+	write_jmp_target(branch_success, (uintptr)get_target());
+	MSUB_xxxx(REG_WORK3, REG_WORK4, REG_WORK2, REG_WORK1);
+	/* Match m68k_divl's architecturally visible alias ordering. */
+	MOV_ww(dr, REG_WORK3);
+	MOV_ww(dq, REG_WORK2);
+
+	write_jmp_target(branch_zero_end, (uintptr)get_target());
+	write_jmp_target(branch_overflow_end, (uintptr)get_target());
+	unlock2(dr);
+	unlock2(dq);
+	unlock2(src);
+}
+MENDFUNC(3,jnf_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
+
+MIDFUNC(3,jff_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
+{
+	uae_u32 *branch_nonzero;
+	uae_u32 *branch_success;
+	uae_u32 *branch_zero_end;
+	uae_u32 *branch_overflow_end;
+	int saved_flags;
+	const uintptr exception_idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
+	prepare_arithmetic_exception(exception_idx);
+	src = readreg(src);
+	dq = rmw(dq);
+	dr = rmw(dr);
+	saved_flags = readreg(FLAGTMP);
+
+	branch_nonzero = (uae_u32 *)get_target();
+	CBNZ_wi(src, 0);
+	emit_arithmetic_exception(5, exception_idx);
+	branch_zero_end = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(branch_nonzero, (uintptr)get_target());
+
+	ORR_xxxLSLi(REG_WORK1, dq, dr, 32);
+	SXTW_xw(REG_WORK4, src);
+	SDIV_xxx(REG_WORK2, REG_WORK1, REG_WORK4);
+	SXTW_xw(REG_WORK3, REG_WORK2);
+	CMP_xx(REG_WORK3, REG_WORK2);
+	branch_success = (uae_u32 *)get_target();
+	BEQ_i(0);
+
+	/* CMP clobbered host Z; reconstruct overflow flags from the saved CCR. */
+	MOV_ww(REG_WORK1, saved_flags);
 	SET_xxbit(REG_WORK1, REG_WORK1, 31);
 	SET_xxVflag(REG_WORK1, REG_WORK1);
 	CLEAR_xxCflag(REG_WORK1, REG_WORK1);
@@ -3713,6 +3759,7 @@ MIDFUNC(3,jff_DIVLS64,(RW4 dq, RW4 dr, RR4 src))
 	write_jmp_target(branch_zero_end, (uintptr)get_target());
 	write_jmp_target(branch_overflow_end, (uintptr)get_target());
 	flags_carry_inverted = false;
+	unlock2(saved_flags);
 	unlock2(dr);
 	unlock2(dq);
 	unlock2(src);

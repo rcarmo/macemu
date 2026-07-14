@@ -171,9 +171,9 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 ## BasiliskII 68K JIT
 
-**Current structural-audit gate (2026-07-13):** ✅
+**Current structural-audit gate (2026-07-14):** ✅
 **Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible at SHA-256 `09758be160430afd9222fe57499207eb361093e7f036d4fba63ff2e31aecefea`
-**JIT harness:** ✅ 507/507 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**JIT harness:** ✅ 523/523 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -205,9 +205,20 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**507 total vectors, all risky, score=100**
+**523 total vectors, all risky, score=100**
 
 ### Recent bug fixes (2026-07)
+
+- **DIVS/DIVL zero, overflow, flags, aliases, and branch geometry**
+  (2026-07-14): signed 32/32 DIVL now widens before division so
+  `INT32_MIN / -1` takes the architectural overflow path instead of inheriting
+  `SDIV.W` saturation. Conditional result registers use read/modify/write
+  allocation; all 28 DIVL zero/fit/overflow joins are patched structurally;
+  signed word and long overflow restore incoming Z after host fit comparisons.
+  Sixteen exact-PC vectors cover flag-live/no-flags, 32/64-bit signed/unsigned,
+  distinct and aliased result registers, source aliases, overflow, and precise
+  vector-5 state. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md`.
 
 - **ABCD/SBCD/NBCD arithmetic, flags, and A7 predecrement** (2026-07-13):
   the old AArch64 helpers used per-digit approximations instead of the

@@ -137,6 +137,14 @@ unreported execution. The accepted focused result is **31/31**, with
 - strict negative contracts, structural audit, shell syntax, and source hygiene:
   pass.
 
+## Subsequent family audit
+
+The next source-inventory tranche repairs signed word and long-division
+zero/overflow lifecycles and removes all remaining numeric DIVL joins. Its
+523-vector acceptance is documented in
+`AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md`; the 507-vector evidence above remains
+the historical BCD acceptance baseline.
+
 ## Validation host
 
 Host-native Orange Pi 6 Plus, CIX P1 (`CD8180`/`CD8160`) 12-core AArch64 SoC,

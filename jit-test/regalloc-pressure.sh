@@ -53,6 +53,7 @@ run_one(){
 run_one int
 run_one jit
 kill -9 "$XV" 2>/dev/null || true
+wait "$XV" 2>/dev/null || true
 PIN=$(grep -ac 'REGPRESSURE_PIN_HIT' "$RUN_DIR/jit.log" || true)
 NAT=$(grep -ac 'NATEXEC pc=00001018' "$RUN_DIR/jit.log" || true)
 INTERP=$(grep -ac 'INTERPOP pc=00001018' "$RUN_DIR/jit.log" || true)

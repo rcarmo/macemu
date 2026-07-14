@@ -300,7 +300,7 @@ TEST_ORDER+=(fpp_semantic_successor fscc_false_byte fbcc_false_operand_lengths)
 # rewriting the generated-style master ordering above.
 TEST_ORDER+=(chk_w_negative_trap_n chk_w_upper_trap_n_clear chk_l_negative_trap_n chk_l_upper_trap_n_clear chk_l_in_range_preserve_ccr)
 # Deferred arithmetic-exception and DIVL result-alias audit vectors.
-TEST_ORDER+=(divu_w_zero_frame divs_w_zero_frame divu_l_zero_frame divs_l_zero_frame divu_l64_zero_frame divs_l64_zero_frame divu_l64_same_dq_dr divs_l64_same_dq_dr divu_l64_same_dq_dr_nf divs_l64_same_dq_dr_nf trapv_taken_frame trapv_not_taken_preserve)
+TEST_ORDER+=(divu_w_zero_frame divs_w_zero_frame divs_w_overflow_preserve_z divs_w_imm_overflow_preserve_z divu_l_zero_frame divs_l_zero_frame divu_l32_zero_distinct divs_l32_zero_distinct divu_l32_success_nf divs_l32_success_nf divu_l32_same_dq_dr_nf divs_l32_same_dq_dr_nf divu_l32_src_dr_alias_nf divs_l32_src_dr_alias_nf divu_l64_zero_frame divs_l64_zero_frame divu_l64_same_dq_dr divs_l64_same_dq_dr divu_l64_same_dq_dr_nf divs_l64_same_dq_dr_nf divu_l64_overflow divu_l64_overflow_nf divs_l64_overflow divs_l64_overflow_nf divs_l32_overflow divs_l32_overflow_nf trapv_taken_frame trapv_not_taken_preserve)
 # Shared SR/control/cache semantic-service coverage.
 TEST_ORDER+=(fullsr_orsr_privilege_vector8 fullsr_andsr_privilege_vector8 fullsr_eorsr_privilege_vector8 fullsr_mv2sr_privilege_vector8 fullsr_mvsr_privilege_vector8 system_usp_roundtrip reset_privilege_vector8 usp_privilege_vector8 stop_clear_s_vector8 stop_privilege_vector8 movec_privilege_vector8 rte_privilege_vector8 cache_privilege_vector8 cache_supervisor_successors)
 # Exact-PC bitfield service coverage spans every operation and each legal EA decoder.
@@ -341,6 +341,12 @@ declare -A EXPECTED_REG_FIELDS
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
 declare -A NATIVE_REPLAY_TESTS=(
+    [divs_w_imm_overflow_preserve_z]=1
+    [divu_l32_same_dq_dr_nf]=1
+    [divs_l32_same_dq_dr_nf]=1
+    [divu_l32_src_dr_alias_nf]=1
+    [divs_l32_src_dr_alias_nf]=1
+    [divs_w_overflow_preserve_z]=1
     [ccr_ori_exact_bits]=1
     [ccr_andi_exact_mask]=1
     [ccr_eori_exact_toggle]=1
@@ -418,12 +424,22 @@ declare -A NATIVE_REPLAY_TESTS=(
     [divs_w_zero_frame]=1
     [divu_l_zero_frame]=1
     [divs_l_zero_frame]=1
+    [divu_l32_zero_distinct]=1
+    [divs_l32_zero_distinct]=1
+    [divu_l32_success_nf]=1
+    [divs_l32_success_nf]=1
     [divu_l64_zero_frame]=1
     [divs_l64_zero_frame]=1
     [divu_l64_same_dq_dr]=1
     [divs_l64_same_dq_dr]=1
     [divu_l64_same_dq_dr_nf]=1
     [divs_l64_same_dq_dr_nf]=1
+    [divu_l64_overflow]=1
+    [divu_l64_overflow_nf]=1
+    [divs_l64_overflow]=1
+    [divs_l64_overflow_nf]=1
+    [divs_l32_overflow]=1
+    [divs_l32_overflow_nf]=1
     [trapv_taken_frame]=1
     [trapv_not_taken_preserve]=1
     [cas_b_predec]=1
@@ -508,14 +524,30 @@ declare -A NATIVE_REPLAY_PC=(
     [chk_l_in_range_preserve_ccr]=0x1010
     [divu_w_zero_frame]=0x101c
     [divs_w_zero_frame]=0x101c
+    [divs_w_overflow_preserve_z]=0x100c
+    [divs_w_imm_overflow_preserve_z]=0x100a
     [divu_l_zero_frame]=0x101c
     [divs_l_zero_frame]=0x101c
+    [divu_l32_zero_distinct]=0x1022
+    [divs_l32_zero_distinct]=0x1022
+    [divu_l32_success_nf]=0x1016
+    [divs_l32_success_nf]=0x1016
+    [divu_l32_same_dq_dr_nf]=0x1010
+    [divs_l32_same_dq_dr_nf]=0x1010
+    [divu_l32_src_dr_alias_nf]=0x1010
+    [divs_l32_src_dr_alias_nf]=0x1010
     [divu_l64_zero_frame]=0x1022
     [divs_l64_zero_frame]=0x1022
     [divu_l64_same_dq_dr]=0x1010
     [divs_l64_same_dq_dr]=0x1010
     [divu_l64_same_dq_dr_nf]=0x1010
     [divs_l64_same_dq_dr_nf]=0x1010
+    [divu_l64_overflow]=0x1016
+    [divu_l64_overflow_nf]=0x1016
+    [divs_l64_overflow]=0x1016
+    [divs_l64_overflow_nf]=0x1016
+    [divs_l32_overflow]=0x1016
+    [divs_l32_overflow_nf]=0x1016
     [trapv_taken_frame]=0x1014
     [trapv_not_taken_preserve]=0x1004
     [bcd_abcd_zero_sticky_set]=0x100c
@@ -573,14 +605,30 @@ declare -A NATIVE_REPLAY_COUNT=(
     [chk_l_in_range_preserve_ccr]=2
     [divu_w_zero_frame]=2
     [divs_w_zero_frame]=2
+    [divs_w_overflow_preserve_z]=2
+    [divs_w_imm_overflow_preserve_z]=2
     [divu_l_zero_frame]=2
     [divs_l_zero_frame]=2
+    [divu_l32_zero_distinct]=2
+    [divs_l32_zero_distinct]=2
+    [divu_l32_success_nf]=2
+    [divs_l32_success_nf]=2
+    [divu_l32_same_dq_dr_nf]=2
+    [divs_l32_same_dq_dr_nf]=2
+    [divu_l32_src_dr_alias_nf]=2
+    [divs_l32_src_dr_alias_nf]=2
     [divu_l64_zero_frame]=2
     [divs_l64_zero_frame]=2
     [divu_l64_same_dq_dr]=2
     [divs_l64_same_dq_dr]=2
     [divu_l64_same_dq_dr_nf]=2
     [divs_l64_same_dq_dr_nf]=2
+    [divu_l64_overflow]=2
+    [divu_l64_overflow_nf]=2
+    [divs_l64_overflow]=2
+    [divs_l64_overflow_nf]=2
+    [divs_l32_overflow]=2
+    [divs_l32_overflow_nf]=2
     [trapv_taken_frame]=2
     [trapv_not_taken_preserve]=2
     # Prefix-bearing BCD vectors need one replay to trace the exact opcode
@@ -1800,6 +1848,12 @@ EXPECTED_REG_FIELDS[divu_w_zero_frame]="D0=12345678 D4=0000101e D5=0000101c D6=0
 # successor/opcode pair in the vector-5 format-2 frame.
 TESTS[divs_w_zero_frame]="7000 4E7B 0801 23FC 0000 1022 0000 0014 203C 8765 4321 7200 44FC 001F 81C1 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
 EXPECTED_REG_FIELDS[divs_w_zero_frame]="D0=87654321 D4=0000101e D5=0000101c D6=0000271d"
+# Signed word overflow must preserve incoming Z even though its ARM64 fit test
+# uses ANDS/CMP, while publishing N/V and clearing C.
+TESTS[divs_w_overflow_preserve_z]="203C 0001 0000 7201 44FC 0015 81C1 40C6"
+EXPECTED_REG_FIELDS[divs_w_overflow_preserve_z]="D0=00010000 D6=0000271e"
+TESTS[divs_w_imm_overflow_preserve_z]="203C 0001 0000 44FC 0015 81FC 0001 40C6"
+EXPECTED_REG_FIELDS[divs_w_imm_overflow_preserve_z]="D0=00010000 D6=0000271e"
 # Unsigned DIVL zero: preserve the complete CCR and dividend registers; the
 # stacked PC follows the four-byte opcode+extension while oldpc names opcode.
 TESTS[divu_l_zero_frame]="7000 4E7B 0801 23FC 0000 1024 0000 0014 203C 1357 9BDF 7200 44FC 001F 4C41 0000 60FE 4E71 3C17 282F 0002 2A2F 0008 7E67"
@@ -1828,6 +1882,45 @@ TESTS[divu_l64_same_dq_dr_nf]="203C 0000 0001 223C 0000 0002 44FC 001F 4C41 0400
 EXPECTED_REG_FIELDS[divu_l64_same_dq_dr_nf]="D0=80000000 D6=00002714 D7=00000000"
 TESTS[divs_l64_same_dq_dr_nf]="203C FFFF FFFF 223C 0000 0002 44FC 001F 4C41 0C00 7E00 40C6"
 EXPECTED_REG_FIELDS[divs_l64_same_dq_dr_nf]="D0=00000000 D6=00002714 D7=00000000"
+# The only overflowing signed 32/32 quotient is INT32_MIN / -1. DIVL must set
+# N/V, clear C, preserve X/Z, and leave both quotient and remainder registers
+# untouched. The no-flags form remains observable through the unchanged D2.
+TESTS[divs_l32_overflow]="203C 8000 0000 223C FFFF FFFF 243C 1234 5678 44FC 0015 4C41 0802 40C6"
+EXPECTED_REG_FIELDS[divs_l32_overflow]="D0=80000000 D2=12345678 D6=0000271e"
+TESTS[divs_l32_overflow_nf]="203C 8000 0000 223C FFFF FFFF 243C 1234 5678 44FC 0015 4C41 0802 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_overflow_nf]="D0=80000000 D2=12345678 D6=00002714 D7=00000000"
+# Distinct-remainder divide-by-zero vectors expose pure-write allocation bugs:
+# neither Dq nor Dr may change before the exact vector-5 format-2 frame.
+TESTS[divu_l32_zero_distinct]="7000 4E7B 0801 23FC 0000 102A 0000 0014 203C 1357 9BDF 243C 2468 ACE0 7200 44FC 001F 4C41 0002 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6D"
+EXPECTED_REG_FIELDS[divu_l32_zero_distinct]="D0=13579bdf D2=2468ace0 D4=00001026 D5=00001022 D6=0000271f"
+TESTS[divs_l32_zero_distinct]="7000 4E7B 0801 23FC 0000 102A 0000 0014 203C 89AB CDEF 243C 7654 3210 7200 44FC 001F 4C41 0802 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6E"
+EXPECTED_REG_FIELDS[divs_l32_zero_distinct]="D0=89abcdef D2=76543210 D4=00001026 D5=00001022 D6=0000271f"
+# Successful no-flags DIVL still has observable quotient/remainder and alias
+# ordering even though MOVEQ deliberately kills the instruction's NZVC result.
+TESTS[divu_l32_success_nf]="203C 0000 0064 223C 0000 0007 243C A5A5 5A5A 44FC 0015 4C41 0002 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l32_success_nf]="D0=0000000e D2=00000002 D6=00002714 D7=00000000"
+TESTS[divs_l32_success_nf]="203C FFFF FF9C 223C 0000 0007 243C A5A5 5A5A 44FC 0015 4C41 0802 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_success_nf]="D0=fffffff2 D2=fffffffe D6=00002714 D7=00000000"
+# Quotient/remainder aliasing must retain the quotient, while a source/Dr alias
+# must consume the divisor before the ordered remainder write.
+TESTS[divu_l32_same_dq_dr_nf]="203C 0000 0064 223C 0000 0007 44FC 0015 4C41 0000 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l32_same_dq_dr_nf]="D0=0000000e D6=00002714 D7=00000000"
+TESTS[divs_l32_same_dq_dr_nf]="203C FFFF FF9C 223C 0000 0007 44FC 0015 4C41 0800 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_same_dq_dr_nf]="D0=fffffff2 D6=00002714 D7=00000000"
+TESTS[divu_l32_src_dr_alias_nf]="203C 0000 0064 243C 0000 0007 44FC 0015 4C42 0002 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l32_src_dr_alias_nf]="D0=0000000e D2=00000002 D6=00002714 D7=00000000"
+TESTS[divs_l32_src_dr_alias_nf]="203C FFFF FF9C 243C 0000 0007 44FC 0015 4C42 0802 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_src_dr_alias_nf]="D0=fffffff2 D2=fffffffe D6=00002714 D7=00000000"
+# 64/32 overflow leaves both halves untouched. Live forms prove N/V/C/Z/X;
+# no-flags forms prove that the result path skips both architectural stores.
+TESTS[divu_l64_overflow]="203C 0000 0000 223C 0000 0001 243C 0000 0001 44FC 0015 4C41 0402 40C6"
+EXPECTED_REG_FIELDS[divu_l64_overflow]="D0=00000000 D2=00000001 D6=0000271e"
+TESTS[divu_l64_overflow_nf]="203C 0000 0000 223C 0000 0001 243C 0000 0001 44FC 0015 4C41 0402 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l64_overflow_nf]="D0=00000000 D2=00000001 D6=00002714 D7=00000000"
+TESTS[divs_l64_overflow]="203C 8000 0000 223C 0000 0001 243C 0000 0000 44FC 0015 4C41 0C02 40C6"
+EXPECTED_REG_FIELDS[divs_l64_overflow]="D0=80000000 D2=00000000 D6=0000271e"
+TESTS[divs_l64_overflow_nf]="203C 8000 0000 223C 0000 0001 243C 0000 0000 44FC 0015 4C41 0C02 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l64_overflow_nf]="D0=80000000 D2=00000000 D6=00002714 D7=00000000"
 # Taken TRAPV preserves all CCR bits and uses the same successor/opcode
 # format-2 address split as vector-5 arithmetic traps.
 TESTS[trapv_taken_frame]="7000 4E7B 0801 23FC 0000 101A 0000 001C 44FC 001F 4E76 60FE 4E71 3C17 282F 0002 2A2F 0008 7E69"
@@ -2120,14 +2213,30 @@ INIT_REGS[chk_l_upper_trap_n_clear]="00010000 0000FFFF 00000000 00000000 0000000
 INIT_REGS[chk_l_in_range_preserve_ccr]="00010000 00020000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
 INIT_REGS[divu_w_zero_frame]="12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_w_zero_frame]="87654321 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_w_overflow_preserve_z]="00010000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_w_imm_overflow_preserve_z]="00010000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
 INIT_REGS[divu_l_zero_frame]="13579BDF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_l_zero_frame]="89ABCDEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l32_zero_distinct]="13579BDF 00000000 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l32_zero_distinct]="89ABCDEF 00000000 76543210 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l32_success_nf]="00000064 00000007 A5A55A5A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_success_nf]="FFFFFF9C 00000007 A5A55A5A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l32_same_dq_dr_nf]="00000064 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_same_dq_dr_nf]="FFFFFF9C 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l32_src_dr_alias_nf]="00000064 00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_src_dr_alias_nf]="FFFFFF9C 00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
 INIT_REGS[divu_l64_zero_frame]="00000000 00000000 13579BDF 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_l64_zero_frame]="00000000 00000000 89ABCDEF FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divu_l64_same_dq_dr]="00000001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_l64_same_dq_dr]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divu_l64_same_dq_dr_nf]="00000001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[divs_l64_same_dq_dr_nf]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_overflow]="00000000 00000001 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l64_overflow_nf]="00000000 00000001 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l64_overflow]="80000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l64_overflow_nf]="80000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_overflow]="80000000 FFFFFFFF 12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_overflow_nf]="80000000 FFFFFFFF 12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
 INIT_REGS[trapv_taken_frame]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[trapv_not_taken_preserve]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
 # Exact-opcode BCD replays bypass each setup prefix. Restore the operands, X/Z
@@ -2762,14 +2871,30 @@ SENTINEL_A6[chk_l_upper_trap_n_clear]="a6c6e004"
 SENTINEL_A6[chk_l_in_range_preserve_ccr]="a6c6e005"
 SENTINEL_A6[divu_w_zero_frame]="a6d50001"
 SENTINEL_A6[divs_w_zero_frame]="a6d50002"
+SENTINEL_A6[divs_w_overflow_preserve_z]="a6d50017"
+SENTINEL_A6[divs_w_imm_overflow_preserve_z]="a6d5001c"
 SENTINEL_A6[divu_l_zero_frame]="a6d50003"
 SENTINEL_A6[divs_l_zero_frame]="a6d50004"
+SENTINEL_A6[divu_l32_zero_distinct]="a6d5000f"
+SENTINEL_A6[divs_l32_zero_distinct]="a6d50010"
+SENTINEL_A6[divu_l32_success_nf]="a6d50011"
+SENTINEL_A6[divs_l32_success_nf]="a6d50012"
+SENTINEL_A6[divu_l32_same_dq_dr_nf]="a6d50018"
+SENTINEL_A6[divs_l32_same_dq_dr_nf]="a6d50019"
+SENTINEL_A6[divu_l32_src_dr_alias_nf]="a6d5001a"
+SENTINEL_A6[divs_l32_src_dr_alias_nf]="a6d5001b"
 SENTINEL_A6[divu_l64_zero_frame]="a6d50007"
 SENTINEL_A6[divs_l64_zero_frame]="a6d50008"
 SENTINEL_A6[divu_l64_same_dq_dr]="a6d50009"
 SENTINEL_A6[divs_l64_same_dq_dr]="a6d5000a"
 SENTINEL_A6[divu_l64_same_dq_dr_nf]="a6d5000b"
 SENTINEL_A6[divs_l64_same_dq_dr_nf]="a6d5000c"
+SENTINEL_A6[divu_l64_overflow]="a6d50013"
+SENTINEL_A6[divu_l64_overflow_nf]="a6d50014"
+SENTINEL_A6[divs_l64_overflow]="a6d50015"
+SENTINEL_A6[divs_l64_overflow_nf]="a6d50016"
+SENTINEL_A6[divs_l32_overflow]="a6d5000d"
+SENTINEL_A6[divs_l32_overflow_nf]="a6d5000e"
 SENTINEL_A6[trapv_taken_frame]="a6d50005"
 SENTINEL_A6[trapv_not_taken_preserve]="a6d50006"
 SENTINEL_A6[sbcd_borrow_chain]="a6f03500"
@@ -2877,6 +3002,12 @@ SENTINEL_A6[branch_flush_bgt_zero]="a6c0e003"
 # Risk-focused subset used for strict mismatch-first autoresearch.
 # Only these vectors count toward risky_total progression.
 declare -A RISKY_TESTS=(
+    [divs_w_imm_overflow_preserve_z]=1
+    [divu_l32_same_dq_dr_nf]=1
+    [divs_l32_same_dq_dr_nf]=1
+    [divu_l32_src_dr_alias_nf]=1
+    [divs_l32_src_dr_alias_nf]=1
+    [divs_w_overflow_preserve_z]=1
     [cas_b_success]=1
     [cas_b_fail]=1
     [cas_b_predec]=1
@@ -3040,12 +3171,22 @@ declare -A RISKY_TESTS=(
     [divs_w_zero_frame]=1
     [divu_l_zero_frame]=1
     [divs_l_zero_frame]=1
+    [divu_l32_zero_distinct]=1
+    [divs_l32_zero_distinct]=1
+    [divu_l32_success_nf]=1
+    [divs_l32_success_nf]=1
     [divu_l64_zero_frame]=1
     [divs_l64_zero_frame]=1
     [divu_l64_same_dq_dr]=1
     [divs_l64_same_dq_dr]=1
     [divu_l64_same_dq_dr_nf]=1
     [divs_l64_same_dq_dr_nf]=1
+    [divu_l64_overflow]=1
+    [divu_l64_overflow_nf]=1
+    [divs_l64_overflow]=1
+    [divs_l64_overflow_nf]=1
+    [divs_l32_overflow]=1
+    [divs_l32_overflow_nf]=1
     [trapv_taken_frame]=1
     [trapv_not_taken_preserve]=1
     [muldiv]=1

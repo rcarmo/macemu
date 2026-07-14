@@ -43,18 +43,20 @@ After a successful build, `run.sh` executes `structural-audit.ts` before opcode 
 - privilege-before-extension ordering for system-control helpers and exact-PC contracts for RESET, STOP, RTE, USP moves, MOVEC, and CPUSH;
 - complete legal-opcode classification as native-generated code, semantic services, or architectural traps, with no fallback/null slots;
 - one flag-live `ABCD`/`SBCD`/`NBCD` lifecycle, patched correction joins, and `areg_byteinc[]` source/destination predecrement geometry;
+- 28 structurally patched DIVL zero/fit/overflow joins, widened signed 32/32 fit checks, conditional-destination preservation, and saved-Z overflow materialisation;
 - exact-PC replay state, including deterministic restoration of memory bytes mutated by predecrement BCD vectors.
 
 Each passing invariant emits a `METRIC structural_*=1` line. A structural failure stops the run before equivalence results can mask the engine defect.
 
 ## Current deterministic vectors
 
-`run.sh` currently covers 507 vectors across:
+`run.sh` currently covers 523 vectors across:
 - Decode/dispatch sanity (`nop`, `nop_triplet`)
 - Bit manipulation boundary behavior (`bitops`, `bitops_chg`, high-bit immediate `bitops_highbit`, high-bit toggle `bitops_chg_highbit`)
 - Core arithmetic/data movement (`move` + `moveq_signext` + moveq edge sign-extension checks, `alu` + negative roundtrip check, `addi/subi` incl. byte/word/long plus byte/word/long-boundary-wrap checks, `quick_ops` incl. long-negative roundtrip + word+word-wrap+long-wrap+byte+byte-wrap+address-register variants, `compare` + `cmpi` size coverage for both non-zero and zero immediates plus negative byte/word/long boundary forms, `muldiv`, `movem`, `misc` + `swap_roundtrip`, `not` size forms (`not_sizes`) plus explicit NOT.W/NOT.B upper-bit preservation checks, `clr` size forms (`clr_sizes`) plus byte/word partial-clear upper-bit preservation checks, `neg` size forms (`neg_sizes`) plus explicit zero-input NEG size path, `flags` incl. OR/AND/EOR-CCR path, `exg`, `imm_logic` incl. byte+word+long variants plus explicit byte/word/long high-bit edge logic checks, `tst` size forms on negative, zero, and positive inputs)
 - Shift/rotate contracts, including register-count ROXL/ROXR in both directions and all widths, low-six-bit modulo 9/17/33 effective-zero paths, C=X with unchanged X/data, size-correct N/Z, cleared V, partial-register preservation, and populated guest-register mappings
 - BCD-family contracts across `ABCD`, `SBCD`, and `NBCD`: exact 68040 decimal and invalid-nibble correction, X/C chains, sticky-Z histories, aliasing, source/destination/same-register A7 predecrement, and opcode-only exact-native entry
+- Division lifecycle contracts: signed word overflow Z preservation; signed/unsigned 32/32 and 64/32 DIVL success, zero, and overflow; flag-live/no-flags parity; quotient/remainder and source/remainder aliases; unchanged conditional destinations; exact vector-5 state; and exact native opcode entry
 - Ordered semantic services: CAS byte/word/long success and failure, predecrement/postincrement/displacement modes, CAS2 success/failure and aliasing, MOVES privilege/fetch ordering and register/EA aliasing, all eight bitfield operations across register and memory EAs, and width/offset/fault-order edges
 - System-control services: RESET, STOP, RTE, USP moves, MOVEC, and cache operations with privilege, extension-fetch, exact fault-PC, and successor-PC vectors
 - Branch condition behavior (`bra` short+word, `bne/beq` short+word, both short + `.W` displacement forms for `bpl/bmi`, `bvc/bvs`, `bge/blt`, `bgt/ble`, `bcc/bcs`, `bhi/bls`, plus chained-condition branch sequencing with explicit Z-clear, Z-set, carry-clear, carry-set, and overflow-set chain behaviors)

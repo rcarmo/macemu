@@ -472,6 +472,67 @@ for (const vector of [
   requireText(harnessSource, `INIT_REGS[${vector}]`, "BCD exact-opcode replay state");
 }
 
+// DIVL's zero and overflow joins span variable-length exception/flag code. No
+// reachable flag-live or no-flags shape may encode their target as an ARM64
+// instruction count. Signed 32/32 division must also widen before SDIV so the
+// unique INT32_MIN/-1 overflow remains observable instead of saturating.
+const divlFamilyStart = midfunc2Source.indexOf("MIDFUNC(3,jnf_DIVLU32");
+const divlFamilyEnd = midfunc2Source.indexOf("/*\n * EOR", divlFamilyStart);
+if (divlFamilyStart < 0 || divlFamilyEnd < 0) fail("missing native DIVL family");
+const divlFamily = midfunc2Source.slice(divlFamilyStart, divlFamilyEnd);
+if (/\bB[A-Z]*_i\(\s*[1-9][0-9]*\s*\)/.test(divlFamily) ||
+    /\b(?:CBNZ|CBZ)_[wx]i\([^,\n]+,\s*[1-9][0-9]*\s*\)/.test(divlFamily)) {
+  fail("native DIVL branch geometry: fixed nonzero internal displacement remains");
+}
+if ((divlFamily.match(/write_jmp_target\(/g) || []).length !== 28) {
+  fail("native DIVL branch geometry: expected 28 structurally patched joins");
+}
+for (const forbidden of ["rem = writereg(rem);", "SDIV_www(REG_WORK1, d, s1);"]) {
+  if (divlFamily.includes(forbidden)) {
+    fail(`native DIVL lifecycle: unsafe zero/overflow shape remains: ${forbidden}`);
+  }
+}
+for (const contract of [
+  "MIDFUNC(3,jnf_DIVLU32",
+  "MIDFUNC(3,jff_DIVLU32",
+  "MIDFUNC(3,jnf_DIVLS32",
+  "MIDFUNC(3,jff_DIVLS32",
+  "MIDFUNC(3,jnf_DIVLU64",
+  "MIDFUNC(3,jff_DIVLU64",
+  "MIDFUNC(3,jnf_DIVLS64",
+  "MIDFUNC(3,jff_DIVLS64",
+  "rem = rmw(rem);",
+  "SDIV_xxx(REG_WORK1, REG_WORK3, REG_WORK4);",
+  "saved_flags = readreg(FLAGTMP);",
+]) {
+  requireText(divlFamily, contract, "native DIVL lifecycle");
+}
+const divsWordBody = functionBody(
+  midfunc2Source,
+  "MIDFUNC(2,jff_DIVS,(RW4 d, RR4 s))",
+  "MIDFUNC(3,jnf_DIVLU32",
+  "signed word division overflow flags",
+);
+requireText(divsWordBody, "MRS_NZCV_x(REG_WORK4);", "signed word division overflow flags");
+requireText(divsWordBody, "MOV_xx(REG_WORK1, REG_WORK4);", "signed word division overflow flags");
+for (const vector of [
+  "divs_w_overflow_preserve_z",
+  "divs_w_imm_overflow_preserve_z",
+  "divu_l32_zero_distinct",
+  "divs_l32_zero_distinct",
+  "divu_l32_success_nf",
+  "divs_l32_success_nf",
+  "divu_l32_same_dq_dr_nf",
+  "divs_l32_src_dr_alias_nf",
+  "divu_l64_overflow_nf",
+  "divs_l64_overflow",
+  "divs_l32_overflow",
+  "divs_l32_overflow_nf",
+]) {
+  requireText(harnessSource, `[${vector}]=0x`, "DIVL exact-opcode replay coverage");
+  requireText(harnessSource, `INIT_REGS[${vector}]`, "DIVL exact-opcode replay state");
+}
+
 const chkGeneratorBody = functionBody(
   gencompSource,
   "\t case i_CHK:",
@@ -1691,6 +1752,8 @@ console.log("METRIC structural_bcd_flag_lifecycle=1");
 console.log("METRIC structural_bcd_patched_branch_joins=7");
 console.log("METRIC structural_bcd_a7_predecrement_geometry=1");
 console.log("METRIC structural_bcd_exact_pc_memory_replay=1");
+console.log("METRIC structural_division_patched_branch_joins=28");
+console.log("METRIC structural_division_overflow_flags=1");
 console.log("METRIC structural_fullsr_ea_mode_decode=1");
 console.log("METRIC structural_complete_mvsr2_helper_family=1");
 console.log("METRIC structural_complete_legacy_condition_mapping=1");
