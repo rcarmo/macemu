@@ -380,6 +380,118 @@ for (const contract of [
   requireText(basiliskGlueSource, contract, "exact-PC memory replay state");
 }
 
+/* MOVEM is emitted directly by gencomp rather than through the four legacy
+ * MOVEM MIDFUNC definitions. Keep the transfer cursor private from all sixteen
+ * architectural registers: a list may name the EA base itself. Writeback is a
+ * single publication after the loop, while no-update control modes discard the
+ * cursor. The mask word must also be decoded before any PC-relative EA words. */
+const movemLoadGenerator = functionBody(
+  gencompSource,
+  "static void\ngenmovemel (uae_u16 opcode)",
+  "static void\ngenmovemle (uae_u16 opcode)",
+  "MOVEM memory-to-register generator",
+);
+const movemStoreGenerator = functionBody(
+  gencompSource,
+  "static void\ngenmovemle (uae_u16 opcode)",
+  "static void\nduplicate_carry (void)",
+  "MOVEM register-to-memory generator",
+);
+for (const [body, context] of [
+  [movemLoadGenerator, "MOVEM memory-to-register generator"],
+  [movemStoreGenerator, "MOVEM register-to-memory generator"],
+] as const) {
+  requireBefore(body, "gen_nextiword ()", "genamode (", `${context} extension order`);
+  requireText(body, "GENA_MOVEM_NO_INC", `${context} EA ownership`);
+}
+for (const contract of [
+  'const char *movem_srca = "movem_srca";',
+  'comprintf("\\tint movem_srca=scratchie++;\\n"',
+  '"\\tmov_l_rr(movem_srca,srca);\\n");',
+  '"\\t\\t\\treadlong(%s,i,scratchie);\\n"',
+  '"\\t\\t\\treadword(%s,i,scratchie);\\n"',
+  'comprintf("\\t\\t\\tmov_l_rr(8+dstreg,movem_srca);\\n");',
+]) {
+  requireText(movemLoadGenerator, contract, "MOVEM private load cursor");
+}
+requireBefore(
+  movemLoadGenerator,
+  '"\\t\\t\\treadlong(%s,i,scratchie);\\n"',
+  'comprintf("\\t\\t\\tmov_l_rr(8+dstreg,movem_srca);\\n");',
+  "MOVEM postincrement load writeback",
+);
+for (const contract of [
+  'const char *movem_dsta = "movem_dsta";',
+  'comprintf("\\tint movem_dsta=scratchie++;\\n"',
+  '"\\tmov_l_rr(movem_dsta,srca);\\n");',
+  '"\\t\\t\\tsub_l_ri(%s,4);\\n"',
+  '"\\t\\t\\tmov_l_rr(tmp,15-i);\\n"',
+  '"\\t\\t\\twritelong(%s,tmp,scratchie);\\n"',
+  'comprintf("\\t\\t\\tmov_l_rr(8+dstreg,movem_dsta);\\n");',
+]) {
+  requireText(movemStoreGenerator, contract, "MOVEM private store cursor");
+}
+requireBefore(
+  movemStoreGenerator,
+  '"\\t\\t\\tsub_l_ri(%s,4);\\n"',
+  '"\\t\\t\\tmov_l_rr(tmp,15-i);\\n"',
+  "MOVEM predecrement address-before-value order",
+);
+requireBefore(
+  movemStoreGenerator,
+  '"\\t\\t\\twritelong(%s,tmp,scratchie);\\n"',
+  'comprintf("\\t\\t\\tmov_l_rr(8+dstreg,movem_dsta);\\n");',
+  "MOVEM predecrement writeback publication",
+);
+const movemA64LoadStart = requireText(movemLoadGenerator, "#if defined(CPU_AARCH64)", "MOVEM AArch64 load path");
+const movemA64LoadEnd = requireText(movemLoadGenerator.slice(movemA64LoadStart), "#else", "MOVEM AArch64 load path") + movemA64LoadStart;
+const movemA64StoreStart = requireText(movemStoreGenerator, "#if defined(CPU_AARCH64)", "MOVEM AArch64 store path");
+const movemA64StoreEnd = requireText(movemStoreGenerator.slice(movemA64StoreStart), "#else", "MOVEM AArch64 store path") + movemA64StoreStart;
+for (const [body, forbidden, context] of [
+  [movemLoadGenerator.slice(movemA64LoadStart, movemA64LoadEnd), "add_l_ri(srca", "MOVEM AArch64 load cursor"],
+  [movemStoreGenerator.slice(movemA64StoreStart, movemA64StoreEnd), "sub_l_ri(srca", "MOVEM AArch64 store cursor"],
+] as const) {
+  if (body.includes(forbidden)) fail(`${context}: architectural base is still walked directly`);
+}
+const countText = (text: string, needle: string): number => text.split(needle).length - 1;
+if (countText(generatedSource, "int movem_srca=scratchie++") !== 32)
+  fail("generated MOVEM load cursor coverage changed from 32 handlers");
+if (countText(generatedSource, "int movem_dsta=scratchie++") !== 24)
+  fail("generated MOVEM store cursor coverage changed from 24 handlers");
+if (countText(generatedSource, "mov_l_rr(8+dstreg,movem_srca)") !== 4)
+  fail("generated MOVEM postincrement load writeback coverage changed from 4 handlers");
+if (countText(generatedSource, "mov_l_rr(8+dstreg,movem_dsta)") !== 4)
+  fail("generated MOVEM predecrement store writeback coverage changed from 4 handlers");
+const movemExactVectors = [
+  "movem_l_postinc_base_alias_native",
+  "movem_w_postinc_base_alias_native",
+  "movem_l_predec_base_alias_native",
+  "movem_w_predec_base_alias_native",
+  "movem_l_aind_load_base_alias_native",
+  "movem_l_aind_store_base_alias_native",
+  "movem_l_all_live_roundtrip_native",
+  "movem_l_all_live_special_native",
+  "movem_zero_mask_native",
+  "movem_l_control_modes_native",
+  "movem_l_pc_modes_native",
+];
+for (const name of movemExactVectors) {
+  requireText(harnessSource, `TESTS[${name}]`, `MOVEM exact-native vector ${name}`);
+  requireText(harnessSource, `[${name}]=1`, `MOVEM exact-native gate ${name}`);
+  requireText(harnessSource, `[${name}]=2`, `MOVEM exact-PC replay count ${name}`);
+  requireText(harnessSource, `[${name}]=0x`, `MOVEM exact-PC anchor ${name}`);
+  requireText(activeRiskySource, name, `MOVEM active-risky vector ${name}`);
+}
+requireText(harnessSource, "B2_JIT_ALL_SPECIAL_MEM=1", "MOVEM forced special-memory path");
+for (const contract of [
+  "movem_predec_cursor_base_locked",
+  "[movem_predec_cursor_base_locked]=13",
+  "[movem_predec_cursor_base_locked]=22",
+  "[movem_predec_cursor_base_locked]=1",
+]) {
+  requireText(regallocPressureSource, contract, "MOVEM forced cursor/base allocator collision");
+}
+
 const legacyNarrowZBody = functionBody(
   compatSource,
   "static inline void legacy_set_z_from_narrow_result(",
@@ -2470,6 +2582,13 @@ console.log("METRIC structural_mull_three_operand_ownership=1");
 console.log("METRIC structural_mull_dl_source_lock=1");
 console.log(`METRIC structural_mull_exact_native_vectors=${mullExactVectors.length}`);
 console.log("METRIC structural_mull_allocator_pressure=1");
+console.log("METRIC structural_movem_private_cursor_ownership=1");
+console.log("METRIC structural_movem_base_alias_writeback=1");
+console.log("METRIC structural_movem_mask_ea_extension_order=1");
+console.log(`METRIC structural_movem_exact_native_vectors=${movemExactVectors.length}`);
+console.log("METRIC structural_movem_generated_load_handlers=32");
+console.log("METRIC structural_movem_generated_store_handlers=24");
+console.log("METRIC structural_movem_allocator_pressure=1");
 console.log("METRIC structural_register_shift_six_bit_count=1");
 console.log("METRIC structural_register_shift_patched_joins=11");
 console.log("METRIC structural_register_shift_branchless_carry_sites=24");

@@ -826,15 +826,13 @@ genmovemel (uae_u16 opcode)
 
     /* Fast but unsafe...  */
 #if defined(CPU_AARCH64)
-    const char *movem_srca = "srca";
-    if (table68k[opcode].dmode == Aind) {
-        /* genamode maps (An) directly to the architectural address register.
-         * MOVEM memory-to-register must walk a temporary EA for control modes;
-         * only (An)+ writes the final EA back to An. */
-        comprintf("\tint movem_srca=scratchie++;\n"
-                  "\tmov_l_rr(movem_srca,srca);\n");
-        movem_srca = "movem_srca";
-    }
+    /* Snapshot the effective address into a cursor with one owner. A transfer
+     * may name the base A-register itself, so walking srca directly makes the
+     * transfer address and an architectural result alias. Only (An)+ publishes
+     * the cursor after every load has completed; all control modes discard it. */
+    const char *movem_srca = "movem_srca";
+    comprintf("\tint movem_srca=scratchie++;\n"
+              "\tmov_l_rr(movem_srca,srca);\n");
     comprintf("\tfor (i=0;i<16;i++) {\n"
               "\t\tif ((mask>>i)&1) {\n");
     switch(table68k[opcode].size) {
@@ -854,7 +852,7 @@ genmovemel (uae_u16 opcode)
     comprintf("\t\t}\n"
               "\t}");
     if (table68k[opcode].dmode == Aipi) {
-        comprintf("\t\t\tmov_l_rr(8+dstreg,srca);\n");
+        comprintf("\t\t\tmov_l_rr(8+dstreg,movem_srca);\n");
     }
 #else
     comprintf("\tget_n_addr(srca,native,scratchie);\n");
@@ -944,16 +942,14 @@ genmovemle (uae_u16 opcode)
 #endif
 #endif
 #if defined(CPU_AARCH64)
-    const char *movem_dsta = "srca";
+    /* The cursor is never an architectural register. This is required for
+     * predecrement when the mask contains its own base: 68020+ stores the
+     * original base value, then publishes the fully decremented cursor once.
+     * It also makes no-writeback control modes independent of genamode aliases. */
+    const char *movem_dsta = "movem_dsta";
+    comprintf("\tint movem_dsta=scratchie++;\n"
+              "\tmov_l_rr(movem_dsta,srca);\n");
     if (table68k[opcode].dmode != Apdi) {
-        /* Control addressing modes do not write their walked EA back. In the
-         * plain (An) form genamode aliases srca directly to architectural An;
-         * incrementing srca while emitting each element therefore corrupted An
-         * as if MOVEM used postincrement. Always walk a private EA for every
-         * non-predecrement form, independent of genamode's storage choice. */
-        comprintf("\tint movem_dsta=scratchie++;\n"
-                  "\tmov_l_rr(movem_dsta,srca);\n");
-        movem_dsta = "movem_dsta";
         comprintf("\tfor (i=0;i<16;i++) {\n"
                   "\t\tif ((mask>>i)&1) {\n");
         switch(table68k[opcode].size) {
@@ -974,14 +970,14 @@ genmovemle (uae_u16 opcode)
                   "\t\tif ((mask>>i)&1) {\n");
         switch(table68k[opcode].size) {
          case sz_long:
-            comprintf("\t\t\tsub_l_ri(srca,4);\n"
+            comprintf("\t\t\tsub_l_ri(%s,4);\n"
                       "\t\t\tmov_l_rr(tmp,15-i);\n"
-                      "\t\t\twritelong(srca,tmp,scratchie);\n");
+                      "\t\t\twritelong(%s,tmp,scratchie);\n", movem_dsta, movem_dsta);
             break;
          case sz_word:
-            comprintf("\t\t\tsub_l_ri(srca,2);\n"
+            comprintf("\t\t\tsub_l_ri(%s,2);\n"
                       "\t\t\tmov_l_rr(tmp,15-i);\n"
-                      "\t\t\twriteword(srca,tmp,scratchie);\n");
+                      "\t\t\twriteword(%s,tmp,scratchie);\n", movem_dsta, movem_dsta);
             break;
          default: assert(0);
         }
@@ -989,7 +985,7 @@ genmovemle (uae_u16 opcode)
     comprintf("\t\t}\n"
               "\t}");
     if (table68k[opcode].dmode == Apdi) {
-        comprintf("\t\t\tmov_l_rr(8+dstreg,srca);\n");
+        comprintf("\t\t\tmov_l_rr(8+dstreg,movem_dsta);\n");
     }
 #else
     comprintf("\tget_n_addr(srca,native,scratchie);\n");

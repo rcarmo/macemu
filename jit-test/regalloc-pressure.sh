@@ -35,7 +35,8 @@ sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 # host-timer scheduling, and interpreter/JIT runs otherwise race the first 60 Hz
 # tick independently.
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
-declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl)
+MOVEM_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007ef000 2700"
+declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked)
 declare -A CELL_HEX=(
   [mulu_w_d16_a0_live_a0]="2042 20BC 1122 3344 43F9 0000 2040 337C 0005 0012 3E3C 003F 2042 2244 3005 C0E9 0012 2658 51CF FFF2 2C7C A6AA 55CC"
   # Establish X=1 and 0x8000 at (A0), then keep every non-SP source register
@@ -48,31 +49,46 @@ declare -A CELL_HEX=(
   # EA is fetched; the 64-bit result is then folded with the remaining live
   # D-registers and A0 before DBF repeats the exact native block.
   [mullu64_mem_source_locked_dl]="203C FFFF FFFF 3E3C 003F 2042 20BC 0000 0002 D082 4C10 0401 D081 D082 D083 D084 D085 D086 D087 D088 51CF FFE8 2C7C A6AA 55CE"
+  # Every non-SP architectural register is live. Force the private cursor v22
+  # toward its A5 base v13 while mov_l_rr copies the original base; the source
+  # lock must reject that collision before predecrement transfer begins.
+  [movem_predec_cursor_base_locked]="48E5 FFFE 4CDD 7FFF 2C7C A6AA 55CF"
+)
+declare -A CELL_INIT=(
+  [mulu_w_d16_a0_live_a0]="$INIT"
+  [roxrw_mem_x_live_all]="$INIT"
+  [mullu64_mem_source_locked_dl]="$INIT"
+  [movem_predec_cursor_base_locked]="$MOVEM_INIT"
 )
 declare -A CELL_PC=(
   [mulu_w_d16_a0_live_a0]=0x00001018
   [roxrw_mem_x_live_all]=0x0000100a
   [mullu64_mem_source_locked_dl]=0x00001012
+  [movem_predec_cursor_base_locked]=0x00001000
 )
 declare -A CELL_ALIAS_VREG=(
   [mulu_w_d16_a0_live_a0]=8
   [roxrw_mem_x_live_all]=8
   [mullu64_mem_source_locked_dl]=0
+  [movem_predec_cursor_base_locked]=13
 )
 declare -A CELL_SCRATCH_VREG=(
   [mulu_w_d16_a0_live_a0]=22
   [roxrw_mem_x_live_all]=21
   [mullu64_mem_source_locked_dl]=20
+  [movem_predec_cursor_base_locked]=22
 )
 declare -A CELL_REQUIRE_PIN=(
   [mulu_w_d16_a0_live_a0]=0
   [roxrw_mem_x_live_all]=1
   [mullu64_mem_source_locked_dl]=0
+  [movem_predec_cursor_base_locked]=1
 )
 declare -A CELL_REQUIRE_SKIP=(
   [mulu_w_d16_a0_live_a0]=0
   [roxrw_mem_x_live_all]=0
   [mullu64_mem_source_locked_dl]=1
+  [movem_predec_cursor_base_locked]=1
 )
 run_one(){
   local cell="$1"
@@ -87,7 +103,7 @@ run_one(){
     extra+=(B2_FORCE_SCRATCH_VREG="${B2_FORCE_SCRATCH_VREG:-${CELL_SCRATCH_VREG[$cell]}}")
   fi
   env SDL_VIDEODRIVER=x11 DISPLAY="$DNUM" HOME="$RUN_DIR/home" \
-    B2_TEST_HEX="${CELL_HEX[$cell]}" B2_TEST_DUMP=1 B2_TEST_INIT="$INIT" "${extra[@]}" \
+    B2_TEST_HEX="${CELL_HEX[$cell]}" B2_TEST_DUMP=1 B2_TEST_INIT="${CELL_INIT[$cell]}" "${extra[@]}" \
     timeout -k 5s 80s "$BIN" --config "$pref" >"$log" 2>&1 || true
 }
 RESULT=0

@@ -2,6 +2,13 @@
 
 ## Summary
 
+This is the historical **64-bit pointer-safety** matrix, not a whole-engine
+semantic closure verdict. A row marked safe here means only that the reviewed
+`get_n_addr()` pointer-truncation pattern is absent or repaired. The independent,
+source-derived structural classifications are in
+`AARCH64_JIT_CLOSURE_INVENTORY.md`; entries still marked `unreviewed` there are
+not promoted by this table.
+
 The ARM64 JIT register allocator is 32-bit. When `get_n_addr()` / `jnf_MEM_GETADR_OFF()`
 produces a 64-bit host pointer and caches it in a virtual register, the allocator may
 evict it as 32 bits, **truncating the pointer**. Any subsequent memory access through
@@ -18,7 +25,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 | 0x1 | MOVE.B | 88 | ✅ Safe | None | No get_n_addr usage |
 | 0x2 | MOVE.L/MOVEA.L | 108 | ✅ Safe | None | No get_n_addr usage |
 | 0x3 | MOVE.W/MOVEA.W | 108 | ✅ Safe | None | No get_n_addr usage |
-| 0x4 | CLR/NEG/NBCD/NOT/MOVEM/LEA/PEA/JSR/JMP/RTS/LINK/UNLK/SWAP/EXT/TST/CHK | 197 | ✅ Fixed/audited | None | 9 handlers use safe readlong/writelong; NBCD shares the exact BCD lifecycle |
+| 0x4 | CLR/NEG/NBCD/NOT/MOVEM/LEA/PEA/JSR/JMP/RTS/LINK/UNLK/SWAP/EXT/TST/CHK | 197 | ✅ Pointer-safe | None | 9 handlers use safe readlong/writelong; MOVEM lifecycle and NBCD semantics are separately audited; other structural rows remain governed by the closure inventory |
 | 0x5 | ADDQ/SUBQ/Scc/DBcc | 178 | ✅ Safe | None | No get_n_addr usage |
 | 0x6 | Bcc/BSR/BRA | 42 | ✅ Safe | None | No get_n_addr usage |
 | 0x7 | MOVEQ/EMUL_OP | 1 | ✅ Safe | None | No get_n_addr usage |
@@ -59,7 +66,8 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
-| Long-multiply result/flag/allocator lifecycle | current structural audit | Explicit Dl/Dh/source ownership, full-product N/Z/V, high-before-low alias ordering, and generator value locking under a forced S1-to-Dl collision; see `AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md` |
+| MOVEM cursor/base/extension lifecycle | current structural audit | Private load/store cursors, delayed update-mode publication, 68020+ base-in-mask predecrement semantics, exact PC-relative replay, special-memory service, and forced cursor/base allocator pressure; see `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md` |
+| Long-multiply result/flag/allocator lifecycle | `4bb12cca` | Explicit Dl/Dh/source ownership, full-product N/Z/V, high-before-low alias ordering, and generator value locking under a forced S1-to-Dl collision; see `AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md` |
 | Fixed-memory shifts and ROX ownership | `01a04904` | `jff`/`jnf` memory-shift lifecycle, branchless C/V, and one RMW X binding under forced allocator pressure; see `AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md` |
 | Division zero/overflow lifecycle | `47ed4dea` | Signed 32/32 overflow, conditional result preservation, signed-overflow Z, aliases, and all 28 DIVL joins; see `AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md` |
 | BCD arithmetic/flag/A7 family | `1aeb577e` | `ABCD`/`SBCD`/`NBCD` share exact 68040 correction and X/C/sticky-Z handling; ordered byte predecrement uses `areg_byteinc[]`; see `AARCH64_JIT_AUDIT_BCD.md` |

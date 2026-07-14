@@ -165,6 +165,9 @@ EOF
     )
     if [ "$use_jit" = "true" ]; then
         env_vars+=(B2_JIT_FORCE_TRANSLATE=1)
+        if [ -n "${SPECIAL_MEMORY_TESTS[$name]+x}" ]; then
+            env_vars+=(B2_JIT_ALL_SPECIAL_MEM=1)
+        fi
     fi
     if [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then
         local replay_pc="${NATIVE_REPLAY_PC[$name]:-0x1000}"
@@ -384,10 +387,21 @@ TEST_ORDER+=(bcd_abcd_predec_src_a7 bcd_abcd_predec_dst_a7 bcd_abcd_predec_a7_al
 TEST_ORDER+=(mulls32_negative_fit_v_native mullu64_source_preserve_v_native mullu64_source_low_alias_native mullu64_same_result_alias_native)
 TEST_ORDER+=(mullu32_low_sign_full_flags_native mullu32_overflow_low_zero_flags_native mulls32_negative_overflow_low_zero_native mulls32_positive_overflow_low_sign_native)
 TEST_ORDER+=(mulls64_negative_flags_native mullu64_zero_flags_native mullu64_source_high_alias_native mullu64_all_alias_native mullu32_immediate_nf_native mullu64_memory_nf_native)
+# MOVEM is a generator-owned lifecycle, not the four unreachable legacy MIDFUNCs.
+# Cover both widths, all update modes, base-in-mask ownership, all-live pressure,
+# forced special-memory helpers, zero masks, and the complete control-EA set.
+TEST_ORDER+=(movem_l_postinc_base_alias_native movem_w_postinc_base_alias_native)
+TEST_ORDER+=(movem_l_predec_base_alias_native movem_w_predec_base_alias_native)
+TEST_ORDER+=(movem_l_aind_load_base_alias_native movem_l_aind_store_base_alias_native)
+TEST_ORDER+=(movem_l_all_live_roundtrip_native movem_l_all_live_special_native)
+TEST_ORDER+=(movem_zero_mask_native movem_l_control_modes_native movem_l_pc_modes_native)
 
 declare -A TESTS
 declare -A EXPECTED_D0
 declare -A EXPECTED_REG_FIELDS
+declare -A SPECIAL_MEMORY_TESTS=(
+    [movem_l_all_live_special_native]=1
+)
 # Tests in this set replay from reset architectural state at an exact anchor.
 # The JIT pass forces immediate RAM L2 promotion; the configured final replay
 # proves native entry rather than merely proving that the tracer compiled it.
@@ -660,6 +674,17 @@ declare -A NATIVE_REPLAY_TESTS=(
     [mullu64_all_alias_native]=1
     [mullu32_immediate_nf_native]=1
     [mullu64_memory_nf_native]=1
+    [movem_l_postinc_base_alias_native]=1
+    [movem_w_postinc_base_alias_native]=1
+    [movem_l_predec_base_alias_native]=1
+    [movem_w_predec_base_alias_native]=1
+    [movem_l_aind_load_base_alias_native]=1
+    [movem_l_aind_store_base_alias_native]=1
+    [movem_l_all_live_roundtrip_native]=1
+    [movem_l_all_live_special_native]=1
+    [movem_zero_mask_native]=1
+    [movem_l_control_modes_native]=1
+    [movem_l_pc_modes_native]=1
 )
 # A setup prefix may install architectural state before the audited instruction.
 # Replay and native-entry proof then start at the exact family opcode PC.
@@ -813,6 +838,17 @@ declare -A NATIVE_REPLAY_PC=(
     [bcd_sbcd_predec_dst_a7]=0x1028
     [bcd_sbcd_predec_a7_alias]=0x1022
     [bcd_nbcd_predec_a7]=0x1018
+    [movem_l_postinc_base_alias_native]=0x1018
+    [movem_w_postinc_base_alias_native]=0x1014
+    [movem_l_predec_base_alias_native]=0x100a
+    [movem_w_predec_base_alias_native]=0x100a
+    [movem_l_aind_load_base_alias_native]=0x1014
+    [movem_l_aind_store_base_alias_native]=0x1010
+    [movem_l_all_live_roundtrip_native]=0x1000
+    [movem_l_all_live_special_native]=0x1000
+    [movem_zero_mask_native]=0x1004
+    [movem_l_control_modes_native]=0x1010
+    [movem_l_pc_modes_native]=0x1014
 )
 # Byte pairs are RAM-relative address/value operands restored before every
 # exact-PC replay. This keeps memory-EA vectors deterministic across the trace
@@ -840,6 +876,10 @@ declare -A NATIVE_REPLAY_BYTES=(
     [bcd_sbcd_predec_dst_a7]="2080 01 2040 00"
     [bcd_sbcd_predec_a7_alias]="2082 01 2080 00"
     [bcd_nbcd_predec_a7]="2040 01"
+    [movem_l_postinc_base_alias_native]="3000 11 3001 11 3002 11 3003 11 3004 22 3005 22 3006 22 3007 22"
+    [movem_w_postinc_base_alias_native]="3000 80 3001 01 3002 7f 3003 ff 3004 ff 3005 ff"
+    [movem_l_aind_load_base_alias_native]="3000 11 3001 11 3002 11 3003 11 3004 22 3005 22 3006 22 3007 22"
+    [movem_l_pc_modes_native]="3000 11 3001 11 3002 11 3003 11 3004 22 3005 22 3006 22 3007 22"
 )
 declare -A NATIVE_REPLAY_COUNT=(
     [rol_l_reg_const_count64]=2
@@ -989,6 +1029,19 @@ declare -A NATIVE_REPLAY_COUNT=(
     [bcd_sbcd_predec_dst_a7]=2
     [bcd_sbcd_predec_a7_alias]=2
     [bcd_nbcd_predec_a7]=2
+    # Prefix-bearing MOVEM vectors likewise trace the audited internal anchor
+    # once, then require native entry at precisely that MOVEM PC.
+    [movem_l_postinc_base_alias_native]=2
+    [movem_w_postinc_base_alias_native]=2
+    [movem_l_predec_base_alias_native]=2
+    [movem_w_predec_base_alias_native]=2
+    [movem_l_aind_load_base_alias_native]=2
+    [movem_l_aind_store_base_alias_native]=2
+    [movem_l_all_live_roundtrip_native]=2
+    [movem_l_all_live_special_native]=2
+    [movem_zero_mask_native]=2
+    [movem_l_control_modes_native]=2
+    [movem_l_pc_modes_native]=2
     [cache_disabled_selfmod_replay]=2
     [host_code_reuse_coherence]=2
 )
@@ -1151,6 +1204,42 @@ TESTS[movem_no_writeback]="41F8 3000 20FC 1111 1111 20FC 2222 2222 20FC 3333 333
 # MOVEM.L D0/D1/A1,-(A0) with reversed predec mask 0xC040;
 # clear D2/D3/A2; MOVEM.L (A0)+,D2/D3/A2 (mask 0x040C)
 TESTS[movem_predec_mixed_order]="41F9 0000 3000 203C 1111 1111 223C 2222 2222 43F9 0000 3333 48E0 C040 243C 0000 0000 263C 0000 0000 247C 0000 0000 4CD8 040C"
+# MOVEM closure: the address cursor must be private from every architectural
+# register named by the mask. Postincrement writeback wins over a loaded base;
+# predecrement stores the original 68020+ base value and publishes writeback once.
+TESTS[movem_l_postinc_base_alias_native]="41F8 3000 20FC 1111 1111 20FC 2222 2222 41F8 3000 003C 0001 4CD8 0300 55C7"
+EXPECTED_REG_FIELDS[movem_l_postinc_base_alias_native]="A0=00003008 A1=22222222 D7=000000ff"
+TESTS[movem_w_postinc_base_alias_native]="41F8 3000 30FC 8001 30FC 7FFF 30FC FFFF 41F8 3000 4C98 0301"
+EXPECTED_REG_FIELDS[movem_w_postinc_base_alias_native]="D0=ffff8001 A0=00003006 A1=ffffffff"
+TESTS[movem_l_predec_base_alias_native]="41F8 3000 203C 1111 1111 48E0 8080 43F8 2FF8 4CD1 000C"
+EXPECTED_REG_FIELDS[movem_l_predec_base_alias_native]="A0=00002ff8 A1=00002ff8 D2=11111111 D3=00003000"
+TESTS[movem_w_predec_base_alias_native]="41F8 3000 203C FFFF 8001 48A0 8080 43F8 2FFC 4C91 000C"
+EXPECTED_REG_FIELDS[movem_w_predec_base_alias_native]="A0=00002ffc A1=00002ffc D2=ffff8001 D3=00003000"
+# Plain (An) has no implicit writeback, but a base register explicitly present
+# in the load mask is still a destination. The second transfer must continue
+# from the snapshotted cursor after the first transfer overwrites A0.
+TESTS[movem_l_aind_load_base_alias_native]="41F8 3000 20FC 1111 1111 20FC 2222 2222 41F8 3000 4CD0 0300"
+EXPECTED_REG_FIELDS[movem_l_aind_load_base_alias_native]="A0=11111111 A1=22222222"
+TESTS[movem_l_aind_store_base_alias_native]="41F8 3000 203C 1111 1111 227C 2222 2222 48D0 0301 45F8 3000 4CD2 001C"
+EXPECTED_REG_FIELDS[movem_l_aind_store_base_alias_native]="A0=00003000 A1=22222222 D2=11111111 D3=00003000 D4=22222222"
+# All 15 non-stack architectural registers remain live across both transfer
+# loops. The duplicate vector forces readmem_special/writemem_special.
+TESTS[movem_l_all_live_roundtrip_native]="48E5 FFFE 4CDD 7FFF"
+EXPECTED_REG_FIELDS[movem_l_all_live_roundtrip_native]="D0=01010101 D7=08080808 A0=11111111 A5=00003400"
+TESTS[movem_l_all_live_special_native]="48E5 FFFE 4CDD 7FFF"
+EXPECTED_REG_FIELDS[movem_l_all_live_special_native]="D0=01010101 D7=08080808 A0=11111111 A5=00003400"
+# Empty masks must not synthesize an update in either update mode.
+TESTS[movem_zero_mask_native]="41F8 3000 48E0 0000 4CD8 0000"
+EXPECTED_REG_FIELDS[movem_zero_mask_native]="A0=00003000"
+# One vector covers d16(An), d8(An,Xn), absolute.W, and absolute.L in both
+# directions. D4=0 makes the indexed target exact while keeping the indexed
+# generator path distinct.
+TESTS[movem_l_control_modes_native]="41F8 3000 203C 1111 1111 223C 2222 2222 48E8 0003 0010 4CE8 000C 0010 7800 48F0 0003 4020 4CF0 0060 4020 48F8 0003 3100 4CF8 0600 3100 48F9 0003 0000 3200 4CF9 1800 0000 3200"
+EXPECTED_REG_FIELDS[movem_l_control_modes_native]="D2=11111111 D3=22222222 D5=11111111 D6=22222222 A1=11111111 A2=22222222 A3=11111111 A4=22222222"
+# d16(PC) and brief d8(PC,D4.W) both resolve to 0x3000. In each encoding the
+# MOVEM mask precedes the EA extension word, exercising generator decode order.
+TESTS[movem_l_pc_modes_native]="41F8 3000 20FC 1111 1111 20FC 2222 2222 383C 2000 4CFA 000C 1FE8 4CFB 0060 40E2"
+EXPECTED_REG_FIELDS[movem_l_pc_modes_native]="D2=11111111 D3=22222222 D4=00002000 D5=11111111 D6=22222222 A0=00003008"
 # ADDX_CHAIN: multi-precision add: set X, then chain ADDX across D0+D2, D1+D3
 # ORI #$10,CCR; MOVE.L #$FFFFFFFF,D0; MOVEQ #1,D2; ADDX.L D2,D0;
 # MOVE.L #$00000000,D1; MOVEQ #0,D3; ADDX.L D3,D1
@@ -2968,6 +3057,25 @@ INIT_REGS[mullu64_source_high_alias_native]="00000002 FFFFFFFF 00000000 00000000
 INIT_REGS[mullu64_all_alias_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
 INIT_REGS[mullu32_immediate_nf_native]="00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
 INIT_REGS[mullu64_memory_nf_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+# MOVEM exact-anchor replay state. Setup prefixes still make the trace pass
+# self-contained; these inputs recreate the architectural state at each family
+# opcode so B2_NATIVE_ASSERT_PC proves the audited MOVEM itself enters natively.
+_MOVEM_ZERO_D="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+_MOVEM_ZERO_A_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[movem_l_postinc_base_alias_native]="$_MOVEM_ZERO_D 00003000 $_MOVEM_ZERO_A_TAIL 00002701"
+INIT_REGS[movem_w_postinc_base_alias_native]="$_MOVEM_ZERO_D 00003000 $_MOVEM_ZERO_A_TAIL 00002700"
+INIT_REGS[movem_l_predec_base_alias_native]="11111111 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00003000 $_MOVEM_ZERO_A_TAIL 00002700"
+INIT_REGS[movem_w_predec_base_alias_native]="FFFF8001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00003000 $_MOVEM_ZERO_A_TAIL 00002700"
+INIT_REGS[movem_l_aind_load_base_alias_native]="$_MOVEM_ZERO_D 00003000 $_MOVEM_ZERO_A_TAIL 00002700"
+INIT_REGS[movem_l_aind_store_base_alias_native]="11111111 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00003000 22222222 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[movem_zero_mask_native]="$_MOVEM_ZERO_D 00003000 $_MOVEM_ZERO_A_TAIL 00002700"
+INIT_REGS[movem_l_control_modes_native]="11111111 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00003000 $_MOVEM_ZERO_A_TAIL 00002700"
+INIT_REGS[movem_l_pc_modes_native]="00000000 00000000 00000000 00000000 00002000 00000000 00000000 00000000 00003008 $_MOVEM_ZERO_A_TAIL 00002700"
+unset _MOVEM_ZERO_D _MOVEM_ZERO_A_TAIL
+MOVEM_ALL_LIVE_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007EFF00 00002700"
+INIT_REGS[movem_l_all_live_roundtrip_native]="$MOVEM_ALL_LIVE_INIT"
+INIT_REGS[movem_l_all_live_special_native]="$MOVEM_ALL_LIVE_INIT"
+unset MOVEM_ALL_LIVE_INIT
 # Fuzz vector initial register states
 INIT_REGS[io_byte_write_roundtrip]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 50001000 0A014100 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[fuzz_alu_0]="8878FDF6 80000000 00000000 637A51D3 7FFFFFFF 00000000 000000FF FFFFFFFF 0038D748 007BBF88 003C4A38 0023044C 003974BC 00072334 00000000 007EFF00"
@@ -3048,6 +3156,17 @@ SENTINEL_A6[move_to_mem_and_back]="a60100d8"
 SENTINEL_A6[movem_predec_postinc]="a60100d9"
 SENTINEL_A6[movem_no_writeback]="a6010201"
 SENTINEL_A6[movem_predec_mixed_order]="a60100e8"
+SENTINEL_A6[movem_l_postinc_base_alias_native]="a6050001"
+SENTINEL_A6[movem_w_postinc_base_alias_native]="a6050002"
+SENTINEL_A6[movem_l_predec_base_alias_native]="a6050003"
+SENTINEL_A6[movem_w_predec_base_alias_native]="a6050004"
+SENTINEL_A6[movem_l_aind_load_base_alias_native]="a6050005"
+SENTINEL_A6[movem_l_aind_store_base_alias_native]="a6050006"
+SENTINEL_A6[movem_l_all_live_roundtrip_native]="a6050007"
+SENTINEL_A6[movem_l_all_live_special_native]="a6050008"
+SENTINEL_A6[movem_zero_mask_native]="a6050009"
+SENTINEL_A6[movem_l_control_modes_native]="a605000a"
+SENTINEL_A6[movem_l_pc_modes_native]="a605000b"
 SENTINEL_A6[addx_chain]="a60100da"
 SENTINEL_A6[flag_chain_xzn]="a60100db"
 SENTINEL_A6[shift_chain]="a60100dc"
@@ -4373,6 +4492,17 @@ declare -A RISKY_TESTS=(
     [mullu64_all_alias_native]=1
     [mullu32_immediate_nf_native]=1
     [mullu64_memory_nf_native]=1
+    [movem_l_postinc_base_alias_native]=1
+    [movem_w_postinc_base_alias_native]=1
+    [movem_l_predec_base_alias_native]=1
+    [movem_w_predec_base_alias_native]=1
+    [movem_l_aind_load_base_alias_native]=1
+    [movem_l_aind_store_base_alias_native]=1
+    [movem_l_all_live_roundtrip_native]=1
+    [movem_l_all_live_special_native]=1
+    [movem_zero_mask_native]=1
+    [movem_l_control_modes_native]=1
+    [movem_l_pc_modes_native]=1
     [divl_same_dq_dr]=1
     [divl_u64]=1
     [divl_s64]=1
