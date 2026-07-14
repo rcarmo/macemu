@@ -118,6 +118,7 @@ const activeFppCompat = configuredExpandedSource(paths.fppCompat, true);
 const activeCodegen = configuredExpandedSource(paths.codegen, true);
 
 const auditFamilyRules: Array<[RegExp, string]> = [
+  [/^(?:i_|jff_|jnf_)?(?:BTST|BCHG|BCLR|BSET)(?:_|$)/, "AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md"],
   [/^(?:(?:i_|jff_|jnf_)?(?:DBCC|DBcc|SCC|Scc)(?:_|$)|dbcc_cond_move_ne_w$|dbf_dec_test_ne_w$)/, "AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md"],
   [/^(?:i_|jff_|jnf_)?MOVE16$/, "AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md"],
   [/^(?:i_|jff_|jnf_)?MOVEA(?:_[wl](?:_imm)?|$)/, "AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md"],

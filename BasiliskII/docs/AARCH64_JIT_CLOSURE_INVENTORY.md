@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 39 | 44 | 0 | 47 |
-| midfunc | 422 | 164 | 0 | 118 | 140 |
+| generator | 130 | 43 | 44 | 0 | 43 |
+| midfunc | 422 | 192 | 0 | 118 | 112 |
 | emitter_api | 294 | 0 | 0 | 91 | 203 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,18 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 90 | `BCHG` | generator:`i_BCHG`, midfunc:`jff_BCHG_b`, midfunc:`jff_BCHG_l`, midfunc:`jnf_BCHG_b`, midfunc:`jnf_BCHG_l` |
-| 90 | `BCHG_b_imm` | midfunc:`jff_BCHG_b_imm`, midfunc:`jnf_BCHG_b_imm` |
-| 90 | `BCHG_l_imm` | midfunc:`jff_BCHG_l_imm`, midfunc:`jnf_BCHG_l_imm` |
-| 90 | `BCLR` | generator:`i_BCLR`, midfunc:`jff_BCLR_b`, midfunc:`jff_BCLR_l`, midfunc:`jnf_BCLR_b`, midfunc:`jnf_BCLR_l` |
-| 90 | `BCLR_b_imm` | midfunc:`jff_BCLR_b_imm`, midfunc:`jnf_BCLR_b_imm` |
-| 90 | `BCLR_l_imm` | midfunc:`jff_BCLR_l_imm`, midfunc:`jnf_BCLR_l_imm` |
-| 90 | `BSET` | generator:`i_BSET`, midfunc:`jff_BSET_b`, midfunc:`jff_BSET_l`, midfunc:`jnf_BSET_b`, midfunc:`jnf_BSET_l` |
-| 90 | `BSET_b_imm` | midfunc:`jff_BSET_b_imm`, midfunc:`jnf_BSET_b_imm` |
-| 90 | `BSET_l_imm` | midfunc:`jff_BSET_l_imm`, midfunc:`jnf_BSET_l_imm` |
-| 90 | `BTST` | generator:`i_BTST`, midfunc:`jff_BTST_b`, midfunc:`jff_BTST_l` |
-| 90 | `BTST_b_imm` | midfunc:`jff_BTST_b_imm` |
-| 90 | `BTST_l_imm` | midfunc:`jff_BTST_l_imm` |
 | 88 | `CMP` | generator:`i_CMP`, midfunc:`jff_CMP_b`, midfunc:`jff_CMP_l`, midfunc:`jff_CMP_w` |
 | 88 | `CMP_b_imm` | midfunc:`jff_CMP_b_imm` |
 | 88 | `CMP_l_imm` | midfunc:`jff_CMP_l_imm` |
@@ -62,6 +50,18 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 88 | `CMP_ww` | emitter_api:`CMP_ww` |
 | 88 | `CMP_wwLSLi` | emitter_api:`CMP_wwLSLi` |
 | 88 | `CMP_xi` | emitter_api:`CMP_xi` |
+| 88 | `CMP_xx` | emitter_api:`CMP_xx` |
+| 88 | `CMPA` | generator:`i_CMPA` |
+| 88 | `NEG` | generator:`i_NEG` |
+| 88 | `NEG_ww` | emitter_api:`NEG_ww` |
+| 87 | `B_i` | emitter_api:`B_i` |
+| 87 | `BCC_i` | emitter_api:`BCC_i` |
+| 87 | `BCS_i` | emitter_api:`BCS_i` |
+| 87 | `BEQ_i` | emitter_api:`BEQ_i` |
+| 87 | `BNE_i` | emitter_api:`BNE_i` |
+| 87 | `BR_x` | emitter_api:`BR_x` |
+| 87 | `CBNZ_wi` | emitter_api:`CBNZ_wi` |
+| 87 | `CBNZ_xi` | emitter_api:`CBNZ_xi` |
 
 ## Accepted closure targets
 
@@ -70,7 +70,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`BCHG` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_BCHG`, midfunc:`jff_BCHG_b`, midfunc:`jff_BCHG_l`, midfunc:`jnf_BCHG_b`, midfunc:`jnf_BCHG_l`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`CMP` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_CMP`, midfunc:`jff_CMP_b`, midfunc:`jff_CMP_l`, midfunc:`jff_CMP_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

@@ -662,11 +662,13 @@ const tasGenerator = functionBody(
 );
 for (const contract of [
   'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __tasealock=jit_value_lock(srca);\\n");',
   'comprintf("\\tstart_needflags();\\n");',
   'comprintf("\\tjff_TAS(src);\\n");',
   'comprintf("\\tlive_flags();\\n");',
   'comprintf("\\tend_needflags();\\n");',
   'genastore ("src", curi->smode, "srcreg", curi->size, "src");',
+  'comprintf("\\tjit_value_unlock(__tasealock);\\n");',
 ]) {
   requireText(tasGenerator, contract, "TAS mandatory flag-live routing");
 }
@@ -696,6 +698,10 @@ requireBefore(tasMidfunc, "ORR_www(d, d, REG_WORK2);", "flags_carry_inverted = f
 if ((generatedSource.match(/\bjff_TAS\(src\);/g) || []).length !== 16) {
   fail("generated TAS family: expected eight flag-live and eight nominal no-flags handlers");
 }
+const generatedTasLocks = (generatedSource.match(/int __tasealock=jit_value_lock\(srca\);/g) || []).length;
+const generatedTasUnlocks = (generatedSource.match(/jit_value_unlock\(__tasealock\);/g) || []).length;
+if (generatedTasLocks !== 14 || generatedTasUnlocks !== 14)
+  fail(`generated TAS EA ownership: locks=${generatedTasLocks} unlocks=${generatedTasUnlocks}`);
 if (generatedSource.includes("jnf_TAS(src)") || gencompSource.includes("jnf_TAS(src)")) {
   fail("generated TAS family: unreachable no-flags handler has a caller");
 }
@@ -715,8 +721,10 @@ for (const [opcode, nextOpcode] of [
       `void REGPARAM2 op_${nextOpcode}_0_comp_${suffix}`,
       `generated TAS memory ${opcode}/${suffix}`,
     );
-    requireBefore(body, "readbyte(srca, src, scratchie);", "jff_TAS(src);", `TAS ${opcode}/${suffix} read-before-RMW`);
+    requireBefore(body, "readbyte(srca, src, scratchie);", "jit_value_lock(srca)", `TAS ${opcode}/${suffix} read-before-EA-lock`);
+    requireBefore(body, "jit_value_lock(srca)", "jff_TAS(src);", `TAS ${opcode}/${suffix} EA-lock-before-RMW`);
     requireBefore(body, "jff_TAS(src);", "writebyte(srca, src, scratchie);", `TAS ${opcode}/${suffix} RMW-before-write`);
+    requireBefore(body, "writebyte(srca, src, scratchie);", "jit_value_unlock(__tasealock)", `TAS ${opcode}/${suffix} unlock-after-write`);
   }
 }
 for (const contract of [
@@ -880,7 +888,7 @@ for (const contract of [
 ]) requireText(basiliskGlueSource, contract, "initial/exact-replay memory fixture");
 for (const contract of [
   "v >= 0 && v < VREGS",
-  "force_target < S1 && r == force_target",
+  "force_target >= 0 && r == force_target",
   "move_b_mem_source_dst_collision",
   "[move_b_mem_source_dst_collision]=20",
   "[move_b_mem_source_dst_collision]=0",
@@ -1013,6 +1021,100 @@ for (const contract of [
 for (const active of ["scc_core_aind_hi_special_native", "dbcc_core_hi_true_native"]) {
   requireText(activeRiskySource, active, `DBcc/Scc active-risky ${active}`);
 }
+
+/* Classic bit operations share count reduction and original-bit Z semantics,
+ * but only BCHG/BCLR/BSET own a writable destination. Audit the complete
+ * dynamic/immediate, byte-memory/long-Dn lifecycle as one family. */
+const bitopGenerator = functionBody(gencompSource, "     case i_BCHG:", "     case i_CMPM:", "classic bit-operation generator");
+for (const contract of [
+  "case i_BCHG:", "case i_BCLR:", "case i_BSET:", "case i_BTST:",
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  "curi->mnemo != i_BTST && curi->dmode != Dreg",
+  'comprintf("\\tint __bitdstealock=jit_value_lock(dsta);\\n");',
+  '"\\tjff_BTST_%c(dst, src);\\n"',
+  '"\\tjff_%s_%c(dst, src);\\n"',
+  'comprintf("\\tjnf_%s_%c(dst, src);\\n"',
+  'genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");',
+  'comprintf("\\tjit_value_unlock(__bitdstealock);\\n");',
+]) requireText(bitopGenerator, contract, "classic bit-operation generator lifecycle");
+requireBefore(bitopGenerator, "jit_value_lock(dsta)", "jff_%s_%c", "bit-op EA lock before flag-producing RMW");
+requireBefore(bitopGenerator, "jit_value_lock(dsta)", "jnf_%s_%c", "bit-op EA lock before no-flags RMW");
+requireBefore(bitopGenerator, 'genastore ("dst"', "jit_value_unlock(__bitdstealock)", "bit-op EA unlock after store");
+
+const bitopBody = (name: string, args: string) => functionBody(
+  midfunc2Source, `MIDFUNC(2,${name},(${args}))`, `MENDFUNC(2,${name},(${args}))`, name,
+);
+const modifyingFamilies = ["BCHG", "BCLR", "BSET"] as const;
+for (const family of modifyingFamilies) {
+  for (const [width, rw] of [["b", "RW1"], ["l", "RW4"]] as const) {
+    const immNoFlags = bitopBody(`jnf_${family}_${width}_imm`, `${rw} d, IM8 s`);
+    const dynNoFlags = bitopBody(`jnf_${family}_${width}`, `${rw} d, RR4 s`);
+    for (const body of [immNoFlags, dynNoFlags]) {
+      for (const forbidden of ["MRS_NZCV", "MSR_NZCV", "TST_ww", "CSET_xc"])
+        if (body.includes(forbidden)) fail(`no-flags ${family}.${width} clobbers or publishes NZCV via ${forbidden}`);
+    }
+    requireText(immNoFlags, width === "b" ? "s & 0x7" : "s & 0x1f", `${family}.${width} immediate modulo count`);
+    requireText(dynNoFlags, width === "b" ? "UBFIZ_xxii(REG_WORK1, s, 0, 3)" : "UBFIZ_xxii(REG_WORK1, s, 0, 5)", `${family}.${width} dynamic modulo count`);
+
+    const immFlags = bitopBody(`jff_${family}_${width}_imm`, `${rw} d, IM8 s`);
+    const dynFlags = bitopBody(`jff_${family}_${width}`, `${rw} d, RR4 s`);
+    for (const body of [immFlags, dynFlags]) {
+      requireText(body, "MRS_NZCV_x(REG_WORK1);", `${family}.${width} preserve incoming NZVC`);
+      requireText(body, "MSR_NZCV_x(REG_WORK1);", `${family}.${width} restore incoming NZVC with architectural Z`);
+    }
+    requireText(dynFlags, "CSET_xc(REG_WORK3, NATIVE_CC_EQ);", `${family}.${width} dynamic original-bit Z`);
+    requireText(dynFlags, "BFI_xxii(REG_WORK1, REG_WORK3, 30, 1);", `${family}.${width} dynamic Z-only publication`);
+  }
+}
+for (const [width, rr] of [["b", "RR1"], ["l", "RR4"]] as const) {
+  const imm = bitopBody(`jff_BTST_${width}_imm`, `${rr} d, IM8 s`);
+  const dyn = bitopBody(`jff_BTST_${width}`, `${rr} d, RR4 s`);
+  for (const body of [imm, dyn]) {
+    requireText(body, "MRS_NZCV_x(REG_WORK1);", `BTST.${width} preserve incoming NZVC`);
+    requireText(body, "MSR_NZCV_x(REG_WORK1);", `BTST.${width} restore incoming NZVC with architectural Z`);
+    for (const forbidden of ["EOR_", "BIC_", "ORR_", "SET_xxbit", "CLEAR_xxbit"])
+      if (body.includes(forbidden)) fail(`read-only BTST.${width} mutates its destination via ${forbidden}`);
+  }
+}
+const bchgImmLong = bitopBody("jff_BCHG_l_imm", "RW4 d, IM8 s");
+requireBefore(bchgImmLong, "EOR_xxbit", "UBFX_xxii", "BCHG immediate derives Z from toggled/original inverse bit");
+const bchgDynLong = bitopBody("jff_BCHG_l", "RW4 d, RR4 s");
+requireBefore(bchgDynLong, "TST_ww", "EOR_www", "BCHG dynamic samples original bit before toggle");
+requireText(
+  bitopBody("jnf_BCLR_l_imm", "RW4 d, IM8 s"),
+  "uae_u32(1) << (s & 0x1f)",
+  "BCLR.L unsigned bit-31 constant folding",
+);
+
+const generatedBitopLocks = (generatedSource.match(/int __bitdstealock=jit_value_lock\(dsta\);/g) || []).length;
+const generatedBitopUnlocks = (generatedSource.match(/jit_value_unlock\(__bitdstealock\);/g) || []).length;
+if (generatedBitopLocks !== 108 || generatedBitopUnlocks !== 108)
+  fail(`generated modifying bit-op EA lifecycle: locks=${generatedBitopLocks} unlocks=${generatedBitopUnlocks}`);
+for (const [token, expected] of [
+  ["jff_BCHG_b(dst, src);", 18], ["jnf_BCHG_b(dst, src);", 18],
+  ["jff_BCLR_b(dst, src);", 18], ["jnf_BCLR_b(dst, src);", 18],
+  ["jff_BSET_b(dst, src);", 18], ["jnf_BSET_b(dst, src);", 18],
+  ["jff_BTST_b(dst, src);", 20], ["jff_BTST_l(dst, src);", 2],
+] as const) {
+  const found = generatedSource.split(token).length - 1;
+  if (found !== expected) fail(`generated bit-op route ${token}: expected ${expected}, found ${found}`);
+}
+const focusedBitopCount = (harnessSource.match(/^TESTS\[bitop_core_/gm) || []).length;
+if (focusedBitopCount !== 29) fail(`classic bit-op exact-native matrix: expected 29, found ${focusedBitopCount}`);
+for (const contract of [
+  'for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"',
+  "bitop_core_bchg_imm_aind_zero_special_native",
+  "bitop_core_bset_dyn_index_one_special_native",
+  "bitop_core_bclr_imm_absl_one_special_native",
+  "bitop_core_btst_dyn_aind_set_special_native",
+]) requireText(harnessSource, contract, "classic bit-op exact-native gate");
+for (const contract of [
+  "bitop_b_ea_value_collision", "[bitop_b_ea_value_collision]=20", "[bitop_b_ea_value_collision]=21",
+]) requireText(regallocPressureSource, contract, "classic bit-op allocator pressure");
+for (const active of ["bitop_core_bchg_dyn_l_alias_native", "bitop_core_bset_dyn_index_one_special_native"])
+  requireText(activeRiskySource, active, `classic bit-op active-risky ${active}`);
+requireText(allocatorSource, "const bool explicit_target = force_target >= 0 && r == force_target;", "private RMW pressure targeting");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
@@ -3161,4 +3263,9 @@ console.log("METRIC structural_scc_exact_native_vectors=17");
 console.log("METRIC structural_dbcc_dynamic_edge_lifecycle=1");
 console.log("METRIC structural_dbcc_exact_native_vectors=18");
 console.log("METRIC structural_dbcc_scc_allocator_pressure=2");
+console.log("METRIC structural_bitop_midfunc_routes=28");
+console.log("METRIC structural_bitop_exact_native_vectors=29");
+console.log("METRIC structural_bitop_memory_ea_locks=108");
+console.log("METRIC structural_bitop_unsigned_constant_fold=1");
+console.log("METRIC structural_bitop_allocator_pressure=1");
 console.log("METRIC structural_runtime_helper_logical_opcode=1");

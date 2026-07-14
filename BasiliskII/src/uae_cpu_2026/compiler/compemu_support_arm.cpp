@@ -3976,13 +3976,15 @@ static int rmw(int r)
 #if defined(CPU_AARCH64)
     /* The pressure hook normally intercepts write-only allocation in
        writereg(). Constant-backed scratch RMW values (NEGX) and explicitly
-       selected architectural RMW destinations (MOVE.B/W) enter here instead.
-       A correctly ordered operation has already pinned every crossing source,
+       selected architectural or private RMW destinations enter here instead.
+       Private RMW targeting is required to prove that an already-fetched
+       memory value cannot steal its still-live effective-address mapping.
+       A correctly ordered operation has already pinned every crossing value,
        so the attempted host alias must be rejected. */
     const int force_target = b2_force_scratch_target_vreg();
     const bool historical_const_scratch = r >= S1 && isconst(r) &&
         (force_target < 0 || r == force_target);
-    const bool explicit_target = force_target >= 0 && force_target < S1 && r == force_target;
+    const bool explicit_target = force_target >= 0 && r == force_target;
     if (historical_const_scratch || explicit_target) {
         int pin_vreg = b2_force_scratch_alias_vreg();
         if (pin_vreg >= 0 && isinreg(pin_vreg)) {

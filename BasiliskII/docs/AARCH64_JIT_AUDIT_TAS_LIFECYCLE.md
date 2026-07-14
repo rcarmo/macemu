@@ -71,10 +71,11 @@ source and native-runtime proof, not on an opcode-local rewrite.
 ## Memory RMW and effective-address lifecycle
 
 Every generated memory form retains one EA value across
-`readbyte -> jff_TAS -> writebyte`. Postincrement saves the original EA before
-updating An; predecrement updates An before the read and then retains that
-updated EA for the write. Both byte update modes use `areg_byteinc[]`, which
-selects a two-byte step for A7 and one byte for A0-A6.
+`readbyte -> jit_value_lock(srca) -> jff_TAS -> writebyte -> jit_value_unlock`.
+Postincrement saves the original EA before updating An; predecrement updates An
+before the read and then retains that updated EA for the write. Both byte update
+modes use `areg_byteinc[]`, which selects a two-byte step for A7 and one byte for
+A0-A6.
 
 The same generic read/write primitives route ordinary RAM directly and forced
 special memory through the bank helpers. The previously audited byte-write
@@ -116,25 +117,41 @@ METRIC score=100
 
 ## Allocator ownership
 
-For `TAS.B (A0)`, the generated read owns A0's host register while acquiring
-S1 for the fetched byte. The pressure cell forces S1 toward A0's host mapping.
-Both compile attempts observe the live EA lock and reject the alias; exact
-native execution then produces the same complete state as the interpreter:
+The original pressure hook covered write-only allocation during `readbyte`, but
+could not target the later private `rmw(src)`. Extending the diagnostic hook to
+explicit private RMW targets exposed a residual post-read lifetime defect:
 
 ```text
-REGPRESSURE cell=tas_b_ea_value_collision status=PASS pin=0 skip=2 natexec=1 interpop=1
+pre-repair: status=FAIL pin=1 skip=2 natexec=1 interpop=1
+interpreter D0=a5a50080 SR=2718
+JIT         D0=a5a50000 SR=2714
 ```
 
-The complete eight-cell suite also retains the accepted MULL, memory-ROX,
-MOVEM, and NEGX witnesses.
+After `readbyte` released its transient address lock, the forced S1 byte RMW
+could take A0's still-needed host mapping and redirect the final store. The
+generator now explicitly locks every memory `srca` after the read and releases
+it only after `genastore`. The strengthened witness is:
+
+```text
+post-repair: status=PASS pin=0 skip=3 natexec=1 interpop=1
+interpreter D0=a5a50080 SR=2718
+JIT         D0=a5a50080 SR=2718
+```
+
+Generated source contains 14 matched TAS EA locks/unlocks: seven memory forms in
+each nominal compiler table. This correction was found during the later classic
+bit-operation audit; it supersedes the weaker `pin=0 skip=2` evidence recorded
+at the initial TAS publication.
 
 ## Acceptance evidence
 
-The complete active-risky campaign passes **684/684**, with zero semantic,
-infrastructure, timeout, emulator-exit, missing-dump, multiple-dump, sentinel,
-or native-evidence failures. A clean AArch64 build followed by the focused
-matrix passes 13/13, and the post-clean complete allocator suite passes all
-eight cells.
+At initial publication, the complete active-risky campaign passed **684/684**,
+the focused matrix passed 13/13, and the then-current eight allocator cells
+passed. After the strengthened private-RMW hook exposed and repaired the
+post-read EA gap, a clean rebuild passed the combined TAS/classic-bit focused
+matrix 42/42, the expanded active corpus 691/691, and all 12 allocator cells.
+All runs had zero semantic, infrastructure, timeout, emulator-exit,
+missing-dump, multiple-dump, sentinel, or native-evidence failures.
 
 Two independent runs of the authoritative generator reproduced
 `src/Unix/compemu.cpp` byte-for-byte and left it clean:
@@ -157,7 +174,7 @@ The regenerated closure census remains 997 rows. TAS promotion changes only
   `jff_TAS`, with no caller of `jnf_TAS`;
 - sign-extension and TST of the original byte before ORing bit 7;
 - non-inverted C publication, Dn byte-only writeback, and A7 geometry;
-- read/RMW/write order for all seven generated memory EA classes;
+- read/EA-lock/RMW/write/EA-unlock order for all seven generated memory EA classes;
 - all 13 exact-native vectors, three special-memory routes, active-risky
   sentinel, and the EA/value collision witness.
 

@@ -1506,12 +1506,14 @@ void REGPARAM2 op_150_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1556,12 +1558,14 @@ void REGPARAM2 op_158_0_comp_ff(uae_u32 opcode) /* BCHG */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1607,12 +1611,14 @@ void REGPARAM2 op_160_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1657,12 +1663,14 @@ void REGPARAM2 op_168_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1706,12 +1714,14 @@ void REGPARAM2 op_170_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1750,12 +1760,14 @@ void REGPARAM2 op_178_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1794,12 +1806,14 @@ void REGPARAM2 op_179_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1841,12 +1855,14 @@ void REGPARAM2 op_17a_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -1889,12 +1905,14 @@ void REGPARAM2 op_17b_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2013,12 +2031,14 @@ void REGPARAM2 op_190_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2063,12 +2083,14 @@ void REGPARAM2 op_198_0_comp_ff(uae_u32 opcode) /* BCLR */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2114,12 +2136,14 @@ void REGPARAM2 op_1a0_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2164,12 +2188,14 @@ void REGPARAM2 op_1a8_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2213,12 +2239,14 @@ void REGPARAM2 op_1b0_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2257,12 +2285,14 @@ void REGPARAM2 op_1b8_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2301,12 +2331,14 @@ void REGPARAM2 op_1b9_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2348,12 +2380,14 @@ void REGPARAM2 op_1ba_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2396,12 +2430,14 @@ void REGPARAM2 op_1bb_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2520,12 +2556,14 @@ void REGPARAM2 op_1d0_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2570,12 +2608,14 @@ void REGPARAM2 op_1d8_0_comp_ff(uae_u32 opcode) /* BSET */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2621,12 +2661,14 @@ void REGPARAM2 op_1e0_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2671,12 +2713,14 @@ void REGPARAM2 op_1e8_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2720,12 +2764,14 @@ void REGPARAM2 op_1f0_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2764,12 +2810,14 @@ void REGPARAM2 op_1f8_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2808,12 +2856,14 @@ void REGPARAM2 op_1f9_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2855,12 +2905,14 @@ void REGPARAM2 op_1fa_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -2903,12 +2955,14 @@ void REGPARAM2 op_1fb_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -5884,12 +5938,14 @@ void REGPARAM2 op_850_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -5930,12 +5986,14 @@ void REGPARAM2 op_858_0_comp_ff(uae_u32 opcode) /* BCHG */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -5977,12 +6035,14 @@ void REGPARAM2 op_860_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6023,12 +6083,14 @@ void REGPARAM2 op_868_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6068,12 +6130,14 @@ void REGPARAM2 op_870_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6108,12 +6172,14 @@ void REGPARAM2 op_878_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6148,12 +6214,14 @@ void REGPARAM2 op_879_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6191,12 +6259,14 @@ void REGPARAM2 op_87a_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6235,12 +6305,14 @@ void REGPARAM2 op_87b_0_comp_ff(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCHG_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6325,12 +6397,14 @@ void REGPARAM2 op_890_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6371,12 +6445,14 @@ void REGPARAM2 op_898_0_comp_ff(uae_u32 opcode) /* BCLR */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6418,12 +6494,14 @@ void REGPARAM2 op_8a0_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6464,12 +6542,14 @@ void REGPARAM2 op_8a8_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6509,12 +6589,14 @@ void REGPARAM2 op_8b0_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6549,12 +6631,14 @@ void REGPARAM2 op_8b8_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6589,12 +6673,14 @@ void REGPARAM2 op_8b9_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6632,12 +6718,14 @@ void REGPARAM2 op_8ba_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6676,12 +6764,14 @@ void REGPARAM2 op_8bb_0_comp_ff(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BCLR_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6766,12 +6856,14 @@ void REGPARAM2 op_8d0_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6812,12 +6904,14 @@ void REGPARAM2 op_8d8_0_comp_ff(uae_u32 opcode) /* BSET */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6859,12 +6953,14 @@ void REGPARAM2 op_8e0_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6905,12 +7001,14 @@ void REGPARAM2 op_8e8_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6950,12 +7048,14 @@ void REGPARAM2 op_8f0_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -6990,12 +7090,14 @@ void REGPARAM2 op_8f8_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -7030,12 +7132,14 @@ void REGPARAM2 op_8f9_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -7073,12 +7177,14 @@ void REGPARAM2 op_8fa_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -7117,12 +7223,14 @@ void REGPARAM2 op_8fb_0_comp_ff(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	make_flags_live();
 	start_needflags();
 	jff_BSET_b(dst, src);
 	live_flags();
 	end_needflags();
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -24472,11 +24580,13 @@ void REGPARAM2 op_4ad0_0_comp_ff(uae_u32 opcode) /* TAS */
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -24498,11 +24608,13 @@ void REGPARAM2 op_4ad8_0_comp_ff(uae_u32 opcode) /* TAS */
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
 	lea_l_brr(srcreg + 8,srcreg + 8, areg_byteinc[srcreg]);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -24525,11 +24637,13 @@ void REGPARAM2 op_4ae0_0_comp_ff(uae_u32 opcode) /* TAS */
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -24551,11 +24665,13 @@ void REGPARAM2 op_4ae8_0_comp_ff(uae_u32 opcode) /* TAS */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -24576,11 +24692,13 @@ void REGPARAM2 op_4af0_0_comp_ff(uae_u32 opcode) /* TAS */
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -24596,11 +24714,13 @@ void REGPARAM2 op_4af8_0_comp_ff(uae_u32 opcode) /* TAS */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -24616,11 +24736,13 @@ void REGPARAM2 op_4af9_0_comp_ff(uae_u32 opcode) /* TAS */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -51950,8 +52072,10 @@ void REGPARAM2 op_150_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -51992,8 +52116,10 @@ void REGPARAM2 op_158_0_comp_nf(uae_u32 opcode) /* BCHG */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52035,8 +52161,10 @@ void REGPARAM2 op_160_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52077,8 +52205,10 @@ void REGPARAM2 op_168_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52118,8 +52248,10 @@ void REGPARAM2 op_170_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52154,8 +52286,10 @@ void REGPARAM2 op_178_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52190,8 +52324,10 @@ void REGPARAM2 op_179_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52229,8 +52365,10 @@ void REGPARAM2 op_17a_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52269,8 +52407,10 @@ void REGPARAM2 op_17b_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52377,8 +52517,10 @@ void REGPARAM2 op_190_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52419,8 +52561,10 @@ void REGPARAM2 op_198_0_comp_nf(uae_u32 opcode) /* BCLR */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52462,8 +52606,10 @@ void REGPARAM2 op_1a0_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52504,8 +52650,10 @@ void REGPARAM2 op_1a8_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52545,8 +52693,10 @@ void REGPARAM2 op_1b0_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52581,8 +52731,10 @@ void REGPARAM2 op_1b8_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52617,8 +52769,10 @@ void REGPARAM2 op_1b9_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52656,8 +52810,10 @@ void REGPARAM2 op_1ba_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52696,8 +52852,10 @@ void REGPARAM2 op_1bb_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52804,8 +52962,10 @@ void REGPARAM2 op_1d0_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52846,8 +53006,10 @@ void REGPARAM2 op_1d8_0_comp_nf(uae_u32 opcode) /* BSET */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52889,8 +53051,10 @@ void REGPARAM2 op_1e0_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52931,8 +53095,10 @@ void REGPARAM2 op_1e8_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -52972,8 +53138,10 @@ void REGPARAM2 op_1f0_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -53008,8 +53176,10 @@ void REGPARAM2 op_1f8_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -53044,8 +53214,10 @@ void REGPARAM2 op_1f9_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -53083,8 +53255,10 @@ void REGPARAM2 op_1fa_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -53123,8 +53297,10 @@ void REGPARAM2 op_1fb_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55773,8 +55949,10 @@ void REGPARAM2 op_850_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55811,8 +55989,10 @@ void REGPARAM2 op_858_0_comp_nf(uae_u32 opcode) /* BCHG */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55850,8 +56030,10 @@ void REGPARAM2 op_860_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55888,8 +56070,10 @@ void REGPARAM2 op_868_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55925,8 +56109,10 @@ void REGPARAM2 op_870_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55957,8 +56143,10 @@ void REGPARAM2 op_878_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -55989,8 +56177,10 @@ void REGPARAM2 op_879_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56024,8 +56214,10 @@ void REGPARAM2 op_87a_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56060,8 +56252,10 @@ void REGPARAM2 op_87b_0_comp_nf(uae_u32 opcode) /* BCHG */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCHG_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56134,8 +56328,10 @@ void REGPARAM2 op_890_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56172,8 +56368,10 @@ void REGPARAM2 op_898_0_comp_nf(uae_u32 opcode) /* BCLR */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56211,8 +56409,10 @@ void REGPARAM2 op_8a0_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56249,8 +56449,10 @@ void REGPARAM2 op_8a8_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56286,8 +56488,10 @@ void REGPARAM2 op_8b0_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56318,8 +56522,10 @@ void REGPARAM2 op_8b8_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56350,8 +56556,10 @@ void REGPARAM2 op_8b9_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56385,8 +56593,10 @@ void REGPARAM2 op_8ba_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56421,8 +56631,10 @@ void REGPARAM2 op_8bb_0_comp_nf(uae_u32 opcode) /* BCLR */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BCLR_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56495,8 +56707,10 @@ void REGPARAM2 op_8d0_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56533,8 +56747,10 @@ void REGPARAM2 op_8d8_0_comp_nf(uae_u32 opcode) /* BSET */
 	lea_l_brr(dstreg + 8,dstreg + 8, areg_byteinc[dstreg]);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56572,8 +56788,10 @@ void REGPARAM2 op_8e0_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56610,8 +56828,10 @@ void REGPARAM2 op_8e8_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56647,8 +56867,10 @@ void REGPARAM2 op_8f0_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56679,8 +56901,10 @@ void REGPARAM2 op_8f8_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56711,8 +56935,10 @@ void REGPARAM2 op_8f9_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56746,8 +56972,10 @@ void REGPARAM2 op_8fa_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -56782,8 +57010,10 @@ void REGPARAM2 op_8fb_0_comp_nf(uae_u32 opcode) /* BSET */
 	readbyte(dsta, dst, scratchie);
 {
 #if defined(CPU_AARCH64)
+	int __bitdstealock=jit_value_lock(dsta);
 	jnf_BSET_b(dst, src);
 	writebyte(dsta, dst, scratchie);
+	jit_value_unlock(__bitdstealock);
 #else
 	int s=scratchie++;
 	int tmp=scratchie++;
@@ -71756,11 +71986,13 @@ void REGPARAM2 op_4ad0_0_comp_nf(uae_u32 opcode) /* TAS */
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -71782,11 +72014,13 @@ void REGPARAM2 op_4ad8_0_comp_nf(uae_u32 opcode) /* TAS */
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
 	lea_l_brr(srcreg + 8,srcreg + 8, areg_byteinc[srcreg]);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -71809,11 +72043,13 @@ void REGPARAM2 op_4ae0_0_comp_nf(uae_u32 opcode) /* TAS */
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -71835,11 +72071,13 @@ void REGPARAM2 op_4ae8_0_comp_nf(uae_u32 opcode) /* TAS */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -71860,11 +72098,13 @@ void REGPARAM2 op_4af0_0_comp_nf(uae_u32 opcode) /* TAS */
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -71880,11 +72120,13 @@ void REGPARAM2 op_4af8_0_comp_nf(uae_u32 opcode) /* TAS */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -71900,11 +72142,13 @@ void REGPARAM2 op_4af9_0_comp_nf(uae_u32 opcode) /* TAS */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readbyte(srca, src, scratchie);
+	int __tasealock=jit_value_lock(srca);
 	start_needflags();
 	jff_TAS(src);
 	live_flags();
 	end_needflags();
 	writebyte(srca, src, scratchie);
+	jit_value_unlock(__tasealock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();

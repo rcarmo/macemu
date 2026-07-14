@@ -1805,7 +1805,9 @@ MENDFUNC(2,jnf_BCLR_b_imm,(RW1 d, IM8 s))
 MIDFUNC(2,jnf_BCLR_l_imm,(RW4 d, IM8 s))
 {
 	if(isconst(d)) {
-		live.state[d].val = live.state[d].val & ~(1 << (s & 0x1f));
+		/* Bit 31 must be formed in the unsigned domain; signed 1 << 31 is
+		   undefined and can corrupt constant-folded no-flags BCLR.L. */
+		live.state[d].val &= ~(uae_u32(1) << (s & 0x1f));
 		return;
 	}
 	d = rmw(d);

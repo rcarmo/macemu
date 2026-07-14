@@ -473,6 +473,27 @@ declare -a DBCC_NATIVE_MATRIX_NAMES=(
     dbcc_core_gt_true_native dbcc_core_le_false_branch_native
 )
 TEST_ORDER+=("${DBCC_NATIVE_MATRIX_NAMES[@]}")
+# Complete classic bit-operation lifecycle: long Dn versus byte memory width,
+# dynamic/immediate modulo counts, original-bit Z, aliases, no-flags lowering,
+# every writable EA, A7 geometry, special memory, and exact native entry.
+declare -a BITOP_NATIVE_MATRIX_NAMES=(
+    bitop_core_btst_dyn_l_count63_native bitop_core_btst_imm_l_count63_native
+    bitop_core_bchg_dyn_l_alias_native bitop_core_bchg_imm_l_bit31_native
+    bitop_core_bclr_dyn_l_count32_native bitop_core_bclr_imm_l_bit31_noflags_native
+    bitop_core_bset_dyn_l_count63_native bitop_core_bset_imm_l_bit0_native
+    bitop_core_bchg_dyn_l_distinct_native bitop_core_bset_dyn_l_alias_native
+    bitop_core_bchg_imm_aind_zero_special_native bitop_core_bchg_imm_aind_one_native
+    bitop_core_bclr_dyn_postinc_zero_native bitop_core_bclr_dyn_predec_one_native
+    bitop_core_bset_imm_d16_zero_native bitop_core_bset_dyn_index_one_special_native
+    bitop_core_bchg_dyn_absw_zero_native bitop_core_bclr_imm_absl_one_special_native
+    bitop_core_bset_dyn_a7_postinc_zero_native bitop_core_bchg_dyn_a7_predec_one_native
+    bitop_core_btst_dyn_aind_set_special_native bitop_core_btst_imm_d16_zero_native
+    bitop_core_bchg_imm_aind_noflags_native
+    bitop_core_bset_imm_pc_d16_zero_native bitop_core_bclr_dyn_pc_index_one_native
+    bitop_core_btst_imm_pc_d16_set_native bitop_core_btst_dyn_pc_index_zero_native
+    bitop_core_btst_imm_destination_zero_native bitop_core_btst_dyn_destination_set_native
+)
+TEST_ORDER+=("${BITOP_NATIVE_MATRIX_NAMES[@]}")
 # Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
@@ -1231,6 +1252,12 @@ for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_dbcc_name"]=2
 done
 unset _dbcc_name
+for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_bitop_name"]=1
+    NATIVE_REPLAY_PC["$_bitop_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_bitop_name"]=2
+done
+unset _bitop_name
 SPECIAL_MEMORY_TESTS[move_core_b_aind_to_dn_special_native]=1
 SPECIAL_MEMORY_TESTS[move_core_w_index_to_dn_special_native]=1
 SPECIAL_MEMORY_TESTS[move_core_b_absl_to_dn_special_native]=1
@@ -1243,6 +1270,10 @@ SPECIAL_MEMORY_TESTS[move16_core_postpost_special_native]=1
 SPECIAL_MEMORY_TESTS[scc_core_aind_hi_special_native]=1
 SPECIAL_MEMORY_TESTS[scc_core_index_vs_special_native]=1
 SPECIAL_MEMORY_TESTS[scc_core_absl_gt_special_native]=1
+SPECIAL_MEMORY_TESTS[bitop_core_bchg_imm_aind_zero_special_native]=1
+SPECIAL_MEMORY_TESTS[bitop_core_bset_dyn_index_one_special_native]=1
+SPECIAL_MEMORY_TESTS[bitop_core_bclr_imm_absl_one_special_native]=1
+SPECIAL_MEMORY_TESTS[bitop_core_btst_dyn_aind_set_special_native]=1
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -1525,6 +1556,87 @@ for _dbcc_name in dbcc_core_vc_true_native dbcc_core_vs_false_branch_native; do 
 for _dbcc_name in dbcc_core_pl_true_native dbcc_core_mi_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=2712"; done
 for _dbcc_name in dbcc_core_ge_true_native dbcc_core_lt_false_branch_native dbcc_core_gt_true_native dbcc_core_le_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=271A"; done
 unset _dbcc_name
+
+# Exact-native classic bit-operation matrix. Register forms assert modulo-32
+# counts, source/destination aliases and original-bit Z. Memory forms snapshot
+# SR before a verification load so the load cannot contaminate the bit-op CCR.
+TESTS[bitop_core_btst_dyn_l_count63_native]="0300"
+TESTS[bitop_core_btst_imm_l_count63_native]="0800 003F"
+TESTS[bitop_core_bchg_dyn_l_alias_native]="0140"
+TESTS[bitop_core_bchg_imm_l_bit31_native]="0840 001F"
+TESTS[bitop_core_bclr_dyn_l_count32_native]="0380"
+TESTS[bitop_core_bclr_imm_l_bit31_noflags_native]="203C 8000 0000 0880 001F 7400"
+TESTS[bitop_core_bset_dyn_l_count63_native]="03C0"
+TESTS[bitop_core_bset_imm_l_bit0_native]="08C0 0000"
+TESTS[bitop_core_bchg_dyn_l_distinct_native]="0340"
+TESTS[bitop_core_bset_dyn_l_alias_native]="01C0"
+TESTS[bitop_core_bchg_imm_aind_zero_special_native]="0850 0007 40C2 1010"
+TESTS[bitop_core_bchg_imm_aind_one_native]="0850 0007 40C2 1010"
+TESTS[bitop_core_bclr_dyn_postinc_zero_native]="0198 40C2 1028 FFFF"
+TESTS[bitop_core_bclr_dyn_predec_one_native]="01A0 40C2 1010"
+TESTS[bitop_core_bset_imm_d16_zero_native]="08E8 0000 0010 40C2 1028 0010"
+TESTS[bitop_core_bset_dyn_index_one_special_native]="01F0 1000 40C2 1030 1000"
+TESTS[bitop_core_bchg_dyn_absw_zero_native]="0178 6000 40C2 1038 6000"
+TESTS[bitop_core_bclr_imm_absl_one_special_native]="08B9 0000 0000 A000 40C2 1039 0000 A000"
+TESTS[bitop_core_bset_dyn_a7_postinc_zero_native]="01DF 40C2 102F FFFE"
+TESTS[bitop_core_bchg_dyn_a7_predec_one_native]="0167 40C2 1017"
+TESTS[bitop_core_btst_dyn_aind_set_special_native]="0110 40C2 1210"
+TESTS[bitop_core_btst_imm_d16_zero_native]="0828 0007 0010 40C2 1228 0010"
+TESTS[bitop_core_bchg_imm_aind_noflags_native]="0850 0000 7400 1010"
+TESTS[bitop_core_bset_imm_pc_d16_zero_native]="08FA 0000 FFEC 40C2 1038 0FF0"
+TESTS[bitop_core_bclr_dyn_pc_index_one_native]="01BB 1000 40C2 1038 0FF0"
+TESTS[bitop_core_btst_imm_pc_d16_set_native]="083A 0007 FFEC 40C2 1238 0FF0"
+TESTS[bitop_core_btst_dyn_pc_index_zero_native]="013B 1000 40C2 1638 0FF0"
+TESTS[bitop_core_btst_imm_destination_zero_native]="083C 0000 0080"
+TESTS[bitop_core_btst_dyn_destination_set_native]="013C 0080"
+
+EXPECTED_REG_FIELDS[bitop_core_btst_dyn_l_count63_native]="D0=80000000 D1=0000003F SR=271B"
+EXPECTED_REG_FIELDS[bitop_core_btst_imm_l_count63_native]="D0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[bitop_core_bchg_dyn_l_alias_native]="D0=25A5001F SR=271B"
+EXPECTED_REG_FIELDS[bitop_core_bchg_imm_l_bit31_native]="D0=A5A5001F SR=271F"
+EXPECTED_REG_FIELDS[bitop_core_bclr_dyn_l_count32_native]="D0=A5A50000 D1=00000020 SR=271B"
+EXPECTED_REG_FIELDS[bitop_core_bclr_imm_l_bit31_noflags_native]="D0=00000000 D2=00000000 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_bset_dyn_l_count63_native]="D0=A5A5001F D1=0000003F SR=271F"
+EXPECTED_REG_FIELDS[bitop_core_bset_imm_l_bit0_native]="D0=A5A50001 SR=271B"
+EXPECTED_REG_FIELDS[bitop_core_bchg_dyn_l_distinct_native]="D0=A5A50000 D1=00000020 SR=271B"
+EXPECTED_REG_FIELDS[bitop_core_bset_dyn_l_alias_native]="D0=00000025 SR=271F"
+EXPECTED_REG_FIELDS[bitop_core_bchg_imm_aind_zero_special_native]="D0=A5A50080 D2=2222271F A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[bitop_core_bchg_imm_aind_one_native]="D0=A5A50000 D2=2222271B A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_bclr_dyn_postinc_zero_native]="D0=A5A50000 D2=2222271F A0=0000A001 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_bclr_dyn_predec_one_native]="D0=A5A50000 D2=2222271B A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_bset_imm_d16_zero_native]="D0=A5A50001 D2=2222271F A0=0000A000 SR=2710"
+EXPECTED_REG_FIELDS[bitop_core_bset_dyn_index_one_special_native]="D0=A5A50001 D1=00000002 D2=2222271B A0=0000A000 SR=2710"
+EXPECTED_REG_FIELDS[bitop_core_bchg_dyn_absw_zero_native]="D0=A5A50001 D2=2222271F SR=2710"
+EXPECTED_REG_FIELDS[bitop_core_bclr_imm_absl_one_special_native]="D0=A5A50000 D2=2222271B SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_bset_dyn_a7_postinc_zero_native]="D0=A5A50001 D2=2222271F A7=0000A002 SR=2710"
+EXPECTED_REG_FIELDS[bitop_core_bchg_dyn_a7_predec_one_native]="D0=A5A50000 D2=2222271B A7=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_btst_dyn_aind_set_special_native]="D0=00000007 D1=00000080 D2=2222271B A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[bitop_core_btst_imm_d16_zero_native]="D1=00000000 D2=2222271F A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_bchg_imm_aind_noflags_native]="D0=A5A50001 D2=00000000 A0=0000A000 SR=2710"
+EXPECTED_REG_FIELDS[bitop_core_bset_imm_pc_d16_zero_native]="D0=A5A50001 D2=2222271F SR=2710"
+EXPECTED_REG_FIELDS[bitop_core_bclr_dyn_pc_index_one_native]="D0=A5A50000 D1=FFFFFFEE D2=2222271B SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_btst_imm_pc_d16_set_native]="D1=00000080 D2=2222271B SR=2718"
+EXPECTED_REG_FIELDS[bitop_core_btst_dyn_pc_index_zero_native]="D0=00000007 D1=FFFFFFEE D2=2222271F D3=00000000 SR=2714"
+EXPECTED_REG_FIELDS[bitop_core_btst_imm_destination_zero_native]="SR=271F"
+EXPECTED_REG_FIELDS[bitop_core_btst_dyn_destination_set_native]="D0=00000007 SR=271B"
+
+TEST_MEMORY_BYTES[bitop_core_bchg_imm_aind_zero_special_native]="A000 00"
+TEST_MEMORY_BYTES[bitop_core_bchg_imm_aind_one_native]="A000 80"
+TEST_MEMORY_BYTES[bitop_core_bclr_dyn_postinc_zero_native]="A000 00"
+TEST_MEMORY_BYTES[bitop_core_bclr_dyn_predec_one_native]="A000 01"
+TEST_MEMORY_BYTES[bitop_core_bset_imm_d16_zero_native]="A010 00"
+TEST_MEMORY_BYTES[bitop_core_bset_dyn_index_one_special_native]="A002 01"
+TEST_MEMORY_BYTES[bitop_core_bchg_dyn_absw_zero_native]="6000 00"
+TEST_MEMORY_BYTES[bitop_core_bclr_imm_absl_one_special_native]="A000 01"
+TEST_MEMORY_BYTES[bitop_core_bset_dyn_a7_postinc_zero_native]="A000 00"
+TEST_MEMORY_BYTES[bitop_core_bchg_dyn_a7_predec_one_native]="A000 01"
+TEST_MEMORY_BYTES[bitop_core_btst_dyn_aind_set_special_native]="A000 80"
+TEST_MEMORY_BYTES[bitop_core_btst_imm_d16_zero_native]="A010 00"
+TEST_MEMORY_BYTES[bitop_core_bchg_imm_aind_noflags_native]="A000 00"
+TEST_MEMORY_BYTES[bitop_core_bset_imm_pc_d16_zero_native]="0FF0 00"
+TEST_MEMORY_BYTES[bitop_core_bclr_dyn_pc_index_one_native]="0FF0 01"
+TEST_MEMORY_BYTES[bitop_core_btst_imm_pc_d16_set_native]="0FF0 80"
+TEST_MEMORY_BYTES[bitop_core_btst_dyn_pc_index_zero_native]="0FF0 00"
 
 # Exact-native MOVE lifecycle matrix. Register/immediate forms publish NZ from
 # the selected width, clear VC, preserve X and retain untouched Dn upper lanes.
@@ -3441,6 +3553,39 @@ INIT_REGS[dbcc_core_gt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271A"
 INIT_REGS[dbcc_core_le_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 0000271A"
 unset _DBCC_INIT_TAIL
 
+_BITOP_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[bitop_core_btst_dyn_l_count63_native]="80000000 0000003F $_BITOP_ZERO_TAIL 0000271F"
+INIT_REGS[bitop_core_btst_imm_l_count63_native]="00000000 00000000 $_BITOP_ZERO_TAIL 0000271B"
+INIT_REGS[bitop_core_bchg_dyn_l_alias_native]="A5A5001F 00000000 $_BITOP_ZERO_TAIL 0000271F"
+INIT_REGS[bitop_core_bchg_imm_l_bit31_native]="25A5001F 00000000 $_BITOP_ZERO_TAIL 0000271B"
+INIT_REGS[bitop_core_bclr_dyn_l_count32_native]="A5A50001 00000020 $_BITOP_ZERO_TAIL 0000271F"
+INIT_REGS[bitop_core_bclr_imm_l_bit31_noflags_native]="00000000 00000000 $_BITOP_ZERO_TAIL 0000271F"
+INIT_REGS[bitop_core_bset_dyn_l_count63_native]="25A5001F 0000003F $_BITOP_ZERO_TAIL 0000271B"
+INIT_REGS[bitop_core_bset_imm_l_bit0_native]="A5A50001 00000000 $_BITOP_ZERO_TAIL 0000271F"
+INIT_REGS[bitop_core_bchg_dyn_l_distinct_native]="A5A50001 00000020 $_BITOP_ZERO_TAIL 0000271F"
+INIT_REGS[bitop_core_bset_dyn_l_alias_native]="00000005 00000000 $_BITOP_ZERO_TAIL 0000271B"
+unset _BITOP_ZERO_TAIL
+
+INIT_REGS[bitop_core_bchg_imm_aind_zero_special_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_bchg_imm_aind_one_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_bclr_dyn_postinc_zero_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_bclr_dyn_predec_one_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A001 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_bset_imm_d16_zero_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_bset_dyn_index_one_special_native]="A5A50000 00000002 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_bchg_dyn_absw_zero_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_bclr_imm_absl_one_special_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_bset_dyn_a7_postinc_zero_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271B"
+INIT_REGS[bitop_core_bchg_dyn_a7_predec_one_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 0000271F"
+INIT_REGS[bitop_core_btst_dyn_aind_set_special_native]="00000007 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_btst_imm_d16_zero_native]="00000000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_bchg_imm_aind_noflags_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_bset_imm_pc_d16_zero_native]="A5A50000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_bclr_dyn_pc_index_one_native]="A5A50000 FFFFFFEE 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_btst_imm_pc_d16_set_native]="00000000 00000000 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[bitop_core_btst_dyn_pc_index_zero_native]="00000007 FFFFFFEE 22222222 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_btst_imm_destination_zero_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
+INIT_REGS[bitop_core_btst_dyn_destination_set_native]="00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+
 _MOVE_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[move_core_b_reg_negative_native]="A5A50000 00000080 $_MOVE_ZERO_TAIL 00002717"
 INIT_REGS[move_core_b_reg_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
@@ -3845,6 +3990,12 @@ for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     ((_dbcc_sentinel_id+=1))
 done
 unset _dbcc_name _dbcc_sentinel_id
+_bitop_sentinel_id=1
+for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_bitop_name"] 'a60d%04x' "$_bitop_sentinel_id"
+    ((_bitop_sentinel_id+=1))
+done
+unset _bitop_name _bitop_sentinel_id
 SENTINEL_A6[addx_basic]="a60100d4"
 SENTINEL_A6[subx_basic]="a60100d5"
 SENTINEL_A6[ext_word]="a60100d6"
@@ -5299,6 +5450,10 @@ for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_dbcc_name"]=1
 done
 unset _dbcc_name
+for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_bitop_name"]=1
+done
+unset _bitop_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

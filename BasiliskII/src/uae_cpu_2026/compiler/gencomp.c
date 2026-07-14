@@ -1850,6 +1850,12 @@ gen_opcode (unsigned int opcode)
 	       bit-op midfuncs instead; their jff forms set m68k Z directly from the
 	       original tested bit and then perform the data mutation. */
 	    comprintf("\n#if defined(CPU_AARCH64)\n");
+	    /* Modifying memory bit operations retain the pre-write EA after the byte
+	       fetch while condition sampling and the value RMW allocate registers.
+	       Own that EA until the ordered store completes; otherwise the RMW value
+	       can evict/alias its private address mapping under allocator pressure. */
+	    if (curi->mnemo != i_BTST && curi->dmode != Dreg)
+		comprintf("\tint __bitdstealock=jit_value_lock(dsta);\n");
 	    if (curi->mnemo == i_BTST) {
 		if (!noflags) {
 		    comprintf("\tmake_flags_live();\n"
@@ -1869,6 +1875,8 @@ gen_opcode (unsigned int opcode)
 		    comprintf("\tjnf_%s_%c(dst, src);\n", armop, curi->size == sz_byte ? 'b' : 'l');
 		}
 		genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");
+		if (curi->dmode != Dreg)
+		    comprintf("\tjit_value_unlock(__bitdstealock);\n");
 	    }
 	    comprintf("#else\n");
 	    comprintf("\tint s=scratchie++;\n"
@@ -3642,11 +3650,18 @@ gen_opcode (unsigned int opcode)
 	 case i_TAS:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* TAS retains the fetched byte's EA through flag publication, value RMW,
+	   and final store. Own memory EAs explicitly: a private byte destination
+	   must not evict or alias the still-live address mapping. */
+	if (curi->smode != Dreg)
+	    comprintf("\tint __tasealock=jit_value_lock(srca);\n");
 	comprintf("\tstart_needflags();\n");
 	comprintf("\tjff_TAS(src);\n");
 	comprintf("\tlive_flags();\n");
 	comprintf("\tend_needflags();\n");
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
+	if (curi->smode != Dreg)
+	    comprintf("\tjit_value_unlock(__tasealock);\n");
 #else
 	failure;
 #endif
