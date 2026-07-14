@@ -5341,13 +5341,19 @@ MIDFUNC(2,jff_MULS32,(RW4 d, RR4 s))
 	INIT_REGS_l(d, s);
 
 	SMULL_xww(d, d, s);
-	TST_ww(d, d);
+	/* m68k_mull() derives N/Z from the full mathematical product even when
+	   only Dl is selected; a non-zero overflow with low word zero is not Z. */
+	TST_xx(d, d);
 
 	if (needed_flags & FLAG_V) {
-		LSR_xxi(REG_WORK1, d, 32);
-		CBZ_wi(REG_WORK1, 4);
+		/* V is set only when the full signed product is not the sign extension
+		   of its low 32 bits.  Preserve the full-product N/Z/C result while
+		   deriving V branchlessly from that exact comparison. */
 		MRS_NZCV_x(REG_WORK4);
-		SET_xxVflag(REG_WORK4, REG_WORK4);
+		SXTW_xw(REG_WORK1, d);
+		CMP_xx(d, REG_WORK1);
+		CSET_xc(REG_WORK2, NATIVE_CC_NE);
+		ORR_xxxLSLi(REG_WORK4, REG_WORK4, REG_WORK2, 28);
 		MSR_NZCV_x(REG_WORK4);
 	}
 	MOV_ww(d, d); // Clean upper 32 bits after 64-bit multiply (after overflow check reads upper bits)
@@ -5356,48 +5362,51 @@ MIDFUNC(2,jff_MULS32,(RW4 d, RR4 s))
 }
 MENDFUNC(2,jff_MULS32,(RW4 d, RR4 s))
 
-MIDFUNC(2,jnf_MULS64,(RW4 d, RW4 s))
+/* A 64-bit MULL has two architectural destinations and one read-only source.
+   Stage both inputs in reserved work registers before acquiring either output;
+   then publish high first and low second, matching m68k_mull() when dh == dl.
+   This also keeps a distinct Dn source unchanged and makes source/destination
+   aliases independent of allocator placement. */
+#define STAGE_MULL32_OPERAND(vreg, workreg) do { \
+	if (isconst(vreg)) { \
+		LOAD_U32(workreg, live.state[vreg].val); \
+	} else { \
+		int _mull_input = readreg(vreg); \
+		MOV_ww(workreg, _mull_input); \
+		unlock2(_mull_input); \
+	} \
+} while (0)
+
+#define PUBLISH_MULL64_RESULT(dl, dh) do { \
+	int _mull_hi = writereg(dh); \
+	LSR_xxi(_mull_hi, REG_WORK3, 32); \
+	unlock2(_mull_hi); \
+	int _mull_lo = writereg(dl); \
+	MOV_ww(_mull_lo, REG_WORK3); \
+	unlock2(_mull_lo); \
+} while (0)
+
+MIDFUNC(3,jnf_MULS64,(W4 dl, W4 dh, RR4 s))
 {
-	s = rmw(s);
-	d = rmw(d);
-
-	SMULL_xww(d, d, s);
-	LSR_xxi(s, d, 32);
-	MOV_ww(d, d); // Clean upper 32 bits of d after 64-bit multiply
-
-	unlock2(s);
-	unlock2(d);
+	STAGE_MULL32_OPERAND(dl, REG_WORK1);
+	STAGE_MULL32_OPERAND(s, REG_WORK2);
+	SMULL_xww(REG_WORK3, REG_WORK1, REG_WORK2);
+	PUBLISH_MULL64_RESULT(dl, dh);
 }
-MENDFUNC(2,jnf_MULS64,(RW4 d, RW4 s))
+MENDFUNC(3,jnf_MULS64,(W4 dl, W4 dh, RR4 s))
 
-MIDFUNC(2,jff_MULS64,(RW4 d, RW4 s))
+MIDFUNC(3,jff_MULS64,(W4 dl, W4 dh, RR4 s))
 {
-	s = rmw(s);
-	d = rmw(d);
+	STAGE_MULL32_OPERAND(dl, REG_WORK1);
+	STAGE_MULL32_OPERAND(s, REG_WORK2);
+	SMULL_xww(REG_WORK3, REG_WORK1, REG_WORK2);
+	TST_xx(REG_WORK3, REG_WORK3);
+	PUBLISH_MULL64_RESULT(dl, dh);
 
-	SXTW_xw(REG_WORK1, d);
-	SXTW_xw(REG_WORK2, s);
-	SMULL_xww(d, REG_WORK1, REG_WORK2);
-	TST_xx(d, d);
-	LSR_xxi(s, d, 32);
-	MOV_ww(d, d); // Clean upper 32 bits of d after 64-bit multiply
-
-	if (needed_flags & FLAG_V) {
-		// check overflow: no overflow if high part is 0 or 0xffffffff
-		SMULH_xxx(REG_WORK3, REG_WORK1, REG_WORK2);
-		CBZ_xi(REG_WORK3, 6);
-		ADD_wwi(REG_WORK3, REG_WORK3, 1);
-		CBZ_xi(REG_WORK3, 4);
-		MRS_NZCV_x(REG_WORK4);
-		SET_xxVflag(REG_WORK4, REG_WORK4);
-		MSR_NZCV_x(REG_WORK4);
-	}
-
+	/* A signed 32x32 product always fits in the selected 64-bit result. */
 	flags_carry_inverted = false;
-	unlock2(s);
-	unlock2(d);
 }
-MENDFUNC(2,jff_MULS64,(RW4 d, RW4 s))
+MENDFUNC(3,jff_MULS64,(W4 dl, W4 dh, RR4 s))
 
 /*
  * MULU
@@ -5480,66 +5489,50 @@ MIDFUNC(2,jff_MULU32,(RW4 d, RR4 s))
 	INIT_REGS_l(d, s);
 
 	UMULL_xww(d, d, s);
-	TST_ww(d, d);
+	/* Match m68k_mull(): N/Z describe the full unsigned 64-bit product. */
+	TST_xx(d, d);
 
 	if (needed_flags & FLAG_V) {
-		LSR_xxi(REG_WORK1, d, 32);
-		CBZ_wi(REG_WORK1, 4);
+		/* V is the non-zero high half.  Avoid an instruction-count branch and
+		   restore the full-product N/Z/C bits after the comparison. */
 		MRS_NZCV_x(REG_WORK4);
-		SET_xxVflag(REG_WORK4, REG_WORK4);
+		LSR_xxi(REG_WORK1, d, 32);
+		CMP_xi(REG_WORK1, 0);
+		CSET_xc(REG_WORK2, NATIVE_CC_NE);
+		ORR_xxxLSLi(REG_WORK4, REG_WORK4, REG_WORK2, 28);
 		MSR_NZCV_x(REG_WORK4);
 	}
-	MOV_ww(d, d); // Clean upper 32 bits after 64-bit multiply (after overflow check reads upper bits)
+	MOV_ww(d, d); // Clean upper 32 bits after overflow and full-product flag tests
 
 	flags_carry_inverted = false;
 	EXIT_REGS(d, s);
 }
 MENDFUNC(2,jff_MULU32,(RW4 d, RR4 s))
 
-MIDFUNC(2,jnf_MULU64,(RW4 d, RW4 s))
+MIDFUNC(3,jnf_MULU64,(W4 dl, W4 dh, RR4 s))
 {
-	s = rmw(s);
-	d = rmw(d);
-
-	UMULL_xww(d, d, s);
-	LSR_xxi(s, d, 32);
-	MOV_ww(d, d); // Clean upper 32 bits of d after 64-bit multiply
-
-	unlock2(s);
-	unlock2(d);
+	STAGE_MULL32_OPERAND(dl, REG_WORK1);
+	STAGE_MULL32_OPERAND(s, REG_WORK2);
+	UMULL_xww(REG_WORK3, REG_WORK1, REG_WORK2);
+	PUBLISH_MULL64_RESULT(dl, dh);
 }
-MENDFUNC(2,jnf_MULU64,(RW4 d, RW4 s))
+MENDFUNC(3,jnf_MULU64,(W4 dl, W4 dh, RR4 s))
 
-MIDFUNC(2,jff_MULU64,(RW4 d, RW4 s))
+MIDFUNC(3,jff_MULU64,(W4 dl, W4 dh, RR4 s))
 {
-	s = rmw(s);
-	d = rmw(d);
+	STAGE_MULL32_OPERAND(dl, REG_WORK1);
+	STAGE_MULL32_OPERAND(s, REG_WORK2);
+	UMULL_xww(REG_WORK3, REG_WORK1, REG_WORK2);
+	TST_xx(REG_WORK3, REG_WORK3);
+	PUBLISH_MULL64_RESULT(dl, dh);
 
-	if (needed_flags & FLAG_V) {
-		MOV_ww(REG_WORK1, d);
-		MOV_ww(REG_WORK2, s);
-		UMULL_xww(d, REG_WORK1, REG_WORK2);
-	} else {
-		UMULL_xww(d, d, s);
-	}
-	TST_xx(d, d);
-	LSR_xxi(s, d, 32);
-	MOV_ww(d, d); // Clean upper 32 bits of d after 64-bit multiply
-
-	if (needed_flags & FLAG_V) {
-		// check overflow: no overflow if high part is 0
-		UMULH_xxx(REG_WORK3, REG_WORK1, REG_WORK2);
-		CBZ_xi(REG_WORK3, 4);
-		MRS_NZCV_x(REG_WORK4);
-		SET_xxVflag(REG_WORK4, REG_WORK4);
-		MSR_NZCV_x(REG_WORK4);
-	}
-
+	/* An unsigned 32x32 product always fits in the selected 64-bit result. */
 	flags_carry_inverted = false;
-	unlock2(s);
-	unlock2(d);
 }
-MENDFUNC(2,jff_MULU64,(RW4 d, RW4 s))
+MENDFUNC(3,jff_MULU64,(W4 dl, W4 dh, RR4 s))
+
+#undef PUBLISH_MULL64_RESULT
+#undef STAGE_MULL32_OPERAND
 
 /*
  * NEG

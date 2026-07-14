@@ -323,6 +323,14 @@ const compemuArmHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_arm.h",
   import.meta.url,
 )).text();
+const midfuncArmHeaderSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm.h",
+  import.meta.url,
+)).text();
+const midfuncArm2HeaderSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm2.h",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -874,6 +882,146 @@ for (const opcode of ["e120", "e160", "e1a0"] as const) {
 const activeRiskyNames = new Set(
   activeRiskySource.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#")),
 );
+
+/* MULL is one generator/MIDFUNC/allocator lifecycle. Dl must be pinned while
+ * the source EA is fetched; selected-64 handlers own explicit Dl/Dh/source
+ * operands; selected-32 flags describe the full mathematical product. */
+const mullGenerator = functionBody(
+  gencompSource,
+  "     case i_MULL:",
+  "     case i_BFTST:",
+  "MULL generator family",
+);
+for (const contract of [
+  "int dl = (extra >> 12) & 7;",
+  "int dh = extra & 7;",
+  "int mull_dl_lock = jit_value_lock(dl);",
+  "jit_value_unlock(mull_dl_lock);",
+  "jnf_MULS64(dl, dh, src);",
+  "jff_MULS64(dl, dh, src);",
+  "jnf_MULU64(dl, dh, src);",
+  "jff_MULU64(dl, dh, src);",
+]) {
+  requireText(mullGenerator, contract, "MULL generator ownership");
+  requireText(generatedSource, contract, "generated MULL ownership");
+}
+requireBefore(mullGenerator, "jit_value_lock(dl)", "GENA_GETV_FETCH", "MULL Dl/source ordering");
+requireBefore(mullGenerator, "GENA_GETV_FETCH", "jit_value_unlock(mull_dl_lock)", "MULL Dl/source ordering");
+for (const forbidden of [
+  "jnf_MULS64(dl, src)", "jff_MULS64(dl, src)",
+  "jnf_MULU64(dl, src)", "jff_MULU64(dl, src)",
+  "src now has high 32 bits", "mov_l_rr(dh, src)",
+]) {
+  if (mullGenerator.includes(forbidden) || generatedSource.includes(forbidden)) {
+    fail(`MULL generator ownership: obsolete source-write contract remains: ${forbidden}`);
+  }
+}
+
+const mullSigned32 = functionBody(
+  midfunc2Source,
+  "MIDFUNC(2,jff_MULS32,",
+  "MIDFUNC(3,jnf_MULS64,",
+  "signed selected-32 MULL flags",
+);
+const mullUnsigned32 = functionBody(
+  midfunc2Source,
+  "MIDFUNC(2,jff_MULU32,",
+  "MIDFUNC(3,jnf_MULU64,",
+  "unsigned selected-32 MULL flags",
+);
+for (const [body, signed] of [[mullSigned32, true], [mullUnsigned32, false]] as const) {
+  const label = signed ? "signed" : "unsigned";
+  requireText(body, "TST_xx(d, d)", `${label} selected-32 full-product N/Z`);
+  requireText(body, "MRS_NZCV_x(REG_WORK4)", `${label} selected-32 flag preservation`);
+  requireText(body, "CSET_xc(REG_WORK2, NATIVE_CC_NE)", `${label} selected-32 branchless overflow`);
+  requireText(body, "ORR_xxxLSLi(REG_WORK4, REG_WORK4, REG_WORK2, 28)", `${label} selected-32 V publication`);
+  if (/\b(?:CBZ|CBNZ|B)_\w+i\s*\(/.test(body)) {
+    fail(`${label} selected-32 MULL reintroduced fixed-displacement flag branching`);
+  }
+}
+requireText(mullSigned32, "SXTW_xw(REG_WORK1, d)", "signed selected-32 fit comparison");
+requireText(mullSigned32, "CMP_xx(d, REG_WORK1)", "signed selected-32 fit comparison");
+requireText(mullUnsigned32, "LSR_xxi(REG_WORK1, d, 32)", "unsigned selected-32 high-half overflow");
+
+for (const signature of [
+  "MIDFUNC(3,jnf_MULS64,(W4 dl, W4 dh, RR4 s))",
+  "MIDFUNC(3,jff_MULS64,(W4 dl, W4 dh, RR4 s))",
+  "MIDFUNC(3,jnf_MULU64,(W4 dl, W4 dh, RR4 s))",
+  "MIDFUNC(3,jff_MULU64,(W4 dl, W4 dh, RR4 s))",
+]) {
+  requireText(midfunc2Source, signature, "selected-64 MULL three-operand API");
+}
+for (const contract of [
+  "STAGE_MULL32_OPERAND(dl, REG_WORK1)",
+  "STAGE_MULL32_OPERAND(s, REG_WORK2)",
+  "PUBLISH_MULL64_RESULT(dl, dh)",
+]) {
+  const occurrences = midfunc2Source.split(contract).length - 1;
+  const expected = contract.startsWith("PUBLISH_") ? 5 : 4; // macro definition plus four calls
+  if (occurrences !== expected) fail(`selected-64 MULL contract ${contract}: expected ${expected}, got ${occurrences}`);
+}
+const mullPublishStart = requireText(midfunc2Source, "#define PUBLISH_MULL64_RESULT(dl, dh)", "selected-64 MULL publication");
+const mullPublishEnd = requireText(midfunc2Source.slice(mullPublishStart), "MIDFUNC(3,jnf_MULS64,", "selected-64 MULL publication") + mullPublishStart;
+const mullPublish = midfunc2Source.slice(mullPublishStart, mullPublishEnd);
+requireBefore(mullPublish, "writereg(dh)", "writereg(dl)", "selected-64 MULL high-before-low publication");
+for (const contract of [
+  "DECLARE_MIDFUNC(jnf_MULU64(W4 dl, W4 dh, RR4 s));",
+  "DECLARE_MIDFUNC(jnf_MULS64(W4 dl, W4 dh, RR4 s));",
+  "DECLARE_MIDFUNC(jff_MULU64(W4 dl, W4 dh, RR4 s));",
+  "DECLARE_MIDFUNC(jff_MULS64(W4 dl, W4 dh, RR4 s));",
+]) {
+  for (const [header, label] of [
+    [midfuncArmHeaderSource, "primary"],
+    [midfuncArm2HeaderSource, "JIT2"],
+  ] as const) {
+    const normalizedHeader = header.replaceAll("DECLARE_MIDFUNC (", "DECLARE_MIDFUNC(");
+    requireText(normalizedHeader, contract, `selected-64 MULL ${label} AArch64 declarations`);
+  }
+}
+for (const contract of [
+  "jff_MULS64(d, s, s)", "jnf_MULS64(d, s, s)",
+  "jff_MULU64(d, s, s)", "jnf_MULU64(d, s, s)",
+]) {
+  requireText(compatSource, contract, "legacy MULL two-operand bridge");
+}
+
+const mullNativeReplaySection = harnessSource.slice(
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_TESTS=(", "MULL native replay inventory"),
+  requireText(harnessSource, "declare -A NATIVE_REPLAY_PC=(", "MULL native replay inventory"),
+);
+const mullExactVectors = [
+  "mulls32_negative_fit_v_native",
+  "mullu64_source_preserve_v_native",
+  "mullu64_source_low_alias_native",
+  "mullu64_same_result_alias_native",
+  "mullu32_low_sign_full_flags_native",
+  "mullu32_overflow_low_zero_flags_native",
+  "mulls32_negative_overflow_low_zero_native",
+  "mulls32_positive_overflow_low_sign_native",
+  "mulls64_negative_flags_native",
+  "mullu64_zero_flags_native",
+  "mullu64_source_high_alias_native",
+  "mullu64_all_alias_native",
+  "mullu32_immediate_nf_native",
+  "mullu64_memory_nf_native",
+] as const;
+for (const name of mullExactVectors) {
+  requireText(harnessSource, `TESTS[${name}]=`, `${name} MULL vector`);
+  requireText(mullNativeReplaySection, `[${name}]=1`, `${name} exact-native replay inventory`);
+  requireText(harnessSource, `INIT_REGS[${name}]=`, `${name} exact entry state`);
+  requireText(harnessSource, `SENTINEL_A6[${name}]=`, `${name} register sentinel`);
+  if (!activeRiskyNames.has(name)) fail(`${name}: missing from active risky corpus`);
+}
+requireText(harnessSource, '[mullu64_memory_nf_native]="A000 00 A001 00 A002 00 A003 02"', "MULL deterministic memory replay");
+for (const contract of [
+  "mullu64_mem_source_locked_dl",
+  "[mullu64_mem_source_locked_dl]=0x00001012",
+  "[mullu64_mem_source_locked_dl]=20",
+  "REGPRESSURE_PIN_SKIP",
+]) {
+  requireText(regallocPressureSource, contract, "MULL allocator-pressure witness");
+}
+
 const shiftVectorNames: string[] = [];
 for (const op of ["asl", "asr", "lsl", "lsr"] as const) {
   for (const width of ["b", "w", "l"] as const) {
@@ -2317,6 +2465,11 @@ console.log("METRIC structural_bcd_a7_predecrement_geometry=1");
 console.log("METRIC structural_bcd_exact_pc_memory_replay=1");
 console.log("METRIC structural_division_patched_branch_joins=28");
 console.log("METRIC structural_division_overflow_flags=1");
+console.log("METRIC structural_mull_full_product_flags=1");
+console.log("METRIC structural_mull_three_operand_ownership=1");
+console.log("METRIC structural_mull_dl_source_lock=1");
+console.log(`METRIC structural_mull_exact_native_vectors=${mullExactVectors.length}`);
+console.log("METRIC structural_mull_allocator_pressure=1");
 console.log("METRIC structural_register_shift_six_bit_count=1");
 console.log("METRIC structural_register_shift_patched_joins=11");
 console.log("METRIC structural_register_shift_branchless_carry_sites=24");

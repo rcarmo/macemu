@@ -609,6 +609,22 @@ lsrw_mem_native
 lsrw_mem_native_nf
 roxlw_mem_x_native
 roxrw_mem_x_native
+# MULL closure: full-product flags, selected-width overflow, source/output aliases,
+# non-register sources, exact native entry, and locked-Dl allocator pressure.
+mulls32_negative_fit_v_native
+mullu64_source_preserve_v_native
+mullu64_source_low_alias_native
+mullu64_same_result_alias_native
+mullu32_low_sign_full_flags_native
+mullu32_overflow_low_zero_flags_native
+mulls32_negative_overflow_low_zero_native
+mulls32_positive_overflow_low_sign_native
+mulls64_negative_flags_native
+mullu64_zero_flags_native
+mullu64_source_high_alias_native
+mullu64_all_alias_native
+mullu32_immediate_nf_native
+mullu64_memory_nf_native
 asl_b_reg_count32_nf
 asl_w_reg_count32_nf
 asl_l_reg_count32_nf

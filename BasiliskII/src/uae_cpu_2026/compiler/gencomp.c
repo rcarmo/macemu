@@ -3529,33 +3529,38 @@ gen_opcode (unsigned int opcode)
 	       for the multiplicand value. The non-aarch64 path below already
 	       uses curi->dmode correctly. */
 	    comprintf("\tuae_u16 extra=%s;\n", gen_nextiword());
-	    genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    comprintf("\tint dl = (extra >> 12) & 7;\n");
 	    comprintf("\tint dh = extra & 7;\n");
+	    /* Dl is both an input and an output.  Pin its pre-instruction value while
+	       genamode allocates/fetches the source EA, otherwise a pressured source
+	       scratch can reuse Dl's host register before the MIDFUNC can stage it. */
+	    comprintf("\tint mull_dl_lock = jit_value_lock(dl);\n");
+	    genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	    comprintf("\tjit_value_unlock(mull_dl_lock);\n");
 	    comprintf("\tif (extra & 0x0400) {\n");  /* 64-bit result */
+	    /* The 64-bit MIDFUNC owns all three operands.  It stages the source and
+	       original Dl before publishing Dh then Dl, so a distinct register EA is
+	       read-only and every source/Dl/Dh alias follows m68k_mull() write order. */
 	    comprintf("\t  if (extra & 0x0800) {\n"); /* signed */
 	    if (noflags) {
-		comprintf("\t    jnf_MULS64(dl, src);\n");
+		comprintf("\t    jnf_MULS64(dl, dh, src);\n");
 	    } else {
 		comprintf("\t    make_flags_live();\n");
 		comprintf("\t    start_needflags();\n");
-		comprintf("\t    jff_MULS64(dl, src);\n");
+		comprintf("\t    jff_MULS64(dl, dh, src);\n");
 		comprintf("\t    live_flags();\n");
 		comprintf("\t    end_needflags();\n");
 	    }
-	    comprintf("\t    /* src now has high 32 bits, dl has low 32 */\n");
-	    comprintf("\t    mov_l_rr(dh, src);\n");
 	    comprintf("\t  } else {\n"); /* unsigned */
 	    if (noflags) {
-		comprintf("\t    jnf_MULU64(dl, src);\n");
+		comprintf("\t    jnf_MULU64(dl, dh, src);\n");
 	    } else {
 		comprintf("\t    make_flags_live();\n");
 		comprintf("\t    start_needflags();\n");
-		comprintf("\t    jff_MULU64(dl, src);\n");
+		comprintf("\t    jff_MULU64(dl, dh, src);\n");
 		comprintf("\t    live_flags();\n");
 		comprintf("\t    end_needflags();\n");
 	    }
-	    comprintf("\t    mov_l_rr(dh, src);\n");
 	    comprintf("\t  }\n");
 	    comprintf("\t} else {\n");  /* 32-bit result */
 	    comprintf("\t  if (extra & 0x0800) {\n"); /* signed */

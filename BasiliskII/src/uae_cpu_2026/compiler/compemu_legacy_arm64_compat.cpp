@@ -603,8 +603,11 @@ void mid_bswap_32(RW4 r)
 }
 
 void imul_32_32(RW4 d, RR4 s) { if (legacy_needflags_enabled()) jff_MULS32(d, s); else jnf_MULS32(d, s); }
-void imul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULS64(d, s); else jnf_MULS64(d, s); }
-void mul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULU64(d, s); else jnf_MULU64(d, s); }
+/* Legacy callers use s as both the multiplicand and returned high half.  Keep
+   that old two-operand ABI on top of the AArch64 three-operand ownership
+   contract; current gencomp MULL calls the MIDFUNC directly with explicit Dh. */
+void imul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULS64(d, s, s); else jnf_MULS64(d, s, s); }
+void mul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULU64(d, s, s); else jnf_MULU64(d, s, s); }
 
 void shra_b_ri(RW1 d, uae_s32 i) { if (legacy_needflags_enabled()) jff_ASR_b_imm(d, i); else jnf_ASR_b_imm(d, i); }
 void shra_w_ri(RW2 d, uae_s32 i) { if (legacy_needflags_enabled()) jff_ASR_w_imm(d, i); else jnf_ASR_w_imm(d, i); }

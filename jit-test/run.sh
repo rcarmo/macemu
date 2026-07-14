@@ -379,6 +379,11 @@ TEST_ORDER+=(bcd_abcd_decimal_09_plus_01 bcd_abcd_invalid_nibble_exact bcd_abcd_
 TEST_ORDER+=(bcd_sbcd_decimal_10_minus_01 bcd_sbcd_invalid_nibble_exact bcd_nbcd_decimal_10 bcd_nbcd_invalid_nibble_exact)
 TEST_ORDER+=(bcd_native_abcd_zero_sticky bcd_native_abcd_invalid_extend bcd_native_sbcd_invalid_borrow bcd_native_nbcd_invalid_borrow)
 TEST_ORDER+=(bcd_abcd_predec_src_a7 bcd_abcd_predec_dst_a7 bcd_abcd_predec_a7_alias bcd_sbcd_predec_src_a7 bcd_sbcd_predec_dst_a7 bcd_sbcd_predec_a7_alias bcd_nbcd_predec_a7)
+# MULL closure vectors cover signed 32-bit overflow publication plus the
+# source/result ownership and legal alias matrix for 64-bit results.
+TEST_ORDER+=(mulls32_negative_fit_v_native mullu64_source_preserve_v_native mullu64_source_low_alias_native mullu64_same_result_alias_native)
+TEST_ORDER+=(mullu32_low_sign_full_flags_native mullu32_overflow_low_zero_flags_native mulls32_negative_overflow_low_zero_native mulls32_positive_overflow_low_sign_native)
+TEST_ORDER+=(mulls64_negative_flags_native mullu64_zero_flags_native mullu64_source_high_alias_native mullu64_all_alias_native mullu32_immediate_nf_native mullu64_memory_nf_native)
 
 declare -A TESTS
 declare -A EXPECTED_D0
@@ -641,6 +646,20 @@ declare -A NATIVE_REPLAY_TESTS=(
     [bcd_sbcd_predec_dst_a7]=1
     [bcd_sbcd_predec_a7_alias]=1
     [bcd_nbcd_predec_a7]=1
+    [mulls32_negative_fit_v_native]=1
+    [mullu64_source_preserve_v_native]=1
+    [mullu64_source_low_alias_native]=1
+    [mullu64_same_result_alias_native]=1
+    [mullu32_low_sign_full_flags_native]=1
+    [mullu32_overflow_low_zero_flags_native]=1
+    [mulls32_negative_overflow_low_zero_native]=1
+    [mulls32_positive_overflow_low_sign_native]=1
+    [mulls64_negative_flags_native]=1
+    [mullu64_zero_flags_native]=1
+    [mullu64_source_high_alias_native]=1
+    [mullu64_all_alias_native]=1
+    [mullu32_immediate_nf_native]=1
+    [mullu64_memory_nf_native]=1
 )
 # A setup prefix may install architectural state before the audited instruction.
 # Replay and native-entry proof then start at the exact family opcode PC.
@@ -813,6 +832,7 @@ declare -A NATIVE_REPLAY_BYTES=(
     [lsrw_mem_native_nf]="A000 80 A001 01"
     [roxlw_mem_x_native]="A000 80 A001 01"
     [roxrw_mem_x_native]="A000 80 A001 00"
+    [mullu64_memory_nf_native]="A000 00 A001 00 A002 00 A003 02"
     [bcd_abcd_predec_src_a7]="2080 01 2040 99"
     [bcd_abcd_predec_dst_a7]="2080 01 2040 99"
     [bcd_abcd_predec_a7_alias]="2082 01 2080 99"
@@ -2501,6 +2521,51 @@ TESTS[divl_u32_max]="203C FFFF FFFF 223C 0000 0010 4C41 0002"
 TESTS[divl_s32_neg_divisor]="203C 0000 0064 223C FFFF FFF9 4C41 0802"
 # MULSL.L D1,D3:D2 — 64-bit signed negative: -100 * 1000 = -100000
 TESTS[mull_s64_neg]="243C FFFF FF9C 223C 0000 03E8 4C01 2C03"
+
+# Opcode-first native MULL closure vectors.  BVC makes the signed/unsigned
+# 32/64 flag-producing handlers observable; MOVEQ D7 selects the no-flags
+# handler for alias-only vectors after the multiply result has been consumed.
+# MULL.S32 D0,D1: -1 * 2 = -2 fits in 32 bits, so V must stay clear.
+TESTS[mulls32_negative_fit_v_native]="4C00 1800 6802 7401 7602"
+EXPECTED_REG_FIELDS[mulls32_negative_fit_v_native]="D0=00000002 D1=fffffffe D2=00000000 D3=00000002 SR=2700"
+# MULL.U64 D0,D2:D1: D0 is a read-only source and must survive 0xffffffff * 2.
+TESTS[mullu64_source_preserve_v_native]="4C00 1402 6802 7601 7802"
+EXPECTED_REG_FIELDS[mullu64_source_preserve_v_native]="D0=00000002 D1=fffffffe D2=00000001 D3=00000000 D4=00000002 SR=2700"
+# Source D0 is also the low result.  The product must be staged before either
+# architectural result register is published.
+TESTS[mullu64_source_low_alias_native]="4C00 0402 7E01"
+EXPECTED_REG_FIELDS[mullu64_source_low_alias_native]="D0=00000001 D2=fffffffe D7=00000001 SR=2700"
+# Dh == Dl is legal.  m68k_mull writes high first and low second, so low wins.
+TESTS[mullu64_same_result_alias_native]="4C00 1401 7E01"
+EXPECTED_REG_FIELDS[mullu64_same_result_alias_native]="D0=00000002 D1=fffffffe D7=00000001 SR=2700"
+
+# For a selected 32-bit result, m68k_mull still derives N/Z from the full
+# product.  The branch markers make N/Z/V independently observable before a
+# final MOVEQ normalises the dump-time CCR.
+TESTS[mullu32_low_sign_full_flags_native]="4C00 1000 6A02 7401 6602 7601 6802 7801 7A02"
+EXPECTED_REG_FIELDS[mullu32_low_sign_full_flags_native]="D0=80000000 D1=80000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+TESTS[mullu32_overflow_low_zero_flags_native]="4C00 1000 6A02 7401 6602 7601 6902 7801 7A02"
+EXPECTED_REG_FIELDS[mullu32_overflow_low_zero_flags_native]="D0=00010000 D1=00000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+TESTS[mulls32_negative_overflow_low_zero_native]="4C00 1800 6B02 7401 6602 7601 6902 7801 7A02"
+EXPECTED_REG_FIELDS[mulls32_negative_overflow_low_zero_native]="D0=00000002 D1=00000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+TESTS[mulls32_positive_overflow_low_sign_native]="4C00 1800 6A02 7401 6602 7601 6902 7801 7A02"
+EXPECTED_REG_FIELDS[mulls32_positive_overflow_low_sign_native]="D0=00000002 D1=80000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+# Signed and unsigned selected-64 flag paths: N/Z use all 64 result bits and
+# V/C are clear because every 32x32 product fits the selected width.
+TESTS[mulls64_negative_flags_native]="4C00 1C02 6B02 7601 6602 7801 6802 7A01 7C02"
+EXPECTED_REG_FIELDS[mulls64_negative_flags_native]="D0=000003e8 D1=fffe7960 D2=ffffffff D3=00000000 D4=00000000 D5=00000000 D6=00000002 SR=2700"
+TESTS[mullu64_zero_flags_native]="4C00 1402 6702 7601 6A02 7801 6802 7A01 7C02"
+EXPECTED_REG_FIELDS[mullu64_zero_flags_native]="D0=00001234 D1=00000000 D2=00000000 D3=00000000 D4=00000000 D5=00000000 D6=00000002 SR=2700"
+# Complete the legal source/Dl/Dh alias closure and non-register source forms.
+TESTS[mullu64_source_high_alias_native]="4C00 1400 7E01"
+EXPECTED_REG_FIELDS[mullu64_source_high_alias_native]="D0=00000001 D1=fffffffe D7=00000001 SR=2700"
+TESTS[mullu64_all_alias_native]="4C00 0400 7E01"
+EXPECTED_REG_FIELDS[mullu64_all_alias_native]="D0=00000001 D7=00000001 SR=2700"
+TESTS[mullu32_immediate_nf_native]="4C3C 1000 0000 0003 7E01"
+EXPECTED_REG_FIELDS[mullu32_immediate_nf_native]="D1=00000015 D7=00000001 SR=2700"
+TESTS[mullu64_memory_nf_native]="4C10 0401 7E01"
+EXPECTED_REG_FIELDS[mullu64_memory_nf_native]="D0=fffffffe D1=00000001 D7=00000001 A0=0000a000 SR=2700"
+
 # DIVUL.L D1,D0:D0 — same Dq and Dr (remainder discarded): 100/7=14
 TESTS[divl_same_dq_dr]="203C 0000 0064 223C 0000 0007 4C41 0000"
 # DIVUL.L D1,D3:D2 — 64-bit unsigned: 0x100000064 / 7 = 0x24924932 rem 6
@@ -2889,6 +2954,20 @@ INIT_REGS[bcd_native_abcd_zero_sticky]="00000000 00000000 00000000 00000000 0000
 INIT_REGS[bcd_native_abcd_invalid_extend]="0000000A 0000000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
 INIT_REGS[bcd_native_sbcd_invalid_borrow]="00000000 0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
 INIT_REGS[bcd_native_nbcd_invalid_borrow]="0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[mulls32_negative_fit_v_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_source_preserve_v_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_source_low_alias_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_same_result_alias_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu32_low_sign_full_flags_native]="80000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu32_overflow_low_zero_flags_native]="00010000 00010000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mulls32_negative_overflow_low_zero_native]="00000002 80000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mulls32_positive_overflow_low_sign_native]="00000002 40000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mulls64_negative_flags_native]="000003E8 FFFFFF9C 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_zero_flags_native]="00001234 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_source_high_alias_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_all_alias_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu32_immediate_nf_native]="00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_memory_nf_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
 # Fuzz vector initial register states
 INIT_REGS[io_byte_write_roundtrip]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 50001000 0A014100 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[fuzz_alu_0]="8878FDF6 80000000 00000000 637A51D3 7FFFFFFF 00000000 000000FF FFFFFFFF 0038D748 007BBF88 003C4A38 0023044C 003974BC 00072334 00000000 007EFF00"
@@ -3629,6 +3708,20 @@ SENTINEL_A6[divl_s32_neg]="a6f04100"
 SENTINEL_A6[divl_u32_max]="a6f04200"
 SENTINEL_A6[divl_s32_neg_divisor]="a6f04300"
 SENTINEL_A6[mull_s64_neg]="a6f04400"
+SENTINEL_A6[mulls32_negative_fit_v_native]="a6040001"
+SENTINEL_A6[mullu64_source_preserve_v_native]="a6040002"
+SENTINEL_A6[mullu64_source_low_alias_native]="a6040003"
+SENTINEL_A6[mullu64_same_result_alias_native]="a6040004"
+SENTINEL_A6[mullu32_low_sign_full_flags_native]="a6040005"
+SENTINEL_A6[mullu32_overflow_low_zero_flags_native]="a6040006"
+SENTINEL_A6[mulls32_negative_overflow_low_zero_native]="a6040007"
+SENTINEL_A6[mulls32_positive_overflow_low_sign_native]="a6040008"
+SENTINEL_A6[mulls64_negative_flags_native]="a6040009"
+SENTINEL_A6[mullu64_zero_flags_native]="a604000a"
+SENTINEL_A6[mullu64_source_high_alias_native]="a604000b"
+SENTINEL_A6[mullu64_all_alias_native]="a604000c"
+SENTINEL_A6[mullu32_immediate_nf_native]="a604000d"
+SENTINEL_A6[mullu64_memory_nf_native]="a604000e"
 SENTINEL_A6[divl_same_dq_dr]="a6f04500"
 SENTINEL_A6[divl_u64]="a6f04600"
 SENTINEL_A6[divl_s64]="a6f04700"
@@ -4266,6 +4359,20 @@ declare -A RISKY_TESTS=(
     [divl_u32_max]=1
     [divl_s32_neg_divisor]=1
     [mull_s64_neg]=1
+    [mulls32_negative_fit_v_native]=1
+    [mullu64_source_preserve_v_native]=1
+    [mullu64_source_low_alias_native]=1
+    [mullu64_same_result_alias_native]=1
+    [mullu32_low_sign_full_flags_native]=1
+    [mullu32_overflow_low_zero_flags_native]=1
+    [mulls32_negative_overflow_low_zero_native]=1
+    [mulls32_positive_overflow_low_sign_native]=1
+    [mulls64_negative_flags_native]=1
+    [mullu64_zero_flags_native]=1
+    [mullu64_source_high_alias_native]=1
+    [mullu64_all_alias_native]=1
+    [mullu32_immediate_nf_native]=1
+    [mullu64_memory_nf_native]=1
     [divl_same_dq_dr]=1
     [divl_u64]=1
     [divl_s64]=1
