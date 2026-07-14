@@ -20,6 +20,8 @@ static inline void legacy_copy_carry_to_flagx(void)
 static inline int legacy_x86_cc_to_native(int cc)
 {
 	switch (cc) {
+	case 0: return NATIVE_CC_VS;
+	case 1: return NATIVE_CC_VC;
 	case 2: return NATIVE_CC_CS;
 	case 3: return NATIVE_CC_CC;
 	case 4: return NATIVE_CC_EQ;
@@ -96,7 +98,7 @@ void add_l(RW4 d, RR4 s) {
 }
 void add_l_ri(RW4 d, uae_s32 i) {
 #ifdef CPU_AARCH64
-	if (d == PC_P) { arm_ADD_l_ri(d, (uintptr)(uae_s64)i); return; }
+	if (d == PC_P) { arm_ADD_ptr_ri(d, i); return; }
 #endif
 	if (legacy_needflags_enabled()) jff_ADD_l_imm(d, i); else jnf_ADD_l_imm(d, i);
 }
@@ -288,15 +290,34 @@ static inline void legacy_invert_carry_in_pstate(void)
 	MSR_NZCV_x(REG_WORK4);
 }
 
+/* Shifted byte/word ADC/SBC arithmetic uses the low padding bits to carry the
+   incoming X/borrow into the operand lane.  Rebuild Z from the architectural
+   narrow result while preserving the arithmetic N/C/V bits and the current
+   carry-polarity contract. */
+static inline void legacy_set_z_from_narrow_result(int d, int width)
+{
+	MRS_NZCV_x(REG_WORK4);
+	if (width == 8)
+		UBFX_wwii(REG_WORK3, d, 0, 8);
+	else
+		UBFX_wwii(REG_WORK3, d, 0, 16);
+	CMP_wi(REG_WORK3, 0);
+	CSET_xc(REG_WORK3, NATIVE_CC_EQ);
+	BFI_xxii(REG_WORK4, REG_WORK3, 30, 1);
+	MSR_NZCV_x(REG_WORK4);
+}
+
 void adc_b(RW1 d, RR1 s)
 {
 	legacy_fix_inverted_carry();
 	INIT_REGS_b(d, s);
-	MOV_xi(REG_WORK1, 0);
+	/* Ones below bit 24 propagate carry-in into the byte lane. */
+	MOVN_xi(REG_WORK1, 0);
 	BFI_xxii(REG_WORK1, s, 24, 8);
 	LSL_wwi(REG_WORK3, d, 24);
 	ADCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 24, 8);
+	legacy_set_z_from_narrow_result(d, 8);
 	flags_carry_inverted = false;
 	EXIT_REGS(d, s);
 }
@@ -305,11 +326,13 @@ void adc_w(RW2 d, RR2 s)
 {
 	legacy_fix_inverted_carry();
 	INIT_REGS_w(d, s);
-	MOV_xi(REG_WORK1, 0);
+	/* Ones below bit 16 propagate carry-in into the word lane. */
+	MOVN_xi(REG_WORK1, 0);
 	BFI_xxii(REG_WORK1, s, 16, 16);
 	LSL_wwi(REG_WORK3, d, 16);
 	ADCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 16, 16);
+	legacy_set_z_from_narrow_result(d, 16);
 	flags_carry_inverted = false;
 	EXIT_REGS(d, s);
 }
@@ -332,6 +355,7 @@ void sbb_b(RW1 d, RR1 s)
 	LSL_wwi(REG_WORK3, s, 24);
 	SBCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 24, 8);
+	legacy_set_z_from_narrow_result(d, 8);
 	flags_carry_inverted = true;
 	EXIT_REGS(d, s);
 }
@@ -345,6 +369,7 @@ void sbb_w(RW2 d, RR2 s)
 	LSL_wwi(REG_WORK3, s, 16);
 	SBCS_www(REG_WORK1, REG_WORK1, REG_WORK3);
 	BFXIL_xxii(d, REG_WORK1, 16, 16);
+	legacy_set_z_from_narrow_result(d, 16);
 	flags_carry_inverted = true;
 	EXIT_REGS(d, s);
 }
@@ -578,8 +603,11 @@ void mid_bswap_32(RW4 r)
 }
 
 void imul_32_32(RW4 d, RR4 s) { if (legacy_needflags_enabled()) jff_MULS32(d, s); else jnf_MULS32(d, s); }
-void imul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULS64(d, s); else jnf_MULS64(d, s); }
-void mul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULU64(d, s); else jnf_MULU64(d, s); }
+/* Legacy callers use s as both the multiplicand and returned high half.  Keep
+   that old two-operand ABI on top of the AArch64 three-operand ownership
+   contract; current gencomp MULL calls the MIDFUNC directly with explicit Dh. */
+void imul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULS64(d, s, s); else jnf_MULS64(d, s, s); }
+void mul_64_32(RW4 d, RW4 s) { if (legacy_needflags_enabled()) jff_MULU64(d, s, s); else jnf_MULU64(d, s, s); }
 
 void shra_b_ri(RW1 d, uae_s32 i) { if (legacy_needflags_enabled()) jff_ASR_b_imm(d, i); else jnf_ASR_b_imm(d, i); }
 void shra_w_ri(RW2 d, uae_s32 i) { if (legacy_needflags_enabled()) jff_ASR_w_imm(d, i); else jnf_ASR_w_imm(d, i); }
@@ -633,7 +661,7 @@ void set_zero(int r, int tmp)
 		unlock2(rr);
 	}
 	MSR_NZCV_x(REG_WORK1);
-	flags_carry_inverted = false;
+	/* Only Z changed; preserve the caller's physical-C polarity contract. */
 }
 
 int kill_rodent(int r)
@@ -879,13 +907,9 @@ static void jit_trace_table_log(const char *tag, unsigned long step, uae_u32 pc)
 #if defined(CPU_AARCH64)
 static cpuop_func *jit_orig_op_0_0_ff = NULL;
 
-static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
+static inline void jit_execute_ori_b_d0_exact(void)
 {
-	(void)opcode;
 	uae_u8 *p = regs.pc_p;
-	/* OR.B #<data>.B,D0.  This is the dominant interpreter fallback while
-	   executing zero-filled RAM probes; avoid get_ibyte()/get_real_address()
-	   and the generated handler's byte-lane generality on the hot path. */
 	uae_u8 imm = p[3];
 	uae_u32 d0 = m68k_dreg(regs, 0);
 	uae_u8 result = (uae_u8)(d0 | imm);
@@ -894,6 +918,12 @@ static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
 	if (imm)
 		m68k_dreg(regs, 0) = (d0 & ~0xff) | result;
 	regs.pc_p = p + 4;
+}
+
+static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
+{
+	(void)opcode;
+	jit_execute_ori_b_d0_exact();
 }
 
 static void jit_install_fast_interpreter_overrides(void)
@@ -910,33 +940,12 @@ static void jit_install_fast_interpreter_overrides(void)
 void exec_nostats(void)
 {
 #if defined(CPU_AARCH64)
+	if (jit_strict_full_jit_env())
+		jit_abort("strict full-JIT: exec_nostats runtime entry pc=%08x", m68k_getpc());
 	if (jit_diag_enabled()) {
 		jit_diag_exec_nostats_calls++;
 		jit_diag_dispatch_count++;
 		jit_diag_maybe_print();
-	}
-	{
-		uintptr pcp = (uintptr)regs.pc_p;
-		uintptr base = (uintptr)RAMBaseHost;
-		uintptr limit = base + RAMSize + ROMSize + 0x1000000;
-		if (pcp < base || pcp >= limit || (pcp & 1)) {
-			static int bad_count = 0;
-			uae_u32 safe_pc = regs.pc & ~1u;
-			/* If safe_pc looks like 24-bit sign-extended ROM address
-			   (0xFFxxxxxx with underlying 0x008xxxxx), mask to 24 bits. */
-			if ((safe_pc & 0xFF000000) == 0xFF000000 && (safe_pc & 0x00800000))
-				safe_pc &= 0x00FFFFFF;
-			if (bad_count++ < 50)
-				fprintf(stderr, "JIT: exec_nostats bad pc_p=%p regs.pc=%08x d0=%08x d1=%08x a0=%08x a1=%08x a2=%08x a7=%08x sr=%04x spc=%08x oldp=%p last_setpc=%p last_kind=%u last_seq=%lu\n",
-					(void*)regs.pc_p, regs.pc,
-					regs.regs[0], regs.regs[1], regs.regs[8], regs.regs[9], regs.regs[10], regs.regs[15],
-					(unsigned)regs.sr, (unsigned)regs.spcflags, (void*)regs.pc_oldp,
-					(void*)jit_last_setpc_value, (unsigned)jit_last_setpc_kind, jit_last_setpc_seq);
-			/* Re-derive pc_p from guest PC */
-			regs.pc = safe_pc;
-			regs.pc_p = get_real_address(safe_pc, 0, sz_word);
-			regs.pc_oldp = regs.pc_p - safe_pc;
-		}
 	}
 #endif
 	static unsigned long trace_count = 0;
@@ -950,6 +959,10 @@ void exec_nostats(void)
 		if (trace_enabled && trace_count < jit_tracewin_limit()) {
 			trace_this = jit_tracewin_match(before_pc);
 		}
+		if (jit_guest_path_enabled())
+			jit_guest_path_record_reference(before_pc);
+		if (jit_trace_target_pc(before_pc))
+			jit_trace_pc_hit(before_pc, (2u << 16) | (opcode & 0xffff));
 		if (trace_this) {
 			fprintf(stderr,
 				"TRACEWINJ BEFORE step=%lu pc=%08x op=%04x regs.pc=%08x pc_p=%p oldp=%p d0=%08x d1=%08x d2=%08x d3=%08x a0=%08x a1=%08x a2=%08x a3=%08x a7=%08x sr=%04x nzcv=%08x x=%08x\n",
@@ -1006,16 +1019,25 @@ void exec_nostats(void)
 }
 
 #if defined(CPU_AARCH64)
-extern "C" uae_u32 jit_current_interp_pc = 0;
-extern "C" uae_u32 jit_current_interp_opcode = 0;
+extern "C" {
+uae_u32 jit_current_interp_pc = 0;
+uae_u32 jit_current_interp_opcode = 0;
+}
 
 static void exec_nostats_limited(int maxrun_limit)
 {
+	if (jit_strict_full_jit_env())
+		jit_abort("strict full-JIT: exec_nostats_limited runtime entry pc=%08x", m68k_getpc());
 	int run_count = 0;
 	if (maxrun_limit <= 0 || maxrun_limit > MAXRUN)
 		maxrun_limit = MAXRUN;
 	for (;;) {
 		uae_u32 opcode = GET_OPCODE;
+		const uae_u32 pc = m68k_getpc();
+		if (jit_guest_instruction_observer_enabled())
+			jit_guest_path_record_nostats(pc);
+		if (jit_trace_target_pc(pc))
+			jit_trace_pc_hit(pc, (2u << 16) | (opcode & 0xffff));
 		(*cpufunctbl[opcode])(opcode);
 		cpu_check_ticks();
 		if (end_block(opcode) || SPCFLAGS_TEST(SPCFLAG_ALL) || ++run_count >= maxrun_limit)
@@ -1024,6 +1046,31 @@ static void exec_nostats_limited(int maxrun_limit)
 }
 
 #endif
+
+static inline bool jit_interpop_assert_target(uae_u32 *target)
+{
+#if defined(CPU_AARCH64)
+	static int initialized = 0;
+	static bool enabled = false;
+	static uae_u32 value = 0;
+	if (!initialized) {
+		const char *env = getenv("B2_INTERPOP_PC");
+		if (env && *env) {
+			char *end = NULL;
+			const unsigned long parsed = strtoul(env, &end, 0);
+			enabled = end != env;
+			value = (uae_u32)parsed;
+		}
+		initialized = 1;
+	}
+	if (target)
+		*target = value;
+	return enabled;
+#else
+	(void)target;
+	return false;
+#endif
+}
 
 void execute_normal(void)
 {
@@ -1045,62 +1092,22 @@ void execute_normal(void)
 
 	if (jit_diag_enabled())
 		jit_diag_maybe_print();
-	/* If pc_p is outside valid Mac memory range (corrupt), re-derive it. */
-	{
-		uintptr pcp = (uintptr)regs.pc_p;
-		uintptr base = (uintptr)RAMBaseHost;
-		uintptr limit = base + RAMSize + ROMSize + 0x1000000; /* allocation limit */
-		if (pcp < base || pcp >= limit || (pcp & 1)) {
-			static int fix_count = 0;
-			uae_u32 safe_pc = regs.pc & ~1u;
-			/* If safe_pc looks like 24-bit sign-extended ROM address
-			   (0xFFxxxxxx with underlying 0x008xxxxx), mask to 24 bits. */
-			if ((safe_pc & 0xFF000000) == 0xFF000000 && (safe_pc & 0x00800000))
-				safe_pc &= 0x00FFFFFF;
-			if (fix_count++ < 50)
-				fprintf(stderr, "JIT: exec_normal bad pc_p=%p regs.pc=%08x safe=%08x "
-					"d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a6=%08x a7=%08x s0=%08x s4=%08x sr=%04x spc=%08x oldp=%p "
-					"isp=%08x msp=%08x s=%d m=%d last_setpc=%p last_kind=%u last_seq=%lu\n",
-					(void*)regs.pc_p, regs.pc, safe_pc,
-					regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[8], regs.regs[9], regs.regs[14], regs.regs[15],
-					(unsigned)get_long(regs.regs[15]), (unsigned)get_long(regs.regs[15] + 4),
-					(unsigned)regs.sr, (unsigned)regs.spcflags, (void*)regs.pc_oldp,
-					(unsigned)regs.isp, (unsigned)regs.msp, regs.s, regs.m,
-					(void*)jit_last_setpc_value, (unsigned)jit_last_setpc_kind, jit_last_setpc_seq);
-			/* Check if the guest Mac address is in valid executable memory:
-			   - RAM: 0 <= pc < RAMSize
-			   - ROM: ROMBaseMac <= pc < ROMBaseMac + ROMSize
-			   Anything else (NuBus space, frame buffer, unmapped) is a bus error. */
-			bool valid_mac_pc = (safe_pc < (uae_u32)RAMSize) ||
-				(safe_pc >= (uae_u32)ROMBaseMac && safe_pc < (uae_u32)(ROMBaseMac + ROMSize));
-			if (!valid_mac_pc) {
-				/* Guest PC points to unmapped memory (e.g. NuBus slot probe).
-				   Generate a bus error exception to let the ROM's handler
-				   deal with it, just like real hardware would. */
-				static int buserr_count = 0;
-				if (buserr_count++ < 10)
-					fprintf(stderr, "JIT: bus error for unmapped PC=%08x a7=%08x isp=%08x (triggering Exception 2)\n",
-						safe_pc, m68k_areg(regs, 7), regs.isp);
-				/* Restore a7 from ISP/MSP — the JIT may have desynchronized them */
-				if (regs.s && !regs.m && regs.isp >= 0x1000)
-					m68k_areg(regs, 7) = regs.isp;
-				else if (regs.s && regs.m && regs.msp >= 0x1000)
-					m68k_areg(regs, 7) = regs.msp;
-				Exception(2, safe_pc);
-				return;
-			}
-			/* Valid Mac address — re-derive pc_p from the guest PC */
-			regs.pc = safe_pc;
-			regs.pc_p = get_real_address(safe_pc, 0, sz_word);
-			regs.pc_oldp = regs.pc_p - safe_pc;
-		}
+	/* A corrupt fetch pointer is an internal JIT invariant failure, not an
+	   architectural bus error and not permission to reconstruct registers from
+	   stale metadata.  Strict mode checks the canonical direct-address mapping
+	   and fails closed; ordinary execution retains the established fetch path. */
+	if (jit_strict_full_jit_env()) {
+		const uaecptr guest_pc = m68k_getpc();
+		const uae_u8 *expected_pc_p = get_real_address(guest_pc, 0, sz_word);
+		if (regs.pc_p != expected_pc_p)
+			jit_abort("strict full-JIT: noncanonical fetch pointer pc=%08x pc_p=%p expected=%p oldp=%p",
+				guest_pc, (void*)regs.pc_p, (const void*)expected_pc_p,
+				(void*)regs.pc_oldp);
 	}
-	/* Zero-filled RAM probes are common during early ROM/RAM setup and are
-	   unsafe to cache as native code because the guest can later write real
-	   code there.  Avoid the expensive trace+compile step but preserve the
-	   current dispatch cadence by interpreting at most one MAXRUN-sized chunk
-	   and re-checking the first word on the next entry. */
-	{
+	/* Ordinary mode avoids caching transient zero-filled RAM probes. Strict mode
+	   must not substitute a C semantic loop for translated execution: let the
+	   first-seen tracer observe the code and compile an L2 block normally. */
+	if (!jit_strict_full_jit_env()) {
 		uae_u32 fast_pc = get_virtual_address((uae_u8*)regs.pc_p);
 		if (fast_pc < (uae_u32)ROMBaseMac && *((const uae_u16*)regs.pc_p) == 0) {
 			exec_nostats_limited(MAXRUN);
@@ -1123,9 +1130,6 @@ void execute_normal(void)
 		start_pc = get_virtual_address((uae_u8*)regs.pc_p);
 #if defined(CPU_AARCH64)
 		{
-			uae_u32 trace_a1 = regs.regs[9];
-			if (trace_a1 >= 0x1e00 && trace_a1 < 0x1e40)
-				basilisk_trace_after_table_ready = true;
 			static unsigned long pctrace_count = 0;
 			static unsigned long pctrace_limit = 0;
 			static bool pctrace_init = false;
@@ -1246,12 +1250,10 @@ jit_pctrace_done:
 			maxrun_limit = env_maxrun;
 		}
 		for (;;) {
-			/* CONT.109 cont15 (port of d759ea08 to active execute_normal):
-			   non-perturbing block-split probe. When B2_FORCE_BLOCK_BREAK_BEFORE=<guest pc>
-			   matches the current guest PC and the block already has at least one insn,
-			   end the block here so the next dispatch starts at the target PC. Pairs
-			   with PATHRING (B2_PATH_RING_TARGET) to capture live D0/A* at the target
-			   boundary without altering codegen semantics inside the following block. */
+			/* Optional verifier block-split probe. When
+			   B2_FORCE_BLOCK_BREAK_BEFORE=<guest pc> matches after at least one
+			   retired instruction, end the trace so the next dispatch starts at the
+			   requested architectural boundary. */
 			{
 				static int bb_init = -1;
 				static uae_u32 bb_target = 0;
@@ -1270,53 +1272,62 @@ jit_pctrace_done:
 						return;
 					}
 #endif
-					compile_block(pc_hist, blocklen, total_cycles);
+					if (!jit_strict_defer_cold_ram_trace(pc_hist, blocklen))
+						compile_block(pc_hist, blocklen, total_cycles);
 					return;
 				}
 			}
-			pc_hist[blocklen++].location = (uae_u16 *)regs.pc_p;
+			cpu_history *hist = &pc_hist[blocklen++];
+			hist->location = (uae_u16 *)regs.pc_p;
 			uae_u32 opcode = GET_OPCODE;
+			/* GET_OPCODE is host-table ordered under direct addressing. Retain
+			   both the logical opcode and the complete maximum architectural
+			   encoding window; later instructions in this same trace may rewrite
+			   opcode or extension words before compile_block starts. */
+			hist->opcode = (uae_u16)do_get_mem_word(hist->location);
+			memcpy(hist->source, hist->location, JIT_TRACE_SOURCE_BYTES);
 #if defined(CPU_AARCH64)
 			{
+				/* Assertion-only first-seen state capture. Cache the environment
+				   contract once so ordinary tracing does not call getenv/strtoul for
+				   every guest instruction. */
 				static unsigned long interpop_count = 0;
-				const char *env = getenv("B2_INTERPOP_PC");
-				if (env && *env) {
-					char *end = NULL;
-					unsigned long want = strtoul(env, &end, 0);
-					uae_u32 pc_now = m68k_getpc();
-					if (end != env && (uae_u32)want == pc_now) {
+				uae_u32 want = 0;
+				if (jit_interpop_assert_target(&want)) {
+					const uae_u32 pc_now = m68k_getpc();
+					if (want == pc_now && interpop_count < 32) {
 						interpop_count++;
-						fprintf(stderr, "INTERPOP pc=%08x count=%lu op=%04x d0=%08x d7=%08x a0=%08x a3=%08x sr=%04x\n",
-							pc_now, interpop_count, opcode, regs.regs[0], regs.regs[7], regs.regs[8], regs.regs[11], regs.sr);
+						fprintf(stderr, "INTERPOP pc=%08x count=%lu op=%04x d0=%08x d1=%08x d2=%08x d3=%08x d4=%08x d5=%08x d7=%08x a0=%08x a1=%08x a2=%08x a3=%08x a6=%08x a7=%08x sr=%04x\n",
+							pc_now, interpop_count, opcode,
+							regs.regs[0], regs.regs[1], regs.regs[2], regs.regs[3],
+							regs.regs[4], regs.regs[5], regs.regs[7], regs.regs[8],
+							regs.regs[9], regs.regs[10], regs.regs[11], regs.regs[14],
+							regs.regs[15], regs.sr);
 					}
 				}
 			}
 #endif
+			jit_current_interp_pc = m68k_getpc();
+			jit_current_interp_opcode = opcode;
+			if (jit_guest_instruction_observer_enabled())
+				jit_guest_path_record_trace(jit_current_interp_pc);
+			if (jit_trace_target_pc(jit_current_interp_pc))
+				jit_trace_pc_hit(jit_current_interp_pc, (2u << 16) | (opcode & 0xffff));
+			jit_strict_note_trace_op(jit_current_interp_pc, opcode);
 			(*cpufunctbl[opcode])(opcode);
 			cpu_check_ticks();
 			total_cycles += 4 * CYCLE_UNIT;
 			bool must_end = __atomic_load_n(&regs.spcflags, __ATOMIC_ACQUIRE) || blocklen >= maxrun_limit;
-			if (!must_end && end_block(opcode)) {
-				uintptr new_pcp = (uintptr)regs.pc_p;
-				uintptr blk_start = (uintptr)pc_hist[0].location;
-				uintptr cur_insn = (uintptr)pc_hist[blocklen - 1].location;
-				uae_u32 cur_guest_pc = get_virtual_address((uae_u8*)pc_hist[blocklen - 1].location);
-				bool is_bsr = ((opcode & 0xff00) == 0x6100);
-				bool forbid_trace_follow = is_bsr || (cur_guest_pc == 0x0401b70c && (opcode & 0xffc0) == 0x4ec0);
-				/* Follow forward short branches to keep straight-line code
-				   together, but NEVER follow backward branches or BSR calls.
-				   A backward branch (target <= current instruction) creates a
-				   loop; unrolling it into a single block causes DBRA/DBcc to
-				   execute a fixed unroll count instead of the runtime counter
-				   value. BSR is a call boundary and must leave the return stack
-				   visible to a fresh successor dispatch. The Resource Manager
-				   callback jump at 0401b70c is data-dependent and must not be
-				   baked into a reusable trace. */
-				if (!forbid_trace_follow && new_pcp > cur_insn && new_pcp < blk_start + 512
-				    && blocklen < 32)
-					continue;
+			/* A compiled block is a basic block: once the interpreter tracer
+			   executes an instruction classified as control flow, stop tracing
+			   and compile exactly the instructions retired so far.  Following a
+			   sampled forward outcome turns data-dependent control flow into a
+			   reusable trace and requires every later stage to reconstruct side
+			   exits, runtime PCs, flags, and register state perfectly.  The old
+			   policy accumulated opcode- and guest-PC-specific exceptions when
+			   those assumptions failed. */
+			if (!must_end && end_block(opcode))
 				must_end = true;
-			}
 			if (must_end) {
 #if defined(CPU_AARCH64)
 				tick_inhibit = false;
@@ -1331,7 +1342,8 @@ jit_pctrace_done:
 					return;
 				}
 #endif
-				compile_block(pc_hist, blocklen, total_cycles);
+				if (!jit_strict_defer_cold_ram_trace(pc_hist, blocklen))
+					compile_block(pc_hist, blocklen, total_cycles);
 				return;
 			}
 		}
@@ -1341,8 +1353,15 @@ jit_pctrace_done:
 void execute_exception(uae_u32 cycles)
 {
 	countdown -= cycles;
-	Exception(regs.jit_exception, 0);
+	const uae_u32 request = regs.jit_exception;
+	const bool has_oldpc = (request & JIT_EXCEPTION_OLDPC_VALID) != 0;
+	const bool is_chk = (request & JIT_EXCEPTION_CHK_N_VALID) != 0;
+	if (is_chk)
+		SET_NFLG((request & JIT_EXCEPTION_CHK_N_SET) != 0);
+	Exception(request & JIT_EXCEPTION_VECTOR_MASK,
+		has_oldpc ? regs.jit_exception_oldpc : 0);
 	regs.jit_exception = 0;
+	regs.jit_exception_oldpc = 0;
 }
 
 /* --- JIT native-call helpers for SR/CCR opcodes --- */
@@ -1402,25 +1421,6 @@ extern "C" void jit_op_eorsr(void)
         regs.sr = (regs.sr & 0xFF00) | ((regs.sr ^ val) & 0xFF);
     }
     MakeFromSR();
-}
-
-/* MOVEC helpers */
-extern "C" void jit_op_movec2(void)
-{
-    uae_u32 ext = regs.jit_exception;
-    int rn = (ext >> 12) & 15;
-    int cr = ext & 0xFFF;
-    uae_u32 *regp = &regs.regs[rn];
-    m68k_movec2(cr, regp);
-}
-
-extern "C" void jit_op_move2c(void)
-{
-    uae_u32 ext = regs.jit_exception;
-    int rn = (ext >> 12) & 15;
-    int cr = ext & 0xFFF;
-    uae_u32 *regp = &regs.regs[rn];
-    m68k_move2c(cr, regp);
 }
 
 /* ================================================================
@@ -1747,112 +1747,57 @@ extern "C" void jit_op_nbcd(void)
 
 /* --- MOVEP helpers --- */
 
-extern "C" void jit_op_mvprm(void)
+extern "C" void jit_op_mvprm(uae_u32 next_pc)
 {
-    /* Move register to peripheral (byte-interleaved write)
-     * jit_exception: bits 0-2 = An, bits 3-5 = Dn, bit 6 = long mode */
+    /* Move register to peripheral (byte-interleaved write).
+     * jit_exception: bits 0-2 = An, bits 3-5 = Dn, bit 6 = long mode.
+     *
+     * The ordered-helper ABI enters with the exact opcode PC.  Every lane is
+     * independently faultable there; the successor becomes architectural only
+     * after the final successful write, matching the interpreter. */
     int an = regs.jit_exception & 7;
     int dn = (regs.jit_exception >> 3) & 7;
     int is_long = (regs.jit_exception >> 6) & 1;
     uae_s16 disp = (uae_s16)(regs.jit_exception >> 16);
     uae_u32 addr = regs.regs[8 + an] + disp;
     uae_u32 val = regs.regs[dn];
-    
+
     if (is_long) {
         put_byte(addr, (val >> 24) & 0xFF); addr += 2;
         put_byte(addr, (val >> 16) & 0xFF); addr += 2;
     }
     put_byte(addr, (val >> 8) & 0xFF); addr += 2;
     put_byte(addr, val & 0xFF);
+    m68k_setpc(next_pc);
 }
 
-extern "C" void jit_op_mvpmr(void)
+extern "C" void jit_op_mvpmr(uae_u32 next_pc)
 {
-    /* Move peripheral to register (byte-interleaved read) */
+    /* All interleaved source reads fault at the opcode PC.  Commit the complete
+       register value before publishing the explicit successor. */
     int an = regs.jit_exception & 7;
     int dn = (regs.jit_exception >> 3) & 7;
     int is_long = (regs.jit_exception >> 6) & 1;
     uae_s16 disp = (uae_s16)(regs.jit_exception >> 16);
     uae_u32 addr = regs.regs[8 + an] + disp;
     uae_u32 val = 0;
-    
+
     if (is_long) {
         val = (get_byte(addr) << 24); addr += 2;
         val |= (get_byte(addr) << 16); addr += 2;
     }
     val |= (get_byte(addr) << 8); addr += 2;
     val |= get_byte(addr);
-    
+
     if (is_long) {
         regs.regs[dn] = val;
     } else {
         regs.regs[dn] = (regs.regs[dn] & 0xFFFF0000) | (val & 0xFFFF);
     }
+    m68k_setpc(next_pc);
 }
 
-/* --- Privileged/flow control helpers --- */
-
-extern "C" void jit_op_mvr2usp(void)
-{
-    int rn = regs.jit_exception & 0xF;
-    regs.usp = regs.regs[rn];
-}
-
-extern "C" void jit_op_mvusp2r(void)
-{
-    int rn = regs.jit_exception & 0xF;
-    regs.regs[rn] = regs.usp;
-}
-
-extern "C" void jit_op_reset(void)
-{
-    /* RESET instruction — in emulation, this is a no-op */
-}
-
-extern "C" void jit_op_rte(void)
-{
-    /* RTE: pop SR and PC from supervisor stack.
-     * 68040 has different stack frame formats. */
-    uae_u32 sp = m68k_areg(regs, 7);
-    uae_u16 new_sr = get_word(sp); sp += 2;
-    uae_u32 new_pc = get_long(sp); sp += 4;
-    
-    /* Read frame format (68040) */
-    uae_u16 frame_word = get_word(sp); sp += 2;
-    int frame_type = (frame_word >> 12) & 0xF;
-    
-    /* Handle different frame types */
-    switch (frame_type) {
-        case 0: /* Normal 4-word frame */
-            break;
-        case 1: /* Throwaway 4-word frame */
-            break;
-        case 2: /* 6-word frame (instruction error) */
-            sp += 4; /* skip instruction address */
-            break;
-        case 7: /* 68040 access error - 30 word frame */
-            sp += 52; /* skip the 26 additional words */
-            break;
-        case 9: /* Coprocessor mid-instruction, 10 word */
-            sp += 12;
-            break;
-        case 0xA: /* 68040 short bus cycle, 16 word */
-            sp += 24;
-            break;
-        case 0xB: /* 68040 long bus cycle, 46 word */
-            sp += 84;
-            break;
-        default:
-            /* Unknown frame type — treat as normal */
-            break;
-    }
-    
-    m68k_areg(regs, 7) = sp;
-    regs.sr = new_sr;
-    MakeFromSR();
-    m68k_setpc_rte(new_pc);
-    fill_prefetch_0();
-}
+/* --- Flow control helpers --- */
 
 extern "C" void jit_op_rtr(void)
 {
@@ -1865,16 +1810,6 @@ extern "C" void jit_op_rtr(void)
     regs.pc = get_long(sp); sp += 4;
     m68k_areg(regs, 7) = sp;
     fill_prefetch_0();
-}
-
-extern "C" void jit_op_stop(void)
-{
-    /* STOP #imm: load SR from immediate and halt */
-    uae_u16 new_sr = (uae_u16)regs.jit_exception;
-    regs.sr = new_sr;
-    MakeFromSR();
-    regs.stopped = 1;
-    SPCFLAGS_SET(SPCFLAG_STOP);
 }
 
 extern "C" void jit_op_trap(void)
@@ -1923,6 +1858,57 @@ extern "C" void jit_op_chk(void)
     }
 }
 
+extern "C" void jit_op_chk2(void)
+{
+    /* scratchregs: [0] bounds EA, [1] extension word, [2] element size.
+       CHK2 performs two separately faultable reads in ascending address order.
+       It changes only Z and C; N, V, and X survive exactly as on the 68020+
+       interpreter path.  Trap delivery is deferred through jit_exception so
+       the JIT dispatcher retains the precise current-instruction PC. */
+    const uaecptr ea = regs.scratchregs[0];
+    const uae_u16 extra = (uae_u16)regs.scratchregs[1];
+    const unsigned size = regs.scratchregs[2];
+    uae_s32 lower;
+    uae_s32 upper;
+
+    regs.jit_exception = 0;
+    switch (size) {
+    case 1:
+        lower = (uae_s32)(uae_s8)get_byte(ea);
+        upper = (uae_s32)(uae_s8)get_byte(ea + 1);
+        break;
+    case 2:
+        lower = (uae_s32)(uae_s16)get_word(ea);
+        upper = (uae_s32)(uae_s16)get_word(ea + 2);
+        break;
+    case 4:
+        lower = (uae_s32)get_long(ea);
+        upper = (uae_s32)get_long(ea + 4);
+        break;
+    default:
+        /* Generator/helper ABI corruption must fail closed, never become an
+           implicit guest result or interpreter dispatch. */
+        abort();
+    }
+
+    uae_s32 value = (uae_s32)regs.regs[(extra >> 12) & 15];
+    if ((extra & 0x8000) == 0) {
+        if (size == 1)
+            value = (uae_s32)(uae_s8)value;
+        else if (size == 2)
+            value = (uae_s32)(uae_s16)value;
+    }
+
+    const bool equal_bound = value == lower || value == upper;
+    const bool outside = lower <= upper
+        ? value < lower || value > upper
+        : value > upper || value < lower;
+    SET_ZFLG(equal_bound);
+    SET_CFLG(outside);
+    if ((extra & 0x0800) != 0 && outside)
+        regs.jit_exception = 6;
+}
+
 /* --- TAS helper --- */
 extern "C" void jit_op_tas(void)
 {
@@ -1956,56 +1942,68 @@ extern "C" void jit_op_tas(void)
 }
 
 /* --- PACK/UNPK helpers --- */
-extern "C" void jit_op_pack(void)
+extern "C" void jit_op_pack(uae_u32 next_pc)
 {
-    /* PACK Dn,Dn,#adj or PACK -(An),-(An),#adj */
+    /* The ordered-helper ABI enters at the opcode PC.  Source reads retain that
+       PC; the predecrement destination write observes the explicit successor,
+       exactly where the interpreter performs m68k_incpc(). */
     int dst_reg = regs.jit_exception & 7;
     int src_reg = (regs.jit_exception >> 3) & 7;
     int predec = (regs.jit_exception >> 6) & 1;
     uae_s16 adj = (uae_s16)(regs.jit_exception >> 16);
-    
+
     uae_u16 val;
     if (predec) {
-        uae_u32 src_addr = regs.regs[8 + src_reg] -= 2;
-        val = get_word(src_addr);
+        /* Canonical 68040 ordering is deliberately not a get_word(): the two
+         source bytes are independently predecrement-addressed, which matters
+         for A7 and for a source/destination register alias.  The architectural
+         source update itself is two bytes for every An. */
+        const uae_u32 source = regs.regs[8 + src_reg];
+        val = (uae_u16)get_byte(source - areg_byteinc[src_reg]);
+        val |= (uae_u16)get_byte(source - 2 * areg_byteinc[src_reg]) << 8;
+        regs.regs[8 + src_reg] -= 2;
     } else {
         val = (uae_u16)regs.regs[src_reg];
     }
-    
+
     val += adj;
-    uae_u8 result = ((val >> 4) & 0xF0) | (val & 0x0F);
-    
+    const uae_u8 result = ((val >> 4) & 0xF0) | (val & 0x0F);
+
     if (predec) {
-        uae_u32 dst_addr = regs.regs[8 + dst_reg] -= 1;
-        put_byte(dst_addr, result);
+        regs.regs[8 + dst_reg] -= areg_byteinc[dst_reg];
+        m68k_setpc(next_pc);
+        put_byte(regs.regs[8 + dst_reg], result);
     } else {
         regs.regs[dst_reg] = (regs.regs[dst_reg] & 0xFFFFFF00) | result;
+        m68k_setpc(next_pc);
     }
 }
 
-extern "C" void jit_op_unpk(void)
+extern "C" void jit_op_unpk(uae_u32 next_pc)
 {
     int dst_reg = regs.jit_exception & 7;
     int src_reg = (regs.jit_exception >> 3) & 7;
     int predec = (regs.jit_exception >> 6) & 1;
     uae_s16 adj = (uae_s16)(regs.jit_exception >> 16);
-    
+
     uae_u8 val;
     if (predec) {
-        uae_u32 src_addr = regs.regs[8 + src_reg] -= 1;
-        val = get_byte(src_addr);
+        regs.regs[8 + src_reg] -= areg_byteinc[src_reg];
+        val = get_byte(regs.regs[8 + src_reg]);
     } else {
         val = (uae_u8)regs.regs[src_reg];
     }
-    
+
     uae_u16 result = ((val & 0xF0) << 4) | (val & 0x0F);
     result += adj;
-    
+
     if (predec) {
-        uae_u32 dst_addr = regs.regs[8 + dst_reg] -= 2;
-        put_word(dst_addr, result);
+        regs.regs[8 + dst_reg] -= 2;
+        m68k_setpc(next_pc);
+        put_word(regs.regs[8 + dst_reg], result);
     } else {
         regs.regs[dst_reg] = (regs.regs[dst_reg] & 0xFFFF0000) | result;
+        m68k_setpc(next_pc);
     }
 }
 
@@ -2014,8 +2012,8 @@ extern "C" void jit_op_bfffo(void)
 {
     /* Bit Field Find First One.
      * jit_exception = extension word
-     * scratchregs[0] = effective address for memory EA, or reg number +
-     *                  0x80000000 for Dn source.
+     * scratchregs[0] = effective address or Dn number; scratchregs[1]
+     *                  distinguishes Dn from the full 32-bit memory address.
      */
     const uae_u32 ext = regs.jit_exception;
     const uae_u32 ea_info = regs.scratchregs[0];
@@ -2023,7 +2021,7 @@ extern "C" void jit_op_bfffo(void)
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
     uae_u32 tmp;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int src_reg = ea_info & 7;
         offset &= 0x1f;
         const uae_u32 src = regs.regs[src_reg];
@@ -2054,15 +2052,15 @@ extern "C" void jit_op_bfffo(void)
 extern "C" void jit_op_bfextu(void)
 {
     /* Bit Field Extract Unsigned. Mirrors the interpreter (gencpu.c i_BFEXTU).
-     * jit_exception = extension word; scratchregs[0] = memory EA, or reg
-     * number + 0x80000000 for a Dn source. Result -> Dn=(ext>>12)&7. */
+     * jit_exception = extension word; scratchregs[0] = memory EA or Dn;
+     * scratchregs[1] distinguishes the two. Result -> Dn=(ext>>12)&7. */
     const uae_u32 ext = regs.jit_exception;
     const uae_u32 ea_info = regs.scratchregs[0];
     uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
     uae_u32 tmp;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int src_reg = ea_info & 7;
         offset &= 0x1f;
         const uae_u32 src = regs.regs[src_reg];
@@ -2093,7 +2091,7 @@ extern "C" void jit_op_bfexts(void)
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
     uae_u32 tmp;
 
-    if (ea_info & 0x80000000u) {
+    if (regs.scratchregs[1]) {
         const int src_reg = ea_info & 7;
         offset &= 0x1f;
         const uae_u32 src = regs.regs[src_reg];
@@ -2116,15 +2114,15 @@ extern "C" void jit_op_bfexts(void)
  * Byte-exact mirror of the interpreter (gencpu.c i_BFTST/BFCHG/BFCLR/BFSET):
  * same get_bitfield/put_bitfield + bdata[] idiom and the same Dn rotate.
  * op: 0=TST (no write), 1=CHG, 2=CLR, 3=SET.
- * jit_exception = extension word; scratchregs[0] = memory EA, or reg number
- * + 0x80000000 for a Dn destination. */
+ * jit_exception = extension word; scratchregs[0] = memory EA or Dn number;
+ * scratchregs[1] distinguishes the two without stealing an address bit. */
 static inline void jit_bf_rmw(int op)
 {
     const uae_u32 ext = regs.jit_exception;
     const uae_u32 ea_info = regs.scratchregs[0];
     uae_s32 offset = (ext & 0x800) ? (uae_s32)regs.regs[(ext >> 6) & 7] : (uae_s32)((ext >> 6) & 0x1f);
     const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
-    const int is_dreg = (ea_info & 0x80000000u) != 0;
+    const int is_dreg = regs.scratchregs[1] != 0;
     const int dreg = ea_info & 7;
     uae_u32 bdata[2];
     uae_u32 dsta = 0;
@@ -2169,74 +2167,39 @@ extern "C" void jit_op_bfset(void) { jit_bf_rmw(3); }
 /* --- BFINS helper --- */
 extern "C" void jit_op_bfins(void)
 {
-    /* Bit field insert — complex encoding.
-     * jit_exception = extension word
-     * scratchregs[0] = effective address (for memory EA) or reg number + 0x80000000 for Dn
-     * The extension word:
-     *   bits 15-12: Dn (source data register)
-     *   bit 11: Do (0=offset in ext, 1=offset in Dn)
-     *   bits 10-6: offset or offset reg
-     *   bit 5: Dw (0=width in ext, 1=width in Dn)
-     *   bits 4-0: width or width reg */
-    uae_u32 ext = regs.jit_exception;
-    uae_u32 ea_info = regs.scratchregs[0];
-    
-    int dn = (ext >> 12) & 7;
-    int do_reg = (ext >> 11) & 1;
-    int offset = do_reg ? (regs.regs[(ext >> 6) & 7] & 31) : ((ext >> 6) & 31);
-    int dw_reg = (ext >> 5) & 1;
-    int width = dw_reg ? (regs.regs[ext & 7] & 31) : (ext & 31);
-    if (width == 0) width = 32;
-    
-    uae_u32 ins_data = regs.regs[dn];
-    
-    if (ea_info & 0x80000000) {
-        /* Register destination */
-        int dreg = ea_info & 7;
-        uae_u32 val = regs.regs[dreg];
-        uae_u32 mask = (width == 32) ? 0xFFFFFFFF : ((1u << width) - 1);
-        int shift = 32 - offset - width;
-        if (shift < 0) shift += 32; /* shouldn't happen for reg */
-        val &= ~(mask << shift);
-        val |= ((ins_data & mask) << shift);
-        regs.regs[dreg] = val;
-        
-        /* Set flags based on inserted field */
-        uae_u32 field = (ins_data & mask);
-        SET_NFLG((field >> (width - 1)) & 1);
-        SET_ZFLG(field == 0);
-        SET_VFLG(0);
-        SET_CFLG(0);
+    /* Mirror the interpreter's get_bitfield()/put_bitfield() contract.
+     * jit_exception is the extension word; scratchregs[0] is either the
+     * memory EA or Dn number, with scratchregs[1] selecting a register.  A dynamic
+     * memory offset is a signed 32-bit value and must not be reduced modulo
+     * 32 until after distinguishing the register-destination case. */
+    const uae_u32 ext = regs.jit_exception;
+    const uae_u32 ea_info = regs.scratchregs[0];
+    uae_s32 offset = (ext & 0x800)
+        ? (uae_s32)regs.regs[(ext >> 6) & 7]
+        : (uae_s32)((ext >> 6) & 0x1f);
+    const int width = ((((ext & 0x20) ? regs.regs[ext & 7] : ext) - 1) & 0x1f) + 1;
+    const uae_u32 field_mask = width == 32 ? 0xffffffffu : ((1u << width) - 1);
+    const uae_u32 field = regs.regs[(ext >> 12) & 7] & field_mask;
+
+    if (regs.scratchregs[1]) {
+        const int dreg = ea_info & 7;
+        const unsigned roff = (unsigned)offset & 0x1f;
+        const uae_u32 old = regs.regs[dreg];
+        const uae_u32 rotated = roff ? (old << roff) | (old >> (32 - roff)) : old;
+        const uae_u32 keep_mask = width == 32 ? 0 : ((1u << (32 - width)) - 1);
+        const uae_u32 merged = (rotated & keep_mask) | (field << (32 - width));
+        regs.regs[dreg] = roff ? (merged >> roff) | (merged << (32 - roff)) : merged;
     } else {
-        /* Memory destination — byte-oriented bit manipulation */
-        uae_u32 addr = ea_info;
-        int byte_offset = offset >> 3;
-        int bit_offset = offset & 7;
-        addr += byte_offset;
-        
-        /* Read enough bytes to cover the field */
-        int total_bits = bit_offset + width;
-        int bytes_needed = (total_bits + 7) >> 3;
-        uae_u32 val = 0;
-        for (int i = 0; i < bytes_needed && i < 5; i++) {
-            val = (val << 8) | get_byte(addr + i);
-        }
-        
-        uae_u32 mask = (width == 32) ? 0xFFFFFFFF : ((1u << width) - 1);
-        int shift = (bytes_needed * 8) - bit_offset - width;
-        val &= ~(mask << shift);
-        val |= ((ins_data & mask) << shift);
-        
-        for (int i = 0; i < bytes_needed && i < 5; i++) {
-            put_byte(addr + i, (val >> ((bytes_needed - 1 - i) * 8)) & 0xFF);
-        }
-        
-        uae_u32 field = (ins_data & mask);
-        SET_NFLG((field >> (width - 1)) & 1);
-        SET_ZFLG(field == 0);
-        SET_VFLG(0);
-        SET_CFLG(0);
+        uae_u32 bdata[2];
+        const uae_u32 dsta = ea_info + (offset >> 3);
+        (void)get_bitfield(dsta, bdata, offset, width);
+        put_bitfield(dsta, bdata, field, offset, width);
     }
+
+    SET_NFLG((field >> (width - 1)) & 1);
+    SET_ZFLG(field == 0);
+    SET_VFLG(0);
+    SET_CFLG(0);
 }
 
 /* --- ROXL/ROXR register helpers --- */
@@ -2422,19 +2385,6 @@ extern "C" void jit_op_roxrw(void)
     SET_ZFLG(val == 0);
     SET_NFLG((val >> 15) & 1);
     SET_VFLG(0);
-}
-
-/* --- Cache instructions (no-ops in emulation) --- */
-extern "C" void jit_op_cinva(void)
-{
-    /* CINVA: Cache invalidate all — no-op in emulation */
-}
-
-extern "C" void jit_op_cpusha(void)
-{
-    /* CPUSH*: guest cache maintenance. Host-side translated code must be
-       invalidated just like the SIGILL fallback path did for CPUSHA. */
-    FlushCodeCache(NULL, 0);
 }
 
 /* --- TRAPcc helper --- */

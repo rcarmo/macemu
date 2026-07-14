@@ -438,3 +438,22 @@ It is:
 - stop leaving lifecycle truth distributed across codegen helpers, compile logic, and dispatcher repair
 
 That is the right next step for this backend.
+
+---
+
+## 2026-07-09 structural resolution
+
+The two highest-risk lifecycle recommendations above are now enforced in code and by `jit-test/structural-audit.ts`:
+
+- `execute_normal()` stops trace construction at every `end_block()` control-flow instruction. The former sampled-forward trace policy and its guest-PC-specific exception were removed; compiled units are basic blocks.
+- both ARM64 endblock emitters publish the complete successor PC triple before either countdown or `spcflags` can return to C. The hot chain and both slow exits now observe one canonical state transition.
+- `block_need_recompile()` disables `direct_handler` before `set_dhtu()` repatches inbound dependencies. A `prefer_direct` edge can no longer retain the old native target after that target is marked for recompilation.
+- `reset_lists()` returns every unconsumed `hold_bi[]` reservation to `BlockInfoAllocator` before clearing the reserve slots. Reserved block records are not on the active or dormant lists, so the former hard-flush path leaked up to `MAX_HOLD_BI` allocator chunks on every cache reset.
+- `invalidate_block()` clears both edge counters and recorded targets. A checksum failure means the profiled code incarnation is no longer authoritative; retaining those counters allowed the next compile to reconstruct a stable direct-edge summary from different guest code. Countdown-driven `block_need_recompile()` deliberately remains the profile-preserving transition.
+- code-cache exhaustion is checked only after the final `blockinfo` metadata update. The former finalization order linked the new block into `active`, called `flush_icache_hard()` (which released it), then wrote `status`, zero-source containment state, trace state, and possible recompile state through the freed `bi` pointer.
+- zero-filled RAM containment now replaces `direct_handler` with `direct_pen` and calls `set_dhtu()`. Changing only the cache tag and `handler_to_use` left existing dependency branches pointed at the wrapper/direct native code that containment was intended to suppress.
+- lazy flush uses a validation-forcing dependency repatch. The normal `set_dhtu()` policy honours stable `prefer_direct` edges, which allowed those inbound branches to remain on `direct_handler` while the block was `BI_NEED_CHECK`; `set_dhtu_validated()` keeps the compiled entry available for successful reactivation but routes every edge through `direct_pcc` until checksum validation completes.
+
+The same tranche also makes generated C-helper calls explicit allocator barriers. See `AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md`.
+
+Verification: structural gates pass and opcode equivalence remains `320/320`. Frozen-clock boot moved beyond the earlier corrupt-PC/RTE failures, but Finder desktop framebuffer mean `42849` remains outstanding.

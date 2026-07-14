@@ -159,7 +159,11 @@ static int cond_codes[]={-1,-1,
 		NATIVE_CC_HI,NATIVE_CC_LS,
 		NATIVE_CC_CC,NATIVE_CC_CS,
 		NATIVE_CC_NE,NATIVE_CC_EQ,
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		NATIVE_CC_VC,NATIVE_CC_VS,
+#else
 		-1,-1,
+#endif
 		NATIVE_CC_PL,NATIVE_CC_MI,
 		NATIVE_CC_GE,NATIVE_CC_LT,
 		NATIVE_CC_GT,NATIVE_CC_LE
@@ -419,7 +423,7 @@ static void genamode(amodes mode, const char *reg, wordsizes size, const char *n
 			comprintf("\tint %s = dodgy ? scratchie++ : %s + 8;\n", name, reg);
 			if (getv == GENA_GETV_FETCH)
 			{
-				comprintf("\tif (dodgy) \n");
+				comprintf("\tif (dodgy)\n");
 				comprintf("\t\tmov_l_rr(%s, %s + 8);\n", name, reg);
 			}
 		}
@@ -456,7 +460,7 @@ static void genamode(amodes mode, const char *reg, wordsizes size, const char *n
 			if (movem != GENA_MOVEM_DO_INC)
 			{
 				comprintf("\tint %sa=dodgy?scratchie++:%s+8;\n", name, reg);
-				comprintf("\tif (dodgy) \n");
+				comprintf("\tif (dodgy)\n");
 				comprintf("\tmov_l_rr(%sa,8+%s);\n", name, reg);
 			} else
 			{
@@ -822,19 +826,28 @@ genmovemel (uae_u16 opcode)
 
     /* Fast but unsafe...  */
 #if defined(CPU_AARCH64)
+    const char *movem_srca = "srca";
+    if (table68k[opcode].dmode == Aind) {
+        /* genamode maps (An) directly to the architectural address register.
+         * MOVEM memory-to-register must walk a temporary EA for control modes;
+         * only (An)+ writes the final EA back to An. */
+        comprintf("\tint movem_srca=scratchie++;\n"
+                  "\tmov_l_rr(movem_srca,srca);\n");
+        movem_srca = "movem_srca";
+    }
     comprintf("\tfor (i=0;i<16;i++) {\n"
               "\t\tif ((mask>>i)&1) {\n");
     switch(table68k[opcode].size) {
      case sz_long:
-        comprintf("\t\t\treadlong(srca,i,scratchie);\n"
-                  "\t\t\tadd_l_ri(srca,4);\n"
-                  "\t\t\toffset+=4;\n");
+        comprintf("\t\t\treadlong(%s,i,scratchie);\n"
+                  "\t\t\tadd_l_ri(%s,4);\n"
+                  "\t\t\toffset+=4;\n", movem_srca, movem_srca);
         break;
      case sz_word:
-        comprintf("\t\t\treadword(srca,i,scratchie);\n"
+        comprintf("\t\t\treadword(%s,i,scratchie);\n"
                   "\t\t\tsign_extend_16_rr(i,i);\n"
-                  "\t\t\tadd_l_ri(srca,2);\n"
-                  "\t\t\toffset+=2;\n");
+                  "\t\t\tadd_l_ri(%s,2);\n"
+                  "\t\t\toffset+=2;\n", movem_srca, movem_srca);
         break;
      default: assert(0);
     }
@@ -931,19 +944,28 @@ genmovemle (uae_u16 opcode)
 #endif
 #endif
 #if defined(CPU_AARCH64)
-    if (table68k[opcode].dmode!=Apdi) {
+    const char *movem_dsta = "srca";
+    if (table68k[opcode].dmode != Apdi) {
+        /* Control addressing modes do not write their walked EA back. In the
+         * plain (An) form genamode aliases srca directly to architectural An;
+         * incrementing srca while emitting each element therefore corrupted An
+         * as if MOVEM used postincrement. Always walk a private EA for every
+         * non-predecrement form, independent of genamode's storage choice. */
+        comprintf("\tint movem_dsta=scratchie++;\n"
+                  "\tmov_l_rr(movem_dsta,srca);\n");
+        movem_dsta = "movem_dsta";
         comprintf("\tfor (i=0;i<16;i++) {\n"
                   "\t\tif ((mask>>i)&1) {\n");
         switch(table68k[opcode].size) {
          case sz_long:
             comprintf("\t\t\tmov_l_rr(tmp,i);\n"
-                      "\t\t\twritelong(srca,tmp,scratchie);\n"
-                      "\t\t\tadd_l_ri(srca,4);\n");
+                      "\t\t\twritelong(%s,tmp,scratchie);\n"
+                      "\t\t\tadd_l_ri(%s,4);\n", movem_dsta, movem_dsta);
             break;
          case sz_word:
             comprintf("\t\t\tmov_l_rr(tmp,i);\n"
-                      "\t\t\twriteword(srca,tmp,scratchie);\n"
-                      "\t\t\tadd_l_ri(srca,2);\n");
+                      "\t\t\twriteword(%s,tmp,scratchie);\n"
+                      "\t\t\tadd_l_ri(%s,2);\n", movem_dsta, movem_dsta);
             break;
          default: assert(0);
         }
@@ -1126,7 +1148,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tor_l_ri(scratchie,0xffffff00);\n");
 		comprintf("\tand_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tand_b(%s,%s);\n",dst,src);
 		break;
 	     case sz_word:
@@ -1135,7 +1157,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tor_l_ri(scratchie,0xffff0000);\n");
 		comprintf("\tand_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tand_w(%s,%s);\n",dst,src);
 		break;
 	     case sz_long:
@@ -1154,7 +1176,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tand_l_ri(%s,0xffffff00);\n",dst);
 		comprintf("\tor_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tmov_b_rr(%s,%s);\n",dst,src);
 		break;
 	     case sz_word:
@@ -1163,7 +1185,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		comprintf("\tand_l_ri(%s,0xffff0000);\n",dst);
 		comprintf("\tor_l(%s,scratchie);\n",dst);
 		comprintf("\tforget_about(scratchie);\n");
-		comprintf("\t} else \n"
+		comprintf("\t} else\n"
 			  "\tmov_w_rr(%s,%s);\n",dst,src);
 		break;
 	     case sz_long:
@@ -1190,7 +1212,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		    comprintf("\tzero_extend_8_rr(scratchie,%s);\n",src);
 		    comprintf("\t%s_l(%s,scratchie);\n",op,dst);
 		    comprintf("\tforget_about(scratchie);\n");
-		    comprintf("\t} else \n"
+		    comprintf("\t} else\n"
 			      "\t%s_b(%s,%s);\n",op,dst,src);
 		    break;
 		 case sz_word:
@@ -1198,7 +1220,7 @@ genflags (flagtypes type, wordsizes size, const char *value, const char *src, co
 		    comprintf("\tzero_extend_16_rr(scratchie,%s);\n",src);
 		    comprintf("\t%s_l(%s,scratchie);\n",op,dst);
 		    comprintf("\tforget_about(scratchie);\n");
-		    comprintf("\t} else \n"
+		    comprintf("\t} else\n"
 			      "\t%s_w(%s,%s);\n",op,dst,src);
 		    break;
 		 case sz_long:
@@ -1514,15 +1536,17 @@ gen_opcode (unsigned int opcode)
 
      case i_ORSR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	if (curi->size == sz_byte) {
-	    /* ORI to CCR: native flag manipulation */
+	    /* ORI to CCR: the immediate is known while compiling the block. Do not
+	       mistake a materialized virtual-register number for the guest value. */
+	    comprintf("\tuae_u32 ccr_imm = (uae_u32)comp_get_iword((m68k_pc_offset += 2) - 2);\n");
 	    comprintf("\tmake_flags_live();\n");
 	    comprintf("\tstart_needflags();\n");
-	    comprintf("\tjff_ORSR(ARM_CCR_MAP[src & 0xF], ((src & 0x10) >> 4));\n");
+	    comprintf("\tjff_ORSR(ARM_CCR_MAP[ccr_imm & 0xF], ((ccr_imm & 0x10) >> 4));\n");
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
 	} else {
+	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    /* ORI to SR: modify full SR via helper */
 	    /* ORSRI to SR: inline MakeFromSR */
 	    comprintf("\tjnf_ORSR_w(src);\n");
@@ -1535,14 +1559,15 @@ gen_opcode (unsigned int opcode)
 
      case i_EORSR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	if (curi->size == sz_byte) {
+	    comprintf("\tuae_u32 ccr_imm = (uae_u32)comp_get_iword((m68k_pc_offset += 2) - 2);\n");
 	    comprintf("\tmake_flags_live();\n");
 	    comprintf("\tstart_needflags();\n");
-	    comprintf("\tjff_EORSR(ARM_CCR_MAP[src & 0xF], ((src & 0x10) >> 4));\n");
+	    comprintf("\tjff_EORSR(ARM_CCR_MAP[ccr_imm & 0xF], ((ccr_imm & 0x10) >> 4));\n");
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
 	} else {
+	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    /* EORSRI to SR: inline MakeFromSR */
 	    comprintf("\tjnf_EORSR_w(src);\n");
 	}
@@ -1554,14 +1579,15 @@ gen_opcode (unsigned int opcode)
 
      case i_ANDSR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	if (curi->size == sz_byte) {
+	    comprintf("\tuae_u32 ccr_imm = (uae_u32)comp_get_iword((m68k_pc_offset += 2) - 2);\n");
 	    comprintf("\tmake_flags_live();\n");
 	    comprintf("\tstart_needflags();\n");
-	    comprintf("\tjff_ANDSR(ARM_CCR_MAP[src & 0xF], (src & 0x10));\n");
+	    comprintf("\tjff_ANDSR(ARM_CCR_MAP[ccr_imm & 0xF], (ccr_imm & 0x10));\n");
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
 	} else {
+	    genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    /* ANDSRI to SR: inline MakeFromSR */
 	    comprintf("\tjnf_ANDSR_w(src);\n");
 	}
@@ -1615,16 +1641,25 @@ gen_opcode (unsigned int opcode)
 	if (curi->smode == Apdi) {
 	    comprintf("\tint src_val = scratchie++;\n");
 	    comprintf("\tint dst_val = scratchie++;\n");
-	    comprintf("\tsub_l_ri(srcreg + 8, 1);\n");
+	    /* Byte predecrement is two bytes for A7 and one for A0-A6. Keep
+	       source and destination updates separate so -(A7),-(A7) applies
+	       both architectural decrements before the destination read. */
+	    comprintf("\tlea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);\n");
 	    comprintf("\treadbyte(srcreg + 8, src_val, scratchie);\n");
-	    comprintf("\tsub_l_ri(dstreg + 8, 1);\n");
+	    comprintf("\tlea_l_brr(dstreg + 8, dstreg + 8, (uae_s32)-areg_byteinc[dstreg]);\n");
 	    comprintf("\treadbyte(dstreg + 8, dst_val, scratchie);\n");
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_SBCD_b(dst_val, src_val);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_SBCD_b(dst_val, src_val);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	    comprintf("\twritebyte(dstreg + 8, dst_val, scratchie);\n");
 	} else {
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_SBCD_b(dstreg, srcreg);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_SBCD_b(dstreg, srcreg);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	}
 #else
 	failure;
@@ -1675,17 +1710,25 @@ gen_opcode (unsigned int opcode)
 	    /* -(An),-(An) mode: inline memory access + BCD add */
 	    comprintf("\tint src_val = scratchie++;\n");
 	    comprintf("\tint dst_val = scratchie++;\n");
-	    comprintf("\tsub_l_ri(srcreg + 8, 1);\n");
+	    /* Match generic byte predecrement geometry, including A7's two-byte
+	       stride and the two ordered decrements of the same-register form. */
+	    comprintf("\tlea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);\n");
 	    comprintf("\treadbyte(srcreg + 8, src_val, scratchie);\n");
-	    comprintf("\tsub_l_ri(dstreg + 8, 1);\n");
+	    comprintf("\tlea_l_brr(dstreg + 8, dstreg + 8, (uae_s32)-areg_byteinc[dstreg]);\n");
 	    comprintf("\treadbyte(dstreg + 8, dst_val, scratchie);\n");
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_ABCD_b(dst_val, src_val);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_ABCD_b(dst_val, src_val);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	    comprintf("\twritebyte(dstreg + 8, dst_val, scratchie);\n");
 	} else {
-	    /* Dn,Dn mode: native inline BCD add */
-	    comprintf("\tdont_care_flags();\n");
-	    comprintf("\tjnf_ABCD_b(dstreg, srcreg);\n");
+	    /* BCD NZVC is materialised even in a nominally flag-dead block. */
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_ABCD_b(dstreg, srcreg);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	}
 #else
 	failure;
@@ -1720,15 +1763,22 @@ gen_opcode (unsigned int opcode)
      case i_NBCD:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
 	if (curi->smode == Dreg) {
 	    /* Dn mode: native inline BCD negate */
-	    comprintf("\tjnf_NBCD_b(srcreg);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_NBCD_b(srcreg);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	} else {
 	    /* Memory mode: read, BCD negate, write back */
 	    comprintf("\tint val = scratchie++;\n");
 	    comprintf("\treadbyte(srca, val, scratchie);\n");
-	    comprintf("\tjnf_NBCD_b(val);\n");
+	    comprintf("\tmake_flags_live();\n");
+	    comprintf("\tstart_needflags();\n");
+	    comprintf("\tjff_NBCD_b(val);\n");
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
 	    comprintf("\twritebyte(srca, val, scratchie);\n");
 	}
 #else
@@ -1879,15 +1929,38 @@ gen_opcode (unsigned int opcode)
 	 * weird things... */
 
      case i_MVPRM:
-	/* MOVEP: rare peripheral I/O — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* MOVEP Dn,(d16,An): keep the four byte-lane writes in one explicit
+	   semantic helper.  The displacement is part of the compiled instruction;
+	   the register fields remain runtime values for canonical propagation. */
+	isjump;
+	comprintf("\tuae_s16 movep_disp = %s;\n", gen_nextiword());
+	comprintf("\t{ int movep_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(movep_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)movep_disp << 16));\n",
+	    curi->size == sz_long ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, movep_enc); }\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_mvprm, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
+#else
 	isjump;
 	failure;
+#endif
 	break;
 
      case i_MVPMR:
-	/* MOVEP: rare peripheral I/O — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* MOVEP (d16,An),Dn: byte-interleaved reads are likewise one classified
+	   helper operation rather than an opcode-table fallback. */
+	isjump;
+	comprintf("\tuae_s16 movep_disp = %s;\n", gen_nextiword());
+	comprintf("\t{ int movep_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(movep_enc, (srcreg & 7) | ((dstreg & 7) << 3) | %u | ((uae_u32)(uae_u16)movep_disp << 16));\n",
+	    curi->size == sz_long ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, movep_enc); }\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_mvpmr, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
+#else
 	isjump;
 	failure;
+#endif
 	break;
 
      case i_MOVE:
@@ -2051,61 +2124,19 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_MVR2USP:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tjnf_MVR2USP(srcreg);\n");
-#else
-	isjump;
-	failure;
-#endif
-	break;
-
      case i_MVUSP2R:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tjnf_MVUSP2R(srcreg);\n");
-#else
-	isjump;
-	failure;
-#endif
-	break;
-
      case i_RESET:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* RESET: no-op in emulation */
-#else
+     case i_STOP:
+     case i_RTE:
+	/* Privilege checks, extension ordering, exception PCs and dynamic control
+	 * flow are owned by the AArch64 system-control semantic service registered
+	 * after generated-table construction.  Do not leave a second partial
+	 * implementation in the generated compiler. */
 	isjump;
 	failure;
-#endif
 	break;
 
      case i_NOP:
-	break;
-
-     case i_STOP:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, src);\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_stop);\n");
-#else
-	isjump;
-	failure;
-#endif
-	break;
-
-     case i_RTE:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_rte);\n");
-#else
-	isjump;
-	failure;
-#endif
 	break;
 
      case i_RTD:
@@ -2171,6 +2202,9 @@ gen_opcode (unsigned int opcode)
 
      case i_TRAPV:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* TRAPV consumes but never modifies the incoming CCR.  Materialise it
+	   before the native conditional vector-7 request and precise-PC gate. */
+	comprintf("\tmake_flags_live();\n");
 	comprintf("\tjnf_TRAPV();\n");
 #else
 	isjump;
@@ -2286,14 +2320,19 @@ gen_opcode (unsigned int opcode)
 	/* Leave the following as "add" --- it will allow it to be optimized
 	   away due to src being a constant ;-) */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	comprintf("\tarm_ADD_l_ri(src,(uintptr)comp_pc_p);\n");
+	comprintf("\tarm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);\n");
 #else
 	comprintf("\tadd_l_ri(src,(uintptr)comp_pc_p);\n");
 #endif
 	comprintf("\tmov_l_ri(PC_P,(uintptr)comp_pc_p);\n");
 	/* Now they are both constant. Might as well fold in m68k_pc_offset */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	comprintf("\tarm_ADD_ptr_ri(src,m68k_pc_offset);\n");
+	comprintf("\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\n");
+#else
 	comprintf("\tadd_l_ri(src,m68k_pc_offset);\n");
 	comprintf("\tadd_l_ri(PC_P,m68k_pc_offset);\n");
+#endif
 	comprintf("\tm68k_pc_offset=0;\n");
 
 	if (curi->cc>=2) {
@@ -2314,9 +2353,13 @@ gen_opcode (unsigned int opcode)
 	    comprintf("\tcomp_pc_p=(uae_u8*)(uintptr)get_const(PC_P);\n");
 	    break;
 	 case 1: break; /* This is silly! */
-	 case 8: failure; break;  /* Work out details! FIXME */
-	 case 9: failure; break;  /* Not critical, though! */
-
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	 case 8:
+	 case 9:
+#else
+	 case 8: failure; break;
+	 case 9: failure; break;
+#endif
 	 case 2:
 	 case 3:
 	 case 4:
@@ -2377,13 +2420,18 @@ gen_opcode (unsigned int opcode)
 	comprintf("\tsub_l_ri(offs,m68k_pc_offset-m68k_pc_offset_thisinst-2);\n");
 	/* New PC, once the offset_68k is also added. */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	comprintf("\tarm_ADD_l_ri(offs,(uintptr)comp_pc_p);\n");
+	comprintf("\tarm_ADD_l_ri_hostptr(offs,(uintptr)comp_pc_p);\n");
 #else
 	comprintf("\tadd_l_ri(offs,(uintptr)comp_pc_p);\n");
 #endif
 	/* Let's fold in the m68k_pc_offset at this point */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	comprintf("\tarm_ADD_ptr_ri(offs,m68k_pc_offset);\n");
+	comprintf("\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\n");
+#else
 	comprintf("\tadd_l_ri(offs,m68k_pc_offset);\n");
 	comprintf("\tadd_l_ri(PC_P,m68k_pc_offset);\n");
+#endif
 	comprintf("\tm68k_pc_offset=0;\n");
 
 	start_brace();
@@ -2403,11 +2451,16 @@ gen_opcode (unsigned int opcode)
 	       M68K spec: DBcc does NOT affect CCR.
 	       Test src.W for zero BEFORE decrementing (terminal when 0),
 	       then decrement the low word without flag side-effects.  On
-	       ARM64, do this in one midfunc instead of allocating scratchie
-	       virtual registers: scratch virtuals can collide with dirty
-	       architectural registers in the legacy allocator and corrupt
-	       their eventual writeback. */
+	       ARM64, also keep the pre-decrement value in nsrc so the runtime
+	       PC_P can be materialized before the block exits; otherwise a
+	       trace-formed block can follow one DBF outcome and reuse it for a
+	       later iteration with the opposite outcome. */
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tmov_l_rr(nsrc,src);\n");
+	    /* DBF's terminal TST is host-only control plumbing. Save the live
+	       architectural CCR produced by any preceding instruction before that
+	       TST overwrites NZCV, then discard the temporary branch flags below. */
+	    comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	    comprintf("\tdbf_dec_test_ne_w(src);\n");
 #else
 	    {
@@ -2435,6 +2488,11 @@ gen_opcode (unsigned int opcode)
 	    comprintf("\tv2=get_const(offs);\n"
 		      "\tregister_branch(v1,v2,%d);\n", NATIVE_CC_NE);
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* Runtime PC_P for the native endblock path: branch to offs when
+	       the pre-decrement counter was non-zero; otherwise fall through.
+	       CBZ/MOV does not touch NZCV, so the branch flags remain available
+	       for the legacy branch emitter if this DBF is compiled as a final op. */
+	    comprintf("\tdbcc_cond_move_ne_w(PC_P, offs, nsrc);\n");
 	    /* Prevent flush(1) from saving the TST's hardware NZCV to
 	       regflags.nzcv.  live_flags() from earlier instructions in
 	       this block set flags_on_stack=TRASH; restore it to VALID
@@ -2443,9 +2501,13 @@ gen_opcode (unsigned int opcode)
 #endif
 	    break;
 
-	 case 8: failure; break;  /* Work out details! FIXME */
-	 case 9: failure; break;  /* Not critical, though! */
-
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	 case 8:
+	 case 9:
+#else
+	 case 8: failure; break;
+	 case 9: failure; break;
+#endif
 	 case 2:
 	 case 3:
 	 case 4:
@@ -2519,9 +2581,13 @@ gen_opcode (unsigned int opcode)
 	    /* Unconditional not-set */
 	    comprintf("\tmov_l_ri(val,1);\n");
 	    break;
-	 case 8: failure; break;  /* Work out details! FIXME */
-	 case 9: failure; break;  /* Not critical, though! */
-
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	 case 8:
+	 case 9:
+#else
+	 case 8: failure; break;
+	 case 9: failure; break;
+#endif
 	 case 2:
 	 case 3:
 	 case 4:
@@ -2548,6 +2614,8 @@ gen_opcode (unsigned int opcode)
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Divide-by-zero clears only V, so N/Z/C must be live on entry. */
+	comprintf("\tmake_flags_live();\n");
 	comprintf("\tstart_needflags();\n");
 	comprintf("\tjff_DIVU(dst, src);\n");
 	comprintf("\tlive_flags();\n");
@@ -2562,6 +2630,8 @@ gen_opcode (unsigned int opcode)
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Divide-by-zero clears only V, so N/Z/C must be live on entry. */
+	comprintf("\tmake_flags_live();\n");
 	comprintf("\tstart_needflags();\n");
 	comprintf("\tjff_DIVS(dst, src);\n");
 	comprintf("\tlive_flags();\n");
@@ -2602,9 +2672,13 @@ gen_opcode (unsigned int opcode)
 
 	 case i_CHK:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* CHK conditionally crosses an architectural exception boundary.  Split the
+	   trace here, preserve the incoming partial CCR, and let the native midfunc
+	   publish N plus a deferred vector-6 request before the exception gate. */
+	isjump;
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	if (curi->size == sz_word) {
 	    comprintf("\tjnf_CHK_w(dstreg, src);\n");
 	} else {
@@ -2616,8 +2690,26 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_CHK2:
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* CHK2 compares a register against two adjacent signed bounds.  Keep
+	   extension decoding and EA formation in generated code, but perform the
+	   ordered pair of memory reads and the partial-CCR update in one semantic
+	   helper.  The helper publishes a deferred vector-6 request through
+	   jit_exception; ending the block gives the dispatcher the same precise
+	   instruction boundary as native CHK. */
 	isjump;
+	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], dsta);\n");
+	comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[1], extra);\n");
+	comprintf("\t{ int chk2_size = scratchie++;\n");
+	comprintf("\t  mov_l_ri(chk2_size, %u);\n", curi->size == sz_byte ? 1 : curi->size == sz_word ? 2 : 4);
+	comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[2], chk2_size); }\n");
+	comprintf("\tflush(1);\n");
+	comprintf("\tcall_helper((uintptr)jit_op_chk2);\n");
+#else
 	failure;
+#endif
 	break;
 
      case i_ASR:
@@ -2625,6 +2717,7 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2633,6 +2726,7 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 	    start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -2729,6 +2823,7 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2737,16 +2832,8 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 	    start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
-	/* Register-count ASL still lacks complete V handling in this generic path.
-	   Immediate ASL uses ARM64 jff_ASL_*_imm helpers below, which do calculate V. */
-	if (curi->smode != immi) {
-		comprintf(
-			"    if (needed_flags & FLAG_V) {\n"
-			"        FAIL(1);\n"
-			"        " RETURN "\n"
-			"    }\n");
-	}
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -2758,15 +2845,26 @@ gen_opcode (unsigned int opcode)
 		uses_cmov;
 		start_brace();
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-		/* cont92: aliasing-immune in-place shift (see i_ASR note). */
+		/* Register-count ASL requires its dedicated semantic helper when flags
+		   are live: unlike logical LSL, ASL must report whether the sign changed
+		   at any point.  Copy the count first so source==destination is safe. */
 		comprintf("\tint tmpcnt=scratchie++;\n");
 		comprintf("\tmov_l_rr(tmpcnt,cnt);\n");
 		comprintf("\tand_l_ri(tmpcnt,63);\n");
-		switch(curi->size) {
-		 case sz_byte: comprintf("\tshll_b_rr(data,tmpcnt);\n"); break;
-		 case sz_word: comprintf("\tshll_w_rr(data,tmpcnt);\n"); break;
-		 case sz_long: comprintf("\tshll_l_rr(data,tmpcnt);\n"); break;
-		 default: assert(0);
+		if (!noflags) {
+			switch(curi->size) {
+			 case sz_byte: comprintf("\tjff_ASL_b_reg(data,tmpcnt);\n"); break;
+			 case sz_word: comprintf("\tjff_ASL_w_reg(data,tmpcnt);\n"); break;
+			 case sz_long: comprintf("\tjff_ASL_l_reg(data,tmpcnt);\n"); break;
+			 default: assert(0);
+			}
+		} else {
+			switch(curi->size) {
+			 case sz_byte: comprintf("\tshll_b_rr(data,tmpcnt);\n"); break;
+			 case sz_word: comprintf("\tshll_w_rr(data,tmpcnt);\n"); break;
+			 case sz_long: comprintf("\tshll_l_rr(data,tmpcnt);\n"); break;
+			 default: assert(0);
+			}
 		}
 #else
 		comprintf("\tint cdata = scratchie++;\n");
@@ -2809,13 +2907,16 @@ gen_opcode (unsigned int opcode)
 	     default: assert(0);
 	    }
 	}
-	/* And create the flags */
+	/* And create the flags.  The AArch64 register-count helper already owns
+	   count-zero X preservation and full X/N/Z/V/C publication. */
 	if (!noflags) {
 		comprintf("\tlive_flags();\n");
 		comprintf("\tend_needflags();\n");
-		if (curi->smode!=immi)
+		if (curi->smode!=immi) {
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 			comprintf("\tsetcc_for_cntzero(tmpcnt, data, %d);\n", curi->size == sz_byte ? 1 : curi->size == sz_word ? 2 : 4);
-		else
+#endif
+		} else
 			comprintf("\tduplicate_carry();\n");
 		comprintf("if (!(needed_flags & FLAG_CZNV)) dont_care_flags();\n");
 	}
@@ -2827,6 +2928,7 @@ gen_opcode (unsigned int opcode)
 	failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2835,6 +2937,7 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 	    start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -2913,6 +3016,7 @@ gen_opcode (unsigned int opcode)
 	failure;
 #endif
 	mayfail;
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	if (curi->smode==Dreg) {
 		comprintf(
 			"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
@@ -2921,6 +3025,7 @@ gen_opcode (unsigned int opcode)
 			"    }\n");
 		start_brace();
 	}
+#endif
 	comprintf("\tdont_care_flags();\n");
 
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
@@ -3001,17 +3106,29 @@ gen_opcode (unsigned int opcode)
 #endif
 	mayfail;
 	if (curi->smode==Dreg) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* AArch64 helpers lock the count before destination writeback, so an
+	     * encoded source/destination alias is legal and must stay native. */
+	    start_brace();
+#else
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
 			"        FAIL(1);\n"
 			"        " RETURN "\n"
 			"    }\n");
 	    start_brace();
+#endif
 	}
 	comprintf("\tdont_care_flags();\n");
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace ();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64 rotate helpers own the complete N/Z/V/C lifecycle, including
+	 * low-six-bit count zero. Select their jff form before emitting the op. */
+	if (!noflags)
+	    comprintf("\tstart_needflags();\n");
+#endif
 
 	switch(curi->size) {
 	 case sz_long: comprintf("\trol_l_rr(data,cnt);\n"); break;
@@ -3020,6 +3137,10 @@ gen_opcode (unsigned int opcode)
 	}
 
 	if (!noflags) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
+#else
 	    comprintf("\tstart_needflags();\n");
 	    /*
 	     * x86 ROL instruction does not set ZF/SF, so we need extra checks here
@@ -3033,6 +3154,7 @@ gen_opcode (unsigned int opcode)
 	    comprintf("\tbt_l_ri(data,0x00);\n"); /* Set C */
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
+#endif
 	}
 	genastore ("data", curi->dmode, "dstreg", curi->size, "data");
 	break;
@@ -3043,17 +3165,29 @@ gen_opcode (unsigned int opcode)
 #endif
 	mayfail;
 	if (curi->smode==Dreg) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    /* AArch64 helpers lock the count before destination writeback, so an
+	     * encoded source/destination alias is legal and must stay native. */
+	    start_brace();
+#else
 	    comprintf(
 	    	"    if ((uae_u32)srcreg==(uae_u32)dstreg) {\n"
 			"        FAIL(1);\n"
 			"        " RETURN "\n"
 			"    }\n");
 	    start_brace();
+#endif
 	}
 	comprintf("\tdont_care_flags();\n");
 	genamode (curi->smode, "srcreg", curi->size, "cnt", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "data", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace ();
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64 rotate helpers own the complete N/Z/V/C lifecycle, including
+	 * low-six-bit count zero. Select their jff form before emitting the op. */
+	if (!noflags)
+	    comprintf("\tstart_needflags();\n");
+#endif
 
 	switch(curi->size) {
 	 case sz_long: comprintf("\tror_l_rr(data,cnt);\n"); break;
@@ -3062,6 +3196,10 @@ gen_opcode (unsigned int opcode)
 	}
 
 	if (!noflags) {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	    comprintf("\tlive_flags();\n");
+	    comprintf("\tend_needflags();\n");
+#else
 	    comprintf("\tstart_needflags();\n");
 	    /*
 	     * x86 ROR instruction does not set ZF/SF, so we need extra checks here
@@ -3079,6 +3217,7 @@ gen_opcode (unsigned int opcode)
 	    }
 	    comprintf("\tlive_flags();\n");
 	    comprintf("\tend_needflags();\n");
+#endif
 	}
 	genastore ("data", curi->dmode, "dstreg", curi->size, "data");
 	break;
@@ -3139,10 +3278,14 @@ gen_opcode (unsigned int opcode)
      case i_ASRW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_ASRW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_ASRW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_ASRW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3152,10 +3295,14 @@ gen_opcode (unsigned int opcode)
      case i_ASLW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_ASLW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_ASLW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_ASLW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3165,10 +3312,14 @@ gen_opcode (unsigned int opcode)
      case i_LSRW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_LSRW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_LSRW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_LSRW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3178,10 +3329,14 @@ gen_opcode (unsigned int opcode)
      case i_LSLW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_LSLW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_LSLW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_LSLW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3191,10 +3346,14 @@ gen_opcode (unsigned int opcode)
      case i_ROLW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_ROLW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_ROLW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_ROLW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3204,10 +3363,14 @@ gen_opcode (unsigned int opcode)
      case i_RORW:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tstart_needflags();\n");
-	comprintf("\tjff_RORW(src);\n");
-	comprintf("\tlive_flags();\n");
-	comprintf("\tend_needflags();\n");
+	if (!noflags) {
+		comprintf("\tstart_needflags();\n");
+		comprintf("\tjff_RORW(src);\n");
+		comprintf("\tlive_flags();\n");
+		comprintf("\tend_needflags();\n");
+	} else {
+		comprintf("\tjnf_RORW(src);\n");
+	}
 	genastore ("src", curi->smode, "srcreg", curi->size, "src");
 #else
 	failure;
@@ -3241,27 +3404,10 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_MOVEC2:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, src);\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_movec2);\n");
-#else
-	failure;
-#endif
-	break;
-
      case i_MOVE2C:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, src);\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_move2c);\n");
-#else
+	/* The AArch64 system-control semantic service owns privilege-before-fetch,
+	 * invalid-control-register trapping and cache/MMU transition side effects. */
 	failure;
-#endif
 	break;
 
      case i_CAS:
@@ -3300,31 +3446,42 @@ gen_opcode (unsigned int opcode)
 
      case i_DIVL:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Same table68k convention as MULL: 'DIVL.L  #1,s[!Areg]' — the
-	   '#1' immediate-word placeholder for the extra (dq/dr/signed/64-bit
-	   specifier) is in the SOURCE field (curi->smode = imm1), and the
-	   actual divisor EA from the opcode bits is in the DEST field
-	   (curi->dmode). Order: read extra word first (smode), then the EA
-	   (dmode) so any EA extension words follow in the correct stream
-	   position. Variable names must reflect data flow: 'extra' for the
-	   specifier word, 'src' for the divisor fetched from memory.
-
-	   PRIOR BUG: this path used 'src' for the smode immediate and 'extra'
-	   for the dmode memory — inverted relative to the C code that
-	   extracts dq/dr from 'extra' and passes 'src' as the divisor to
-	   jnf_DIVLx*. Result was: dq/dr derived from a memory-loaded long
-	   instead of the architectural specifier word, and the divisor
-	   passed to the helper was actually the specifier word. */
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* DIVL's first extension word is instruction metadata, not a runtime
+	   operand.  genamode(imm1) yields a virtual-register number; using that
+	   number as `extra` selects arbitrary quotient/remainder registers and
+	   signed/64-bit modes.  Consume the extension at code-generation time,
+	   exactly as MULL does, then fetch the divisor through the real EA. */
+	comprintf("\tuae_u16 extra=%s;\n", gen_nextiword());
 	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Long divide-by-zero preserves the complete incoming CCR.  Save it even
+	   in the no-flags table because an exception frame is an external consumer. */
+	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	comprintf("\tint dq = (extra >> 12) & 7;\n");
 	comprintf("\tint dr = extra & 7;\n");
 	comprintf("\tif (extra & 0x0400) {\n");
-	/* 64-bit dividend: inline ARM64 via UDIV_xxx/SDIV_xxx */
+	/* 64-bit dividend: inline ARM64 via UDIV_xxx/SDIV_xxx.  Unlike the
+	   no-flags table, the flags table must publish the successful quotient
+	   flags and the defined overflow flags rather than leaving host CMP state. */
 	comprintf("\t  if (extra & 0x0800) {\n"); /* signed */
-	comprintf("\t    jnf_DIVLS64(dq, dr, src);\n");
+	if (noflags) {
+	    comprintf("\t    jnf_DIVLS64(dq, dr, src);\n");
+	} else {
+	    comprintf("\t    make_flags_live();\n");
+	    comprintf("\t    start_needflags();\n");
+	    comprintf("\t    jff_DIVLS64(dq, dr, src);\n");
+	    comprintf("\t    live_flags();\n");
+	    comprintf("\t    end_needflags();\n");
+	}
 	comprintf("\t  } else {\n"); /* unsigned */
-	comprintf("\t    jnf_DIVLU64(dq, dr, src);\n");
+	if (noflags) {
+	    comprintf("\t    jnf_DIVLU64(dq, dr, src);\n");
+	} else {
+	    comprintf("\t    make_flags_live();\n");
+	    comprintf("\t    start_needflags();\n");
+	    comprintf("\t    jff_DIVLU64(dq, dr, src);\n");
+	    comprintf("\t    live_flags();\n");
+	    comprintf("\t    end_needflags();\n");
+	}
 	comprintf("\t  }\n");
 	comprintf("\t} else {\n");
 	/* 32-bit dividend: use inline ARM64 mid-layer */
@@ -3372,33 +3529,38 @@ gen_opcode (unsigned int opcode)
 	       for the multiplicand value. The non-aarch64 path below already
 	       uses curi->dmode correctly. */
 	    comprintf("\tuae_u16 extra=%s;\n", gen_nextiword());
-	    genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	    comprintf("\tint dl = (extra >> 12) & 7;\n");
 	    comprintf("\tint dh = extra & 7;\n");
+	    /* Dl is both an input and an output.  Pin its pre-instruction value while
+	       genamode allocates/fetches the source EA, otherwise a pressured source
+	       scratch can reuse Dl's host register before the MIDFUNC can stage it. */
+	    comprintf("\tint mull_dl_lock = jit_value_lock(dl);\n");
+	    genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	    comprintf("\tjit_value_unlock(mull_dl_lock);\n");
 	    comprintf("\tif (extra & 0x0400) {\n");  /* 64-bit result */
+	    /* The 64-bit MIDFUNC owns all three operands.  It stages the source and
+	       original Dl before publishing Dh then Dl, so a distinct register EA is
+	       read-only and every source/Dl/Dh alias follows m68k_mull() write order. */
 	    comprintf("\t  if (extra & 0x0800) {\n"); /* signed */
 	    if (noflags) {
-		comprintf("\t    jnf_MULS64(dl, src);\n");
+		comprintf("\t    jnf_MULS64(dl, dh, src);\n");
 	    } else {
 		comprintf("\t    make_flags_live();\n");
 		comprintf("\t    start_needflags();\n");
-		comprintf("\t    jff_MULS64(dl, src);\n");
+		comprintf("\t    jff_MULS64(dl, dh, src);\n");
 		comprintf("\t    live_flags();\n");
 		comprintf("\t    end_needflags();\n");
 	    }
-	    comprintf("\t    /* src now has high 32 bits, dl has low 32 */\n");
-	    comprintf("\t    mov_l_rr(dh, src);\n");
 	    comprintf("\t  } else {\n"); /* unsigned */
 	    if (noflags) {
-		comprintf("\t    jnf_MULU64(dl, src);\n");
+		comprintf("\t    jnf_MULU64(dl, dh, src);\n");
 	    } else {
 		comprintf("\t    make_flags_live();\n");
 		comprintf("\t    start_needflags();\n");
-		comprintf("\t    jff_MULU64(dl, src);\n");
+		comprintf("\t    jff_MULU64(dl, dh, src);\n");
 		comprintf("\t    live_flags();\n");
 		comprintf("\t    end_needflags();\n");
 	    }
-	    comprintf("\t    mov_l_rr(dh, src);\n");
 	    comprintf("\t  }\n");
 	    comprintf("\t} else {\n");  /* 32-bit result */
 	    comprintf("\t  if (extra & 0x0800) {\n"); /* signed */
@@ -3453,145 +3615,48 @@ gen_opcode (unsigned int opcode)
 	break;
 
      case i_BFTST:
-     case i_BFCHG:
-     case i_BFCLR:
-     case i_BFSET:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Native via helper (jit_op_bftst/bfchg/bfclr/bfset). Sets flags in
-	   regflags (and RMW the field for chg/clr/set), so end the block. */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
-	}
-	comprintf("\tflush(1);\n");
-	switch (curi->mnemo) {
-	 case i_BFCHG: comprintf("\tcall_helper((uintptr)jit_op_bfchg);\n"); break;
-	 case i_BFCLR: comprintf("\tcall_helper((uintptr)jit_op_bfclr);\n"); break;
-	 case i_BFSET: comprintf("\tcall_helper((uintptr)jit_op_bfset);\n"); break;
-	 default:      comprintf("\tcall_helper((uintptr)jit_op_bftst);\n"); break;
-	}
-#else
-	failure;
-#endif
-	break;
-
      case i_BFEXTU:
+     case i_BFCHG:
      case i_BFEXTS:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Native via helper (jit_op_bfextu/bfexts). The helper sets flags in
-	   regflags, so end the block after it for correct CCR reload (as BFFFO). */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
-	}
-	comprintf("\tflush(1);\n");
-	if (curi->mnemo == i_BFEXTS)
-	    comprintf("\tcall_helper((uintptr)jit_op_bfexts);\n");
-	else
-	    comprintf("\tcall_helper((uintptr)jit_op_bfextu);\n");
-#else
-	failure;
-#endif
-	break;
-
+     case i_BFCLR:
      case i_BFFFO:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	/* Helper sets flags in regflags; end the block after it so the next
-	   compiled block reloads the correct CCR state. */
-	isjump;
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	if (curi->dmode == Dreg) {
-	    comprintf("\t{ int ea_enc = scratchie++;\n");
-	    comprintf("\t  mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t  mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	} else {
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], srca);\n");
-	}
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_bfffo);\n");
-#else
-	failure;
-#endif
-	break;
-
+     case i_BFSET:
      case i_BFINS:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "extra", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
-	comprintf("\tdont_care_flags();\n");
-	if (curi->dmode == Dreg) {
-	    /* Dreg: inline bit field insert */
-	    comprintf("\t{\n");
-	    comprintf("\t  int dn = (extra >> 12) & 7;\n");
-	    comprintf("\t  int Do = (extra >> 11) & 1;\n");
-	    comprintf("\t  int Dw = (extra >> 5) & 1;\n");
-	    comprintf("\t  int offset, width;\n");
-	    comprintf("\t  if (Do) { int tmp = scratchie++; mov_l_rr(tmp, (extra>>6)&7); and_l_ri(tmp,31); mov_l_mr((uintptr)&regs.scratchregs[1], tmp); offset = regs.scratchregs[1]; }\n");
-	    /* Actually, we can't read regs.scratchregs at JIT compile time for register mode.
-	       The offset/width from a register is only known at EXECUTION time.
-	       For register-specified offset/width, keep call_helper. */
-	    comprintf("\t  if (Do || Dw) {\n");
-	    comprintf("\t    mov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	    comprintf("\t    { int ea_enc = scratchie++;\n");
-	    comprintf("\t      mov_l_ri(ea_enc, (dstreg & 7) | 0x80000000u);\n");
-	    comprintf("\t      mov_l_mr((uintptr)&regs.scratchregs[0], ea_enc); }\n");
-	    comprintf("\t    flush(1);\n");
-	    comprintf("\t    call_helper((uintptr)jit_op_bfins);\n");
-	    comprintf("\t  } else {\n");
-	    comprintf("\t    /* Immediate offset and width: fully inline */\n");
-	    comprintf("\t    int off = (extra >> 6) & 31;\n");
-	    comprintf("\t    int wid = extra & 31;\n");
-	    comprintf("\t    if (!wid) wid = 32;\n");
-	    comprintf("\t    int shift = 32 - off - wid;\n");
-	    comprintf("\t    uae_u32 mask = (wid == 32) ? 0xFFFFFFFFu : ((1u << wid) - 1);\n");
-	    comprintf("\t    uae_u32 shifted_mask = mask << shift;\n");
-	    comprintf("\t    int tmp = scratchie++;\n");
-	    comprintf("\t    mov_l_rr(tmp, dn);\n");
-	    comprintf("\t    and_l_ri(tmp, mask);\n");
-	    comprintf("\t    shll_l_ri(tmp, shift);\n");
-	    comprintf("\t    and_l_ri(dstreg, ~shifted_mask);\n");
-	    comprintf("\t    or_l(dstreg, tmp);\n");
-	    comprintf("\t  }\n");
-	    comprintf("\t}\n");
-	} else {
-	    /* Memory destination: call_helper for byte-spanning access */
-	    comprintf("\tmov_l_mr((uintptr)&regs.jit_exception, extra);\n");
-	    comprintf("\tmov_l_mr((uintptr)&regs.scratchregs[0], dsta);\n");
-	    comprintf("\tflush(1);\n");
-	    {
-		extern void jit_op_bfins(void);
-		comprintf("\tcall_helper((uintptr)jit_op_bfins);\n");
-	    }
-	}
-#else
+	/* One exact-PC runtime service owns extension fetch, EA decoding, field
+	   reads and conditional writes.  Splitting those phases across generated
+	   code and a register-file helper loses the architectural fault PC. */
 	failure;
-#endif
 	break;
 
      case i_PACK:
-	/* PACK: rare BCD packing — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* PACK has no CCR result, but its predecrement form has observable ordered
+	   reads and address-register updates.  End the block around the helper so
+	   all guest registers are canonical at the memory/fault boundary. */
+	isjump;
+	comprintf("\tuae_s16 pack_adj = %s;\n", gen_nextiword());
+	comprintf("\t{ int pack_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(pack_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)pack_adj << 16));\n",
+	    curi->smode == Apdi ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, pack_enc); }\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_pack, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
+#else
 	failure;
+#endif
 	break;
 
      case i_UNPK:
-	/* UNPK: rare BCD packing — keep as interpreter fallback */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	isjump;
+	comprintf("\tuae_s16 pack_adj = %s;\n", gen_nextiword());
+	comprintf("\t{ int pack_enc = scratchie++;\n");
+	comprintf("\t  mov_l_ri(pack_enc, (dstreg & 7) | ((srcreg & 7) << 3) | %u | ((uae_u32)(uae_u16)pack_adj << 16));\n",
+	    curi->smode == Apdi ? 0x40 : 0);
+	comprintf("\t  mov_l_mr((uintptr)&regs.jit_exception, pack_enc); }\n");
+	comprintf("\tjit_emit_ordered_semantic_helper_call((uintptr)jit_op_unpk, m68k_pc_offset - m68k_pc_offset_thisinst);\n");
+#else
 	failure;
+#endif
 	break;
 
 	 case i_TAS:
@@ -3690,15 +3755,9 @@ gen_opcode (unsigned int opcode)
      case i_CPUSHL:
      case i_CPUSHP:
      case i_CPUSHA:
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	isjump;
-	comprintf("\tdont_care_flags();\n");
-	comprintf("\tflush(1);\n");
-	comprintf("\tcall_helper((uintptr)jit_op_cpusha);\n");
-#else
+	/* All cache-control forms share the exact-PC semantic service. */
 	isjump;
 	failure;
-#endif
 	break;
 
      case i_MOVE16:

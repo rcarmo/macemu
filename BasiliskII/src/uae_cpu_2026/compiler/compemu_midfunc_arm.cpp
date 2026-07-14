@@ -536,6 +536,21 @@ MIDFUNC(2,arm_ADD_l_ri,(RW4 d, IMPTR i))
 }
 MENDFUNC(2,arm_ADD_l_ri,(RW4 d, IMPTR i))
 
+/* On 32-bit ARM, guest values and host pointers have the same width.  Keep
+   the contracts separate at the generator boundary even though their emitted
+   arithmetic is identical here. */
+MIDFUNC(2,arm_ADD_l_ri_hostptr,(RW4 d, IMPTR base))
+{
+	COMPCALL(arm_ADD_l_ri)(d, base);
+}
+MENDFUNC(2,arm_ADD_l_ri_hostptr,(RW4 d, IMPTR base))
+
+MIDFUNC(2,arm_ADD_ptr_ri,(RW4 d, IM32 offset))
+{
+	COMPCALL(arm_ADD_l_ri)(d, (uintptr)offset);
+}
+MENDFUNC(2,arm_ADD_ptr_ri,(RW4 d, IM32 offset))
+
 MIDFUNC(2,arm_ADD_l_ri8,(RW4 d, IM8 i))
 {
 	if (!i) 

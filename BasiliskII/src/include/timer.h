@@ -26,6 +26,12 @@ extern void TimerExit(void);
 extern void TimerReset(void);
 
 extern void TimerInterrupt(void);
+// Poll host-time Time Manager expiry from a JIT-safe dispatcher boundary.
+extern void TimerPoll(void);
+// Restore precise-timer thread ownership if requested JIT initialization fails.
+extern void TimerRestoreAsyncOwnership(void);
+// Advance the diagnostic guest-retirement clock by one 60 Hz tick.
+extern void TimerAdvanceDeterministicTick(void);
 
 extern int16 InsTime(uint32 tm, uint16 trap);
 extern int16 RmvTime(uint32 tm);

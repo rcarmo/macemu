@@ -17,7 +17,11 @@ DISK_CLONE=""
 
 cleanup() {
     [ -n "$DISK_CLONE" ] && command -v cow_release >/dev/null 2>&1 && cow_release "$DISK_CLONE"
-    rm -rf "$RUN_DIR"
+    if [ "${B2_KEEP_TEST_RUN_DIR:-0}" = "1" ]; then
+        echo "JIT_TEST_RUN_DIR=$RUN_DIR" >&2
+    else
+        rm -rf "$RUN_DIR"
+    fi
 }
 trap cleanup EXIT
 
@@ -77,16 +81,24 @@ if [ ! -f config.h ] || [ ! -f Makefile ]; then
     fi
 fi
 
-# The generated Unix Makefile does not always track header-only MIDFUNC/JIT
-# macro changes through to all dependent objects. Force-rebuild the key ARM64
-# JIT glue objects so harness runs do not silently use stale code or fail on
-# missing symbols after header-only changes.
-rm -f obj/compemu_support.o obj/compemu_fpp.o
+# Generated opcode objects inline regstruct offsets and MIDFUNC/JIT code.  They
+# must be rebuilt in the same layout epoch as compemu_support.o; rebuilding only
+# the support object after a registers.h change silently corrupts helper fields.
+# Force the complete JIT object family so the equivalence gate cannot test a
+# mixed ABI even when an older generated Makefile lacks header dependencies.
+rm -f obj/compemu*.o
 if ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
     tail -20 "$RUN_DIR/build.log" >&2 || true
     emit_failure_metrics 0 "build failed"
 fi
 echo "METRIC build_ok=1"
+
+# Engine-level emitter invariants which ordinary opcode equivalence cannot
+# exercise deterministically (for example an asynchronous spcflags exit at the
+# exact end of a compiled block).
+if ! bun "$SCRIPT_DIR/structural-audit.ts"; then
+    emit_failure_metrics 1 "ARM64 JIT structural audit failed" 0
+fi
 
 # Use a fresh copy-on-write clone of the base disk for this harness run so the
 # shared fixture is never mutated (clone shares extents; only deltas stored).
@@ -154,6 +166,28 @@ EOF
     if [ "$use_jit" = "true" ]; then
         env_vars+=(B2_JIT_FORCE_TRANSLATE=1)
     fi
+    if [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then
+        local replay_pc="${NATIVE_REPLAY_PC[$name]:-0x1000}"
+        env_vars+=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC="$replay_pc")
+        if [ "$name" = "host_code_reuse_coherence" ]; then
+            # Reuse the same host-injected address with a different MOVEQ,
+            # preserving the harness sentinel after the replacement opcode.
+            env_vars+=(B2_TEST_REWRITE_HEX="7002 2C7C ${sentinel_a6:0:4} ${sentinel_a6:4:4}")
+        fi
+        local replay_bytes="${NATIVE_REPLAY_BYTES[$name]:-}"
+        if [ -n "$replay_bytes" ]; then
+            env_vars+=(B2_TEST_REPLAY_BYTES="$replay_bytes")
+        fi
+        local replay_count="${NATIVE_REPLAY_COUNT[$name]:-1}"
+        if [ "$replay_count" -gt 1 ]; then
+            # Some alternate-PC or coherency vectors must first trace their
+            # replay anchor before a later pass can prove its native entry.
+            env_vars+=(B2_TEST_REPLAY_COUNT="$replay_count")
+        fi
+        if [ "$use_jit" = "true" ]; then
+            env_vars+=(B2_TEST_FORCE_L2_RAM=1 B2_JIT_STRICT_FULL=1 B2_NATIVE_ASSERT_PC="$replay_pc")
+        fi
+    fi
     if [ -n "$init_regs" ]; then
         env_vars+=(B2_TEST_INIT="$init_regs")
     fi
@@ -177,6 +211,22 @@ EOF
         return 1
     fi
 
+    if [ "$use_jit" = "true" ] && [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then
+        if ! grep -q '^JIT_STRICT_SUMMARY ' "$td/emu.log" ||
+           grep -qE 'strict full-JIT:|JIT_FALLBACK' "$td/emu.log"; then
+            echo "strict_native_evidence" > "$reason_file"
+            echo "INFRA $name jit=$use_jit: missing clean strict native summary" >&2
+            return 1
+        fi
+        local replay_pc_hex
+        replay_pc_hex=$(printf '%08x' "$((replay_pc))")
+        if ! grep -q "^NATEXEC pc=$replay_pc_hex " "$td/emu.log"; then
+            echo "strict_native_entry_evidence" > "$reason_file"
+            echo "INFRA $name jit=$use_jit: test block did not enter native L2 code at PC $replay_pc_hex" >&2
+            return 1
+        fi
+    fi
+
     local dump_count
     dump_count=$(grep -c "^REGDUMP:" "$td/emu.log" 2>/dev/null || true)
     if [ "$dump_count" -eq 0 ]; then
@@ -196,6 +246,20 @@ EOF
         echo "INFRA $name jit=$use_jit: sentinel A6 mismatch (expected $sentinel_a6)" >&2
         return 1
     fi
+    local expected_d0="${EXPECTED_D0[$name]:-}"
+    if [ -n "$expected_d0" ] && ! grep -qi "D0=$expected_d0" "$outfile"; then
+        echo "semantic_d0_mismatch" > "$reason_file"
+        echo "INFRA $name jit=$use_jit: D0 mismatch (expected $expected_d0)" >&2
+        return 1
+    fi
+    local expected_field
+    for expected_field in ${EXPECTED_REG_FIELDS[$name]:-}; do
+        if ! grep -qi " $expected_field\( \|$\)" "$outfile"; then
+            echo "semantic_reg_mismatch" > "$reason_file"
+            echo "INFRA $name jit=$use_jit: register dump missing $expected_field" >&2
+            return 1
+        fi
+    done
 
     return 0
 }
@@ -217,14 +281,754 @@ if ! DISPLAY=:99 xdpyinfo >/dev/null 2>&1; then
     emit_failure_metrics 0 "failed to start Xvfb on :99"
 fi
 
+# Strict mode is fail-closed. Exercise its negative contracts separately from
+# equivalence tests so an expected abort can never be misreported as an opcode
+# mismatch or a successful REGDUMP.
+if ! "$SCRIPT_DIR/strict-full-jit.sh" "$UNIX_DIR" "$ROM" "$DISK"; then
+    emit_failure_metrics 1 "strict full-JIT negative contract gate failed" 0
+fi
+
 # ---- Define test cases -------------------------------------------------------
 # Format: name|hex_words (M68K big-endian, STOP #0x2700 appended automatically)
 # Each test sets up known state and exercises one opcode class.
 
-declare -a TEST_ORDER=(nop move moveq_signext alu alu_overflow addi_subi_long addi_subi_long_wrap addi_subi_word addi_subi_word_wrap addi_subi_byte addi_subi_byte_wrap shift bitops bitops_chg bitops_highbit bitops_chg_highbit branch branch_chain compare compare_negative cmpi_sizes cmpi_sizes_zero cmpi_byte_negative cmpi_word_negative cmpi_long_negative cmpi_beq_taken muldiv movem misc clr_sizes clr_byte_preserve_upper clr_word_preserve_upper neg_sizes neg_zero_sizes swap_roundtrip flags flags_eori_ccr exg exg_roundtrip imm_logic imm_logic_alt imm_logic_byte_highbit imm_logic_word imm_logic_long imm_logic_long_alt tst_sizes tst_zero tst_positive bra_taken bra_w_taken bne_not_taken bne_taken bne_w_not_taken bne_w_taken beq_taken beq_not_taken beq_w_taken beq_w_not_taken bpl_taken bpl_not_taken bpl_w_taken bpl_w_not_taken bmi_taken bmi_not_taken bmi_w_taken bmi_w_not_taken bvc_taken bvc_not_taken_overflow bvc_w_taken bvc_w_not_taken_overflow bvs_taken_overflow bvs_not_taken bvs_w_taken_overflow bvs_w_not_taken bge_taken bge_not_taken bge_w_taken bge_w_not_taken blt_taken blt_not_taken blt_w_taken blt_w_not_taken bgt_taken bgt_not_taken bgt_w_taken bgt_w_not_taken ble_taken ble_not_taken ble_w_taken ble_w_not_taken bcc_taken bcc_not_taken bcc_w_taken bcc_w_not_taken bcs_taken bcs_not_taken bcs_w_taken bcs_w_not_taken bhi_taken bhi_not_taken bhi_w_taken bhi_w_not_taken bls_taken bls_not_taken bls_w_taken bls_w_not_taken scc_basic scc_eq_ne scc_carry scc_hi_ls scc_hi_ls_z scc_vc_vs scc_pl_mi scc_ge_lt scc_gt_le scc_ccr_preserve_blt scc_ccr_preserve_bcs scc_ccr_preserve_bne_not_taken scc_ccr_preserve_beq_taken quick_ops quick_ops_long_neg_roundtrip quick_ops_word quick_ops_word_wrap quick_ops_long_wrap quick_ops_byte quick_ops_byte_wrap quick_ops_addr dbra dbra_not_taken dbra_start_minus1_branch dbra_start_8000_branch dbt_true_not_taken dbra_three_iter dbcc_loop_c_set dbcs_not_taken_c_set dbpl_loop_n_set dbmi_not_taken_n_set dbhi_not_taken_hi_set dbls_not_taken_ls_set dbge_not_taken_n_eq_v dblt_not_taken_n_ne_v dbgt_not_taken_gt_set dble_not_taken_le_set dbhi_false_dec_terminal_ls_set dbls_false_dec_terminal_hi_set dbge_false_dec_terminal_n_ne_v dblt_false_dec_terminal_n_eq_v dbgt_false_dec_terminal_z_set dble_false_dec_terminal_gt_set dbcc_ccr_preserve_beq_taken dbcc_ccr_preserve_bne_taken dbcc_ccr_preserve_bcs_taken dbcc_ccr_preserve_bvc_taken dbcc_ccr_preserve_bvs_taken dbcc_ccr_preserve_bhi_taken dbcc_ccr_preserve_bls_taken dbcc_ccr_preserve_bge_taken dbcc_ccr_preserve_blt_taken dbcc_ccr_preserve_bgt_taken dbcc_ccr_preserve_ble_taken dbvc_loop_v_set dbvs_loop_v_clear dbvc_not_taken_v_clear dbvs_not_taken_v_set dbne_loop_z_set dbeq_loop_z_clear dbeq_x_clobber moveq_edges alu_negative_roundtrip imm_logic_word_highbit branch_chain_z_clear branch_chain_carry_set branch_chain_overflow_set scc_ccr_preserve_bvs_taken dbra_four_iter scc_ccr_preserve_bvc_taken scc_ccr_preserve_bhi_taken scc_ccr_preserve_bls_taken dbra_five_iter branch_chain_eq_then_ne branch_chain_carry_clear imm_logic_long_highbit dbra_six_iter not_sizes not_word_preserve_upper not_byte_preserve_upper scc_ccr_preserve_bpl_taken scc_ccr_preserve_bmi_taken scc_ccr_preserve_bge_taken scc_ccr_preserve_bgt_taken scc_ccr_preserve_ble_taken nop_triplet roxl_x_propagation roxr_x_propagation roxl_count_2 asl_overflow lsr_count_32 asr_count_0 ror_word rol_word btst_reg_high_bit muls_neg_neg muls_zero divs_neg_neg divs_overflow abcd_basic sbcd_basic negx_with_x negx_zero addx_basic subx_basic ext_word ext_long move_to_mem_and_back movem_predec_postinc movem_predec_mixed_order addx_chain flag_chain_xzn shift_chain roxl_reg_count_32 roxl_reg_count_33 roxr_reg_count_33 roxr_reg_count_32 roxr_reg_count_0 roxl_reg_count_63 roxr_reg_count_63 roxr_roxl_chain_x roxl_lsr_chain_x mulu_large divu_remainder abcd_with_carry nbcd_basic bsr_rts link_unlk indexed_addr_mode byte_postinc cmpm_equal move_sr_roundtrip dbra_loop_100 dbne_loop_cmpi bsr_in_dbra_loop table_lookup dbra_loop_1000 swap_pack lea_scaled_index multi_branch andi_l_dn eor_self asl_w_vflag asl_b_overflow lsr_w_regcount asr_w_preserve movem_w_signext cmpm_l_equal cmpm_b_unequal addx_64bit subx_64bit muls_boundary divu_max_quotient move_b_preserve_flags byte_logic_chain bchg_imm_high neg_w_partial clr_b_tst all_regs_alive scaled_index_word byte_indexed_load indexed_store_load addq_subq_sizes x_flag_chain sub_w_subx_chain exg_dn_an push_pop_a0 dbeq_loop_50 dbmi_loop_neg lsl_l_count0 asr_l_8_neg rol_l_16 lsl_b_7 asr_b_1_sign move_b_flags move_w_zero add_l_an_dn sub_w_dn_an cmp_b cmp_w ori_w_mem andi_b_mem link_neg16 mulu_max divs_neg_rem negx_64bit cmpi_l_abs_short_eq cmpi_l_abs_short_ne cmpi_bne_w_not_taken cmpi_bne_w_taken cmpi_b_abs_short_blt movem_save_modify_restore bsr_l_long jmp_d8_pc_dn_w pea_movem_stack subq_sp_movea_write tst_bne_after_bsr_rts tst_bne_after_jsr_an save_clear_slot_restore_tst movec_cacr_roundtrip cache_init_sequence move_l_neg_disp_a5 sr_barrier_cache_init divs_word_hardfail divu_word_hardfail mull_32_hardfail divl_32_hardfail aslw_mem_hardfail lsrw_mem_hardfail rolw_mem_hardfail ori_sr_hardfail andi_sr_hardfail eori_sr_hardfail move_from_sr_hardfail move_to_sr_hardfail divs_neg_by_neg_edge divs_by_minus_one_edge divs_zero_dividend_edge divs_overflow_edge divu_exact_edge divu_with_remainder_edge divu_overflow_edge mull_unsigned_32 mull_signed_32 divl_unsigned_32 divl_signed_32 asrw_mem_edge roxlw_mem_edge roxrw_mem_edge abcd_99_plus_01_edge sbcd_with_x_edge nbcd_99_edge bfextu_reg_edge bfexts_reg_edge bfffo_reg_edge bfset_reg_edge bfclr_reg_edge bfchg_reg_edge bftst_reg_edge bfins_reg_edge pack_dn_edge unpk_dn_edge movep_l_roundtrip sr_ops_combo moves_write_read adda_w_cov adda_l_cov adda_w_neg_cov eori_ccr_cov rtr_cov mvr2usp_cov move_b_d16_an_cov move_w_d16_an_cov move_l_d16_an_cov move_b_idx_cov move_l_idx_scale_cov move_l_pc_rel_cov move_l_abs_w_cov move_l_abs_l_cov predec_postinc_cov imm_to_mem_b_cov imm_to_mem_w_cov imm_to_mem_l_cov add_b_overflow_cov sub_w_borrow_cov cmp_l_equal_cov and_l_zero_cov or_l_allones_cov eor_self_cov neg_b_overflow_cov not_b_cov odd_addr_cov a7_byte_postinc_cov fuzz_alu_0 fuzz_shift_0 fuzz_bitops_0 fuzz_muldiv_0 fuzz_extswap_0 fuzz_addxsubx_0 fuzz_memrt_0 fuzz_exg_0 fuzz_mixed_0 fuzz_flags_0 fuzz_alu_1 fuzz_shift_1 fuzz_bitops_1 fuzz_muldiv_1 fuzz_extswap_1 fuzz_addxsubx_1 fuzz_memrt_1 fuzz_exg_1 fuzz_mixed_1 fuzz_flags_1 fuzz_alu_2 fuzz_shift_2 fuzz_bitops_2 fuzz_muldiv_2 fuzz_extswap_2 fuzz_addxsubx_2 fuzz_memrt_2 fuzz_exg_2 fuzz_mixed_2 fuzz_flags_2 fuzz_alu_3 fuzz_shift_3 fuzz_bitops_3 fuzz_muldiv_3 fuzz_extswap_3 fuzz_addxsubx_3 fuzz_memrt_3 fuzz_exg_3 fuzz_mixed_3 fuzz_flags_3 fuzz_alu_4 fuzz_shift_4 fuzz_bitops_4 fuzz_muldiv_4 fuzz_extswap_4 fuzz_addxsubx_4 fuzz_memrt_4 fuzz_exg_4 fuzz_mixed_4 fuzz_flags_4 chk_w_in_range chk_w_zero chk_w_equal sbcd_borrow_chain sbcd_zero_zero nbcd_zero_no_x nbcd_with_x bfins_low8 bfins_mid8 movec_vbr_roundtrip movec_sfc_roundtrip movec_dfc_roundtrip mull_u64 mull_s32_neg divl_u32_rem divl_s32_neg divl_u32_max divl_s32_neg_divisor mull_s64_neg divl_same_dq_dr divl_u64 divl_s64 bfins_dreg_imm bfins_dreg_narrow oracle_zf_moveq_z1_take oracle_zf_moveq_z0_notake oracle_zf_moveq_z0_take oracle_zf_moveq_z1_notake oracle_zf_tst_z1_take oracle_zf_tst_z0_notake oracle_zf_move_z1_take oracle_zf_move_z0_notake oracle_zf_and_z1_take oracle_zf_and_z0_notake oracle_zf_sub_z1_take oracle_zf_sub_z0_notake oracle_zf_bne_z1_take oracle_zf_bne_z0_notake oracle_zf_mem_take oracle_zf_mem_notake)
+declare -a TEST_ORDER=(nop move moveq_signext alu alu_overflow addi_subi_long addi_subi_long_wrap addi_subi_word addi_subi_word_wrap addi_subi_byte addi_subi_byte_wrap shift bitops bitops_chg bitops_highbit bitops_chg_highbit btst_b_d16_highbit branch branch_chain compare compare_negative cmpi_sizes cmpi_sizes_zero cmpi_byte_negative cmpi_word_negative cmpi_long_negative cmpi_beq_taken muldiv movem misc clr_sizes clr_byte_preserve_upper clr_word_preserve_upper neg_sizes neg_zero_sizes swap_roundtrip flags flags_eori_ccr exg exg_roundtrip imm_logic imm_logic_alt imm_logic_byte_highbit imm_logic_word imm_logic_long imm_logic_long_alt tst_sizes tst_zero tst_positive bra_taken bra_w_taken bne_not_taken bne_taken bne_w_not_taken bne_w_taken beq_taken beq_not_taken beq_w_taken beq_w_not_taken bpl_taken bpl_not_taken bpl_w_taken bpl_w_not_taken bmi_taken bmi_not_taken bmi_w_taken bmi_w_not_taken bvc_taken bvc_not_taken_overflow bvc_w_taken bvc_w_not_taken_overflow bvs_taken_overflow bvs_not_taken bvs_w_taken_overflow bvs_w_not_taken bge_taken bge_not_taken bge_w_taken bge_w_not_taken blt_taken blt_not_taken blt_w_taken blt_w_not_taken bgt_taken bgt_not_taken bgt_w_taken bgt_w_not_taken ble_taken ble_not_taken ble_w_taken ble_w_not_taken bcc_taken bcc_not_taken bcc_w_taken bcc_w_not_taken bcs_taken bcs_not_taken bcs_w_taken bcs_w_not_taken bhi_taken bhi_not_taken bhi_w_taken bhi_w_not_taken bls_taken bls_not_taken bls_w_taken bls_w_not_taken scc_basic scc_eq_ne scc_carry scc_hi_ls scc_hi_ls_z scc_vc_vs scc_pl_mi scc_ge_lt scc_gt_le scc_ccr_preserve_blt scc_ccr_preserve_bcs scc_ccr_preserve_bne_not_taken scc_ccr_preserve_beq_taken quick_ops quick_ops_long_neg_roundtrip quick_ops_word quick_ops_word_wrap quick_ops_long_wrap quick_ops_byte quick_ops_byte_wrap quick_ops_addr dbra dbra_not_taken dbra_start_minus1_branch dbra_start_8000_branch dbt_true_not_taken dbra_three_iter dbcc_loop_c_set dbcs_not_taken_c_set dbpl_loop_n_set dbmi_not_taken_n_set dbhi_not_taken_hi_set dbls_not_taken_ls_set dbge_not_taken_n_eq_v dblt_not_taken_n_ne_v dbgt_not_taken_gt_set dble_not_taken_le_set dbhi_false_dec_terminal_ls_set dbls_false_dec_terminal_hi_set dbge_false_dec_terminal_n_ne_v dblt_false_dec_terminal_n_eq_v dbgt_false_dec_terminal_z_set dble_false_dec_terminal_gt_set dbcc_ccr_preserve_beq_taken dbra_ccr_preserve_z_clear dbra_ccr_preserve_z_set dbcc_ccr_preserve_bne_taken dbcc_ccr_preserve_bcs_taken dbcc_ccr_preserve_bvc_taken dbcc_ccr_preserve_bvs_taken dbcc_ccr_preserve_bhi_taken dbcc_ccr_preserve_bls_taken dbcc_ccr_preserve_bge_taken dbcc_ccr_preserve_blt_taken dbcc_ccr_preserve_bgt_taken dbcc_ccr_preserve_ble_taken dbvc_loop_v_set dbvs_loop_v_clear dbvc_not_taken_v_clear dbvs_not_taken_v_set dbne_loop_z_set dbeq_loop_z_clear dbeq_x_clobber moveq_edges alu_negative_roundtrip imm_logic_word_highbit branch_chain_z_clear branch_chain_carry_set branch_chain_overflow_set scc_ccr_preserve_bvs_taken dbra_four_iter scc_ccr_preserve_bvc_taken scc_ccr_preserve_bhi_taken scc_ccr_preserve_bls_taken dbra_five_iter branch_chain_eq_then_ne branch_chain_carry_clear branch_flush_bgt_zero imm_logic_long_highbit dbra_six_iter not_sizes not_word_preserve_upper not_byte_preserve_upper scc_ccr_preserve_bpl_taken scc_ccr_preserve_bmi_taken scc_ccr_preserve_bge_taken scc_ccr_preserve_bgt_taken scc_ccr_preserve_ble_taken nop_triplet roxl_x_propagation roxr_x_propagation roxl_count_2 asl_overflow lsr_count_32 asr_count_0 ror_word rol_word btst_reg_high_bit muls_neg_neg muls_zero divs_neg_neg divs_overflow abcd_basic sbcd_basic negx_with_x negx_zero addx_basic subx_basic ext_word ext_long move_to_mem_and_back movem_predec_postinc movem_no_writeback movem_predec_mixed_order addx_chain flag_chain_xzn shift_chain roxl_reg_count_32 roxl_reg_count_33 roxr_reg_count_33 roxr_reg_count_32 roxr_reg_count_0 roxl_reg_count_63 roxr_reg_count_63 roxr_roxl_chain_x roxl_lsr_chain_x mulu_large divu_remainder abcd_with_carry nbcd_basic bsr_rts link_unlk indexed_addr_mode indexed_full_neg_base io_byte_write_roundtrip strict_zero_ram_native host_code_reuse_coherence cache_disabled_selfmod_replay byte_postinc cmpm_equal move_sr_roundtrip dbra_loop_100 dbne_loop_cmpi bsr_in_dbra_loop table_lookup dbra_loop_1000 swap_pack lea_scaled_index multi_branch andi_l_dn eor_self asl_w_vflag asl_b_overflow lsr_w_regcount asr_w_preserve movem_w_signext cmpm_l_equal cmpm_b_unequal addx_64bit subx_64bit muls_boundary divu_max_quotient move_b_preserve_flags byte_logic_chain bchg_imm_high neg_w_partial clr_b_tst all_regs_alive scaled_index_word byte_indexed_load indexed_store_load addq_subq_sizes x_flag_chain sub_w_subx_chain exg_dn_an push_pop_a0 dbeq_loop_50 dbmi_loop_neg lsl_l_count0 asr_l_8_neg rol_l_16 lsl_b_7 asr_b_1_sign move_b_flags move_w_zero add_l_an_dn sub_w_dn_an cmp_b cmp_w ori_w_mem andi_b_mem link_neg16 mulu_max divs_neg_rem negx_64bit cmpi_l_abs_short_eq cmpi_l_abs_short_ne cmpi_bne_w_not_taken cmpi_bne_w_taken cmpi_b_abs_short_blt movem_save_modify_restore bsr_l_long jmp_d8_pc_dn_w pea_movem_stack subq_sp_movea_write tst_bne_after_bsr_rts tst_bne_after_jsr_an save_clear_slot_restore_tst movea_l_sp_postinc_cov movea_l_postinc_alias movec_cacr_roundtrip cache_init_sequence move_l_neg_disp_a5 sr_barrier_cache_init divs_word_hardfail divu_word_hardfail mull_32_hardfail divl_32_hardfail aslw_mem_hardfail lsrw_mem_hardfail rolw_mem_hardfail ori_sr_hardfail andi_sr_hardfail eori_sr_hardfail move_from_sr_hardfail move_to_sr_hardfail divs_neg_by_neg_edge divs_by_minus_one_edge divs_zero_dividend_edge divs_overflow_edge divu_exact_edge divu_with_remainder_edge divu_overflow_edge mull_unsigned_32 mull_signed_32 divl_unsigned_32 divl_signed_32 asrw_mem_edge roxlw_mem_edge roxrw_mem_edge abcd_99_plus_01_edge sbcd_with_x_edge nbcd_99_edge bfextu_reg_edge bfexts_reg_edge bfffo_reg_edge bfset_reg_edge bfclr_reg_edge bfchg_reg_edge bftst_reg_edge bfins_reg_edge pack_dn_edge pack_predec_a7_alias unpk_dn_edge unpk_predec_a7_alias chk2_w_equal_preserve_ccr chk2_b_areg_fullwidth_d16 chk2_l_wrapped_absl chk2_w_trap_vector6 chk2_w_indexed_inrange chk2_l_fullindexed_inrange chk2_w_pcrel_inrange movep_l_roundtrip sr_ops_combo moves_write_read moves_b_postinc_areg_alias moves_privilege_vector8 fdbcc_false_decrement_branch ftrapcc_true_vector7 ftrapcc_false_operand_lengths cas2_w_success cas2_w_fail_first cas2_w_fail_second cas2_l_success cas2_l_fail_second cas2_l_alias_compare adda_w_cov adda_l_cov adda_w_neg_cov eori_ccr_cov rtr_cov mvr2usp_cov move_b_d16_an_cov move_w_d16_an_cov move_l_d16_an_cov move_l_idx_absw_native move_b_idx_cov move_l_idx_scale_cov move_l_pc_rel_cov move_l_abs_w_cov move_l_abs_l_cov predec_postinc_cov imm_to_mem_b_cov imm_to_mem_w_cov imm_to_mem_l_cov add_b_overflow_cov sub_w_borrow_cov cmp_l_equal_cov and_l_zero_cov or_l_allones_cov eor_self_cov neg_b_overflow_cov not_b_cov odd_addr_cov a7_byte_postinc_cov fuzz_alu_0 fuzz_shift_0 fuzz_bitops_0 fuzz_muldiv_0 fuzz_extswap_0 fuzz_addxsubx_0 fuzz_memrt_0 fuzz_exg_0 fuzz_mixed_0 fuzz_flags_0 fuzz_alu_1 fuzz_shift_1 fuzz_bitops_1 fuzz_muldiv_1 fuzz_extswap_1 fuzz_addxsubx_1 fuzz_memrt_1 fuzz_exg_1 fuzz_mixed_1 fuzz_flags_1 fuzz_alu_2 fuzz_shift_2 fuzz_bitops_2 fuzz_muldiv_2 fuzz_extswap_2 fuzz_addxsubx_2 fuzz_memrt_2 fuzz_exg_2 fuzz_mixed_2 fuzz_flags_2 fuzz_alu_3 fuzz_shift_3 fuzz_bitops_3 fuzz_muldiv_3 fuzz_extswap_3 fuzz_addxsubx_3 fuzz_memrt_3 fuzz_exg_3 fuzz_mixed_3 fuzz_flags_3 fuzz_alu_4 fuzz_shift_4 fuzz_bitops_4 fuzz_muldiv_4 fuzz_extswap_4 fuzz_addxsubx_4 fuzz_memrt_4 fuzz_exg_4 fuzz_mixed_4 fuzz_flags_4 chk_w_in_range chk_w_zero chk_w_equal sbcd_borrow_chain sbcd_zero_zero nbcd_zero_no_x nbcd_with_x bfins_low8 bfins_mid8 movec_vbr_roundtrip movec_sfc_roundtrip movec_dfc_roundtrip mull_u64 mull_s32_neg divl_u32_rem divl_s32_neg divl_u32_max divl_s32_neg_divisor mull_s64_neg divl_same_dq_dr divl_u64 divl_s64 bfins_dreg_imm bfins_dreg_narrow bfins_dreg_wrap bfins_dreg_dyn bfins_dreg_dyn_width32 bfins_mem_span32 bfins_mem_dyn_negative bfins_dreg_boot_alias bfins_mem_dyn_neg_width32 bfins_mem_dyn_pos_width32 oracle_zf_moveq_z1_take oracle_zf_moveq_z0_notake oracle_zf_moveq_z0_take oracle_zf_moveq_z1_notake oracle_zf_tst_z1_take oracle_zf_tst_z0_notake oracle_zf_move_z1_take oracle_zf_move_z0_notake oracle_zf_and_z1_take oracle_zf_and_z0_notake oracle_zf_sub_z1_take oracle_zf_sub_z0_notake oracle_zf_bne_z1_take oracle_zf_bne_z0_notake oracle_zf_mem_take oracle_zf_mem_notake oracle_zf_dbf_preserve_take)
+# FPU semantic-service vectors are appended independently so additions remain
+# reviewable without rewriting the generated-style master ordering above.
+TEST_ORDER+=(fpp_semantic_successor fscc_false_byte fbcc_false_operand_lengths)
+# CHK exception-state vectors are kept beside the family audit rather than
+# rewriting the generated-style master ordering above.
+TEST_ORDER+=(chk_w_negative_trap_n chk_w_upper_trap_n_clear chk_l_negative_trap_n chk_l_upper_trap_n_clear chk_l_in_range_preserve_ccr)
+# Deferred arithmetic-exception and DIVL result-alias audit vectors.
+TEST_ORDER+=(divu_w_zero_frame divs_w_zero_frame divs_w_overflow_preserve_z divs_w_imm_overflow_preserve_z divu_l_zero_frame divs_l_zero_frame divu_l32_zero_distinct divs_l32_zero_distinct divu_l32_success_nf divs_l32_success_nf divu_l32_same_dq_dr_nf divs_l32_same_dq_dr_nf divu_l32_src_dr_alias_nf divs_l32_src_dr_alias_nf divu_l64_zero_frame divs_l64_zero_frame divu_l64_same_dq_dr divs_l64_same_dq_dr divu_l64_same_dq_dr_nf divs_l64_same_dq_dr_nf divu_l64_overflow divu_l64_overflow_nf divs_l64_overflow divs_l64_overflow_nf divs_l32_overflow divs_l32_overflow_nf trapv_taken_frame trapv_not_taken_preserve)
+# Shared SR/control/cache semantic-service coverage.
+TEST_ORDER+=(fullsr_orsr_privilege_vector8 fullsr_andsr_privilege_vector8 fullsr_eorsr_privilege_vector8 fullsr_mv2sr_privilege_vector8 fullsr_mvsr_privilege_vector8 system_usp_roundtrip reset_privilege_vector8 usp_privilege_vector8 stop_clear_s_vector8 stop_privilege_vector8 movec_privilege_vector8 rte_privilege_vector8 cache_privilege_vector8 cache_supervisor_successors)
+# Exact-PC bitfield service coverage spans every operation and each legal EA decoder.
+TEST_ORDER+=(bitfield_mem_an_family bitfield_d16_an bitfield_indexed_an bitfield_absw bitfield_absl bitfield_pc_d16 bitfield_pc_indexed)
+TEST_ORDER+=(cas_b_success cas_b_fail cas_b_predec cas_w_postinc cas_l_d16 moves_predec_store_alias moves_predec_read_alias moves_l_indexed_store)
+# Register-count ROX must copy unchanged X into C when the effective ring count is zero.
+# Cover both directions and all widths, including each width's deepest low-six-bit
+# modulo-reduction path, the unreduced source-count-zero path, and both directions
+# with the remaining guest register mappings populated before the rotate.
+TEST_ORDER+=(roxl_b_reg_count_63_copies_x roxr_b_reg_count_63_copies_x roxl_w_reg_count_51_copies_x roxr_w_reg_count_51_copies_x roxl_l_reg_count_33_copies_x roxr_l_reg_count_33_copies_x roxl_l_reg_count_0_copies_x roxr_reg_count_0_copies_x roxl_l_reg_count_33_pressure roxr_l_reg_count_33_pressure)
+# Register-count AS/LS effective-zero paths must preserve X while clearing C/V
+# and deriving N/Z from the unchanged size-specific result.
+TEST_ORDER+=(asl_b_reg_count_0_preserves_x asl_w_reg_count_0_preserves_x asl_l_reg_count_0_preserves_x asr_b_reg_count_0_preserves_x asr_w_reg_count_0_preserves_x asr_l_reg_count_0_preserves_x asr_l_reg_count0_pressure_preserves_x lsl_b_reg_count_0_preserves_x lsl_w_reg_count_0_preserves_x lsl_l_reg_count_0_preserves_x lsr_b_reg_count_0_preserves_x lsr_w_reg_count_0_preserves_x lsr_l_reg_count_0_preserves_x)
+# Register-count shift boundaries must use the guest low-six-bit count without
+# wrapping count 32 through AArch64 W-form variable shifts.
+TEST_ORDER+=(asl_b_reg_count32_boundary asl_w_reg_count32_boundary asl_l_reg_count32_boundary asl_l_reg_zero_count32_v_clear asl_l_reg_zero_count32_const_v_clear asl_b_reg_zero_count63_v_clear asl_w_reg_zero_count33_v_clear asr_b_reg_count32_boundary asr_w_reg_count32_boundary asr_l_reg_count32_boundary lsl_b_reg_count32_boundary lsl_w_reg_count32_boundary lsl_l_reg_count32_boundary lsr_b_reg_count32_boundary lsr_w_reg_count32_boundary lsr_l_reg_count32_boundary lsr_l_reg_count33_boundary lsr_l_reg_const_count32)
+# ROL/ROR use the low six register-count bits even though the rotation result
+# itself is periodic at the operand width. Cover zero, both sides of 32, the
+# maximal six-bit count, both flag lifecycles, and legal count/data aliasing.
+declare -a ROTATE_REGISTER_MATRIX_NAMES=()
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        for _rotate_count in 0 31 32 33 63; do
+            _rotate_name="${_rotate_op}_${_rotate_width}_reg_count${_rotate_count}_boundary"
+            ROTATE_REGISTER_MATRIX_NAMES+=("$_rotate_name" "${_rotate_name}_nf")
+            TEST_ORDER+=("$_rotate_name" "${_rotate_name}_nf")
+        done
+        _rotate_alias_name="${_rotate_op}_${_rotate_width}_reg_same_count_data"
+        ROTATE_REGISTER_MATRIX_NAMES+=("$_rotate_alias_name" "${_rotate_alias_name}_nf")
+        TEST_ORDER+=("$_rotate_alias_name" "${_rotate_alias_name}_nf")
+    done
+done
+unset _rotate_op _rotate_width _rotate_count _rotate_name _rotate_alias_name
+TEST_ORDER+=(rol_l_reg_const_count64 rol_l_reg_const_count64_nf ror_l_reg_const_count64 ror_l_reg_const_count64_nf)
+TEST_ORDER+=(rol_b_imm_count8 rol_b_imm_count8_nf rol_w_imm_count8 rol_w_imm_count8_nf rol_l_imm_count8 rol_l_imm_count8_nf)
+TEST_ORDER+=(ror_b_imm_count8 ror_b_imm_count8_nf ror_w_imm_count8 ror_w_imm_count8_nf ror_l_imm_count8 ror_l_imm_count8_nf)
+TEST_ORDER+=(rolw_mem_native rolw_mem_native_nf rorw_mem_native rorw_mem_native_nf)
+TEST_ORDER+=(aslw_mem_native aslw_mem_native_nf asrw_mem_native asrw_mem_native_nf lslw_mem_native lslw_mem_native_nf lsrw_mem_native lsrw_mem_native_nf)
+TEST_ORDER+=(roxlw_mem_x_native roxrw_mem_x_native)
+TEST_ORDER+=(asl_b_reg_count32_nf asl_w_reg_count32_nf asl_l_reg_count32_nf asr_b_reg_count32_nf asr_w_reg_count32_nf asr_l_reg_count32_nf lsl_b_reg_count32_nf lsl_w_reg_count32_nf lsl_l_reg_count32_nf lsr_b_reg_count32_nf lsr_w_reg_count32_nf lsr_l_reg_count32_nf)
+TEST_ORDER+=(asl_b_reg_same_count_data asl_w_reg_same_count_data asl_l_reg_same_count_data asr_b_reg_same_count_data asr_w_reg_same_count_data asr_l_reg_same_count_data lsl_b_reg_same_count_data lsl_w_reg_same_count_data lsl_l_reg_same_count_data lsr_b_reg_same_count_data lsr_w_reg_same_count_data lsr_l_reg_same_count_data)
+TEST_ORDER+=(asl_b_reg_same_count_data_nf asl_w_reg_same_count_data_nf asl_l_reg_same_count_data_nf asr_b_reg_same_count_data_nf asr_w_reg_same_count_data_nf asr_l_reg_same_count_data_nf lsl_b_reg_same_count_data_nf lsl_w_reg_same_count_data_nf lsl_l_reg_same_count_data_nf lsr_b_reg_same_count_data_nf lsr_w_reg_same_count_data_nf lsr_l_reg_same_count_data_nf)
+# Adjacent and maximal low-six-bit counts close both sides of the count-32
+# boundary.  Generate the regular/no-flags family matrix from one inventory so
+# an opcode or width cannot silently drop out of one lifecycle.
+declare -a SHIFT_BOUNDARY_MATRIX_NAMES=()
+for _shift_op in asl asr lsl lsr; do
+    for _shift_width in b w l; do
+        for _shift_count in 31 33 63; do
+            _shift_name="${_shift_op}_${_shift_width}_reg_count${_shift_count}_boundary"
+            SHIFT_BOUNDARY_MATRIX_NAMES+=("$_shift_name" "${_shift_name}_nf")
+            if [ "$_shift_name" != "lsr_l_reg_count33_boundary" ]; then
+                TEST_ORDER+=("$_shift_name")
+            fi
+            TEST_ORDER+=("${_shift_name}_nf")
+        done
+    done
+done
+unset _shift_op _shift_width _shift_count _shift_name
+TEST_ORDER+=(addx_b_same_reg_consumes_x addx_w_same_reg_consumes_x addx_l_same_reg_consumes_x subx_b_same_reg_consumes_x subx_w_same_reg_consumes_x subx_l_same_reg_consumes_x)
+TEST_ORDER+=(addx_b_distinct_reg_consumes_x addx_w_distinct_reg_consumes_x addx_l_distinct_reg_consumes_x subx_b_distinct_reg_consumes_x subx_w_distinct_reg_consumes_x subx_l_distinct_reg_consumes_x)
+TEST_ORDER+=(addx_b_zero_sticky_z_set addx_w_zero_sticky_z_set addx_l_zero_sticky_z_set addx_b_zero_without_x_sticky_z_set addx_w_zero_without_x_sticky_z_set addx_l_zero_without_x_sticky_z_set roxl_l_zero_count_copies_cleared_x subx_b_zero_sticky_z_set subx_w_zero_sticky_z_set subx_l_zero_sticky_z_set)
+TEST_ORDER+=(addx_b_zero_sticky_z_clear addx_w_zero_sticky_z_clear addx_l_zero_sticky_z_clear subx_b_zero_sticky_z_clear subx_w_zero_sticky_z_clear subx_l_zero_sticky_z_clear)
+TEST_ORDER+=(addx_b_overflow_with_x addx_w_overflow_with_x addx_l_overflow_with_x subx_b_overflow_with_x subx_w_overflow_with_x subx_l_overflow_with_x subx_b_without_x subx_w_without_x subx_l_without_x)
+# Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
+# Cover each logical operation, all five CCR bits, preservation/toggling, and entry
+# from the subtraction carry-inverted lifecycle.
+TEST_ORDER+=(ccr_ori_exact_bits ccr_andi_exact_mask ccr_eori_exact_toggle ccr_ori_after_borrow_flags ccr_andi_after_borrow_flags ccr_eori_after_borrow_flags)
+# BCD arithmetic is one lifecycle family: C is copied to X, Z is sticky,
+# data-register aliases consume the pre-write source, and byte predecrement
+# uses the architectural two-byte A7 stride for each source/destination access.
+TEST_ORDER+=(bcd_abcd_zero_sticky_set bcd_abcd_zero_sticky_clear bcd_abcd_nonzero_clears_sticky bcd_abcd_carry_zero bcd_abcd_same_reg_with_x)
+TEST_ORDER+=(bcd_sbcd_zero_sticky_set bcd_sbcd_zero_sticky_clear bcd_sbcd_borrow bcd_sbcd_same_reg_with_x)
+TEST_ORDER+=(bcd_nbcd_zero_sticky_set bcd_nbcd_zero_sticky_clear bcd_nbcd_nonzero bcd_nbcd_with_x)
+TEST_ORDER+=(bcd_abcd_decimal_09_plus_01 bcd_abcd_invalid_nibble_exact bcd_abcd_extend_chain)
+TEST_ORDER+=(bcd_sbcd_decimal_10_minus_01 bcd_sbcd_invalid_nibble_exact bcd_nbcd_decimal_10 bcd_nbcd_invalid_nibble_exact)
+TEST_ORDER+=(bcd_native_abcd_zero_sticky bcd_native_abcd_invalid_extend bcd_native_sbcd_invalid_borrow bcd_native_nbcd_invalid_borrow)
+TEST_ORDER+=(bcd_abcd_predec_src_a7 bcd_abcd_predec_dst_a7 bcd_abcd_predec_a7_alias bcd_sbcd_predec_src_a7 bcd_sbcd_predec_dst_a7 bcd_sbcd_predec_a7_alias bcd_nbcd_predec_a7)
+# MULL closure vectors cover signed 32-bit overflow publication plus the
+# source/result ownership and legal alias matrix for 64-bit results.
+TEST_ORDER+=(mulls32_negative_fit_v_native mullu64_source_preserve_v_native mullu64_source_low_alias_native mullu64_same_result_alias_native)
+TEST_ORDER+=(mullu32_low_sign_full_flags_native mullu32_overflow_low_zero_flags_native mulls32_negative_overflow_low_zero_native mulls32_positive_overflow_low_sign_native)
+TEST_ORDER+=(mulls64_negative_flags_native mullu64_zero_flags_native mullu64_source_high_alias_native mullu64_all_alias_native mullu32_immediate_nf_native mullu64_memory_nf_native)
+
 declare -A TESTS
+declare -A EXPECTED_D0
+declare -A EXPECTED_REG_FIELDS
+# Tests in this set replay from reset architectural state at an exact anchor.
+# The JIT pass forces immediate RAM L2 promotion; the configured final replay
+# proves native entry rather than merely proving that the tracer compiled it.
+declare -A NATIVE_REPLAY_TESTS=(
+    [rol_l_reg_const_count64]=1
+    [rol_l_reg_const_count64_nf]=1
+    [ror_l_reg_const_count64]=1
+    [ror_l_reg_const_count64_nf]=1
+    [rol_b_imm_count8]=1
+    [rol_b_imm_count8_nf]=1
+    [rol_w_imm_count8]=1
+    [rol_w_imm_count8_nf]=1
+    [rol_l_imm_count8]=1
+    [rol_l_imm_count8_nf]=1
+    [ror_b_imm_count8]=1
+    [ror_b_imm_count8_nf]=1
+    [ror_w_imm_count8]=1
+    [ror_w_imm_count8_nf]=1
+    [ror_l_imm_count8]=1
+    [ror_l_imm_count8_nf]=1
+    [rolw_mem_native]=1
+    [rolw_mem_native_nf]=1
+    [rorw_mem_native]=1
+    [rorw_mem_native_nf]=1
+    [aslw_mem_native]=1
+    [aslw_mem_native_nf]=1
+    [asrw_mem_native]=1
+    [asrw_mem_native_nf]=1
+    [lslw_mem_native]=1
+    [lslw_mem_native_nf]=1
+    [lsrw_mem_native]=1
+    [lsrw_mem_native_nf]=1
+    [roxlw_mem_x_native]=1
+    [roxrw_mem_x_native]=1
+    [asl_l_reg_zero_count32_const_v_clear]=1
+    [lsr_l_reg_const_count32]=1
+    [asr_l_reg_count0_pressure_preserves_x]=1
+    [asl_b_reg_count32_boundary]=1
+    [asl_w_reg_count32_boundary]=1
+    [asl_l_reg_count32_boundary]=1
+    [asl_l_reg_zero_count32_v_clear]=1
+    [asl_b_reg_zero_count63_v_clear]=1
+    [asl_w_reg_zero_count33_v_clear]=1
+    [asr_b_reg_count32_boundary]=1
+    [asr_w_reg_count32_boundary]=1
+    [asr_l_reg_count32_boundary]=1
+    [lsl_b_reg_count32_boundary]=1
+    [lsl_w_reg_count32_boundary]=1
+    [lsl_l_reg_count32_boundary]=1
+    [lsr_b_reg_count32_boundary]=1
+    [lsr_w_reg_count32_boundary]=1
+    [lsr_l_reg_count32_boundary]=1
+    [lsr_l_reg_count33_boundary]=1
+    [asl_b_reg_count32_nf]=1
+    [asl_w_reg_count32_nf]=1
+    [asl_l_reg_count32_nf]=1
+    [asr_b_reg_count32_nf]=1
+    [asr_w_reg_count32_nf]=1
+    [asr_l_reg_count32_nf]=1
+    [lsl_b_reg_count32_nf]=1
+    [lsl_w_reg_count32_nf]=1
+    [lsl_l_reg_count32_nf]=1
+    [lsr_b_reg_count32_nf]=1
+    [lsr_w_reg_count32_nf]=1
+    [lsr_l_reg_count32_nf]=1
+    [asl_b_reg_same_count_data]=1
+    [asl_w_reg_same_count_data]=1
+    [asl_l_reg_same_count_data]=1
+    [asr_b_reg_same_count_data]=1
+    [asr_w_reg_same_count_data]=1
+    [asr_l_reg_same_count_data]=1
+    [lsl_b_reg_same_count_data]=1
+    [lsl_w_reg_same_count_data]=1
+    [lsl_l_reg_same_count_data]=1
+    [lsr_b_reg_same_count_data]=1
+    [lsr_w_reg_same_count_data]=1
+    [lsr_l_reg_same_count_data]=1
+    [asl_b_reg_same_count_data_nf]=1
+    [asl_w_reg_same_count_data_nf]=1
+    [asl_l_reg_same_count_data_nf]=1
+    [asr_b_reg_same_count_data_nf]=1
+    [asr_w_reg_same_count_data_nf]=1
+    [asr_l_reg_same_count_data_nf]=1
+    [lsl_b_reg_same_count_data_nf]=1
+    [lsl_w_reg_same_count_data_nf]=1
+    [lsl_l_reg_same_count_data_nf]=1
+    [lsr_b_reg_same_count_data_nf]=1
+    [lsr_w_reg_same_count_data_nf]=1
+    [lsr_l_reg_same_count_data_nf]=1
+    [divs_w_imm_overflow_preserve_z]=1
+    [divu_l32_same_dq_dr_nf]=1
+    [divs_l32_same_dq_dr_nf]=1
+    [divu_l32_src_dr_alias_nf]=1
+    [divs_l32_src_dr_alias_nf]=1
+    [divs_w_overflow_preserve_z]=1
+    [ccr_ori_exact_bits]=1
+    [ccr_andi_exact_mask]=1
+    [ccr_eori_exact_toggle]=1
+    [ccr_ori_after_borrow_flags]=1
+    [ccr_andi_after_borrow_flags]=1
+    [ccr_eori_after_borrow_flags]=1
+    [addx_b_zero_sticky_z_clear]=1
+    [addx_w_zero_sticky_z_clear]=1
+    [addx_l_zero_sticky_z_clear]=1
+    [subx_b_zero_sticky_z_clear]=1
+    [subx_w_zero_sticky_z_clear]=1
+    [subx_l_zero_sticky_z_clear]=1
+    [addx_b_overflow_with_x]=1
+    [addx_w_overflow_with_x]=1
+    [addx_l_overflow_with_x]=1
+    [subx_b_overflow_with_x]=1
+    [subx_w_overflow_with_x]=1
+    [subx_l_overflow_with_x]=1
+    [subx_b_without_x]=1
+    [subx_w_without_x]=1
+    [subx_l_without_x]=1
+    [addx_b_zero_sticky_z_set]=1
+    [addx_w_zero_sticky_z_set]=1
+    [addx_l_zero_sticky_z_set]=1
+    [addx_b_zero_without_x_sticky_z_set]=1
+    [addx_w_zero_without_x_sticky_z_set]=1
+    [addx_l_zero_without_x_sticky_z_set]=1
+    [roxl_l_zero_count_copies_cleared_x]=1
+    [subx_b_zero_sticky_z_set]=1
+    [subx_w_zero_sticky_z_set]=1
+    [subx_l_zero_sticky_z_set]=1
+    [addx_b_distinct_reg_consumes_x]=1
+    [addx_w_distinct_reg_consumes_x]=1
+    [addx_l_distinct_reg_consumes_x]=1
+    [subx_b_distinct_reg_consumes_x]=1
+    [subx_w_distinct_reg_consumes_x]=1
+    [subx_l_distinct_reg_consumes_x]=1
+    [addx_b_same_reg_consumes_x]=1
+    [addx_w_same_reg_consumes_x]=1
+    [addx_l_same_reg_consumes_x]=1
+    [subx_b_same_reg_consumes_x]=1
+    [subx_w_same_reg_consumes_x]=1
+    [subx_l_same_reg_consumes_x]=1
+    [asl_b_reg_count_0_preserves_x]=1
+    [asl_w_reg_count_0_preserves_x]=1
+    [asl_l_reg_count_0_preserves_x]=1
+    [asr_b_reg_count_0_preserves_x]=1
+    [asr_w_reg_count_0_preserves_x]=1
+    [asr_l_reg_count_0_preserves_x]=1
+    [lsl_b_reg_count_0_preserves_x]=1
+    [lsl_w_reg_count_0_preserves_x]=1
+    [lsl_l_reg_count_0_preserves_x]=1
+    [lsr_b_reg_count_0_preserves_x]=1
+    [lsr_w_reg_count_0_preserves_x]=1
+    [lsr_l_reg_count_0_preserves_x]=1
+    [roxl_l_reg_count_33_pressure]=1
+    [roxr_l_reg_count_33_pressure]=1
+    [roxl_b_reg_count_63_copies_x]=1
+    [roxr_b_reg_count_63_copies_x]=1
+    [roxl_w_reg_count_51_copies_x]=1
+    [roxr_w_reg_count_51_copies_x]=1
+    [roxl_l_reg_count_33_copies_x]=1
+    [roxr_l_reg_count_33_copies_x]=1
+    [roxl_l_reg_count_0_copies_x]=1
+    [roxr_reg_count_0_copies_x]=1
+    [chk_w_in_range]=1
+    [chk_w_zero]=1
+    [chk_w_equal]=1
+    [chk_w_negative_trap_n]=1
+    [chk_w_upper_trap_n_clear]=1
+    [chk_l_negative_trap_n]=1
+    [chk_l_upper_trap_n_clear]=1
+    [chk_l_in_range_preserve_ccr]=1
+    [divu_w_zero_frame]=1
+    [divs_w_zero_frame]=1
+    [divu_l_zero_frame]=1
+    [divs_l_zero_frame]=1
+    [divu_l32_zero_distinct]=1
+    [divs_l32_zero_distinct]=1
+    [divu_l32_success_nf]=1
+    [divs_l32_success_nf]=1
+    [divu_l64_zero_frame]=1
+    [divs_l64_zero_frame]=1
+    [divu_l64_same_dq_dr]=1
+    [divs_l64_same_dq_dr]=1
+    [divu_l64_same_dq_dr_nf]=1
+    [divs_l64_same_dq_dr_nf]=1
+    [divu_l64_overflow]=1
+    [divu_l64_overflow_nf]=1
+    [divs_l64_overflow]=1
+    [divs_l64_overflow_nf]=1
+    [divs_l32_overflow]=1
+    [divs_l32_overflow_nf]=1
+    [trapv_taken_frame]=1
+    [trapv_not_taken_preserve]=1
+    [cas_b_predec]=1
+    [moves_predec_store_alias]=1
+    [bitfield_mem_an_family]=1
+    [io_byte_write_roundtrip]=1
+    [btst_b_d16_highbit]=1
+    [move_to_mem_and_back]=1
+    [move_l_d16_an_cov]=1
+    [move_l_idx_absw_native]=1
+    [strict_zero_ram_native]=1
+    [host_code_reuse_coherence]=1
+    [cache_disabled_selfmod_replay]=1
+    [fpp_semantic_successor]=1
+    [fscc_false_byte]=1
+    [fbcc_false_operand_lengths]=1
+    [cas2_w_success]=1
+    [cas2_w_fail_first]=1
+    [cas2_w_fail_second]=1
+    [cas2_l_success]=1
+    [cas2_l_fail_second]=1
+    [cas2_l_alias_compare]=1
+    [pack_dn_edge]=1
+    [pack_predec_a7_alias]=1
+    [unpk_dn_edge]=1
+    [unpk_predec_a7_alias]=1
+    [chk2_w_equal_preserve_ccr]=1
+    [chk2_b_areg_fullwidth_d16]=1
+    [chk2_l_wrapped_absl]=1
+    [chk2_w_trap_vector6]=1
+    [chk2_w_indexed_inrange]=1
+    [chk2_l_fullindexed_inrange]=1
+    [chk2_w_pcrel_inrange]=1
+    [movep_l_roundtrip]=1
+    [movea_l_sp_postinc_cov]=1
+    [movea_l_postinc_alias]=1
+    [branch_flush_bgt_zero]=1
+    [dbra_ccr_preserve_z_clear]=1
+    [dbra_ccr_preserve_z_set]=1
+    [bcd_abcd_zero_sticky_set]=1
+    [bcd_abcd_zero_sticky_clear]=1
+    [bcd_abcd_nonzero_clears_sticky]=1
+    [bcd_abcd_carry_zero]=1
+    [bcd_abcd_same_reg_with_x]=1
+    [bcd_sbcd_zero_sticky_set]=1
+    [bcd_sbcd_zero_sticky_clear]=1
+    [bcd_sbcd_borrow]=1
+    [bcd_sbcd_same_reg_with_x]=1
+    [bcd_nbcd_zero_sticky_set]=1
+    [bcd_nbcd_zero_sticky_clear]=1
+    [bcd_nbcd_nonzero]=1
+    [bcd_nbcd_with_x]=1
+    [bcd_abcd_decimal_09_plus_01]=1
+    [bcd_abcd_invalid_nibble_exact]=1
+    [bcd_abcd_extend_chain]=1
+    [bcd_sbcd_decimal_10_minus_01]=1
+    [bcd_sbcd_invalid_nibble_exact]=1
+    [bcd_nbcd_decimal_10]=1
+    [bcd_nbcd_invalid_nibble_exact]=1
+    [bcd_native_abcd_zero_sticky]=1
+    [bcd_native_abcd_invalid_extend]=1
+    [bcd_native_sbcd_invalid_borrow]=1
+    [bcd_native_nbcd_invalid_borrow]=1
+    [bcd_abcd_predec_src_a7]=1
+    [bcd_abcd_predec_dst_a7]=1
+    [bcd_abcd_predec_a7_alias]=1
+    [bcd_sbcd_predec_src_a7]=1
+    [bcd_sbcd_predec_dst_a7]=1
+    [bcd_sbcd_predec_a7_alias]=1
+    [bcd_nbcd_predec_a7]=1
+    [mulls32_negative_fit_v_native]=1
+    [mullu64_source_preserve_v_native]=1
+    [mullu64_source_low_alias_native]=1
+    [mullu64_same_result_alias_native]=1
+    [mullu32_low_sign_full_flags_native]=1
+    [mullu32_overflow_low_zero_flags_native]=1
+    [mulls32_negative_overflow_low_zero_native]=1
+    [mulls32_positive_overflow_low_sign_native]=1
+    [mulls64_negative_flags_native]=1
+    [mullu64_zero_flags_native]=1
+    [mullu64_source_high_alias_native]=1
+    [mullu64_all_alias_native]=1
+    [mullu32_immediate_nf_native]=1
+    [mullu64_memory_nf_native]=1
+)
+# A setup prefix may install architectural state before the audited instruction.
+# Replay and native-entry proof then start at the exact family opcode PC.
+declare -A NATIVE_REPLAY_PC=(
+    [rol_l_reg_const_count64]=0x100c
+    [rol_l_reg_const_count64_nf]=0x100c
+    [ror_l_reg_const_count64]=0x100c
+    [ror_l_reg_const_count64_nf]=0x100c
+    [rol_b_imm_count8]=0x1000
+    [rol_b_imm_count8_nf]=0x1000
+    [rol_w_imm_count8]=0x1000
+    [rol_w_imm_count8_nf]=0x1000
+    [rol_l_imm_count8]=0x1000
+    [rol_l_imm_count8_nf]=0x1000
+    [ror_b_imm_count8]=0x1000
+    [ror_b_imm_count8_nf]=0x1000
+    [ror_w_imm_count8]=0x1000
+    [ror_w_imm_count8_nf]=0x1000
+    [ror_l_imm_count8]=0x1000
+    [ror_l_imm_count8_nf]=0x1000
+    [rolw_mem_native]=0x1000
+    [rolw_mem_native_nf]=0x1000
+    [rorw_mem_native]=0x1000
+    [rorw_mem_native_nf]=0x1000
+    [aslw_mem_native]=0x1000
+    [aslw_mem_native_nf]=0x1000
+    [asrw_mem_native]=0x1000
+    [asrw_mem_native_nf]=0x1000
+    [lslw_mem_native]=0x1000
+    [lslw_mem_native_nf]=0x1000
+    [lsrw_mem_native]=0x1000
+    [lsrw_mem_native_nf]=0x1000
+    [roxlw_mem_x_native]=0x1000
+    [roxrw_mem_x_native]=0x1000
+    [chk_w_in_range]=0x1004
+    [chk_w_zero]=0x1004
+    [chk_w_equal]=0x1004
+    [chk_w_negative_trap_n]=0x1018
+    [chk_w_upper_trap_n_clear]=0x1018
+    [chk_l_negative_trap_n]=0x1018
+    [chk_l_upper_trap_n_clear]=0x1020
+    [chk_l_in_range_preserve_ccr]=0x1010
+    [divu_w_zero_frame]=0x101c
+    [divs_w_zero_frame]=0x101c
+    [divs_w_overflow_preserve_z]=0x100c
+    [divs_w_imm_overflow_preserve_z]=0x100a
+    [asl_b_reg_count32_boundary]=0x100c
+    [asl_w_reg_count32_boundary]=0x100c
+    [asl_l_reg_count32_boundary]=0x100c
+    [asl_l_reg_zero_count32_v_clear]=0x100c
+    [asl_b_reg_zero_count63_v_clear]=0x100c
+    [asl_w_reg_zero_count33_v_clear]=0x100c
+    [asr_b_reg_count32_boundary]=0x100c
+    [asr_w_reg_count32_boundary]=0x100c
+    [asr_l_reg_count32_boundary]=0x100c
+    [lsl_b_reg_count32_boundary]=0x100c
+    [lsl_w_reg_count32_boundary]=0x100c
+    [lsl_l_reg_count32_boundary]=0x100c
+    [lsr_b_reg_count32_boundary]=0x100c
+    [lsr_w_reg_count32_boundary]=0x100c
+    [lsr_l_reg_count32_boundary]=0x100c
+    [lsr_l_reg_count33_boundary]=0x100c
+    [asl_b_reg_count32_nf]=0x100c
+    [asl_w_reg_count32_nf]=0x100c
+    [asl_l_reg_count32_nf]=0x100c
+    [asr_b_reg_count32_nf]=0x100c
+    [asr_w_reg_count32_nf]=0x100c
+    [asr_l_reg_count32_nf]=0x100c
+    [lsl_b_reg_count32_nf]=0x100c
+    [lsl_w_reg_count32_nf]=0x100c
+    [lsl_l_reg_count32_nf]=0x100c
+    [lsr_b_reg_count32_nf]=0x100c
+    [lsr_w_reg_count32_nf]=0x100c
+    [lsr_l_reg_count32_nf]=0x100c
+    [asl_b_reg_same_count_data]=0x100a
+    [asl_w_reg_same_count_data]=0x100a
+    [asl_l_reg_same_count_data]=0x100a
+    [asr_b_reg_same_count_data]=0x100a
+    [asr_w_reg_same_count_data]=0x100a
+    [asr_l_reg_same_count_data]=0x100a
+    [lsl_b_reg_same_count_data]=0x100a
+    [lsl_w_reg_same_count_data]=0x100a
+    [lsl_l_reg_same_count_data]=0x100a
+    [lsr_b_reg_same_count_data]=0x100a
+    [lsr_w_reg_same_count_data]=0x100a
+    [lsr_l_reg_same_count_data]=0x100a
+    [asl_b_reg_same_count_data_nf]=0x100a
+    [asl_w_reg_same_count_data_nf]=0x100a
+    [asl_l_reg_same_count_data_nf]=0x100a
+    [asr_b_reg_same_count_data_nf]=0x100a
+    [asr_w_reg_same_count_data_nf]=0x100a
+    [asr_l_reg_same_count_data_nf]=0x100a
+    [lsl_b_reg_same_count_data_nf]=0x100a
+    [lsl_w_reg_same_count_data_nf]=0x100a
+    [lsl_l_reg_same_count_data_nf]=0x100a
+    [lsr_b_reg_same_count_data_nf]=0x100a
+    [lsr_w_reg_same_count_data_nf]=0x100a
+    [lsr_l_reg_same_count_data_nf]=0x100a
+    [divu_l_zero_frame]=0x101c
+    [divs_l_zero_frame]=0x101c
+    [divu_l32_zero_distinct]=0x1022
+    [divs_l32_zero_distinct]=0x1022
+    [divu_l32_success_nf]=0x1016
+    [divs_l32_success_nf]=0x1016
+    [divu_l32_same_dq_dr_nf]=0x1010
+    [divs_l32_same_dq_dr_nf]=0x1010
+    [divu_l32_src_dr_alias_nf]=0x1010
+    [divs_l32_src_dr_alias_nf]=0x1010
+    [divu_l64_zero_frame]=0x1022
+    [divs_l64_zero_frame]=0x1022
+    [divu_l64_same_dq_dr]=0x1010
+    [divs_l64_same_dq_dr]=0x1010
+    [divu_l64_same_dq_dr_nf]=0x1010
+    [divs_l64_same_dq_dr_nf]=0x1010
+    [divu_l64_overflow]=0x1016
+    [divu_l64_overflow_nf]=0x1016
+    [divs_l64_overflow]=0x1016
+    [divs_l64_overflow_nf]=0x1016
+    [divs_l32_overflow]=0x1016
+    [divs_l32_overflow_nf]=0x1016
+    [trapv_taken_frame]=0x1014
+    [trapv_not_taken_preserve]=0x1004
+    [bcd_abcd_zero_sticky_set]=0x100c
+    [bcd_abcd_zero_sticky_clear]=0x1008
+    [bcd_abcd_nonzero_clears_sticky]=0x100c
+    [bcd_abcd_carry_zero]=0x1010
+    [bcd_abcd_same_reg_with_x]=0x100e
+    [bcd_sbcd_zero_sticky_set]=0x100c
+    [bcd_sbcd_zero_sticky_clear]=0x1008
+    [bcd_sbcd_borrow]=0x100c
+    [bcd_sbcd_same_reg_with_x]=0x100e
+    [bcd_nbcd_zero_sticky_set]=0x100a
+    [bcd_nbcd_zero_sticky_clear]=0x1006
+    [bcd_nbcd_nonzero]=0x100a
+    [bcd_nbcd_with_x]=0x100a
+    [bcd_abcd_decimal_09_plus_01]=0x1008
+    [bcd_abcd_invalid_nibble_exact]=0x100c
+    [bcd_abcd_extend_chain]=0x1014
+    [bcd_sbcd_decimal_10_minus_01]=0x1008
+    [bcd_sbcd_invalid_nibble_exact]=0x100c
+    [bcd_nbcd_decimal_10]=0x1006
+    [bcd_nbcd_invalid_nibble_exact]=0x100a
+    [bcd_native_abcd_zero_sticky]=0x1000
+    [bcd_native_abcd_invalid_extend]=0x1000
+    [bcd_native_sbcd_invalid_borrow]=0x1000
+    [bcd_native_nbcd_invalid_borrow]=0x1000
+    [bcd_abcd_predec_src_a7]=0x1028
+    [bcd_abcd_predec_dst_a7]=0x1028
+    [bcd_abcd_predec_a7_alias]=0x1022
+    [bcd_sbcd_predec_src_a7]=0x1028
+    [bcd_sbcd_predec_dst_a7]=0x1028
+    [bcd_sbcd_predec_a7_alias]=0x1022
+    [bcd_nbcd_predec_a7]=0x1018
+)
+# Byte pairs are RAM-relative address/value operands restored before every
+# exact-PC replay. This keeps memory-EA vectors deterministic across the trace
+# pass and the later native-entry pass.
+declare -A NATIVE_REPLAY_BYTES=(
+    [rolw_mem_native]="A000 80 A001 01"
+    [rolw_mem_native_nf]="A000 80 A001 01"
+    [rorw_mem_native]="A000 80 A001 01"
+    [rorw_mem_native_nf]="A000 80 A001 01"
+    [aslw_mem_native]="A000 40 A001 00"
+    [aslw_mem_native_nf]="A000 40 A001 00"
+    [asrw_mem_native]="A000 80 A001 01"
+    [asrw_mem_native_nf]="A000 80 A001 01"
+    [lslw_mem_native]="A000 80 A001 01"
+    [lslw_mem_native_nf]="A000 80 A001 01"
+    [lsrw_mem_native]="A000 80 A001 01"
+    [lsrw_mem_native_nf]="A000 80 A001 01"
+    [roxlw_mem_x_native]="A000 80 A001 01"
+    [roxrw_mem_x_native]="A000 80 A001 00"
+    [mullu64_memory_nf_native]="A000 00 A001 00 A002 00 A003 02"
+    [bcd_abcd_predec_src_a7]="2080 01 2040 99"
+    [bcd_abcd_predec_dst_a7]="2080 01 2040 99"
+    [bcd_abcd_predec_a7_alias]="2082 01 2080 99"
+    [bcd_sbcd_predec_src_a7]="2080 01 2040 00"
+    [bcd_sbcd_predec_dst_a7]="2080 01 2040 00"
+    [bcd_sbcd_predec_a7_alias]="2082 01 2080 00"
+    [bcd_nbcd_predec_a7]="2040 01"
+)
+declare -A NATIVE_REPLAY_COUNT=(
+    [rol_l_reg_const_count64]=2
+    [rol_l_reg_const_count64_nf]=2
+    [ror_l_reg_const_count64]=2
+    [ror_l_reg_const_count64_nf]=2
+    [rol_b_imm_count8]=2
+    [rol_b_imm_count8_nf]=2
+    [rol_w_imm_count8]=2
+    [rol_w_imm_count8_nf]=2
+    [rol_l_imm_count8]=2
+    [rol_l_imm_count8_nf]=2
+    [ror_b_imm_count8]=2
+    [ror_b_imm_count8_nf]=2
+    [ror_w_imm_count8]=2
+    [ror_w_imm_count8_nf]=2
+    [ror_l_imm_count8]=2
+    [ror_l_imm_count8_nf]=2
+    [rolw_mem_native]=2
+    [rolw_mem_native_nf]=2
+    [rorw_mem_native]=2
+    [rorw_mem_native_nf]=2
+    [aslw_mem_native]=2
+    [aslw_mem_native_nf]=2
+    [asrw_mem_native]=2
+    [asrw_mem_native_nf]=2
+    [lslw_mem_native]=2
+    [lslw_mem_native_nf]=2
+    [lsrw_mem_native]=2
+    [lsrw_mem_native_nf]=2
+    [roxlw_mem_x_native]=2
+    [roxrw_mem_x_native]=2
+    [chk_w_in_range]=2
+    [chk_w_zero]=2
+    [chk_w_equal]=2
+    [chk_w_negative_trap_n]=2
+    [chk_w_upper_trap_n_clear]=2
+    [chk_l_negative_trap_n]=2
+    [chk_l_upper_trap_n_clear]=2
+    [chk_l_in_range_preserve_ccr]=2
+    [divu_w_zero_frame]=2
+    [divs_w_zero_frame]=2
+    [divs_w_overflow_preserve_z]=2
+    [divs_w_imm_overflow_preserve_z]=2
+    [asl_b_reg_count32_boundary]=2
+    [asl_w_reg_count32_boundary]=2
+    [asl_l_reg_count32_boundary]=2
+    [asl_l_reg_zero_count32_v_clear]=2
+    [asl_b_reg_zero_count63_v_clear]=2
+    [asl_w_reg_zero_count33_v_clear]=2
+    [asr_b_reg_count32_boundary]=2
+    [asr_w_reg_count32_boundary]=2
+    [asr_l_reg_count32_boundary]=2
+    [lsl_b_reg_count32_boundary]=2
+    [lsl_w_reg_count32_boundary]=2
+    [lsl_l_reg_count32_boundary]=2
+    [lsr_b_reg_count32_boundary]=2
+    [lsr_w_reg_count32_boundary]=2
+    [lsr_l_reg_count32_boundary]=2
+    [lsr_l_reg_count33_boundary]=2
+    [asl_b_reg_count32_nf]=2
+    [asl_w_reg_count32_nf]=2
+    [asl_l_reg_count32_nf]=2
+    [asr_b_reg_count32_nf]=2
+    [asr_w_reg_count32_nf]=2
+    [asr_l_reg_count32_nf]=2
+    [lsl_b_reg_count32_nf]=2
+    [lsl_w_reg_count32_nf]=2
+    [lsl_l_reg_count32_nf]=2
+    [lsr_b_reg_count32_nf]=2
+    [lsr_w_reg_count32_nf]=2
+    [lsr_l_reg_count32_nf]=2
+    [asl_b_reg_same_count_data]=2
+    [asl_w_reg_same_count_data]=2
+    [asl_l_reg_same_count_data]=2
+    [asr_b_reg_same_count_data]=2
+    [asr_w_reg_same_count_data]=2
+    [asr_l_reg_same_count_data]=2
+    [lsl_b_reg_same_count_data]=2
+    [lsl_w_reg_same_count_data]=2
+    [lsl_l_reg_same_count_data]=2
+    [lsr_b_reg_same_count_data]=2
+    [lsr_w_reg_same_count_data]=2
+    [lsr_l_reg_same_count_data]=2
+    [asl_b_reg_same_count_data_nf]=2
+    [asl_w_reg_same_count_data_nf]=2
+    [asl_l_reg_same_count_data_nf]=2
+    [asr_b_reg_same_count_data_nf]=2
+    [asr_w_reg_same_count_data_nf]=2
+    [asr_l_reg_same_count_data_nf]=2
+    [lsl_b_reg_same_count_data_nf]=2
+    [lsl_w_reg_same_count_data_nf]=2
+    [lsl_l_reg_same_count_data_nf]=2
+    [lsr_b_reg_same_count_data_nf]=2
+    [lsr_w_reg_same_count_data_nf]=2
+    [lsr_l_reg_same_count_data_nf]=2
+    [divu_l_zero_frame]=2
+    [divs_l_zero_frame]=2
+    [divu_l32_zero_distinct]=2
+    [divs_l32_zero_distinct]=2
+    [divu_l32_success_nf]=2
+    [divs_l32_success_nf]=2
+    [divu_l32_same_dq_dr_nf]=2
+    [divs_l32_same_dq_dr_nf]=2
+    [divu_l32_src_dr_alias_nf]=2
+    [divs_l32_src_dr_alias_nf]=2
+    [divu_l64_zero_frame]=2
+    [divs_l64_zero_frame]=2
+    [divu_l64_same_dq_dr]=2
+    [divs_l64_same_dq_dr]=2
+    [divu_l64_same_dq_dr_nf]=2
+    [divs_l64_same_dq_dr_nf]=2
+    [divu_l64_overflow]=2
+    [divu_l64_overflow_nf]=2
+    [divs_l64_overflow]=2
+    [divs_l64_overflow_nf]=2
+    [divs_l32_overflow]=2
+    [divs_l32_overflow_nf]=2
+    [trapv_taken_frame]=2
+    [trapv_not_taken_preserve]=2
+    # Prefix-bearing BCD vectors need one replay to trace the exact opcode
+    # anchor and a second replay to prove native entry at that same address.
+    [bcd_abcd_zero_sticky_set]=2
+    [bcd_abcd_zero_sticky_clear]=2
+    [bcd_abcd_nonzero_clears_sticky]=2
+    [bcd_abcd_carry_zero]=2
+    [bcd_abcd_same_reg_with_x]=2
+    [bcd_sbcd_zero_sticky_set]=2
+    [bcd_sbcd_zero_sticky_clear]=2
+    [bcd_sbcd_borrow]=2
+    [bcd_sbcd_same_reg_with_x]=2
+    [bcd_nbcd_zero_sticky_set]=2
+    [bcd_nbcd_zero_sticky_clear]=2
+    [bcd_nbcd_nonzero]=2
+    [bcd_nbcd_with_x]=2
+    [bcd_abcd_decimal_09_plus_01]=2
+    [bcd_abcd_invalid_nibble_exact]=2
+    [bcd_abcd_extend_chain]=2
+    [bcd_sbcd_decimal_10_minus_01]=2
+    [bcd_sbcd_invalid_nibble_exact]=2
+    [bcd_nbcd_decimal_10]=2
+    [bcd_nbcd_invalid_nibble_exact]=2
+    [bcd_abcd_predec_src_a7]=2
+    [bcd_abcd_predec_dst_a7]=2
+    [bcd_abcd_predec_a7_alias]=2
+    [bcd_sbcd_predec_src_a7]=2
+    [bcd_sbcd_predec_dst_a7]=2
+    [bcd_sbcd_predec_a7_alias]=2
+    [bcd_nbcd_predec_a7]=2
+    [cache_disabled_selfmod_replay]=2
+    [host_code_reuse_coherence]=2
+)
+for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_shift_name"]=1
+    NATIVE_REPLAY_PC["$_shift_name"]=0x100c
+    NATIVE_REPLAY_COUNT["$_shift_name"]=2
+done
+unset _shift_name
+for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_rotate_name"]=1
+    NATIVE_REPLAY_PC["$_rotate_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_rotate_name"]=2
+done
+unset _rotate_name
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
+# Strict-mode zero RAM must be traced once, compiled at L2, and replayed
+# natively. Each 0000 0000 pair is ORI.B #0,D0.
+TESTS[strict_zero_ram_native]="0000 0000 0000 0000"
+# Pass one caches MOVEQ #1 at a host-injected RAM address. The harness then
+# rewrites that same address to MOVEQ #2; pass two must retrace it and pass three
+# must execute the replacement natively rather than replaying stale code.
+TESTS[host_code_reuse_coherence]="7001"
+EXPECTED_D0[host_code_reuse_coherence]="00000002"
+# Pass one rewrites the mutable body into a stable BRA.W to a MOVEQ #9 target,
+# invalidating the traced block. Pass two retraces the rewritten stream without
+# further stores. Pass three must retire the stable stream natively and yield 9;
+# stale code, missed invalidation, or an interpreter-only replay cannot pass.
+TESTS[cache_disabled_selfmod_replay]="6000 003C 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 4E71 7007 31FC 7009 1060 31FC 6000 1040 31FC 001C 1042 4EF8 1060 4E71 4E71 4E71 4E71 7001"
+EXPECTED_D0[cache_disabled_selfmod_replay]="00000009"
+# Runtime helper register-field decode: 205f is MOVEA.L (A7)+,A0. A second
+# native pass must load A0 and restore A7, never byte-swap it into (A0)+,A7.
+TESTS[movea_l_sp_postinc_cov]="2F3C 1234 5678 205F"
+# MOVEA.L (A0)+,A0: destination assignment wins over source postincrement.
+# This must be generated natively rather than hidden behind a runtime override.
+TESTS[movea_l_postinc_alias]="207C 0000 9000 20BC 1234 5678 2058"
+# ADD.L yields zero; BGT must remain not-taken after end-of-block canonical
+# register writeback and branch finalisation reload the architectural NZCV.
+TESTS[branch_flush_bgt_zero]="700C 72F4 D280 6E04 7401 6002 7402"
 # NOP_TRIPLET: additional decode/dispatch stream-length sanity for repeated NOPs
 TESTS[nop_triplet]="4E71 4E71 4E71"
 # --- HIGH-RISK OPCODE VECTORS ---
@@ -264,6 +1068,9 @@ TESTS[rol_word]="203C FFFF 8001 E358"
 # Register BTST uses bit mod 32, so bit 31 should test set → Z=0
 # MOVEQ #31,D1 = 721F; MOVE.L #0x80000000,D0 = 203C 8000 0000; BTST D1,D0 = 0300
 TESTS[btst_reg_high_bit]="721F 203C 8000 0000 0300"
+# Native byte-EA path: BTST #7,(d16,A0) must use the shared readbyte primitive,
+# preserve X/N/V/C, and clear Z for a set high bit.
+TESTS[btst_b_d16_highbit]="207C 0000 9000 10BC 0080 44FC 001B 0828 0007 0000 40C1"
 # MULS_NEG_NEG: MOVEQ #-3,D0 (0xFFFFFFFD); MOVEQ #-5,D1 (0xFFFFFFFB); MULS D1,D0
 # (-3)*(-5) = 15, result in D0.L
 # MOVEQ #-3,D0 = 70FD; MOVEQ #-5,D1 = 72FB; MULS D1,D0 = C1C1
@@ -335,6 +1142,10 @@ TESTS[move_to_mem_and_back]="41F9 0000 2000 203C DEAD BEEF 2080 4280 2210"
 # 48E0 F000 = MOVEM.L D0-D3,-(A0)
 # 4CD8 00F0 = MOVEM.L (A0)+,D4-D7
 TESTS[movem_predec_postinc]="41F9 0000 3000 7001 7202 7403 7604 48E0 F000 7000 7200 7400 7600 4CD8 00F0"
+# MOVEM_NO_WRITEBACK: MOVEM.L (A0),D1-D4 must load through a temporary EA and leave A0 unchanged.
+# This covers the control-mode no-writeback form distinct from (A0)+.
+# LEA $3000,A0; seed four longwords with MOVE.L #imm,(A0)+; reset A0; MOVEM.L (A0),D1-D4.
+TESTS[movem_no_writeback]="41F8 3000 20FC 1111 1111 20FC 2222 2222 20FC 3333 3333 20FC 4444 4444 41F8 3000 4CD0 001E"
 # MOVEM_PREDEC_MIXED_ORDER: mixed D/A mask through predecrement + postincrement restore path
 # LEA $3000,A0; D0=0x11111111; D1=0x22222222; A1=$3333;
 # MOVEM.L D0/D1/A1,-(A0) with reversed predec mask 0xC040;
@@ -381,6 +1192,255 @@ TESTS[roxr_reg_count_32]="003C 0010 7001 7220 E2B0"
 # Count=0 semantics are special (no data rotation, flag handling edge).
 # ORI.B #$10,CCR = 003C 0010; MOVE.L #$12345678,D0 = 203C 1234 5678; MOVEQ #0,D1 = 7200; ROXR.L D1,D0 = E2B0
 TESTS[roxr_reg_count_0]="003C 0010 203C 1234 5678 7200 E2B0"
+# Effective-zero register-count ROX paths. ORI.CCR seeds X=1 and stale V=1;
+# SCS makes C architecturally observable. The full REGDUMP additionally proves
+# unchanged X/data, size-correct N/Z, and cleared V. Alternating zero and
+# negative operands exercises both Z outcomes without weakening upper-bit checks.
+TESTS[roxl_b_reg_count_63_copies_x]="003C 0012 203C 89AB CD00 727F 7C00 E330 55C6"
+EXPECTED_REG_FIELDS[roxl_b_reg_count_63_copies_x]="D0=89abcd00 D6=000000ff"
+TESTS[roxr_b_reg_count_63_copies_x]="003C 0012 203C 89AB CDEF 727F 7C00 E230 55C6"
+EXPECTED_REG_FIELDS[roxr_b_reg_count_63_copies_x]="D0=89abcdef D6=000000ff"
+TESTS[roxl_w_reg_count_51_copies_x]="003C 0012 203C 89AB 0000 7233 7C00 E370 55C6"
+EXPECTED_REG_FIELDS[roxl_w_reg_count_51_copies_x]="D0=89ab0000 D6=000000ff"
+TESTS[roxr_w_reg_count_51_copies_x]="003C 0012 203C 89AB CDEF 7233 7C00 E270 55C6"
+EXPECTED_REG_FIELDS[roxr_w_reg_count_51_copies_x]="D0=89abcdef D6=000000ff"
+TESTS[roxl_l_reg_count_33_copies_x]="003C 0012 203C 0000 0000 7221 7C00 E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_reg_count_33_copies_x]="D0=00000000 D6=000000ff"
+TESTS[roxr_l_reg_count_33_copies_x]="003C 0012 203C 89AB CDEF 7221 7C00 E2B0 55C6"
+EXPECTED_REG_FIELDS[roxr_l_reg_count_33_copies_x]="D0=89abcdef D6=000000ff"
+TESTS[roxl_l_reg_count_0_copies_x]="003C 0012 203C 1234 5678 7200 7C00 E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_reg_count_0_copies_x]="D0=12345678 D6=000000ff"
+TESTS[roxr_reg_count_0_copies_x]="003C 0012 203C 1234 5678 7200 7C00 E2B0 55C6"
+EXPECTED_REG_FIELDS[roxr_reg_count_0_copies_x]="D0=12345678 D6=000000ff"
+# Keep D0-D7 and A0-A5 populated in the allocator before the effective-zero
+# rotate. MOVEA does not disturb the CCR; ORI.CCR is deliberately last so X=1
+# and stale V=1 must be replaced by the rotate's V=0 result.
+ROX_PRESSURE_PREFIX="203C 89AB CDEF 7221 7402 7603 7804 7A05 7C06 7E07 207C 0000 2000 227C 0000 2100 247C 0000 2200 267C 0000 2300 287C 0000 2400 2A7C 0000 2500 003C 0012"
+TESTS[roxl_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
+TESTS[roxr_l_reg_count_33_pressure]="$ROX_PRESSURE_PREFIX E2B0 55C6"
+EXPECTED_REG_FIELDS[roxr_l_reg_count_33_pressure]="D0=89abcdef D6=000000ff"
+# Keep the allocator populated across a runtime count-zero ASR. The JIT must
+# preserve the incoming X binding on the branch that skips carry publication.
+SHIFT_COUNT0_PRESSURE_PREFIX="203C 89AB CDEF 7200 7402 7603 7804 7A05 7C06 7E07 207C 0000 2000 227C 0000 2100 247C 0000 2200 267C 0000 2300 287C 0000 2400 2A7C 0000 2500 003C 0012"
+TESTS[asr_l_reg_count0_pressure_preserves_x]="$SHIFT_COUNT0_PRESSURE_PREFIX E2A0 40C6"
+EXPECTED_REG_FIELDS[asr_l_reg_count0_pressure_preserves_x]="D0=89abcdef D6=00002718"
+unset ROX_PRESSURE_PREFIX SHIFT_COUNT0_PRESSURE_PREFIX
+
+# Register-count shift effective-zero contract. Seed X=1 and stale V=1,
+# materialise the shift's required C=0 into D5, then consume X with a
+# same-width effective-zero ROXL and materialise its required C=X into D6.
+# ROXL derives the same N/Z/V result as the shift without obscuring X.
+SHIFT_ZERO_PREFIX="003C 0012 203C 89AB CDEF 7200 7A00 7C00"
+SHIFT_ZERO_EXPECTED="D0=89abcdef D5=00000000 D6=000000ff"
+TESTS[asl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E320 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[asl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E360 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[asl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E3A0 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[asl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E220 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[asr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E260 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[asr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[asr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E2A0 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[asr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E328 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[lsl_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E368 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[lsl_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E3A8 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[lsl_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E228 55C5 E330 55C6"
+EXPECTED_REG_FIELDS[lsr_b_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E268 55C5 E370 55C6"
+EXPECTED_REG_FIELDS[lsr_w_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+TESTS[lsr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_PREFIX E2A8 55C5 E3B0 55C6"
+EXPECTED_REG_FIELDS[lsr_l_reg_count_0_preserves_x]="$SHIFT_ZERO_EXPECTED"
+unset SHIFT_ZERO_PREFIX SHIFT_ZERO_EXPECTED
+
+# ADDX/SUBX register-alias contract. Source and destination may name the same
+# architectural register; both source operands must be read before writeback,
+# and the incoming X bit must participate exactly once.
+TESTS[addx_b_same_reg_consumes_x]="003C 0010 7400 D502"
+EXPECTED_REG_FIELDS[addx_b_same_reg_consumes_x]="D2=00000001"
+TESTS[addx_w_same_reg_consumes_x]="003C 0010 7400 D542"
+EXPECTED_REG_FIELDS[addx_w_same_reg_consumes_x]="D2=00000001"
+TESTS[addx_l_same_reg_consumes_x]="003C 0010 7400 D582"
+EXPECTED_REG_FIELDS[addx_l_same_reg_consumes_x]="D2=00000001"
+TESTS[subx_b_same_reg_consumes_x]="003C 0010 7400 9502"
+EXPECTED_REG_FIELDS[subx_b_same_reg_consumes_x]="D2=000000ff"
+TESTS[subx_w_same_reg_consumes_x]="003C 0010 7400 9542"
+EXPECTED_REG_FIELDS[subx_w_same_reg_consumes_x]="D2=0000ffff"
+TESTS[subx_l_same_reg_consumes_x]="003C 0010 7400 9582"
+EXPECTED_REG_FIELDS[subx_l_same_reg_consumes_x]="D2=ffffffff"
+TESTS[addx_b_distinct_reg_consumes_x]="003C 0010 7400 7600 D503"
+EXPECTED_REG_FIELDS[addx_b_distinct_reg_consumes_x]="D2=00000001 D3=00000000"
+TESTS[addx_w_distinct_reg_consumes_x]="003C 0010 7400 7600 D543"
+EXPECTED_REG_FIELDS[addx_w_distinct_reg_consumes_x]="D2=00000001 D3=00000000"
+TESTS[addx_l_distinct_reg_consumes_x]="003C 0010 7400 7600 D583"
+EXPECTED_REG_FIELDS[addx_l_distinct_reg_consumes_x]="D2=00000001 D3=00000000"
+TESTS[subx_b_distinct_reg_consumes_x]="003C 0010 7400 7600 9503"
+EXPECTED_REG_FIELDS[subx_b_distinct_reg_consumes_x]="D2=000000ff D3=00000000"
+TESTS[subx_w_distinct_reg_consumes_x]="003C 0010 7400 7600 9543"
+EXPECTED_REG_FIELDS[subx_w_distinct_reg_consumes_x]="D2=0000ffff D3=00000000"
+TESTS[subx_l_distinct_reg_consumes_x]="003C 0010 7400 7600 9583"
+EXPECTED_REG_FIELDS[subx_l_distinct_reg_consumes_x]="D2=ffffffff D3=00000000"
+# Sticky-Z controls cover both padding polarities and all widths: carry-in
+# propagating into a zero result, no carry-in with a zero result, SBC borrow-in
+# ending in zero, and both old-Z states. Register setup precedes CCR seeding
+# because MOVE clears N/Z/V/C.
+TESTS[addx_b_zero_sticky_z_set]="74FF 7600 003C 0014 D503"
+EXPECTED_REG_FIELDS[addx_b_zero_sticky_z_set]="D2=ffffff00 D3=00000000 SR=2715"
+TESTS[addx_w_zero_sticky_z_set]="243C 0000 FFFF 7600 003C 0014 D543"
+EXPECTED_REG_FIELDS[addx_w_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2715"
+TESTS[addx_l_zero_sticky_z_set]="243C FFFF FFFF 7600 003C 0014 D583"
+EXPECTED_REG_FIELDS[addx_l_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2715"
+TESTS[addx_b_zero_without_x_sticky_z_set]="7400 7600 023C 0000 003C 0004 D503"
+EXPECTED_REG_FIELDS[addx_b_zero_without_x_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[addx_w_zero_without_x_sticky_z_set]="7400 7600 023C 0000 003C 0004 D543"
+EXPECTED_REG_FIELDS[addx_w_zero_without_x_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[addx_l_zero_without_x_sticky_z_set]="7400 7600 023C 0000 003C 0004 D583"
+EXPECTED_REG_FIELDS[addx_l_zero_without_x_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[roxl_l_zero_count_copies_cleared_x]="7000 7200 7C00 023C 0000 003C 0004 E3B0 55C6"
+EXPECTED_REG_FIELDS[roxl_l_zero_count_copies_cleared_x]="D0=00000000 D1=00000000 D6=00000000 SR=2704"
+TESTS[subx_b_zero_sticky_z_set]="7401 7600 003C 0014 9503"
+EXPECTED_REG_FIELDS[subx_b_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[subx_w_zero_sticky_z_set]="7401 7600 003C 0014 9543"
+EXPECTED_REG_FIELDS[subx_w_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[subx_l_zero_sticky_z_set]="7401 7600 003C 0014 9583"
+EXPECTED_REG_FIELDS[subx_l_zero_sticky_z_set]="D2=00000000 D3=00000000 SR=2704"
+TESTS[addx_b_zero_sticky_z_clear]="243C 0000 00FF 7600 023C 0000 003C 0010 D503"
+EXPECTED_REG_FIELDS[addx_b_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2711"
+TESTS[addx_w_zero_sticky_z_clear]="243C 0000 FFFF 7600 023C 0000 003C 0010 D543"
+EXPECTED_REG_FIELDS[addx_w_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2711"
+TESTS[addx_l_zero_sticky_z_clear]="243C FFFF FFFF 7600 023C 0000 003C 0010 D583"
+EXPECTED_REG_FIELDS[addx_l_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2711"
+TESTS[subx_b_zero_sticky_z_clear]="7401 7600 023C 0000 003C 0010 9503"
+EXPECTED_REG_FIELDS[subx_b_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2700"
+TESTS[subx_w_zero_sticky_z_clear]="7401 7600 023C 0000 003C 0010 9543"
+EXPECTED_REG_FIELDS[subx_w_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2700"
+TESTS[subx_l_zero_sticky_z_clear]="7401 7600 023C 0000 003C 0010 9583"
+EXPECTED_REG_FIELDS[subx_l_zero_sticky_z_clear]="D2=00000000 D3=00000000 SR=2700"
+
+# Signed-overflow and no-X controls complete the result/N/V/C/X contract for
+# each active byte/word/long legacy helper.
+TESTS[addx_b_overflow_with_x]="747F 7600 023C 0000 003C 0010 D503"
+EXPECTED_REG_FIELDS[addx_b_overflow_with_x]="D2=00000080 D3=00000000 SR=270a"
+TESTS[addx_w_overflow_with_x]="243C 0000 7FFF 7600 023C 0000 003C 0010 D543"
+EXPECTED_REG_FIELDS[addx_w_overflow_with_x]="D2=00008000 D3=00000000 SR=270a"
+TESTS[addx_l_overflow_with_x]="243C 7FFF FFFF 7600 023C 0000 003C 0010 D583"
+EXPECTED_REG_FIELDS[addx_l_overflow_with_x]="D2=80000000 D3=00000000 SR=270a"
+TESTS[subx_b_overflow_with_x]="7480 7600 023C 0000 003C 0010 9503"
+EXPECTED_REG_FIELDS[subx_b_overflow_with_x]="D2=ffffff7f D3=00000000 SR=2702"
+TESTS[subx_w_overflow_with_x]="243C 0000 8000 7600 023C 0000 003C 0010 9543"
+EXPECTED_REG_FIELDS[subx_w_overflow_with_x]="D2=00007fff D3=00000000 SR=2702"
+TESTS[subx_l_overflow_with_x]="243C 8000 0000 7600 023C 0000 003C 0010 9583"
+EXPECTED_REG_FIELDS[subx_l_overflow_with_x]="D2=7fffffff D3=00000000 SR=2702"
+TESTS[subx_b_without_x]="7405 7603 023C 0000 9503"
+EXPECTED_REG_FIELDS[subx_b_without_x]="D2=00000002 D3=00000003 SR=2700"
+TESTS[subx_w_without_x]="7405 7603 023C 0000 9543"
+EXPECTED_REG_FIELDS[subx_w_without_x]="D2=00000002 D3=00000003 SR=2700"
+TESTS[subx_l_without_x]="7405 7603 023C 0000 9583"
+EXPECTED_REG_FIELDS[subx_l_without_x]="D2=00000002 D3=00000003 SR=2700"
+
+# ORI/ANDI/EORI to CCR consume the guest immediate at translation time. Exact
+# masks prove all five bits; borrow-produced flags prove physical-C polarity is
+# normalized before the logical merge.
+TESTS[ccr_ori_exact_bits]="023C 0000 003C 001F"
+EXPECTED_REG_FIELDS[ccr_ori_exact_bits]="SR=271f"
+TESTS[ccr_andi_exact_mask]="023C 0000 003C 001F 023C 000A"
+EXPECTED_REG_FIELDS[ccr_andi_exact_mask]="SR=270a"
+TESTS[ccr_eori_exact_toggle]="023C 0000 003C 001F 0A3C 0015"
+EXPECTED_REG_FIELDS[ccr_eori_exact_toggle]="SR=270a"
+TESTS[ccr_ori_after_borrow_flags]="7000 7201 9001 003C 0006"
+EXPECTED_REG_FIELDS[ccr_ori_after_borrow_flags]="D0=000000ff D1=00000001 SR=271f"
+TESTS[ccr_andi_after_borrow_flags]="7000 7201 9001 023C 0011"
+EXPECTED_REG_FIELDS[ccr_andi_after_borrow_flags]="D0=000000ff D1=00000001 SR=2711"
+TESTS[ccr_eori_after_borrow_flags]="7000 7201 9001 0A3C 001F"
+EXPECTED_REG_FIELDS[ccr_eori_after_borrow_flags]="D0=000000ff D1=00000001 SR=2706"
+
+# ABCD/SBCD/NBCD share C->X and sticky-Z semantics. Clear the five defined
+# CCR bits before installing each incoming X/Z state so witnesses are exact.
+TESTS[bcd_abcd_zero_sticky_set]="7000 7200 023C 00E0 003C 0004 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_zero_sticky_set]="D0=00000000 D1=00000000 SR=2704"
+TESTS[bcd_abcd_zero_sticky_clear]="7000 7200 023C 00E0 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_zero_sticky_clear]="D0=00000000 D1=00000000 SR=2700"
+TESTS[bcd_abcd_nonzero_clears_sticky]="7001 7201 023C 00E0 003C 0004 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_nonzero_clears_sticky]="D0=00000002 D1=00000001 SR=2700"
+TESTS[bcd_abcd_carry_zero]="203C 0000 0099 7201 023C 00E0 003C 0004 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_carry_zero]="D0=00000000 D1=00000001 SR=2715"
+TESTS[bcd_abcd_same_reg_with_x]="203C A5A5 0099 023C 00E0 003C 0014 C100"
+EXPECTED_REG_FIELDS[bcd_abcd_same_reg_with_x]="D0=a5a50099 SR=2711"
+
+TESTS[bcd_sbcd_zero_sticky_set]="7000 7200 023C 00E0 003C 0004 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_zero_sticky_set]="D0=00000000 D1=00000000 SR=2704"
+TESTS[bcd_sbcd_zero_sticky_clear]="7000 7200 023C 00E0 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_zero_sticky_clear]="D0=00000000 D1=00000000 SR=2700"
+TESTS[bcd_sbcd_borrow]="7000 7201 023C 00E0 003C 0004 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_borrow]="D0=00000099 D1=00000001 SR=2711"
+TESTS[bcd_sbcd_same_reg_with_x]="203C A5A5 0000 023C 00E0 003C 0014 8100"
+EXPECTED_REG_FIELDS[bcd_sbcd_same_reg_with_x]="D0=a5a50099 SR=2711"
+
+TESTS[bcd_nbcd_zero_sticky_set]="7000 023C 00E0 003C 0004 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_zero_sticky_set]="D0=00000000 SR=2704"
+TESTS[bcd_nbcd_zero_sticky_clear]="7000 023C 00E0 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_zero_sticky_clear]="D0=00000000 SR=2700"
+TESTS[bcd_nbcd_nonzero]="7001 023C 00E0 003C 0004 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_nonzero]="D0=00000099 SR=2711"
+TESTS[bcd_nbcd_with_x]="7000 023C 00E0 003C 0014 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_with_x]="D0=00000099 SR=2711"
+
+# Decimal boundaries plus non-decimal nibbles distinguish the authoritative
+# 68040 correction equations from a superficially plausible per-digit rewrite.
+# The two-ABCD vector also proves that the first decimal carry is consumed as X
+# by the next native instruction and then replaced by that instruction's carry.
+TESTS[bcd_abcd_decimal_09_plus_01]="7009 7201 023C 00E0 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_decimal_09_plus_01]="D0=00000010 D1=00000001 SR=2700"
+TESTS[bcd_abcd_invalid_nibble_exact]="700A 720F 023C 00E0 003C 0010 C101"
+EXPECTED_REG_FIELDS[bcd_abcd_invalid_nibble_exact]="D0=00000020 D1=0000000f SR=2700"
+TESTS[bcd_abcd_extend_chain]="203C 0000 0099 7201 7400 7600 023C 00E0 003C 0004 C101 C503"
+EXPECTED_REG_FIELDS[bcd_abcd_extend_chain]="D0=00000000 D1=00000001 D2=00000001 D3=00000000 SR=2700"
+TESTS[bcd_sbcd_decimal_10_minus_01]="7010 7201 023C 00E0 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_decimal_10_minus_01]="D0=00000009 D1=00000001 SR=2700"
+TESTS[bcd_sbcd_invalid_nibble_exact]="7000 720A 023C 00E0 003C 0010 8101"
+EXPECTED_REG_FIELDS[bcd_sbcd_invalid_nibble_exact]="D0=0000008f D1=0000000a SR=2711"
+TESTS[bcd_nbcd_decimal_10]="7010 023C 00E0 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_decimal_10]="D0=00000090 SR=2711"
+TESTS[bcd_nbcd_invalid_nibble_exact]="700A 023C 00E0 003C 0010 4800"
+EXPECTED_REG_FIELDS[bcd_nbcd_invalid_nibble_exact]="D0=0000008f SR=2711"
+
+# Opcode-first replay vectors anchor NATEXEC at the audited instruction itself.
+# INIT_REGS supplies the exact state seen at native entry. The invalid-nibble
+# cases distinguish the 68040 correction model from the old per-digit path.
+TESTS[bcd_native_abcd_zero_sticky]="C101"
+EXPECTED_REG_FIELDS[bcd_native_abcd_zero_sticky]="D0=00000000 D1=00000000 SR=2704"
+TESTS[bcd_native_abcd_invalid_extend]="C101"
+EXPECTED_REG_FIELDS[bcd_native_abcd_invalid_extend]="D0=00000020 D1=0000000f SR=2700"
+TESTS[bcd_native_sbcd_invalid_borrow]="8101"
+EXPECTED_REG_FIELDS[bcd_native_sbcd_invalid_borrow]="D0=0000008f D1=0000000a SR=2711"
+TESTS[bcd_native_nbcd_invalid_borrow]="4800"
+EXPECTED_REG_FIELDS[bcd_native_nbcd_invalid_borrow]="D0=0000008f SR=2711"
+
+# ABCD/SBCD predecrement encode source and destination address registers
+# independently. A7 must decrement by two for each byte access, including both
+# decrements when source and destination are the same A7. NBCD provides the
+# generic single-EA A7 control.
+TESTS[bcd_abcd_predec_src_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0099 41F9 0000 2041 4FF9 0000 2082 023C 00E0 003C 0004 C10F"
+EXPECTED_REG_FIELDS[bcd_abcd_predec_src_a7]="A0=00002040 A7=00002080 SR=2715"
+TESTS[bcd_abcd_predec_dst_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0099 41F9 0000 2081 4FF9 0000 2042 023C 00E0 003C 0004 CF08"
+EXPECTED_REG_FIELDS[bcd_abcd_predec_dst_a7]="A0=00002080 A7=00002040 SR=2715"
+TESTS[bcd_abcd_predec_a7_alias]="43F9 0000 2082 12FC 0001 45F9 0000 2080 14FC 0099 4FF9 0000 2084 023C 00E0 003C 0004 CF0F"
+EXPECTED_REG_FIELDS[bcd_abcd_predec_a7_alias]="A7=00002080 SR=2715"
+TESTS[bcd_sbcd_predec_src_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0000 41F9 0000 2041 4FF9 0000 2082 023C 00E0 003C 0004 810F"
+EXPECTED_REG_FIELDS[bcd_sbcd_predec_src_a7]="A0=00002040 A7=00002080 SR=2711"
+TESTS[bcd_sbcd_predec_dst_a7]="43F9 0000 2080 12FC 0001 45F9 0000 2040 14FC 0000 41F9 0000 2081 4FF9 0000 2042 023C 00E0 003C 0004 8F08"
+EXPECTED_REG_FIELDS[bcd_sbcd_predec_dst_a7]="A0=00002080 A7=00002040 SR=2711"
+TESTS[bcd_sbcd_predec_a7_alias]="43F9 0000 2082 12FC 0001 45F9 0000 2080 14FC 0000 4FF9 0000 2084 023C 00E0 003C 0004 8F0F"
+EXPECTED_REG_FIELDS[bcd_sbcd_predec_a7_alias]="A7=00002080 SR=2711"
+TESTS[bcd_nbcd_predec_a7]="43F9 0000 2040 12FC 0001 4FF9 0000 2042 023C 00E0 003C 0004 4827"
+EXPECTED_REG_FIELDS[bcd_nbcd_predec_a7]="A7=00002040 SR=2711"
+
 # ROXL_REG_COUNT_63: ORI #$10,CCR (set X); MOVE.L #$A5A55A5A,D0; MOVEQ #63,D1; ROXL.L D1,D0
 # Stresses masked high register-count behavior near the 6-bit limit.
 # ORI.B #$10,CCR = 003C 0010; MOVE.L #$A5A55A5A,D0 = 203C A5A5 5A5A; MOVEQ #63,D1 = 723F; ROXL.L D1,D0 = E3B0
@@ -440,6 +1500,23 @@ TESTS[link_unlk]="41F9 0000 4000 2E48 4E55 FFF8 7042 2A80 4280 2215 4E5D"
 # INDEXED_ADDR_MODE: MOVE.L #$DEADBEEF to (4,A0), read back via (0,A0,D1.L)
 # LEA $5000,A0; MOVE.L #$DEADBEEF,(4,A0); CLR.L D0; MOVEQ #4,D1; MOVE.L (0,A0,D1.L),D0
 TESTS[indexed_addr_mode]="41F9 0000 5000 217C DEAD BEEF 0004 4280 7204 2030 1800"
+# INDEXED_FULL_NEG_BASE: first execute BSR.B/RTS so constant register-sourced
+# PC_P addition exercises the pointer-width contract, then use a 68020
+# full-format (bd,A0,D1.L) EA with a negative word base displacement and a
+# sign-bit-set guest address. Guest EA arithmetic must remain modulo 2^32;
+# treating the displacement as a host-pointer marker leaves dirty upper X bits
+# and makes correctness depend on every later consumer re-applying UXTW.
+# BSR.B sub; RTS; LEA $E0000010,A0; D0=0; D1=0;
+# MOVE.L (-16,A0,D1.L),D0.
+TESTS[indexed_full_neg_base]="7001 6104 7202 6004 7055 4E75 41F9 E000 0010 7000 7200 2030 1920 FFF0"
+# IO_BYTE_WRITE_ROUNDTRIP: direct JIT stores must use the same byte value as
+# interpreter put_byte(). The old ARM64 helper transformed every 0x50xxxxxx
+# write except two scanner offsets, so 0x11 read back as 0xDE. A1 targets the
+# low-NuBus/JIT-cache alias gap: byte/word/long writes must be ignored and reads
+# must return width-correct all-ones open bus values. Native replay resets the
+# architectural input and executes this straight-line block a second time after
+# forcing immediate RAM L2 promotion.
+TESTS[io_byte_write_roundtrip]="7011 1080 4281 1210 1280 3280 2280 1411 3611 2811"
 # BYTE_POSTINC: write 4 bytes via (A0)+, read back via (A1)+
 # LEA $6000,A0; LEA $6000,A1; MOVEQ #$11,D4; MOVE.B D4,(A0)+;
 # MOVEQ #$22,D5; MOVE.B D5,(A0)+; MOVEQ #$33,D6; MOVE.B D6,(A0)+;
@@ -755,6 +1832,11 @@ TESTS[dbgt_false_dec_terminal_z_set]="7000 B080 5EC8 0002 7407"
 TESTS[dble_false_dec_terminal_gt_set]="7000 7201 0C81 0000 0000 5FC8 0002 7407"
 # DBCC_CCR_PRESERVE_BEQ_TAKEN: DBEQ (condition true) should not clobber Z; subsequent BEQ must remain taken
 TESTS[dbcc_ccr_preserve_beq_taken]="7001 B080 57C8 0002 6702 7207 7408"
+# DBRA's host-only terminal test must not replace a preceding architectural Z.
+# Counter zero makes the temporary TST set Z while MOVEQ #9 left guest Z clear.
+TESTS[dbra_ccr_preserve_z_clear]="7200 7009 51C9 0002 6602 7407 7608"
+# Counter nonzero makes the temporary TST clear Z while MOVEQ #0 left guest Z set.
+TESTS[dbra_ccr_preserve_z_set]="7201 7000 51C9 0002 6702 7407 7608"
 # DBCC_CCR_PRESERVE_BNE_TAKEN: DBNE (condition true) should not clobber Z=0; subsequent BNE must remain taken
 TESTS[dbcc_ccr_preserve_bne_taken]="7001 7201 0C81 0000 0002 56C8 0002 6602 7407 7608"
 # DBCC_CCR_PRESERVE_BCS_TAKEN: DBCS (condition true) should not clobber C=1; subsequent BCS must remain taken
@@ -957,11 +2039,95 @@ TESTS[bfclr_reg_edge]="203C FFFF FFFF ECC0 0208"
 TESTS[bfchg_reg_edge]="203C FF00 FF00 EAC0 0208"
 TESTS[bftst_reg_edge]="203C 8000 0000 E8C0 0008"
 TESTS[bfins_reg_edge]="7042 203C FFFF 0000 EFC0 0200"
+# All eight bitfield operations share one runtime transaction and raw 32-bit EA contract.
+TESTS[bitfield_mem_an_family]="41F9 0000 9100 20BC 89AB CDEF E8D0 0008 E9D0 1008 EAD0 0008 EBD0 2008 ECD0 0008 EDD0 3008 EED0 0008 283C 0000 005A EFD0 4008 2410"
+TESTS[bitfield_d16_an]="41F9 0000 9100 217C 8000 0000 0002 E8E8 0008 0002 2428 0002"
+TESTS[bitfield_indexed_an]="7000 41F9 0000 9100 20BC 8000 0000 E8F0 0008 0000 2410"
+TESTS[bitfield_absw]="41F8 1100 20BC 8000 0000 E8F8 0008 1100 2410"
+TESTS[bitfield_absl]="41F9 0000 9100 20BC 8000 0000 E8F9 0008 0000 9100 2410"
+# Read-only PC-relative forms branch over their inline field data after the test.
+TESTS[bitfield_pc_d16]="E8FA 0008 0004 6004 8000 0000"
+TESTS[bitfield_pc_indexed]="7000 E8FB 0008 0004 6004 8000 0000"
 TESTS[pack_dn_edge]="203C 0000 1234 8140 0000"
+# PACK -(A7),-(A7) exercises A7's two-byte byte-step, source/destination
+# register aliasing, independent source reads, and ordered dual writeback.
+TESTS[pack_predec_a7_alias]="207C 0000 9204 20BC 1200 3400 2E7C 0000 9208 8F4F 0000 7000 1017"
 TESTS[unpk_dn_edge]="203C 0000 0012 8180 0000"
-TESTS[movep_l_roundtrip]="41F9 0000 9100 203C 1234 5678 01C8 0000 1210 1428 0002 1628 0004 1828 0006"
+# UNPK -(A7),-(A7) has a two-byte source decrement and an additional
+# two-byte destination decrement when both encoded operands alias A7.
+TESTS[unpk_predec_a7_alias]="207C 0000 9306 20BC 1200 0000 2E7C 0000 9308 8F8F 0000 7000 3017"
+# CHK2.W equality sets Z, clears C, and must preserve the seeded X/N/V bits.
+TESTS[chk2_w_equal_preserve_ccr]="207C 0000 9400 20BC FFF6 000A 700A 44FC 001A 02D0 0000 40C1"
+# CHK2.B with an address-register selector must compare all 32 bits, while the
+# adjacent byte bounds are sign-extended; d16 also checks EA extension order.
+TESTS[chk2_b_areg_fullwidth_d16]="247C 0000 9504 34BC 807F 207C 0000 9500 227C 1000 0050 44FC 001A 00E8 9000 0004 40C2"
+# Reversed long bounds use CHK2's wrapped-range rule; equality with the lower
+# bound deliberately leaves both Z and C set. Absolute-long covers a distinct EA.
+TESTS[chk2_l_wrapped_absl]="207C 0000 9600 20FC 0000 0064 20BC FFFF FF9C 7064 44FC 001A 04F9 0000 0000 9600 40C1"
+# Install a local vector-6 handler, request CHK2 trapping, and make the handler
+# the sole path that sets D7=$66 before joining the harness sentinel.
+TESTS[chk2_w_trap_vector6]="7000 4E7B 0801 23FC 0000 102A 0000 0018 207C 0000 9700 20BC 0000 000A 7014 44FC 001A 02D0 0800 60FE 4E71 7E66"
+# Brief indexed CHK2.W reaches an interior value and clears Z/C while
+# preserving seeded X/N/V; D1.W participates in effective-address formation.
+TESTS[chk2_w_indexed_inrange]="207C 0000 9900 20BC FFF6 000A 207C 0000 98F0 223C 0000 0010 7005 44FC 001A 02F0 0000 1000 40C2"
+# Full-format indexed CHK2.L uses a signed word base displacement before the
+# two ordered long bound reads; -50 lies strictly inside [-100,100].
+TESTS[chk2_l_fullindexed_inrange]="207C 0000 9A00 20FC FFFF FF9C 20BC 0000 0064 207C 0000 9A10 7200 203C FFFF FFCE 44FC 001A 04F0 0000 1920 FFF0 40C2"
+# PC-relative CHK2.W resolves its d16 base from opcode+4, reads inline bounds,
+# and rejoins before a branch skips the embedded data.
+TESTS[chk2_w_pcrel_inrange]="7005 44FC 001A 02FA 0000 000A 40C1 6008 4E71 4E71 FFF6 000A"
+# Exercise both MOVEP directions and sizes from a negative displacement. The
+# word read must preserve D5's upper half; the long read must replace all D7;
+# byte reads retain an independent check of the four interleaved write lanes.
+TESTS[movep_l_roundtrip]="41F9 0000 9104 203C 1234 5678 01C8 FFFC 2A3C AAAA 5555 0B08 FFFC 7E00 0F48 FFFC 1228 FFFC 1428 FFFE 1610 1828 0002"
 TESTS[sr_ops_combo]="46FC 2700 007C 0010 027C F7FF 0A7C 0004 40C0"
 TESTS[moves_write_read]="41F9 0000 A000 203C DEAD BEEF 0E90 0800 2010"
+# MOVES snapshots register sources before auto-update; successful reads update
+# An before an aliased address-register destination, which therefore wins.
+TESTS[moves_predec_store_alias]="41F9 0000 9801 0E20 8800 1210"
+TESTS[moves_predec_read_alias]="41F9 0000 9804 317C 8001 FFFE 0E60 8000"
+TESTS[moves_l_indexed_store]="7000 41F9 0000 9800 203C DEAF BEEF 0EB0 0800 0000 2410"
+# MOVES.B (A0)+,A0 reads before postincrement and then lets the aliased
+# address-register destination win; byte loads into An are sign-extended.
+TESTS[moves_b_postinc_areg_alias]="207C 0000 9800 10BC 0080 0E18 8000 2008"
+# MOVES must privilege-trap before consuming the extension or touching memory.
+# Vector 8 is the sole route from the MOVES instruction to D7=$68 and sentinel;
+# IPL7 masks asynchronous guest interrupts throughout the user-mode window.
+TESTS[moves_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 0E90 0800 60FE 4E71 7E68"
+# FDBF decrements only D0.W, preserves its upper word, and branches relative
+# to the displacement-word PC while the postdecrement value is not -1.
+TESTS[fdbcc_false_decrement_branch]="203C 1234 0001 F248 0000 0008 7201 6004 7202"
+# FTRAPT without an optional operand must deliver vector 7 with the opcode PC;
+# the installed handler is the sole route past the local spin to D7=$67.
+TESTS[ftrapcc_true_vector7]="7000 4E7B 0801 23FC 0000 1018 0000 001C F27C 000F 60FE 4E71 7E67"
+# False FTRAPcc.W/L forms still fetch and skip their optional word/long
+# operands before execution continues at the exact architectural successor.
+TESTS[ftrapcc_false_operand_lengths]="F27A 0000 DEAD F27B 0000 DEAD BEEF 7005"
+# General FPP execution consumes its extension word and performs the canonical
+# arithmetic service before control resumes at the exact successor.
+TESTS[fpp_semantic_successor]="7001 F200 0000 7005"
+# FSF writes a false condition byte through the canonical FPU condition path
+# while preserving the upper 24 bits of the destination data register.
+TESTS[fscc_false_byte]="70FF F240 0000"
+# False FBcc.W/L forms consume their signed displacement widths and rejoin at
+# the exact successor without allowing either embedded value to become code.
+TESTS[fbcc_false_operand_lengths]="F280 DEAD F2C0 DEAD BEEF 7005"
+# CAS2.W/L semantic boundary: successful dual commit, first/second compare
+# failures, partial-word compare-register updates, and aliased compare fields.
+# Extension words encode Rn1/Du1/Dc1 then Rn2/Du2/Dc2.
+# CAS owns extension fetch, EA updates, compare-register failure updates and
+# successor-PC writes as one transaction. Predecrement commits after the read.
+TESTS[cas_b_success]="41F9 0000 A200 10BC 00AA 203C 1234 56AA 223C 8765 4355 0AD0 0040 1410"
+TESTS[cas_b_fail]="41F9 0000 A200 10BC 00AA 203C 1234 56BB 223C 8765 4355 0AD0 0040 1410"
+TESTS[cas_b_predec]="43F9 0000 A200 12BC 00AA 5289 203C 0000 00AA 223C 0000 0055 0AE1 0040 1411"
+TESTS[cas_w_postinc]="41F9 0000 A200 30BC 1234 203C AAAA 1234 223C BBBB 5678 0CD8 0040 3428 FFFE"
+TESTS[cas_l_d16]="41F9 0000 A200 217C 1122 3344 0004 203C 1122 3344 223C 5566 7788 0EE8 0040 0004 2428 0004"
+TESTS[cas2_w_success]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 1111 223C BABE 2222 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
+TESTS[cas2_w_fail_first]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 9999 223C DEAD 7777 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
+TESTS[cas2_w_fail_second]="207C 0000 A100 227C 0000 A104 20BC 1111 AAAA 22BC 2222 BBBB 203C CAFE 1111 223C DEAD 7777 243C 0000 3333 263C 0000 4444 0CFC 8080 90C1 2810 2A11"
+TESTS[cas2_l_success]="207C 0000 A100 227C 0000 A104 20BC 1111 2222 22BC 3333 4444 203C 1111 2222 223C 3333 4444 243C 5555 6666 263C 7777 8888 0EFC 8080 90C1 2810 2A11"
+TESTS[cas2_l_fail_second]="207C 0000 A100 227C 0000 A104 20BC 1111 2222 22BC 3333 4444 203C 1111 2222 223C 9999 AAAA 243C 5555 6666 263C 7777 8888 0EFC 8080 90C1 2810 2A11"
+TESTS[cas2_l_alias_compare]="207C 0000 A100 227C 0000 A104 20BC 1111 2222 22BC 3333 4444 203C 1111 2222 223C 5555 6666 243C 7777 8888 0EFC 8040 9080 2810 2A11"
 TESTS[adda_w_cov]="41F9 0000 1000 D0FC 0500"
 TESTS[adda_l_cov]="41F9 0000 1000 D1FC 0000 0500"
 TESTS[adda_w_neg_cov]="41F9 0000 1000 D0FC FF00"
@@ -971,6 +2137,9 @@ TESTS[mvr2usp_cov]="41F9 0000 1234 4E60 4E69 2009"
 TESTS[move_b_d16_an_cov]="41F9 0000 A000 117C 0042 0010 1028 0010"
 TESTS[move_w_d16_an_cov]="41F9 0000 A000 317C 1234 0010 3028 0010"
 TESTS[move_l_d16_an_cov]="41F9 0000 A000 217C DEAD BEEF 0010 2028 0010"
+# MOVE.L (d8,A0,D1.L),(abs.w): prove the generated indexed source and shared
+# long read/write primitives natively, without the former runtime override.
+TESTS[move_l_idx_absw_native]="207C 0000 9000 223C 0000 0004 217C DEAD BEEF 0004 21F0 1800 A000 2438 A000"
 TESTS[move_b_idx_cov]="41F9 0000 A000 117C 0042 0004 7204 1030 1000"
 TESTS[move_l_idx_scale_cov]="41F9 0000 A000 217C DEAD BEEF 0008 7202 2030 1400"
 TESTS[move_l_pc_rel_cov]="203A 0002 4E71 4E71"
@@ -999,6 +2168,277 @@ TESTS[chk_w_in_range]="7008 7214 4181"
 TESTS[chk_w_zero]="7000 7264 4181"
 # CHK.W equal: D0=D1=50
 TESTS[chk_w_equal]="7032 7232 4181"
+# CHK.W negative trap: vector 6 copies the stacked SR, frame PC, and format-2
+# instruction address to D6/D4/D5. N starts clear and must be set before the
+# frame is built; both frame addresses must identify the CHK opcode at $1018.
+TESTS[chk_w_negative_trap_n]="7000 4E7B 0801 23FC 0000 101E 0000 0018 70FF 7214 44FC 0015 4181 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.W upper-bound trap: seed X/N/Z/C, exceed the bound by one, and require
+# the frame to clear only N and identify the CHK opcode at $1018.
+TESTS[chk_w_upper_trap_n_clear]="7000 4E7B 0801 23FC 0000 101E 0000 0018 7015 7214 44FC 001D 4181 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.L negative trap: a full-width negative D0 must take vector 6, publish N,
+# preserve X/Z/C, and identify the CHK opcode at $1018 in both frame fields.
+TESTS[chk_l_negative_trap_n]="7000 4E7B 0801 23FC 0000 101E 0000 0018 70FF 7214 44FC 0015 4101 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.L upper-bound trap: $00010000 exceeds $0000ffff only in a full 32-bit
+# comparison. The frame must clear only N and identify the opcode at $1020.
+TESTS[chk_l_upper_trap_n_clear]="7000 4E7B 0801 23FC 0000 1026 0000 0018 203C 0001 0000 223C 0000 FFFF 44FC 001D 4101 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+# CHK.L non-trap: compare full-width positive values and snapshot the seeded
+# X/N/Z/C state after CHK to prove that the in-range path changes no flags.
+TESTS[chk_l_in_range_preserve_ccr]="203C 0001 0000 223C 0002 0000 44FC 001D 4101 40C6"
+
+# DIVU.W divide-by-zero: vector 5 copies stacked SR, frame PC, and format-2
+# instruction address to D6/D4/D5. The interpreter clears only V before entry;
+# the frame PC is the successor at $101e and the instruction address is $101c.
+TESTS[divu_w_zero_frame]="7000 4E7B 0801 23FC 0000 1022 0000 0014 203C 1234 5678 7200 44FC 001F 80C1 60FE 4E71 3C17 282F 0002 2A2F 0008 7E65"
+EXPECTED_REG_FIELDS[divu_w_zero_frame]="D0=12345678 D4=0000101e D5=0000101c D6=0000271d"
+# DIVS.W zero: preserve X/N/Z/C, clear V, retain D0, and publish the
+# successor/opcode pair in the vector-5 format-2 frame.
+TESTS[divs_w_zero_frame]="7000 4E7B 0801 23FC 0000 1022 0000 0014 203C 8765 4321 7200 44FC 001F 81C1 60FE 4E71 3C17 282F 0002 2A2F 0008 7E66"
+EXPECTED_REG_FIELDS[divs_w_zero_frame]="D0=87654321 D4=0000101e D5=0000101c D6=0000271d"
+# Signed word overflow must preserve incoming Z even though its ARM64 fit test
+# uses ANDS/CMP, while publishing N/V and clearing C.
+TESTS[divs_w_overflow_preserve_z]="203C 0001 0000 7201 44FC 0015 81C1 40C6"
+EXPECTED_REG_FIELDS[divs_w_overflow_preserve_z]="D0=00010000 D6=0000271e"
+TESTS[divs_w_imm_overflow_preserve_z]="203C 0001 0000 44FC 0015 81FC 0001 40C6"
+EXPECTED_REG_FIELDS[divs_w_imm_overflow_preserve_z]="D0=00010000 D6=0000271e"
+# Unsigned DIVL zero: preserve the complete CCR and dividend registers; the
+# stacked PC follows the four-byte opcode+extension while oldpc names opcode.
+TESTS[divu_l_zero_frame]="7000 4E7B 0801 23FC 0000 1024 0000 0014 203C 1357 9BDF 7200 44FC 001F 4C41 0000 60FE 4E71 3C17 282F 0002 2A2F 0008 7E67"
+EXPECTED_REG_FIELDS[divu_l_zero_frame]="D0=13579bdf D4=00001020 D5=0000101c D6=0000271f"
+# Signed DIVL zero exercises the same four-byte frame/lifecycle contract via
+# the distinct signed midfunc family.
+TESTS[divs_l_zero_frame]="7000 4E7B 0801 23FC 0000 1024 0000 0014 203C 89AB CDEF 7200 44FC 001F 4C41 0800 60FE 4E71 3C17 282F 0002 2A2F 0008 7E68"
+EXPECTED_REG_FIELDS[divs_l_zero_frame]="D0=89abcdef D4=00001020 D5=0000101c D6=0000271f"
+# Unsigned 64/32 DIVL zero retains both dividend halves and observes the same
+# precise frame contract through jnf_DIVLU64.
+TESTS[divu_l64_zero_frame]="7000 4E7B 0801 23FC 0000 102A 0000 0014 243C 1357 9BDF 263C 2468 ACE0 7200 44FC 001F 4C41 2403 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6B"
+EXPECTED_REG_FIELDS[divu_l64_zero_frame]="D2=13579bdf D3=2468ace0 D4=00001026 D5=00001022 D6=0000271f"
+# Signed 64/32 DIVL zero closes the separate jnf_DIVLS64 path.
+TESTS[divs_l64_zero_frame]="7000 4E7B 0801 23FC 0000 102A 0000 0014 243C 89AB CDEF 263C FFFF FFFF 7200 44FC 001F 4C41 2C03 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6C"
+EXPECTED_REG_FIELDS[divs_l64_zero_frame]="D2=89abcdef D3=ffffffff D4=00001026 D5=00001022 D6=0000271f"
+# When quotient and remainder name the same register, m68k_divl writes the
+# remainder first and the quotient second. These native 64/32 paths must retain
+# that architectural quotient rather than accidentally leaving the remainder.
+TESTS[divu_l64_same_dq_dr]="203C 0000 0001 223C 0000 0002 44FC 001F 4C41 0400 40C6"
+EXPECTED_REG_FIELDS[divu_l64_same_dq_dr]="D0=80000000 D6=00002718"
+TESTS[divs_l64_same_dq_dr]="203C FFFF FFFF 223C 0000 0002 44FC 001F 4C41 0C00 40C6"
+EXPECTED_REG_FIELDS[divs_l64_same_dq_dr]="D0=00000000 D6=00002714"
+# MOVEQ overwrites NZVC before the block boundary, selecting the no-flags
+# DIVL form while preserving an observable, deterministic final CCR.
+TESTS[divu_l64_same_dq_dr_nf]="203C 0000 0001 223C 0000 0002 44FC 001F 4C41 0400 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l64_same_dq_dr_nf]="D0=80000000 D6=00002714 D7=00000000"
+TESTS[divs_l64_same_dq_dr_nf]="203C FFFF FFFF 223C 0000 0002 44FC 001F 4C41 0C00 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l64_same_dq_dr_nf]="D0=00000000 D6=00002714 D7=00000000"
+# The only overflowing signed 32/32 quotient is INT32_MIN / -1. DIVL must set
+# N/V, clear C, preserve X/Z, and leave both quotient and remainder registers
+# untouched. The no-flags form remains observable through the unchanged D2.
+TESTS[divs_l32_overflow]="203C 8000 0000 223C FFFF FFFF 243C 1234 5678 44FC 0015 4C41 0802 40C6"
+EXPECTED_REG_FIELDS[divs_l32_overflow]="D0=80000000 D2=12345678 D6=0000271e"
+TESTS[divs_l32_overflow_nf]="203C 8000 0000 223C FFFF FFFF 243C 1234 5678 44FC 0015 4C41 0802 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_overflow_nf]="D0=80000000 D2=12345678 D6=00002714 D7=00000000"
+# Distinct-remainder divide-by-zero vectors expose pure-write allocation bugs:
+# neither Dq nor Dr may change before the exact vector-5 format-2 frame.
+TESTS[divu_l32_zero_distinct]="7000 4E7B 0801 23FC 0000 102A 0000 0014 203C 1357 9BDF 243C 2468 ACE0 7200 44FC 001F 4C41 0002 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6D"
+EXPECTED_REG_FIELDS[divu_l32_zero_distinct]="D0=13579bdf D2=2468ace0 D4=00001026 D5=00001022 D6=0000271f"
+TESTS[divs_l32_zero_distinct]="7000 4E7B 0801 23FC 0000 102A 0000 0014 203C 89AB CDEF 243C 7654 3210 7200 44FC 001F 4C41 0802 60FE 4E71 3C17 282F 0002 2A2F 0008 7E6E"
+EXPECTED_REG_FIELDS[divs_l32_zero_distinct]="D0=89abcdef D2=76543210 D4=00001026 D5=00001022 D6=0000271f"
+# Successful no-flags DIVL still has observable quotient/remainder and alias
+# ordering even though MOVEQ deliberately kills the instruction's NZVC result.
+TESTS[divu_l32_success_nf]="203C 0000 0064 223C 0000 0007 243C A5A5 5A5A 44FC 0015 4C41 0002 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l32_success_nf]="D0=0000000e D2=00000002 D6=00002714 D7=00000000"
+TESTS[divs_l32_success_nf]="203C FFFF FF9C 223C 0000 0007 243C A5A5 5A5A 44FC 0015 4C41 0802 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_success_nf]="D0=fffffff2 D2=fffffffe D6=00002714 D7=00000000"
+# Quotient/remainder aliasing must retain the quotient, while a source/Dr alias
+# must consume the divisor before the ordered remainder write.
+TESTS[divu_l32_same_dq_dr_nf]="203C 0000 0064 223C 0000 0007 44FC 0015 4C41 0000 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l32_same_dq_dr_nf]="D0=0000000e D6=00002714 D7=00000000"
+TESTS[divs_l32_same_dq_dr_nf]="203C FFFF FF9C 223C 0000 0007 44FC 0015 4C41 0800 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_same_dq_dr_nf]="D0=fffffff2 D6=00002714 D7=00000000"
+TESTS[divu_l32_src_dr_alias_nf]="203C 0000 0064 243C 0000 0007 44FC 0015 4C42 0002 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l32_src_dr_alias_nf]="D0=0000000e D2=00000002 D6=00002714 D7=00000000"
+TESTS[divs_l32_src_dr_alias_nf]="203C FFFF FF9C 243C 0000 0007 44FC 0015 4C42 0802 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l32_src_dr_alias_nf]="D0=fffffff2 D2=fffffffe D6=00002714 D7=00000000"
+# 64/32 overflow leaves both halves untouched. Live forms prove N/V/C/Z/X;
+# no-flags forms prove that the result path skips both architectural stores.
+TESTS[divu_l64_overflow]="203C 0000 0000 223C 0000 0001 243C 0000 0001 44FC 0015 4C41 0402 40C6"
+EXPECTED_REG_FIELDS[divu_l64_overflow]="D0=00000000 D2=00000001 D6=0000271e"
+TESTS[divu_l64_overflow_nf]="203C 0000 0000 223C 0000 0001 243C 0000 0001 44FC 0015 4C41 0402 7E00 40C6"
+EXPECTED_REG_FIELDS[divu_l64_overflow_nf]="D0=00000000 D2=00000001 D6=00002714 D7=00000000"
+TESTS[divs_l64_overflow]="203C 8000 0000 223C 0000 0001 243C 0000 0000 44FC 0015 4C41 0C02 40C6"
+EXPECTED_REG_FIELDS[divs_l64_overflow]="D0=80000000 D2=00000000 D6=0000271e"
+TESTS[divs_l64_overflow_nf]="203C 8000 0000 223C 0000 0001 243C 0000 0000 44FC 0015 4C41 0C02 7E00 40C6"
+EXPECTED_REG_FIELDS[divs_l64_overflow_nf]="D0=80000000 D2=00000000 D6=00002714 D7=00000000"
+# Register-count shifts use the low six count bits. Counts at and above the
+# operand width saturate ASR and zero logical shifts; they must not wrap modulo
+# the host W-form variable-shift width.
+TESTS[asl_b_reg_count32_boundary]="203C A5A5 0081 7220 44FC 0015 E320 40C6"
+TESTS[asl_w_reg_count32_boundary]="203C A5A5 8001 7220 44FC 0015 E360 40C6"
+TESTS[asl_l_reg_count32_boundary]="203C 8000 0001 7220 44FC 0015 E3A0 40C6"
+TESTS[asl_l_reg_zero_count32_v_clear]="203C 0000 0000 7220 44FC 0015 E3A0 40C6"
+# Replay the complete generated block with an in-block constant producer.  This
+# guards the generated path if constant propagation reaches the register helper;
+# the structural audit separately owns the helper's constant-count contract.
+TESTS[asl_l_reg_zero_count32_const_v_clear]="7000 7220 E3A0 6804 7401 6002 7402"
+EXPECTED_REG_FIELDS[asl_l_reg_zero_count32_const_v_clear]="D0=00000000 D2=00000002"
+TESTS[asl_b_reg_zero_count63_v_clear]="203C A5A5 0000 723F 44FC 0015 E320 40C6"
+TESTS[asl_w_reg_zero_count33_v_clear]="203C A5A5 0000 7221 44FC 0015 E360 40C6"
+TESTS[asr_b_reg_count32_boundary]="203C A5A5 007F 7220 44FC 0015 E220 40C6"
+TESTS[asr_w_reg_count32_boundary]="203C A5A5 7FFF 7220 44FC 0015 E260 40C6"
+TESTS[asr_l_reg_count32_boundary]="203C 7FFF FFFF 7220 44FC 0015 E2A0 40C6"
+TESTS[lsl_b_reg_count32_boundary]="203C A5A5 0081 7220 44FC 0015 E328 40C6"
+TESTS[lsl_w_reg_count32_boundary]="203C A5A5 8001 7220 44FC 0015 E368 40C6"
+TESTS[lsl_l_reg_count32_boundary]="203C 8000 0001 7220 44FC 0015 E3A8 40C6"
+TESTS[lsr_b_reg_count32_boundary]="203C A5A5 0081 7220 44FC 0015 E228 40C6"
+TESTS[lsr_w_reg_count32_boundary]="203C A5A5 8001 7220 44FC 0015 E268 40C6"
+TESTS[lsr_l_reg_count32_boundary]="203C 8000 0001 7220 44FC 0015 E2A8 40C6"
+TESTS[lsr_l_reg_count33_boundary]="203C 8000 0001 7221 44FC 0015 E2A8 40C6"
+# Replay the corresponding in-block constant producer for LSR.L.  Current
+# allocation may still materialise the count; the source audit independently
+# requires the immediate helper to saturate count 32.
+TESTS[lsr_l_reg_const_count32]="70FF 7220 E2A8 6504 7401 6002 7402"
+EXPECTED_REG_FIELDS[lsr_l_reg_const_count32]="D0=00000000 D2=00000002"
+TESTS[asl_b_reg_count32_nf]="203C A5A5 0081 7220 44FC 0015 E320 2400"
+TESTS[asl_w_reg_count32_nf]="203C A5A5 8001 7220 44FC 0015 E360 2400"
+TESTS[asl_l_reg_count32_nf]="203C 8000 0001 7220 44FC 0015 E3A0 2400"
+TESTS[asr_b_reg_count32_nf]="203C A5A5 007F 7220 44FC 0015 E220 2400"
+TESTS[asr_w_reg_count32_nf]="203C A5A5 7FFF 7220 44FC 0015 E260 2400"
+TESTS[asr_l_reg_count32_nf]="203C 8000 0001 7220 44FC 0015 E2A0 2400"
+TESTS[lsl_b_reg_count32_nf]="203C A5A5 0081 7220 44FC 0015 E328 2400"
+TESTS[lsl_w_reg_count32_nf]="203C A5A5 8001 7220 44FC 0015 E368 2400"
+TESTS[lsl_l_reg_count32_nf]="203C 0000 0001 7220 44FC 0015 E3A8 2400"
+TESTS[lsr_b_reg_count32_nf]="203C A5A5 0081 7220 44FC 0015 E228 2400"
+TESTS[lsr_w_reg_count32_nf]="203C A5A5 8001 7220 44FC 0015 E268 2400"
+TESTS[lsr_l_reg_count32_nf]="203C 8000 0001 7220 44FC 0015 E2A8 2400"
+TESTS[asl_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E120 40C6"
+TESTS[asl_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E160 40C6"
+TESTS[asl_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E1A0 40C6"
+TESTS[asr_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E020 40C6"
+TESTS[asr_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E060 40C6"
+TESTS[asr_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E0A0 40C6"
+TESTS[lsl_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E128 40C6"
+TESTS[lsl_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E168 40C6"
+TESTS[lsl_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E1A8 40C6"
+TESTS[lsr_b_reg_same_count_data]="203C A5A5 00A1 44FC 0015 E028 40C6"
+TESTS[lsr_w_reg_same_count_data]="203C A5A5 8021 44FC 0015 E068 40C6"
+TESTS[lsr_l_reg_same_count_data]="203C 8000 0021 44FC 0015 E0A8 40C6"
+TESTS[asl_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E120 2400"
+TESTS[asl_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E160 2400"
+TESTS[asl_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E1A0 2400"
+TESTS[asr_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E020 2400"
+TESTS[asr_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E060 2400"
+TESTS[asr_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E0A0 2400"
+TESTS[lsl_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E128 2400"
+TESTS[lsl_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E168 2400"
+TESTS[lsl_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E1A8 2400"
+TESTS[lsr_b_reg_same_count_data_nf]="203C A5A5 00A1 44FC 0015 E028 2400"
+TESTS[lsr_w_reg_same_count_data_nf]="203C A5A5 8021 44FC 0015 E068 2400"
+TESTS[lsr_l_reg_same_count_data_nf]="203C 8000 0021 44FC 0015 E0A8 2400"
+declare -A _SHIFT_BOUNDARY_OPCODES=(
+    [asl_b]=E320 [asl_w]=E360 [asl_l]=E3A0
+    [asr_b]=E220 [asr_w]=E260 [asr_l]=E2A0
+    [lsl_b]=E328 [lsl_w]=E368 [lsl_l]=E3A8
+    [lsr_b]=E228 [lsr_w]=E268 [lsr_l]=E2A8
+)
+declare -A _SHIFT_BOUNDARY_DATA=(
+    [b]="A5A5 0081" [w]="A5A5 8001" [l]="8000 0001"
+)
+for _shift_op in asl asr lsl lsr; do
+    for _shift_width in b w l; do
+        _shift_opcode="${_SHIFT_BOUNDARY_OPCODES[${_shift_op}_${_shift_width}]}"
+        _shift_data="${_SHIFT_BOUNDARY_DATA[$_shift_width]}"
+        for _shift_count in 31 33 63; do
+            printf -v _shift_count_hex '%02X' "$_shift_count"
+            _shift_name="${_shift_op}_${_shift_width}_reg_count${_shift_count}_boundary"
+            TESTS["$_shift_name"]="203C ${_shift_data} 72${_shift_count_hex} 44FC 0015 ${_shift_opcode} 40C6"
+            TESTS["${_shift_name}_nf"]="203C ${_shift_data} 72${_shift_count_hex} 44FC 0015 ${_shift_opcode} 2400"
+        done
+    done
+done
+unset _shift_op _shift_width _shift_opcode _shift_data _shift_count _shift_count_hex _shift_name
+unset _SHIFT_BOUNDARY_OPCODES _SHIFT_BOUNDARY_DATA
+
+declare -A _ROTATE_REGISTER_OPCODES=(
+    [rol_b]=E338 [rol_w]=E378 [rol_l]=E3B8
+    [ror_b]=E238 [ror_w]=E278 [ror_l]=E2B8
+)
+declare -A _ROTATE_ALIAS_OPCODES=(
+    [rol_b]=E138 [rol_w]=E178 [rol_l]=E1B8
+    [ror_b]=E038 [ror_w]=E078 [ror_l]=E0B8
+)
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        _rotate_key="${_rotate_op}_${_rotate_width}"
+        _rotate_opcode="${_ROTATE_REGISTER_OPCODES[$_rotate_key]}"
+        _rotate_alias_opcode="${_ROTATE_ALIAS_OPCODES[$_rotate_key]}"
+        for _rotate_count in 0 31 32 33 63; do
+            _rotate_name="${_rotate_op}_${_rotate_width}_reg_count${_rotate_count}_boundary"
+            TESTS["$_rotate_name"]="${_rotate_opcode} 40C6"
+            TESTS["${_rotate_name}_nf"]="${_rotate_opcode} 7E00 40C6"
+        done
+        _rotate_alias_name="${_rotate_op}_${_rotate_width}_reg_same_count_data"
+        TESTS["$_rotate_alias_name"]="${_rotate_alias_opcode} 40C6"
+        TESTS["${_rotate_alias_name}_nf"]="${_rotate_alias_opcode} 7E00 40C6"
+    done
+done
+TESTS[rol_l_reg_const_count64]="203C 8000 0001 7240 44FC 0015 E3B8 40C6"
+TESTS[rol_l_reg_const_count64_nf]="203C 8000 0001 7240 44FC 0015 E3B8 7E00 40C6"
+TESTS[ror_l_reg_const_count64]="203C 8000 0001 7240 44FC 0015 E2B8 40C6"
+TESTS[ror_l_reg_const_count64_nf]="203C 8000 0001 7240 44FC 0015 E2B8 7E00 40C6"
+TESTS[rol_b_imm_count8]="E118 40C6"
+TESTS[rol_b_imm_count8_nf]="E118 7E00 40C6"
+TESTS[rol_w_imm_count8]="E158 40C6"
+TESTS[rol_w_imm_count8_nf]="E158 7E00 40C6"
+TESTS[rol_l_imm_count8]="E198 40C6"
+TESTS[rol_l_imm_count8_nf]="E198 7E00 40C6"
+TESTS[ror_b_imm_count8]="E018 40C6"
+TESTS[ror_b_imm_count8_nf]="E018 7E00 40C6"
+TESTS[ror_w_imm_count8]="E058 40C6"
+TESTS[ror_w_imm_count8_nf]="E058 7E00 40C6"
+TESTS[ror_l_imm_count8]="E098 40C6"
+TESTS[ror_l_imm_count8_nf]="E098 7E00 40C6"
+TESTS[rolw_mem_native]="E7D0 40C6 3010"
+TESTS[rolw_mem_native_nf]="E7D0 7E00 3010 40C6"
+TESTS[rorw_mem_native]="E6D0 40C6 3010"
+TESTS[rorw_mem_native_nf]="E6D0 7E00 3010 40C6"
+# Fixed-count memory shifts have distinct flag-producing and no-flags wrappers.
+# The nf forms overwrite the complete CCR, including X, before observing state.
+TESTS[aslw_mem_native]="E1D0 40C6 3010"
+TESTS[aslw_mem_native_nf]="E1D0 44FC 0015 3010 40C6"
+TESTS[asrw_mem_native]="E0D0 40C6 3010"
+TESTS[asrw_mem_native_nf]="E0D0 44FC 0015 3010 40C6"
+TESTS[lslw_mem_native]="E3D0 40C6 3010"
+TESTS[lslw_mem_native_nf]="E3D0 44FC 0015 3010 40C6"
+TESTS[lsrw_mem_native]="E2D0 40C6 3010"
+TESTS[lsrw_mem_native_nf]="E2D0 44FC 0015 3010 40C6"
+TESTS[roxlw_mem_x_native]="E5D0 40C6 3010"
+TESTS[roxrw_mem_x_native]="E4D0 40C6 3010"
+EXPECTED_REG_FIELDS[rol_l_reg_const_count64]="D0=80000001 D6=00002718"
+EXPECTED_REG_FIELDS[ror_l_reg_const_count64]="D0=80000001 D6=00002718"
+EXPECTED_REG_FIELDS[rolw_mem_native]="D0=00000003 D6=00002711"
+EXPECTED_REG_FIELDS[rorw_mem_native]="D0=0000C000 D6=00002719"
+EXPECTED_REG_FIELDS[aslw_mem_native]="D0=00008000 D6=0000270A"
+EXPECTED_REG_FIELDS[aslw_mem_native_nf]="D0=00008000 D6=00002718"
+EXPECTED_REG_FIELDS[asrw_mem_native]="D0=0000C000 D6=00002719"
+EXPECTED_REG_FIELDS[asrw_mem_native_nf]="D0=0000C000 D6=00002718"
+EXPECTED_REG_FIELDS[lslw_mem_native]="D0=00000002 D6=00002711"
+EXPECTED_REG_FIELDS[lslw_mem_native_nf]="D0=00000002 D6=00002710"
+EXPECTED_REG_FIELDS[lsrw_mem_native]="D0=00004000 D6=00002711"
+EXPECTED_REG_FIELDS[lsrw_mem_native_nf]="D0=00004000 D6=00002710"
+EXPECTED_REG_FIELDS[roxlw_mem_x_native]="D0=00000003 D6=00002711"
+EXPECTED_REG_FIELDS[roxrw_mem_x_native]="D0=0000C000 D6=00002708"
+EXPECTED_REG_FIELDS[rol_l_reg_count32_boundary]="D0=80000001 D6=00002719"
+EXPECTED_REG_FIELDS[rol_l_reg_same_count_data]="D0=00000043 D6=00002711"
+unset _rotate_op _rotate_width _rotate_key _rotate_opcode _rotate_alias_opcode
+unset _rotate_count _rotate_name _rotate_alias_name
+unset _ROTATE_REGISTER_OPCODES _ROTATE_ALIAS_OPCODES
+# Taken TRAPV preserves all CCR bits and uses the same successor/opcode
+# format-2 address split as vector-5 arithmetic traps.
+TESTS[trapv_taken_frame]="7000 4E7B 0801 23FC 0000 101A 0000 001C 44FC 001F 4E76 60FE 4E71 3C17 282F 0002 2A2F 0008 7E69"
+EXPECTED_REG_FIELDS[trapv_taken_frame]="D4=00001016 D5=00001014 D6=0000271f"
+# Non-taken TRAPV must suppress vector 7, clear no CCR bit, and retire its
+# sequential successor natively. MOVE SR,D6 snapshots the preserved CCR before
+# the test hook's terminal state transition.
+TESTS[trapv_not_taken_preserve]="44FC 001D 4E76 40C6 7E6A"
+EXPECTED_REG_FIELDS[trapv_not_taken_preserve]="D6=0000271d"
 
 # SBCD borrow chain: 0x00 - 0x01 with X=0 → 0x99, borrow
 # ANDI #$EF,CCR; MOVEQ #0,D0; MOVEQ #1,D1; SBCD D1,D0
@@ -1026,6 +2466,35 @@ TESTS[movec_sfc_roundtrip]="7005 4E7B 0000 4E7A 1000"
 # MOVEC DFC: write DFC=3, read back
 TESTS[movec_dfc_roundtrip]="7003 4E7B 0001 4E7A 1001"
 
+# Full-SR operations privilege-trap from the opcode, before immediate fetch or
+# destination modification. IPL7 keeps these user-mode windows deterministic.
+TESTS[fullsr_orsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 007C DEAD 60FE 4E71 7E80"
+TESTS[fullsr_andsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 027C DEAD 60FE 4E71 7E81"
+TESTS[fullsr_eorsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 0A7C DEAD 60FE 4E71 7E82"
+TESTS[fullsr_mv2sr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 46FC DEAD 60FE 4E71 7E83"
+TESTS[fullsr_mvsr_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 40C0 60FE 4E71 7E84"
+
+# Privileged integer control families use one exact-opcode-PC semantic service.
+# Successful USP moves round-trip A0 through USP and expose the result in D0.
+TESTS[system_usp_roundtrip]="207C 1234 5678 4E60 207C 0000 0000 4E68 2008"
+# Each user-mode vector installs a local vector-8 handler and retains IPL7 while
+# clearing S, preventing an asynchronous 60 Hz interrupt from racing the short
+# user-mode window. The spin is reached only if privilege is checked late or
+# omitted; extension-bearing forms carry deliberately non-semantic data.
+TESTS[reset_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 4E70 60FE 4E71 7E70"
+TESTS[usp_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 4E68 60FE 4E71 7E68"
+# A supervisor STOP that clears S traps from the successor without committing
+# SR or entering the stopped state; user STOP traps from the opcode before use
+# of its immediate word.
+TESTS[stop_clear_s_vector8]="7000 4E7B 0801 23FC 0000 1018 0000 0020 4E72 0000 60FE 4E71 7E72"
+TESTS[stop_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 4E72 DEAD 60FE 4E71 7E71"
+TESTS[movec_privilege_vector8]="7000 4E7B 0801 23FC 0000 101C 0000 0020 46FC 0700 4E7A 1FFF 60FE 4E71 7E7A"
+TESTS[rte_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 4E73 60FE 4E71 7E73"
+TESTS[cache_privilege_vector8]="7000 4E7B 0801 23FC 0000 101A 0000 0020 46FC 0700 F428 60FE 4E71 7E42"
+# Data-cache-only and instruction-cache CPUSH forms must both advance exactly
+# once; only the latter invalidates host translations.
+TESTS[cache_supervisor_successors]="F428 F4A8 7C42"
+
 # MULL unsigned 64-bit: D0 * D1 → D2:D3 (64-bit result)
 # MOVE.L #$FFFFFFFF,D0; MOVE.L #2,D1; MULL.L D0,D2:D3
 # MULL encoding: 4C00 + EA(D0) + ext_word (D3=Dl bits15-12, D2=Dh bits2-0, unsigned=0, 64=0x400)
@@ -1052,6 +2521,51 @@ TESTS[divl_u32_max]="203C FFFF FFFF 223C 0000 0010 4C41 0002"
 TESTS[divl_s32_neg_divisor]="203C 0000 0064 223C FFFF FFF9 4C41 0802"
 # MULSL.L D1,D3:D2 — 64-bit signed negative: -100 * 1000 = -100000
 TESTS[mull_s64_neg]="243C FFFF FF9C 223C 0000 03E8 4C01 2C03"
+
+# Opcode-first native MULL closure vectors.  BVC makes the signed/unsigned
+# 32/64 flag-producing handlers observable; MOVEQ D7 selects the no-flags
+# handler for alias-only vectors after the multiply result has been consumed.
+# MULL.S32 D0,D1: -1 * 2 = -2 fits in 32 bits, so V must stay clear.
+TESTS[mulls32_negative_fit_v_native]="4C00 1800 6802 7401 7602"
+EXPECTED_REG_FIELDS[mulls32_negative_fit_v_native]="D0=00000002 D1=fffffffe D2=00000000 D3=00000002 SR=2700"
+# MULL.U64 D0,D2:D1: D0 is a read-only source and must survive 0xffffffff * 2.
+TESTS[mullu64_source_preserve_v_native]="4C00 1402 6802 7601 7802"
+EXPECTED_REG_FIELDS[mullu64_source_preserve_v_native]="D0=00000002 D1=fffffffe D2=00000001 D3=00000000 D4=00000002 SR=2700"
+# Source D0 is also the low result.  The product must be staged before either
+# architectural result register is published.
+TESTS[mullu64_source_low_alias_native]="4C00 0402 7E01"
+EXPECTED_REG_FIELDS[mullu64_source_low_alias_native]="D0=00000001 D2=fffffffe D7=00000001 SR=2700"
+# Dh == Dl is legal.  m68k_mull writes high first and low second, so low wins.
+TESTS[mullu64_same_result_alias_native]="4C00 1401 7E01"
+EXPECTED_REG_FIELDS[mullu64_same_result_alias_native]="D0=00000002 D1=fffffffe D7=00000001 SR=2700"
+
+# For a selected 32-bit result, m68k_mull still derives N/Z from the full
+# product.  The branch markers make N/Z/V independently observable before a
+# final MOVEQ normalises the dump-time CCR.
+TESTS[mullu32_low_sign_full_flags_native]="4C00 1000 6A02 7401 6602 7601 6802 7801 7A02"
+EXPECTED_REG_FIELDS[mullu32_low_sign_full_flags_native]="D0=80000000 D1=80000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+TESTS[mullu32_overflow_low_zero_flags_native]="4C00 1000 6A02 7401 6602 7601 6902 7801 7A02"
+EXPECTED_REG_FIELDS[mullu32_overflow_low_zero_flags_native]="D0=00010000 D1=00000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+TESTS[mulls32_negative_overflow_low_zero_native]="4C00 1800 6B02 7401 6602 7601 6902 7801 7A02"
+EXPECTED_REG_FIELDS[mulls32_negative_overflow_low_zero_native]="D0=00000002 D1=00000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+TESTS[mulls32_positive_overflow_low_sign_native]="4C00 1800 6A02 7401 6602 7601 6902 7801 7A02"
+EXPECTED_REG_FIELDS[mulls32_positive_overflow_low_sign_native]="D0=00000002 D1=80000000 D2=00000000 D3=00000000 D4=00000000 D5=00000002 SR=2700"
+# Signed and unsigned selected-64 flag paths: N/Z use all 64 result bits and
+# V/C are clear because every 32x32 product fits the selected width.
+TESTS[mulls64_negative_flags_native]="4C00 1C02 6B02 7601 6602 7801 6802 7A01 7C02"
+EXPECTED_REG_FIELDS[mulls64_negative_flags_native]="D0=000003e8 D1=fffe7960 D2=ffffffff D3=00000000 D4=00000000 D5=00000000 D6=00000002 SR=2700"
+TESTS[mullu64_zero_flags_native]="4C00 1402 6702 7601 6A02 7801 6802 7A01 7C02"
+EXPECTED_REG_FIELDS[mullu64_zero_flags_native]="D0=00001234 D1=00000000 D2=00000000 D3=00000000 D4=00000000 D5=00000000 D6=00000002 SR=2700"
+# Complete the legal source/Dl/Dh alias closure and non-register source forms.
+TESTS[mullu64_source_high_alias_native]="4C00 1400 7E01"
+EXPECTED_REG_FIELDS[mullu64_source_high_alias_native]="D0=00000001 D1=fffffffe D7=00000001 SR=2700"
+TESTS[mullu64_all_alias_native]="4C00 0400 7E01"
+EXPECTED_REG_FIELDS[mullu64_all_alias_native]="D0=00000001 D7=00000001 SR=2700"
+TESTS[mullu32_immediate_nf_native]="4C3C 1000 0000 0003 7E01"
+EXPECTED_REG_FIELDS[mullu32_immediate_nf_native]="D1=00000015 D7=00000001 SR=2700"
+TESTS[mullu64_memory_nf_native]="4C10 0401 7E01"
+EXPECTED_REG_FIELDS[mullu64_memory_nf_native]="D0=fffffffe D1=00000001 D7=00000001 A0=0000a000 SR=2700"
+
 # DIVUL.L D1,D0:D0 — same Dq and Dr (remainder discarded): 100/7=14
 TESTS[divl_same_dq_dr]="203C 0000 0064 223C 0000 0007 4C41 0000"
 # DIVUL.L D1,D3:D2 — 64-bit unsigned: 0x100000064 / 7 = 0x24924932 rem 6
@@ -1062,6 +2576,21 @@ TESTS[divl_s64]="243C FFFF FF9C 263C FFFF FFFF 223C 0000 0007 4C41 2C03"
 TESTS[bfins_dreg_imm]="203C 0000 00A5 4281 EFC1 0108"
 # BFINS D0,D1{8:4} — insert 0xF at offset 8 width 4
 TESTS[bfins_dreg_narrow]="203C 0000 000F 2200 EFC1 0204"
+# Register field wraps through bit 31 back to bit 0.
+TESTS[bfins_dreg_wrap]="203C 0000 00AB 223C 1234 5678 EFC1 0708"
+# Offset and width come from D2/D3 at execution time.
+TESTS[bfins_dreg_dyn]="203C 0000 00A5 223C 1234 5678 741C 7608 EFC1 08A3"
+# A dynamic width of zero denotes 32 bits, including a wrapped destination.
+TESTS[bfins_dreg_dyn_width32]="203C 89AB CDEF 223C 1234 5678 7405 7600 EFC1 08A3"
+# A 32-bit memory field at bit offset 7 spans five bytes.
+TESTS[bfins_mem_span32]="41F9 0000 9100 203C 89AB CDEF 20BC 1122 3344 117C 0055 0004 EFD0 01C0 2410 1628 0004"
+# Dynamic memory offsets are signed and retain their byte displacement.
+TESTS[bfins_mem_dyn_negative]="41F9 0000 9104 217C 1122 3344 FFFC 20BC 5566 7788 203C 0000 0ABC 72F7 EFD0 084C 2428 FFFC 2610"
+# Exact ROM boot form at 0403939c: D0 is both source and dynamic offset, width 32.
+TESTS[bfins_dreg_boot_alias]="203C 89AB CDEF 2C3C 1234 5678 EFC6 0800"
+# Exact ROM boot family at 04030d30: signed D4 memory offset, width 32.
+TESTS[bfins_mem_dyn_neg_width32]="45F9 0000 9104 257C 1122 3344 FFFC 24BC 5566 7788 203C 89AB CDEF 78F7 EFD2 0900 242A FFFC 2612"
+TESTS[bfins_mem_dyn_pos_width32]="45F9 0000 9100 24BC 1122 3344 257C 5566 7788 0004 203C 89AB CDEF 781F EFD2 0900 2412 262A 0004"
 
 # ---- Z-flag flow ORACLE MATRIX (cmpl.L -> beq.W/bne.W Z-materialization) -----
 # Reproduces the CONT.109 cont14 hypothesis: a stale Z from a preceding flag
@@ -1105,6 +2634,10 @@ TESTS[oracle_zf_bne_z0_notake]="7605 7007 7207 B280 6600 0004 7433 7844"
 TESTS[oracle_zf_mem_take]="207C 0000 3000 7007 2080 2010 7207 B280 6700 0004 7433 7844"
 # store 5; reload d0; d1=3; cmp unequal -> BEQ must NOT take
 TESTS[oracle_zf_mem_notake]="207C 0000 3000 7005 2080 2010 7203 B280 6700 0004 7433 7844"
+# DBF must preserve CCR from the preceding MOVE.W. MOVE.W #0,D0 sets Z=1;
+# DBF D0 exits after decrementing D0.W to -1 and must NOT clobber Z;
+# BEQ must therefore skip the D2 marker.
+TESTS[oracle_zf_dbf_preserve_take]="7400 303C 0000 51C8 FFFE 6700 0004 7433 7844"
 
 # RTR: pop CCR + PC from stack — test via BSR/RTR pair
 # Setup flags: ORI #$1F,CCR (set all flags)
@@ -1222,7 +2755,221 @@ TESTS[fuzz_flags_4]="003C 001A D584 4A82"
 
 declare -A SENTINEL_A6
 declare -A INIT_REGS   # optional initial register state (D0-D7 A0-A7 [SR])
+# Exact-anchor replay skips each setup prefix, so restore the audited operands
+# explicitly rather than collapsing every pre-existing CHK.W case to 0 <= 0.
+INIT_REGS[chk_w_in_range]="00000008 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[chk_w_zero]="00000000 00000064 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[chk_w_equal]="00000032 00000032 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[chk_w_negative_trap_n]="FFFFFFFF 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[chk_w_upper_trap_n_clear]="00000015 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+INIT_REGS[chk_l_negative_trap_n]="FFFFFFFF 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[chk_l_upper_trap_n_clear]="00010000 0000FFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+INIT_REGS[chk_l_in_range_preserve_ccr]="00010000 00020000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+INIT_REGS[divu_w_zero_frame]="12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_w_zero_frame]="87654321 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_w_overflow_preserve_z]="00010000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_w_imm_overflow_preserve_z]="00010000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+_SHIFT_COUNT32_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[asl_b_reg_count32_boundary]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_count32_boundary]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_count32_boundary]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_zero_count32_v_clear]="00000000 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_zero_count32_const_v_clear]="DEADBEEF 00000001 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_zero_count63_v_clear]="A5A50000 0000003F $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_zero_count33_v_clear]="A5A50000 00000021 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_count32_boundary]="A5A5007F 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_count32_boundary]="A5A57FFF 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_count32_boundary]="7FFFFFFF 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_count32_boundary]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_count32_boundary]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_count32_boundary]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_count32_boundary]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_count32_boundary]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_count32_boundary]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_count33_boundary]="80000001 00000021 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_const_count32]="DEADBEEF 00000001 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_count32_nf]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_count32_nf]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_count32_nf]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_count32_nf]="A5A5007F 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_count32_nf]="A5A57FFF 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_count32_nf]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_count32_nf]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_count32_nf]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_count32_nf]="00000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_count32_nf]="A5A50081 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_count32_nf]="A5A58001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_count32_nf]="80000001 00000020 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_same_count_data]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_same_count_data]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_same_count_data]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asl_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[asr_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsl_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_b_reg_same_count_data_nf]="A5A500A1 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_w_reg_same_count_data_nf]="A5A58021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[lsr_l_reg_same_count_data_nf]="80000021 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+declare -A _SHIFT_BOUNDARY_INIT_DATA=(
+    [b]=A5A50081 [w]=A5A58001 [l]=80000001
+)
+for _shift_op in asl asr lsl lsr; do
+    for _shift_width in b w l; do
+        for _shift_count in 31 33 63; do
+            printf -v _shift_count_init '%08X' "$_shift_count"
+            _shift_name="${_shift_op}_${_shift_width}_reg_count${_shift_count}_boundary"
+            _shift_init="${_SHIFT_BOUNDARY_INIT_DATA[$_shift_width]} ${_shift_count_init} $_SHIFT_COUNT32_INIT_TAIL"
+            INIT_REGS["$_shift_name"]="$_shift_init"
+            INIT_REGS["${_shift_name}_nf"]="$_shift_init"
+        done
+    done
+done
+unset _shift_op _shift_width _shift_count _shift_count_init _shift_name _shift_init
+unset _SHIFT_BOUNDARY_INIT_DATA
+declare -A _ROTATE_REGISTER_INIT_DATA=(
+    [b]=A5A50081 [w]=A5A58001 [l]=80000001
+)
+declare -A _ROTATE_ALIAS_INIT_DATA=(
+    [b]=A5A500A1 [w]=A5A58021 [l]=80000021
+)
+INIT_REGS[rol_l_reg_const_count64]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[rol_l_reg_const_count64_nf]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[ror_l_reg_const_count64]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+INIT_REGS[ror_l_reg_const_count64_nf]="80000001 00000040 $_SHIFT_COUNT32_INIT_TAIL"
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        case "$_rotate_width" in
+            b) _rotate_immediate_data=A5A50081 ;;
+            w) _rotate_immediate_data=A5A58001 ;;
+            l) _rotate_immediate_data=80000001 ;;
+        esac
+        _rotate_immediate_name="${_rotate_op}_${_rotate_width}_imm_count8"
+        _rotate_immediate_init="${_rotate_immediate_data} 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+        INIT_REGS["$_rotate_immediate_name"]="$_rotate_immediate_init"
+        INIT_REGS["${_rotate_immediate_name}_nf"]="$_rotate_immediate_init"
+    done
+done
+_ROTATE_MEMORY_INIT="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[rolw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[rolw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[rorw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[rorw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[aslw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[aslw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[asrw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[asrw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lslw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lslw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lsrw_mem_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[lsrw_mem_native_nf]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[roxlw_mem_x_native]="$_ROTATE_MEMORY_INIT"
+INIT_REGS[roxrw_mem_x_native]="$_ROTATE_MEMORY_INIT"
+unset _rotate_op _rotate_width _rotate_immediate_data _rotate_immediate_name _rotate_immediate_init _ROTATE_MEMORY_INIT
+for _rotate_op in rol ror; do
+    for _rotate_width in b w l; do
+        for _rotate_count in 0 31 32 33 63; do
+            printf -v _rotate_count_init '%08X' "$_rotate_count"
+            _rotate_name="${_rotate_op}_${_rotate_width}_reg_count${_rotate_count}_boundary"
+            _rotate_init="${_ROTATE_REGISTER_INIT_DATA[$_rotate_width]} ${_rotate_count_init} $_SHIFT_COUNT32_INIT_TAIL"
+            INIT_REGS["$_rotate_name"]="$_rotate_init"
+            INIT_REGS["${_rotate_name}_nf"]="$_rotate_init"
+        done
+        _rotate_alias_name="${_rotate_op}_${_rotate_width}_reg_same_count_data"
+        _rotate_alias_init="${_ROTATE_ALIAS_INIT_DATA[$_rotate_width]} 00000000 $_SHIFT_COUNT32_INIT_TAIL"
+        INIT_REGS["$_rotate_alias_name"]="$_rotate_alias_init"
+        INIT_REGS["${_rotate_alias_name}_nf"]="$_rotate_alias_init"
+    done
+done
+unset _rotate_op _rotate_width _rotate_count _rotate_count_init _rotate_name _rotate_init
+unset _rotate_alias_name _rotate_alias_init _ROTATE_REGISTER_INIT_DATA _ROTATE_ALIAS_INIT_DATA
+unset _SHIFT_COUNT32_INIT_TAIL
+INIT_REGS[divu_l_zero_frame]="13579BDF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l_zero_frame]="89ABCDEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l32_zero_distinct]="13579BDF 00000000 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l32_zero_distinct]="89ABCDEF 00000000 76543210 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l32_success_nf]="00000064 00000007 A5A55A5A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_success_nf]="FFFFFF9C 00000007 A5A55A5A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l32_same_dq_dr_nf]="00000064 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_same_dq_dr_nf]="FFFFFF9C 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l32_src_dr_alias_nf]="00000064 00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_src_dr_alias_nf]="FFFFFF9C 00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l64_zero_frame]="00000000 00000000 13579BDF 2468ACE0 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l64_zero_frame]="00000000 00000000 89ABCDEF FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_same_dq_dr]="00000001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l64_same_dq_dr]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_same_dq_dr_nf]="00000001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divs_l64_same_dq_dr_nf]="FFFFFFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[divu_l64_overflow]="00000000 00000001 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divu_l64_overflow_nf]="00000000 00000001 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l64_overflow]="80000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l64_overflow_nf]="80000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_overflow]="80000000 FFFFFFFF 12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[divs_l32_overflow_nf]="80000000 FFFFFFFF 12345678 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002715"
+INIT_REGS[trapv_taken_frame]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[trapv_not_taken_preserve]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271D"
+# Exact-opcode BCD replays bypass each setup prefix. Restore the operands, X/Z
+# state, address registers, and (for predecrement forms) the pre-access EA.
+INIT_REGS[bcd_abcd_zero_sticky_set]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_abcd_zero_sticky_clear]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_abcd_nonzero_clears_sticky]="00000001 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_abcd_carry_zero]="00000099 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_abcd_same_reg_with_x]="A5A50099 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_sbcd_zero_sticky_set]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_sbcd_zero_sticky_clear]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_sbcd_borrow]="00000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_sbcd_same_reg_with_x]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_nbcd_zero_sticky_set]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_nbcd_zero_sticky_clear]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_nbcd_nonzero]="00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_nbcd_with_x]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_abcd_decimal_09_plus_01]="00000009 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_abcd_invalid_nibble_exact]="0000000A 0000000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[bcd_abcd_extend_chain]="00000099 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_sbcd_decimal_10_minus_01]="00000010 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_sbcd_invalid_nibble_exact]="00000000 0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[bcd_nbcd_decimal_10]="00000010 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[bcd_nbcd_invalid_nibble_exact]="0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[bcd_abcd_predec_src_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002041 00000000 00000000 00000000 00000000 00000000 00000000 00002082 00002704"
+INIT_REGS[bcd_abcd_predec_dst_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002081 00000000 00000000 00000000 00000000 00000000 00000000 00002042 00002704"
+INIT_REGS[bcd_abcd_predec_a7_alias]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002084 00002704"
+INIT_REGS[bcd_sbcd_predec_src_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002041 00000000 00000000 00000000 00000000 00000000 00000000 00002082 00002704"
+INIT_REGS[bcd_sbcd_predec_dst_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002081 00000000 00000000 00000000 00000000 00000000 00000000 00002042 00002704"
+INIT_REGS[bcd_sbcd_predec_a7_alias]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002084 00002704"
+INIT_REGS[bcd_nbcd_predec_a7]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002042 00002704"
+INIT_REGS[bcd_native_abcd_zero_sticky]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002704"
+INIT_REGS[bcd_native_abcd_invalid_extend]="0000000A 0000000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_native_sbcd_invalid_borrow]="00000000 0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[bcd_native_nbcd_invalid_borrow]="0000000A 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[mulls32_negative_fit_v_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_source_preserve_v_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_source_low_alias_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_same_result_alias_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu32_low_sign_full_flags_native]="80000000 00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu32_overflow_low_zero_flags_native]="00010000 00010000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mulls32_negative_overflow_low_zero_native]="00000002 80000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mulls32_positive_overflow_low_sign_native]="00000002 40000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mulls64_negative_flags_native]="000003E8 FFFFFF9C 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_zero_flags_native]="00001234 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_source_high_alias_native]="00000002 FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_all_alias_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu32_immediate_nf_native]="00000000 00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
+INIT_REGS[mullu64_memory_nf_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
 # Fuzz vector initial register states
+INIT_REGS[io_byte_write_roundtrip]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 50001000 0A014100 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[fuzz_alu_0]="8878FDF6 80000000 00000000 637A51D3 7FFFFFFF 00000000 000000FF FFFFFFFF 0038D748 007BBF88 003C4A38 0023044C 003974BC 00072334 00000000 007EFF00"
 INIT_REGS[fuzz_shift_0]="7FFFFFFF FFFFFFFF 0000FFFF 000000FF FFFFFFFF 80000000 0000FFFF 6F01C50E 00124FD8 005EB90C 0032C4F4 006E747C 005771AC 002B43C0 00000000 007EFF00"
 INIT_REGS[fuzz_bitops_0]="FFFFFFFF F567E951 3D5E6FD4 000000FF 10F5BF4D 7FFFFFFF 11D9AF43 75616BFD 001AAB38 00330250 0075C460 005CAF44 00439394 000B9E84 00000000 007EFF00"
@@ -1284,6 +3031,7 @@ SENTINEL_A6[asr_count_0]="a60100c8"
 SENTINEL_A6[ror_word]="a60100c9"
 SENTINEL_A6[rol_word]="a60100ca"
 SENTINEL_A6[btst_reg_high_bit]="a60100cb"
+SENTINEL_A6[btst_b_d16_highbit]="a6b7d160"
 SENTINEL_A6[muls_neg_neg]="a60100cc"
 SENTINEL_A6[muls_zero]="a60100cd"
 SENTINEL_A6[divs_neg_neg]="a60100ce"
@@ -1298,6 +3046,7 @@ SENTINEL_A6[ext_word]="a60100d6"
 SENTINEL_A6[ext_long]="a60100d7"
 SENTINEL_A6[move_to_mem_and_back]="a60100d8"
 SENTINEL_A6[movem_predec_postinc]="a60100d9"
+SENTINEL_A6[movem_no_writeback]="a6010201"
 SENTINEL_A6[movem_predec_mixed_order]="a60100e8"
 SENTINEL_A6[addx_chain]="a60100da"
 SENTINEL_A6[flag_chain_xzn]="a60100db"
@@ -1307,6 +3056,103 @@ SENTINEL_A6[roxl_reg_count_33]="a60100ed"
 SENTINEL_A6[roxr_reg_count_33]="a60100ea"
 SENTINEL_A6[roxr_reg_count_32]="a60100eb"
 SENTINEL_A6[roxr_reg_count_0]="a60100ee"
+SENTINEL_A6[roxr_reg_count_0_copies_x]="a60100f3"
+SENTINEL_A6[roxl_b_reg_count_63_copies_x]="a60100f4"
+SENTINEL_A6[roxr_b_reg_count_63_copies_x]="a60100f5"
+SENTINEL_A6[roxl_w_reg_count_51_copies_x]="a60100f6"
+SENTINEL_A6[roxr_w_reg_count_51_copies_x]="a60100f7"
+SENTINEL_A6[roxl_l_reg_count_33_copies_x]="a60100f8"
+SENTINEL_A6[roxr_l_reg_count_33_copies_x]="a60100f9"
+SENTINEL_A6[roxl_l_reg_count_0_copies_x]="a60100fa"
+SENTINEL_A6[roxl_l_reg_count_33_pressure]="a60100fb"
+SENTINEL_A6[roxr_l_reg_count_33_pressure]="a60100fc"
+SENTINEL_A6[asr_l_reg_count0_pressure_preserves_x]="a6d6014b"
+SENTINEL_A6[addx_b_zero_sticky_z_set]="a6030221"
+SENTINEL_A6[addx_w_zero_sticky_z_set]="a6030222"
+SENTINEL_A6[addx_b_zero_without_x_sticky_z_set]="a6030223"
+SENTINEL_A6[addx_w_zero_without_x_sticky_z_set]="a6030224"
+SENTINEL_A6[addx_l_zero_without_x_sticky_z_set]="a6030227"
+SENTINEL_A6[roxl_l_zero_count_copies_cleared_x]="a6030228"
+SENTINEL_A6[subx_b_zero_sticky_z_set]="a6030225"
+SENTINEL_A6[subx_w_zero_sticky_z_set]="a6030226"
+SENTINEL_A6[addx_l_zero_sticky_z_set]="a6030301"
+SENTINEL_A6[subx_l_zero_sticky_z_set]="a6030302"
+SENTINEL_A6[addx_b_zero_sticky_z_clear]="a6030303"
+SENTINEL_A6[addx_w_zero_sticky_z_clear]="a6030304"
+SENTINEL_A6[addx_l_zero_sticky_z_clear]="a6030305"
+SENTINEL_A6[subx_b_zero_sticky_z_clear]="a6030306"
+SENTINEL_A6[subx_w_zero_sticky_z_clear]="a6030307"
+SENTINEL_A6[subx_l_zero_sticky_z_clear]="a6030308"
+SENTINEL_A6[addx_b_overflow_with_x]="a6030309"
+SENTINEL_A6[addx_w_overflow_with_x]="a603030a"
+SENTINEL_A6[addx_l_overflow_with_x]="a603030b"
+SENTINEL_A6[subx_b_overflow_with_x]="a603030c"
+SENTINEL_A6[subx_w_overflow_with_x]="a603030d"
+SENTINEL_A6[subx_l_overflow_with_x]="a603030e"
+SENTINEL_A6[subx_b_without_x]="a603030f"
+SENTINEL_A6[subx_w_without_x]="a6030310"
+SENTINEL_A6[subx_l_without_x]="a6030311"
+SENTINEL_A6[ccr_ori_exact_bits]="a6030312"
+SENTINEL_A6[ccr_andi_exact_mask]="a6030313"
+SENTINEL_A6[ccr_eori_exact_toggle]="a6030314"
+SENTINEL_A6[ccr_ori_after_borrow_flags]="a6030315"
+SENTINEL_A6[ccr_andi_after_borrow_flags]="a6030316"
+SENTINEL_A6[ccr_eori_after_borrow_flags]="a6030317"
+SENTINEL_A6[bcd_abcd_zero_sticky_set]="a6030401"
+SENTINEL_A6[bcd_abcd_zero_sticky_clear]="a6030402"
+SENTINEL_A6[bcd_abcd_nonzero_clears_sticky]="a6030403"
+SENTINEL_A6[bcd_abcd_carry_zero]="a6030404"
+SENTINEL_A6[bcd_abcd_same_reg_with_x]="a6030405"
+SENTINEL_A6[bcd_sbcd_zero_sticky_set]="a6030406"
+SENTINEL_A6[bcd_sbcd_zero_sticky_clear]="a6030407"
+SENTINEL_A6[bcd_sbcd_borrow]="a6030408"
+SENTINEL_A6[bcd_sbcd_same_reg_with_x]="a6030409"
+SENTINEL_A6[bcd_nbcd_zero_sticky_set]="a603040a"
+SENTINEL_A6[bcd_nbcd_zero_sticky_clear]="a603040b"
+SENTINEL_A6[bcd_nbcd_nonzero]="a603040c"
+SENTINEL_A6[bcd_nbcd_with_x]="a603040d"
+SENTINEL_A6[bcd_abcd_decimal_09_plus_01]="a6030415"
+SENTINEL_A6[bcd_abcd_invalid_nibble_exact]="a6030416"
+SENTINEL_A6[bcd_abcd_extend_chain]="a6030417"
+SENTINEL_A6[bcd_sbcd_decimal_10_minus_01]="a6030418"
+SENTINEL_A6[bcd_sbcd_invalid_nibble_exact]="a6030419"
+SENTINEL_A6[bcd_nbcd_decimal_10]="a603041a"
+SENTINEL_A6[bcd_nbcd_invalid_nibble_exact]="a603041b"
+SENTINEL_A6[bcd_native_abcd_zero_sticky]="a603041c"
+SENTINEL_A6[bcd_native_abcd_invalid_extend]="a603041d"
+SENTINEL_A6[bcd_native_sbcd_invalid_borrow]="a603041e"
+SENTINEL_A6[bcd_native_nbcd_invalid_borrow]="a603041f"
+SENTINEL_A6[bcd_abcd_predec_src_a7]="a603040e"
+SENTINEL_A6[bcd_abcd_predec_dst_a7]="a603040f"
+SENTINEL_A6[bcd_abcd_predec_a7_alias]="a6030410"
+SENTINEL_A6[bcd_sbcd_predec_src_a7]="a6030411"
+SENTINEL_A6[bcd_sbcd_predec_dst_a7]="a6030412"
+SENTINEL_A6[bcd_sbcd_predec_a7_alias]="a6030413"
+SENTINEL_A6[bcd_nbcd_predec_a7]="a6030414"
+SENTINEL_A6[addx_b_distinct_reg_consumes_x]="a6030211"
+SENTINEL_A6[addx_w_distinct_reg_consumes_x]="a6030212"
+SENTINEL_A6[addx_l_distinct_reg_consumes_x]="a6030213"
+SENTINEL_A6[subx_b_distinct_reg_consumes_x]="a6030214"
+SENTINEL_A6[subx_w_distinct_reg_consumes_x]="a6030215"
+SENTINEL_A6[subx_l_distinct_reg_consumes_x]="a6030216"
+SENTINEL_A6[addx_b_same_reg_consumes_x]="a6030201"
+SENTINEL_A6[addx_w_same_reg_consumes_x]="a6030202"
+SENTINEL_A6[addx_l_same_reg_consumes_x]="a6030203"
+SENTINEL_A6[subx_b_same_reg_consumes_x]="a6030204"
+SENTINEL_A6[subx_w_same_reg_consumes_x]="a6030205"
+SENTINEL_A6[subx_l_same_reg_consumes_x]="a6030206"
+SENTINEL_A6[asl_b_reg_count_0_preserves_x]="a6030101"
+SENTINEL_A6[asl_w_reg_count_0_preserves_x]="a6030102"
+SENTINEL_A6[asl_l_reg_count_0_preserves_x]="a6030103"
+SENTINEL_A6[asr_b_reg_count_0_preserves_x]="a6030104"
+SENTINEL_A6[asr_w_reg_count_0_preserves_x]="a6030105"
+SENTINEL_A6[asr_l_reg_count_0_preserves_x]="a6030106"
+SENTINEL_A6[lsl_b_reg_count_0_preserves_x]="a6030107"
+SENTINEL_A6[lsl_w_reg_count_0_preserves_x]="a6030108"
+SENTINEL_A6[lsl_l_reg_count_0_preserves_x]="a6030109"
+SENTINEL_A6[lsr_b_reg_count_0_preserves_x]="a603010a"
+SENTINEL_A6[lsr_w_reg_count_0_preserves_x]="a603010b"
+SENTINEL_A6[lsr_l_reg_count_0_preserves_x]="a603010c"
 SENTINEL_A6[roxl_reg_count_63]="a60100ef"
 SENTINEL_A6[roxr_reg_count_63]="a60100f0"
 SENTINEL_A6[roxr_roxl_chain_x]="a60100f1"
@@ -1318,6 +3164,12 @@ SENTINEL_A6[nbcd_basic]="a60100e0"
 SENTINEL_A6[bsr_rts]="a60100e1"
 SENTINEL_A6[link_unlk]="a60100e2"
 SENTINEL_A6[indexed_addr_mode]="a60100e3"
+SENTINEL_A6[indexed_full_neg_base]="a6010200"
+SENTINEL_A6[io_byte_write_roundtrip]="a60102ff"
+SENTINEL_A6[strict_zero_ram_native]="a6010300"
+SENTINEL_A6[host_code_reuse_coherence]="a6010303"
+SENTINEL_A6[dbra_ccr_preserve_z_clear]="a6010301"
+SENTINEL_A6[dbra_ccr_preserve_z_set]="a6010302"
 SENTINEL_A6[byte_postinc]="a60100e4"
 SENTINEL_A6[cmpm_equal]="a60100e5"
 SENTINEL_A6[move_sr_roundtrip]="a60100e6"
@@ -1546,11 +3398,63 @@ SENTINEL_A6[bfclr_reg_edge]="a60001d5"
 SENTINEL_A6[bfchg_reg_edge]="a60001d6"
 SENTINEL_A6[bftst_reg_edge]="a60001d7"
 SENTINEL_A6[bfins_reg_edge]="a60001d8"
+SENTINEL_A6[bitfield_mem_an_family]="a65b0001"
+SENTINEL_A6[bitfield_d16_an]="a65b0002"
+SENTINEL_A6[bitfield_indexed_an]="a65b0003"
+SENTINEL_A6[bitfield_absw]="a65b0004"
+SENTINEL_A6[bitfield_absl]="a65b0005"
+SENTINEL_A6[bitfield_pc_d16]="a65b0006"
+SENTINEL_A6[bitfield_pc_indexed]="a65b0007"
 SENTINEL_A6[pack_dn_edge]="a60001d9"
+SENTINEL_A6[pack_predec_a7_alias]="a6ca3001"
 SENTINEL_A6[unpk_dn_edge]="a60001da"
+SENTINEL_A6[unpk_predec_a7_alias]="a6ca3002"
+SENTINEL_A6[chk2_w_equal_preserve_ccr]="a6c22001"
+SENTINEL_A6[chk2_b_areg_fullwidth_d16]="a6c22002"
+SENTINEL_A6[chk2_l_wrapped_absl]="a6c22003"
+SENTINEL_A6[chk2_w_trap_vector6]="a6c22004"
+SENTINEL_A6[chk2_w_indexed_inrange]="a6c22005"
+SENTINEL_A6[chk2_l_fullindexed_inrange]="a6c22006"
+SENTINEL_A6[chk2_w_pcrel_inrange]="a6c22007"
 SENTINEL_A6[movep_l_roundtrip]="a60001db"
 SENTINEL_A6[sr_ops_combo]="a60001dc"
 SENTINEL_A6[moves_write_read]="a60001dd"
+SENTINEL_A6[moves_predec_store_alias]="a65d0001"
+SENTINEL_A6[moves_predec_read_alias]="a65d0002"
+SENTINEL_A6[moves_l_indexed_store]="a65d0003"
+SENTINEL_A6[moves_b_postinc_areg_alias]="a6c5e001"
+SENTINEL_A6[moves_privilege_vector8]="a6c5e002"
+SENTINEL_A6[fullsr_orsr_privilege_vector8]="a65c0080"
+SENTINEL_A6[fullsr_andsr_privilege_vector8]="a65c0081"
+SENTINEL_A6[fullsr_eorsr_privilege_vector8]="a65c0082"
+SENTINEL_A6[fullsr_mv2sr_privilege_vector8]="a65c0083"
+SENTINEL_A6[fullsr_mvsr_privilege_vector8]="a65c0084"
+SENTINEL_A6[system_usp_roundtrip]="a65c0001"
+SENTINEL_A6[reset_privilege_vector8]="a65c0002"
+SENTINEL_A6[usp_privilege_vector8]="a65c0003"
+SENTINEL_A6[stop_clear_s_vector8]="a65c0004"
+SENTINEL_A6[stop_privilege_vector8]="a65c0005"
+SENTINEL_A6[movec_privilege_vector8]="a65c0006"
+SENTINEL_A6[rte_privilege_vector8]="a65c0007"
+SENTINEL_A6[cache_privilege_vector8]="a65c0008"
+SENTINEL_A6[cache_supervisor_successors]="a65c0009"
+SENTINEL_A6[fdbcc_false_decrement_branch]="a6fd8001"
+SENTINEL_A6[ftrapcc_true_vector7]="a6f7a001"
+SENTINEL_A6[ftrapcc_false_operand_lengths]="a6f7a002"
+SENTINEL_A6[fpp_semantic_successor]="a6f20001"
+SENTINEL_A6[fscc_false_byte]="a6f24001"
+SENTINEL_A6[fbcc_false_operand_lengths]="a6f28001"
+SENTINEL_A6[cas_b_success]="a65c1001"
+SENTINEL_A6[cas_b_fail]="a65c1002"
+SENTINEL_A6[cas_b_predec]="a65c1003"
+SENTINEL_A6[cas_w_postinc]="a65c1004"
+SENTINEL_A6[cas_l_d16]="a65c1005"
+SENTINEL_A6[cas2_w_success]="a6ca2001"
+SENTINEL_A6[cas2_w_fail_first]="a6ca2002"
+SENTINEL_A6[cas2_w_fail_second]="a6ca2003"
+SENTINEL_A6[cas2_l_success]="a6ca2004"
+SENTINEL_A6[cas2_l_fail_second]="a6ca2005"
+SENTINEL_A6[cas2_l_alias_compare]="a6ca2006"
 SENTINEL_A6[move_b_flags]="a601012a"
 SENTINEL_A6[move_w_zero]="a601012b"
 SENTINEL_A6[cmpi_l_abs_short_eq]="a6010136"
@@ -1633,6 +3537,7 @@ SENTINEL_A6[mvr2usp_cov]="a60001e5"
 SENTINEL_A6[move_b_d16_an_cov]="a60001e6"
 SENTINEL_A6[move_w_d16_an_cov]="a60001e7"
 SENTINEL_A6[move_l_d16_an_cov]="a60001e8"
+SENTINEL_A6[move_l_idx_absw_native]="a621f0f0"
 SENTINEL_A6[move_b_idx_cov]="a60001e9"
 SENTINEL_A6[move_l_idx_scale_cov]="a60001ea"
 SENTINEL_A6[move_l_pc_rel_cov]="a60001eb"
@@ -1656,6 +3561,137 @@ SENTINEL_A6[a7_byte_postinc_cov]="a60001fb"
 SENTINEL_A6[chk_w_in_range]="a6f03200"
 SENTINEL_A6[chk_w_zero]="a6f03300"
 SENTINEL_A6[chk_w_equal]="a6f03400"
+SENTINEL_A6[chk_w_negative_trap_n]="a6c6e001"
+SENTINEL_A6[chk_w_upper_trap_n_clear]="a6c6e002"
+SENTINEL_A6[chk_l_negative_trap_n]="a6c6e003"
+SENTINEL_A6[chk_l_upper_trap_n_clear]="a6c6e004"
+SENTINEL_A6[chk_l_in_range_preserve_ccr]="a6c6e005"
+SENTINEL_A6[divu_w_zero_frame]="a6d50001"
+SENTINEL_A6[divs_w_zero_frame]="a6d50002"
+SENTINEL_A6[divs_w_overflow_preserve_z]="a6d50017"
+SENTINEL_A6[divs_w_imm_overflow_preserve_z]="a6d5001c"
+SENTINEL_A6[asl_b_reg_count32_boundary]="a6d60001"
+SENTINEL_A6[asl_w_reg_count32_boundary]="a6d60002"
+SENTINEL_A6[asl_l_reg_count32_boundary]="a6d60003"
+SENTINEL_A6[asl_l_reg_zero_count32_v_clear]="a6d60148"
+SENTINEL_A6[asl_l_reg_zero_count32_const_v_clear]="a6d6014c"
+SENTINEL_A6[lsr_l_reg_const_count32]="a6d6014d"
+SENTINEL_A6[asl_b_reg_zero_count63_v_clear]="a6d60149"
+SENTINEL_A6[asl_w_reg_zero_count33_v_clear]="a6d6014a"
+SENTINEL_A6[asr_b_reg_count32_boundary]="a6d60004"
+SENTINEL_A6[asr_w_reg_count32_boundary]="a6d60005"
+SENTINEL_A6[asr_l_reg_count32_boundary]="a6d60006"
+SENTINEL_A6[lsl_b_reg_count32_boundary]="a6d60007"
+SENTINEL_A6[lsl_w_reg_count32_boundary]="a6d60008"
+SENTINEL_A6[lsl_l_reg_count32_boundary]="a6d60009"
+SENTINEL_A6[lsr_b_reg_count32_boundary]="a6d6000a"
+SENTINEL_A6[lsr_w_reg_count32_boundary]="a6d6000b"
+SENTINEL_A6[lsr_l_reg_count32_boundary]="a6d6000c"
+SENTINEL_A6[lsr_l_reg_count33_boundary]="a6d6000d"
+SENTINEL_A6[asl_b_reg_count32_nf]="a6d6000e"
+SENTINEL_A6[asl_w_reg_count32_nf]="a6d6000f"
+SENTINEL_A6[asl_l_reg_count32_nf]="a6d60010"
+SENTINEL_A6[asr_b_reg_count32_nf]="a6d60011"
+SENTINEL_A6[asr_w_reg_count32_nf]="a6d60012"
+SENTINEL_A6[asr_l_reg_count32_nf]="a6d60013"
+SENTINEL_A6[lsl_b_reg_count32_nf]="a6d60014"
+SENTINEL_A6[lsl_w_reg_count32_nf]="a6d60015"
+SENTINEL_A6[lsl_l_reg_count32_nf]="a6d60016"
+SENTINEL_A6[lsr_b_reg_count32_nf]="a6d60017"
+SENTINEL_A6[lsr_w_reg_count32_nf]="a6d60018"
+SENTINEL_A6[lsr_l_reg_count32_nf]="a6d60019"
+SENTINEL_A6[asl_b_reg_same_count_data]="a6d6001a"
+SENTINEL_A6[asl_w_reg_same_count_data]="a6d6001b"
+SENTINEL_A6[asl_l_reg_same_count_data]="a6d6001c"
+SENTINEL_A6[asr_b_reg_same_count_data]="a6d6001d"
+SENTINEL_A6[asr_w_reg_same_count_data]="a6d6001e"
+SENTINEL_A6[asr_l_reg_same_count_data]="a6d6001f"
+SENTINEL_A6[lsl_b_reg_same_count_data]="a6d60020"
+SENTINEL_A6[lsl_w_reg_same_count_data]="a6d60021"
+SENTINEL_A6[lsl_l_reg_same_count_data]="a6d60022"
+SENTINEL_A6[lsr_b_reg_same_count_data]="a6d60023"
+SENTINEL_A6[lsr_w_reg_same_count_data]="a6d60024"
+SENTINEL_A6[lsr_l_reg_same_count_data]="a6d60025"
+SENTINEL_A6[asl_b_reg_same_count_data_nf]="a6d60026"
+SENTINEL_A6[asl_w_reg_same_count_data_nf]="a6d60027"
+SENTINEL_A6[asl_l_reg_same_count_data_nf]="a6d60028"
+SENTINEL_A6[asr_b_reg_same_count_data_nf]="a6d60029"
+SENTINEL_A6[asr_w_reg_same_count_data_nf]="a6d6002a"
+SENTINEL_A6[asr_l_reg_same_count_data_nf]="a6d6002b"
+SENTINEL_A6[lsl_b_reg_same_count_data_nf]="a6d6002c"
+SENTINEL_A6[lsl_w_reg_same_count_data_nf]="a6d6002d"
+SENTINEL_A6[lsl_l_reg_same_count_data_nf]="a6d6002e"
+SENTINEL_A6[lsr_b_reg_same_count_data_nf]="a6d6002f"
+SENTINEL_A6[lsr_w_reg_same_count_data_nf]="a6d60030"
+SENTINEL_A6[lsr_l_reg_same_count_data_nf]="a6d60031"
+_shift_sentinel_index=256
+for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
+    printf -v _shift_sentinel 'a6d6%04x' "$_shift_sentinel_index"
+    SENTINEL_A6["$_shift_name"]="$_shift_sentinel"
+    ((_shift_sentinel_index += 1))
+done
+unset _shift_name _shift_sentinel _shift_sentinel_index
+_rotate_sentinel_index=512
+for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
+    printf -v _rotate_sentinel 'a6d6%04x' "$_rotate_sentinel_index"
+    SENTINEL_A6["$_rotate_name"]="$_rotate_sentinel"
+    ((_rotate_sentinel_index += 1))
+done
+unset _rotate_name _rotate_sentinel _rotate_sentinel_index
+SENTINEL_A6[rol_l_reg_const_count64]="a6d60260"
+SENTINEL_A6[rol_l_reg_const_count64_nf]="a6d60261"
+SENTINEL_A6[ror_l_reg_const_count64]="a6d60262"
+SENTINEL_A6[ror_l_reg_const_count64_nf]="a6d60263"
+SENTINEL_A6[rol_b_imm_count8]="a6d60264"
+SENTINEL_A6[rol_b_imm_count8_nf]="a6d60265"
+SENTINEL_A6[rol_w_imm_count8]="a6d60266"
+SENTINEL_A6[rol_w_imm_count8_nf]="a6d60267"
+SENTINEL_A6[rol_l_imm_count8]="a6d60268"
+SENTINEL_A6[rol_l_imm_count8_nf]="a6d60269"
+SENTINEL_A6[ror_b_imm_count8]="a6d6026a"
+SENTINEL_A6[ror_b_imm_count8_nf]="a6d6026b"
+SENTINEL_A6[ror_w_imm_count8]="a6d6026c"
+SENTINEL_A6[ror_w_imm_count8_nf]="a6d6026d"
+SENTINEL_A6[ror_l_imm_count8]="a6d6026e"
+SENTINEL_A6[ror_l_imm_count8_nf]="a6d6026f"
+SENTINEL_A6[rolw_mem_native]="a6d60270"
+SENTINEL_A6[rolw_mem_native_nf]="a6d60271"
+SENTINEL_A6[rorw_mem_native]="a6d60272"
+SENTINEL_A6[rorw_mem_native_nf]="a6d60273"
+SENTINEL_A6[aslw_mem_native]="a6d60274"
+SENTINEL_A6[aslw_mem_native_nf]="a6d60275"
+SENTINEL_A6[asrw_mem_native]="a6d60276"
+SENTINEL_A6[asrw_mem_native_nf]="a6d60277"
+SENTINEL_A6[lslw_mem_native]="a6d60278"
+SENTINEL_A6[lslw_mem_native_nf]="a6d60279"
+SENTINEL_A6[lsrw_mem_native]="a6d6027a"
+SENTINEL_A6[lsrw_mem_native_nf]="a6d6027b"
+SENTINEL_A6[roxlw_mem_x_native]="a6d6027c"
+SENTINEL_A6[roxrw_mem_x_native]="a6d6027d"
+SENTINEL_A6[divu_l_zero_frame]="a6d50003"
+SENTINEL_A6[divs_l_zero_frame]="a6d50004"
+SENTINEL_A6[divu_l32_zero_distinct]="a6d5000f"
+SENTINEL_A6[divs_l32_zero_distinct]="a6d50010"
+SENTINEL_A6[divu_l32_success_nf]="a6d50011"
+SENTINEL_A6[divs_l32_success_nf]="a6d50012"
+SENTINEL_A6[divu_l32_same_dq_dr_nf]="a6d50018"
+SENTINEL_A6[divs_l32_same_dq_dr_nf]="a6d50019"
+SENTINEL_A6[divu_l32_src_dr_alias_nf]="a6d5001a"
+SENTINEL_A6[divs_l32_src_dr_alias_nf]="a6d5001b"
+SENTINEL_A6[divu_l64_zero_frame]="a6d50007"
+SENTINEL_A6[divs_l64_zero_frame]="a6d50008"
+SENTINEL_A6[divu_l64_same_dq_dr]="a6d50009"
+SENTINEL_A6[divs_l64_same_dq_dr]="a6d5000a"
+SENTINEL_A6[divu_l64_same_dq_dr_nf]="a6d5000b"
+SENTINEL_A6[divs_l64_same_dq_dr_nf]="a6d5000c"
+SENTINEL_A6[divu_l64_overflow]="a6d50013"
+SENTINEL_A6[divu_l64_overflow_nf]="a6d50014"
+SENTINEL_A6[divs_l64_overflow]="a6d50015"
+SENTINEL_A6[divs_l64_overflow_nf]="a6d50016"
+SENTINEL_A6[divs_l32_overflow]="a6d5000d"
+SENTINEL_A6[divs_l32_overflow_nf]="a6d5000e"
+SENTINEL_A6[trapv_taken_frame]="a6d50005"
+SENTINEL_A6[trapv_not_taken_preserve]="a6d50006"
 SENTINEL_A6[sbcd_borrow_chain]="a6f03500"
 SENTINEL_A6[sbcd_zero_zero]="a6f03600"
 SENTINEL_A6[nbcd_zero_no_x]="a6f03700"
@@ -1672,11 +3708,33 @@ SENTINEL_A6[divl_s32_neg]="a6f04100"
 SENTINEL_A6[divl_u32_max]="a6f04200"
 SENTINEL_A6[divl_s32_neg_divisor]="a6f04300"
 SENTINEL_A6[mull_s64_neg]="a6f04400"
+SENTINEL_A6[mulls32_negative_fit_v_native]="a6040001"
+SENTINEL_A6[mullu64_source_preserve_v_native]="a6040002"
+SENTINEL_A6[mullu64_source_low_alias_native]="a6040003"
+SENTINEL_A6[mullu64_same_result_alias_native]="a6040004"
+SENTINEL_A6[mullu32_low_sign_full_flags_native]="a6040005"
+SENTINEL_A6[mullu32_overflow_low_zero_flags_native]="a6040006"
+SENTINEL_A6[mulls32_negative_overflow_low_zero_native]="a6040007"
+SENTINEL_A6[mulls32_positive_overflow_low_sign_native]="a6040008"
+SENTINEL_A6[mulls64_negative_flags_native]="a6040009"
+SENTINEL_A6[mullu64_zero_flags_native]="a604000a"
+SENTINEL_A6[mullu64_source_high_alias_native]="a604000b"
+SENTINEL_A6[mullu64_all_alias_native]="a604000c"
+SENTINEL_A6[mullu32_immediate_nf_native]="a604000d"
+SENTINEL_A6[mullu64_memory_nf_native]="a604000e"
 SENTINEL_A6[divl_same_dq_dr]="a6f04500"
 SENTINEL_A6[divl_u64]="a6f04600"
 SENTINEL_A6[divl_s64]="a6f04700"
 SENTINEL_A6[bfins_dreg_imm]="a6f04800"
 SENTINEL_A6[bfins_dreg_narrow]="a6f04900"
+SENTINEL_A6[bfins_dreg_wrap]="a6f04a00"
+SENTINEL_A6[bfins_dreg_dyn]="a6f04b00"
+SENTINEL_A6[bfins_dreg_dyn_width32]="a6f04c00"
+SENTINEL_A6[bfins_mem_span32]="a6f04d00"
+SENTINEL_A6[bfins_mem_dyn_negative]="a6f04e00"
+SENTINEL_A6[bfins_dreg_boot_alias]="a6f04f00"
+SENTINEL_A6[bfins_mem_dyn_neg_width32]="a6f05000"
+SENTINEL_A6[bfins_mem_dyn_pos_width32]="a6f05100"
 SENTINEL_A6[oracle_zf_moveq_z1_take]="a6020001"
 SENTINEL_A6[oracle_zf_moveq_z0_notake]="a6020002"
 SENTINEL_A6[oracle_zf_moveq_z0_take]="a6020003"
@@ -1693,6 +3751,7 @@ SENTINEL_A6[oracle_zf_bne_z1_take]="a602000d"
 SENTINEL_A6[oracle_zf_bne_z0_notake]="a602000e"
 SENTINEL_A6[oracle_zf_mem_take]="a602000f"
 SENTINEL_A6[oracle_zf_mem_notake]="a6020010"
+SENTINEL_A6[oracle_zf_dbf_preserve_take]="a6020011"
 # Fuzz vector sentinels
 SENTINEL_A6[fuzz_alu_0]="a6f00000"
 SENTINEL_A6[fuzz_shift_0]="a6f00100"
@@ -1744,10 +3803,115 @@ SENTINEL_A6[fuzz_memrt_4]="a6f02e00"
 SENTINEL_A6[fuzz_exg_4]="a6f02f00"
 SENTINEL_A6[fuzz_mixed_4]="a6f03000"
 SENTINEL_A6[fuzz_flags_4]="a6f03100"
+SENTINEL_A6[cache_disabled_selfmod_replay]="a6c0e001"
+SENTINEL_A6[movea_l_sp_postinc_cov]="a6c0e002"
+SENTINEL_A6[movea_l_postinc_alias]="a62058a0"
+SENTINEL_A6[branch_flush_bgt_zero]="a6c0e003"
 
 # Risk-focused subset used for strict mismatch-first autoresearch.
 # Only these vectors count toward risky_total progression.
 declare -A RISKY_TESTS=(
+    [rol_l_reg_const_count64]=1
+    [rol_l_reg_const_count64_nf]=1
+    [ror_l_reg_const_count64]=1
+    [ror_l_reg_const_count64_nf]=1
+    [rol_b_imm_count8]=1
+    [rol_b_imm_count8_nf]=1
+    [rol_w_imm_count8]=1
+    [rol_w_imm_count8_nf]=1
+    [rol_l_imm_count8]=1
+    [rol_l_imm_count8_nf]=1
+    [ror_b_imm_count8]=1
+    [ror_b_imm_count8_nf]=1
+    [ror_w_imm_count8]=1
+    [ror_w_imm_count8_nf]=1
+    [ror_l_imm_count8]=1
+    [ror_l_imm_count8_nf]=1
+    [rolw_mem_native]=1
+    [rolw_mem_native_nf]=1
+    [rorw_mem_native]=1
+    [rorw_mem_native_nf]=1
+    [aslw_mem_native]=1
+    [aslw_mem_native_nf]=1
+    [asrw_mem_native]=1
+    [asrw_mem_native_nf]=1
+    [lslw_mem_native]=1
+    [lslw_mem_native_nf]=1
+    [lsrw_mem_native]=1
+    [lsrw_mem_native_nf]=1
+    [roxlw_mem_x_native]=1
+    [roxrw_mem_x_native]=1
+    [asl_l_reg_zero_count32_const_v_clear]=1
+    [lsr_l_reg_const_count32]=1
+    [asr_l_reg_count0_pressure_preserves_x]=1
+    [asl_b_reg_count32_boundary]=1
+    [asl_w_reg_count32_boundary]=1
+    [asl_l_reg_count32_boundary]=1
+    [asl_l_reg_zero_count32_v_clear]=1
+    [asl_b_reg_zero_count63_v_clear]=1
+    [asl_w_reg_zero_count33_v_clear]=1
+    [asr_b_reg_count32_boundary]=1
+    [asr_w_reg_count32_boundary]=1
+    [asr_l_reg_count32_boundary]=1
+    [lsl_b_reg_count32_boundary]=1
+    [lsl_w_reg_count32_boundary]=1
+    [lsl_l_reg_count32_boundary]=1
+    [lsr_b_reg_count32_boundary]=1
+    [lsr_w_reg_count32_boundary]=1
+    [lsr_l_reg_count32_boundary]=1
+    [lsr_l_reg_count33_boundary]=1
+    [asl_b_reg_count32_nf]=1
+    [asl_w_reg_count32_nf]=1
+    [asl_l_reg_count32_nf]=1
+    [asr_b_reg_count32_nf]=1
+    [asr_w_reg_count32_nf]=1
+    [asr_l_reg_count32_nf]=1
+    [lsl_b_reg_count32_nf]=1
+    [lsl_w_reg_count32_nf]=1
+    [lsl_l_reg_count32_nf]=1
+    [lsr_b_reg_count32_nf]=1
+    [lsr_w_reg_count32_nf]=1
+    [lsr_l_reg_count32_nf]=1
+    [asl_b_reg_same_count_data]=1
+    [asl_w_reg_same_count_data]=1
+    [asl_l_reg_same_count_data]=1
+    [asr_b_reg_same_count_data]=1
+    [asr_w_reg_same_count_data]=1
+    [asr_l_reg_same_count_data]=1
+    [lsl_b_reg_same_count_data]=1
+    [lsl_w_reg_same_count_data]=1
+    [lsl_l_reg_same_count_data]=1
+    [lsr_b_reg_same_count_data]=1
+    [lsr_w_reg_same_count_data]=1
+    [lsr_l_reg_same_count_data]=1
+    [asl_b_reg_same_count_data_nf]=1
+    [asl_w_reg_same_count_data_nf]=1
+    [asl_l_reg_same_count_data_nf]=1
+    [asr_b_reg_same_count_data_nf]=1
+    [asr_w_reg_same_count_data_nf]=1
+    [asr_l_reg_same_count_data_nf]=1
+    [lsl_b_reg_same_count_data_nf]=1
+    [lsl_w_reg_same_count_data_nf]=1
+    [lsl_l_reg_same_count_data_nf]=1
+    [lsr_b_reg_same_count_data_nf]=1
+    [lsr_w_reg_same_count_data_nf]=1
+    [lsr_l_reg_same_count_data_nf]=1
+    [divs_w_imm_overflow_preserve_z]=1
+    [divu_l32_same_dq_dr_nf]=1
+    [divs_l32_same_dq_dr_nf]=1
+    [divu_l32_src_dr_alias_nf]=1
+    [divs_l32_src_dr_alias_nf]=1
+    [divs_w_overflow_preserve_z]=1
+    [cas_b_success]=1
+    [cas_b_fail]=1
+    [cas_b_predec]=1
+    [cas_w_postinc]=1
+    [cas_l_d16]=1
+    [host_code_reuse_coherence]=1
+    [cache_disabled_selfmod_replay]=1
+    [movea_l_sp_postinc_cov]=1
+    [movea_l_postinc_alias]=1
+    [branch_flush_bgt_zero]=1
     [roxl_x_propagation]=1
     [roxr_x_propagation]=1
     [roxl_count_2]=1
@@ -1762,13 +3926,84 @@ declare -A RISKY_TESTS=(
     [roxr_reg_count_33]=1
     [roxr_reg_count_32]=1
     [roxr_reg_count_0]=1
+    [roxl_b_reg_count_63_copies_x]=1
+    [roxr_b_reg_count_63_copies_x]=1
+    [roxl_w_reg_count_51_copies_x]=1
+    [roxr_w_reg_count_51_copies_x]=1
+    [roxl_l_reg_count_33_copies_x]=1
+    [roxr_l_reg_count_33_copies_x]=1
+    [roxl_l_reg_count_0_copies_x]=1
+    [roxr_reg_count_0_copies_x]=1
+    [roxl_l_reg_count_33_pressure]=1
+    [roxr_l_reg_count_33_pressure]=1
+    [ccr_ori_exact_bits]=1
+    [ccr_andi_exact_mask]=1
+    [ccr_eori_exact_toggle]=1
+    [ccr_ori_after_borrow_flags]=1
+    [ccr_andi_after_borrow_flags]=1
+    [ccr_eori_after_borrow_flags]=1
+    [addx_b_zero_sticky_z_clear]=1
+    [addx_w_zero_sticky_z_clear]=1
+    [addx_l_zero_sticky_z_clear]=1
+    [subx_b_zero_sticky_z_clear]=1
+    [subx_w_zero_sticky_z_clear]=1
+    [subx_l_zero_sticky_z_clear]=1
+    [addx_b_overflow_with_x]=1
+    [addx_w_overflow_with_x]=1
+    [addx_l_overflow_with_x]=1
+    [subx_b_overflow_with_x]=1
+    [subx_w_overflow_with_x]=1
+    [subx_l_overflow_with_x]=1
+    [subx_b_without_x]=1
+    [subx_w_without_x]=1
+    [subx_l_without_x]=1
+    [addx_b_zero_sticky_z_set]=1
+    [addx_w_zero_sticky_z_set]=1
+    [addx_l_zero_sticky_z_set]=1
+    [addx_b_zero_without_x_sticky_z_set]=1
+    [addx_w_zero_without_x_sticky_z_set]=1
+    [addx_l_zero_without_x_sticky_z_set]=1
+    [roxl_l_zero_count_copies_cleared_x]=1
+    [subx_b_zero_sticky_z_set]=1
+    [subx_w_zero_sticky_z_set]=1
+    [subx_l_zero_sticky_z_set]=1
+    [addx_b_distinct_reg_consumes_x]=1
+    [addx_w_distinct_reg_consumes_x]=1
+    [addx_l_distinct_reg_consumes_x]=1
+    [subx_b_distinct_reg_consumes_x]=1
+    [subx_w_distinct_reg_consumes_x]=1
+    [subx_l_distinct_reg_consumes_x]=1
+    [addx_b_same_reg_consumes_x]=1
+    [addx_w_same_reg_consumes_x]=1
+    [addx_l_same_reg_consumes_x]=1
+    [subx_b_same_reg_consumes_x]=1
+    [subx_w_same_reg_consumes_x]=1
+    [subx_l_same_reg_consumes_x]=1
+    [asl_b_reg_count_0_preserves_x]=1
+    [asl_w_reg_count_0_preserves_x]=1
+    [asl_l_reg_count_0_preserves_x]=1
+    [asr_b_reg_count_0_preserves_x]=1
+    [asr_w_reg_count_0_preserves_x]=1
+    [asr_l_reg_count_0_preserves_x]=1
+    [lsl_b_reg_count_0_preserves_x]=1
+    [lsl_w_reg_count_0_preserves_x]=1
+    [lsl_l_reg_count_0_preserves_x]=1
+    [lsr_b_reg_count_0_preserves_x]=1
+    [lsr_w_reg_count_0_preserves_x]=1
+    [lsr_l_reg_count_0_preserves_x]=1
     [roxl_reg_count_63]=1
     [roxr_reg_count_63]=1
     [roxr_roxl_chain_x]=1
     [roxl_lsr_chain_x]=1
     [movem_predec_postinc]=1
+    [movem_no_writeback]=1
     [movem_predec_mixed_order]=1
     [movem]=1
+    [indexed_full_neg_base]=1
+    [io_byte_write_roundtrip]=1
+    [strict_zero_ram_native]=1
+    [dbra_ccr_preserve_z_clear]=1
+    [dbra_ccr_preserve_z_set]=1
     [dbra]=1
     [dbra_not_taken]=1
     [dbra_start_minus1_branch]=1
@@ -1812,10 +4047,13 @@ declare -A RISKY_TESTS=(
     [dbne_loop_z_set]=1
     [dbeq_loop_z_clear]=1
     [btst_reg_high_bit]=1
+    [btst_b_d16_highbit]=1
+    [move_to_mem_and_back]=1
     [bitops_highbit]=1
     [bitops_chg_highbit]=1
     [flags]=1
     [flags_eori_ccr]=1
+    [scc_vc_vs]=1
     [move_sr_roundtrip]=1
     [muls_neg_neg]=1
     [muls_zero]=1
@@ -1823,6 +4061,28 @@ declare -A RISKY_TESTS=(
     [divs_overflow]=1
     [mulu_large]=1
     [divu_remainder]=1
+    [divu_w_zero_frame]=1
+    [divs_w_zero_frame]=1
+    [divu_l_zero_frame]=1
+    [divs_l_zero_frame]=1
+    [divu_l32_zero_distinct]=1
+    [divs_l32_zero_distinct]=1
+    [divu_l32_success_nf]=1
+    [divs_l32_success_nf]=1
+    [divu_l64_zero_frame]=1
+    [divs_l64_zero_frame]=1
+    [divu_l64_same_dq_dr]=1
+    [divs_l64_same_dq_dr]=1
+    [divu_l64_same_dq_dr_nf]=1
+    [divs_l64_same_dq_dr_nf]=1
+    [divu_l64_overflow]=1
+    [divu_l64_overflow_nf]=1
+    [divs_l64_overflow]=1
+    [divs_l64_overflow_nf]=1
+    [divs_l32_overflow]=1
+    [divs_l32_overflow_nf]=1
+    [trapv_taken_frame]=1
+    [trapv_not_taken_preserve]=1
     [muldiv]=1
     [abcd_basic]=1
     [sbcd_basic]=1
@@ -1941,11 +4201,58 @@ declare -A RISKY_TESTS=(
     [bfchg_reg_edge]=1
     [bftst_reg_edge]=1
     [bfins_reg_edge]=1
+    [bitfield_mem_an_family]=1
+    [bitfield_d16_an]=1
+    [bitfield_indexed_an]=1
+    [bitfield_absw]=1
+    [bitfield_absl]=1
+    [bitfield_pc_d16]=1
+    [bitfield_pc_indexed]=1
     [pack_dn_edge]=1
+    [pack_predec_a7_alias]=1
     [unpk_dn_edge]=1
+    [unpk_predec_a7_alias]=1
+    [chk2_w_equal_preserve_ccr]=1
+    [chk2_b_areg_fullwidth_d16]=1
+    [chk2_l_wrapped_absl]=1
+    [chk2_w_trap_vector6]=1
+    [chk2_w_indexed_inrange]=1
+    [chk2_l_fullindexed_inrange]=1
+    [chk2_w_pcrel_inrange]=1
     [movep_l_roundtrip]=1
     [sr_ops_combo]=1
     [moves_write_read]=1
+    [moves_predec_store_alias]=1
+    [moves_predec_read_alias]=1
+    [moves_l_indexed_store]=1
+    [moves_b_postinc_areg_alias]=1
+    [moves_privilege_vector8]=1
+    [fullsr_orsr_privilege_vector8]=1
+    [fullsr_andsr_privilege_vector8]=1
+    [fullsr_eorsr_privilege_vector8]=1
+    [fullsr_mv2sr_privilege_vector8]=1
+    [fullsr_mvsr_privilege_vector8]=1
+    [system_usp_roundtrip]=1
+    [reset_privilege_vector8]=1
+    [usp_privilege_vector8]=1
+    [stop_clear_s_vector8]=1
+    [stop_privilege_vector8]=1
+    [movec_privilege_vector8]=1
+    [rte_privilege_vector8]=1
+    [cache_privilege_vector8]=1
+    [cache_supervisor_successors]=1
+    [fdbcc_false_decrement_branch]=1
+    [ftrapcc_true_vector7]=1
+    [ftrapcc_false_operand_lengths]=1
+    [fpp_semantic_successor]=1
+    [fscc_false_byte]=1
+    [fbcc_false_operand_lengths]=1
+    [cas2_w_success]=1
+    [cas2_w_fail_first]=1
+    [cas2_w_fail_second]=1
+    [cas2_l_success]=1
+    [cas2_l_fail_second]=1
+    [cas2_l_alias_compare]=1
     [adda_w_cov]=1
     [adda_l_cov]=1
     [adda_w_neg_cov]=1
@@ -1955,6 +4262,7 @@ declare -A RISKY_TESTS=(
     [move_b_d16_an_cov]=1
     [move_w_d16_an_cov]=1
     [move_l_d16_an_cov]=1
+    [move_l_idx_absw_native]=1
     [move_b_idx_cov]=1
     [move_l_idx_scale_cov]=1
     [move_l_pc_rel_cov]=1
@@ -2030,6 +4338,11 @@ declare -A RISKY_TESTS=(
     [chk_w_in_range]=1
     [chk_w_zero]=1
     [chk_w_equal]=1
+    [chk_w_negative_trap_n]=1
+    [chk_w_upper_trap_n_clear]=1
+    [chk_l_negative_trap_n]=1
+    [chk_l_upper_trap_n_clear]=1
+    [chk_l_in_range_preserve_ccr]=1
     [sbcd_borrow_chain]=1
     [sbcd_zero_zero]=1
     [nbcd_zero_no_x]=1
@@ -2046,11 +4359,33 @@ declare -A RISKY_TESTS=(
     [divl_u32_max]=1
     [divl_s32_neg_divisor]=1
     [mull_s64_neg]=1
+    [mulls32_negative_fit_v_native]=1
+    [mullu64_source_preserve_v_native]=1
+    [mullu64_source_low_alias_native]=1
+    [mullu64_same_result_alias_native]=1
+    [mullu32_low_sign_full_flags_native]=1
+    [mullu32_overflow_low_zero_flags_native]=1
+    [mulls32_negative_overflow_low_zero_native]=1
+    [mulls32_positive_overflow_low_sign_native]=1
+    [mulls64_negative_flags_native]=1
+    [mullu64_zero_flags_native]=1
+    [mullu64_source_high_alias_native]=1
+    [mullu64_all_alias_native]=1
+    [mullu32_immediate_nf_native]=1
+    [mullu64_memory_nf_native]=1
     [divl_same_dq_dr]=1
     [divl_u64]=1
     [divl_s64]=1
     [bfins_dreg_imm]=1
     [bfins_dreg_narrow]=1
+    [bfins_dreg_wrap]=1
+    [bfins_dreg_dyn]=1
+    [bfins_dreg_dyn_width32]=1
+    [bfins_mem_span32]=1
+    [bfins_mem_dyn_negative]=1
+    [bfins_dreg_boot_alias]=1
+    [bfins_mem_dyn_neg_width32]=1
+    [bfins_mem_dyn_pos_width32]=1
     [dbeq_x_clobber]=1
     [oracle_zf_moveq_z1_take]=1
     [oracle_zf_moveq_z0_notake]=1
@@ -2068,7 +4403,47 @@ declare -A RISKY_TESTS=(
     [oracle_zf_bne_z0_notake]=1
     [oracle_zf_mem_take]=1
     [oracle_zf_mem_notake]=1
+    [oracle_zf_dbf_preserve_take]=1
+    [bcd_abcd_zero_sticky_set]=1
+    [bcd_abcd_zero_sticky_clear]=1
+    [bcd_abcd_nonzero_clears_sticky]=1
+    [bcd_abcd_carry_zero]=1
+    [bcd_abcd_same_reg_with_x]=1
+    [bcd_sbcd_zero_sticky_set]=1
+    [bcd_sbcd_zero_sticky_clear]=1
+    [bcd_sbcd_borrow]=1
+    [bcd_sbcd_same_reg_with_x]=1
+    [bcd_nbcd_zero_sticky_set]=1
+    [bcd_nbcd_zero_sticky_clear]=1
+    [bcd_nbcd_nonzero]=1
+    [bcd_nbcd_with_x]=1
+    [bcd_abcd_decimal_09_plus_01]=1
+    [bcd_abcd_invalid_nibble_exact]=1
+    [bcd_abcd_extend_chain]=1
+    [bcd_sbcd_decimal_10_minus_01]=1
+    [bcd_sbcd_invalid_nibble_exact]=1
+    [bcd_nbcd_decimal_10]=1
+    [bcd_nbcd_invalid_nibble_exact]=1
+    [bcd_native_abcd_zero_sticky]=1
+    [bcd_native_abcd_invalid_extend]=1
+    [bcd_native_sbcd_invalid_borrow]=1
+    [bcd_native_nbcd_invalid_borrow]=1
+    [bcd_abcd_predec_src_a7]=1
+    [bcd_abcd_predec_dst_a7]=1
+    [bcd_abcd_predec_a7_alias]=1
+    [bcd_sbcd_predec_src_a7]=1
+    [bcd_sbcd_predec_dst_a7]=1
+    [bcd_sbcd_predec_a7_alias]=1
+    [bcd_nbcd_predec_a7]=1
 )
+for _shift_name in "${SHIFT_BOUNDARY_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_shift_name"]=1
+done
+unset _shift_name
+for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_rotate_name"]=1
+done
+unset _rotate_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()
@@ -2135,7 +4510,9 @@ if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
 fi
 
 # Optional exact-name subset for focused debug loops while still using the
-# normal harness machinery and metrics contract.
+# normal harness machinery and metrics contract.  Explicit selection may run a
+# staged risky vector before it is promoted into active-risky-tests.txt; default
+# runs remain limited to the one-vector-at-a-time active campaign inventory.
 if [ -n "${B2_TEST_NAMES:-}" ]; then
     declare -A _wanted_tests=()
     while IFS= read -r _name; do
@@ -2143,14 +4520,14 @@ if [ -n "${B2_TEST_NAMES:-}" ]; then
     done < <(printf '%s\n' "$B2_TEST_NAMES" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sed '/^$/d')
 
     declare -a _filtered_active=()
-    for name in "${ACTIVE_TEST_ORDER[@]}"; do
-        if [ -n "${_wanted_tests[$name]+x}" ]; then
+    for name in "${TEST_ORDER[@]}"; do
+        if [ -n "${_wanted_tests[$name]+x}" ] && [ -n "${RISKY_TESTS[$name]+x}" ]; then
             _filtered_active+=("$name")
         fi
     done
     ACTIVE_TEST_ORDER=("${_filtered_active[@]}")
     if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
-        emit_failure_metrics 1 "B2_TEST_NAMES selected no active risky vectors" 1
+        emit_failure_metrics 1 "B2_TEST_NAMES selected no known risky vectors" 1
     fi
 fi
 

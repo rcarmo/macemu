@@ -137,14 +137,29 @@ static __inline__ uae_u32 do_get_virtual_address(uae_u8 *addr)
 {
 	return (uintptr)addr - MEMBaseDiff;
 }
+/* Low NuBus addresses which alias the host JIT cache/reservation must never
+   expose or modify native code.  With more than 128 MiB of guest RAM this
+   range is ordinary RAM, matching the mapping policy in main_unix.cpp. */
+#define LOW_NUBUS_OPEN_BUS_START 0x0a014000u
+#define LOW_NUBUS_OPEN_BUS_END   0x0a815000u
+extern uint32 RAMSize;
+static __inline__ bool is_low_nubus_open_bus_gap(uaecptr addr)
+{
+    return RAMSize <= 0x08000000u &&
+        addr >= LOW_NUBUS_OPEN_BUS_START && addr < LOW_NUBUS_OPEN_BUS_END;
+}
 static __inline__ uae_u32 get_long(uaecptr addr)
 {
+    if (is_low_nubus_open_bus_gap(addr))
+        return 0xffffffffu;
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     return do_get_mem_long(m);
 }
 #define phys_get_long get_long
 static __inline__ uae_u32 get_word(uaecptr addr)
 {
+    if (is_low_nubus_open_bus_gap(addr))
+        return 0xffffu;
     uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
     return do_get_mem_word(m);
 }
@@ -182,6 +197,8 @@ static __inline__ bool is_50f_scanner_data(uaecptr addr)
 }
 static __inline__ uae_u32 get_byte(uaecptr addr)
 {
+    if (is_low_nubus_open_bus_gap(addr))
+        return 0xffu;
     bool handled = false;
     uae_u32 fake = fake_50f_status_byte(addr, &handled);
     if (handled)
@@ -193,32 +210,44 @@ static __inline__ uae_u32 get_byte(uaecptr addr)
     return v;
 }
 #define phys_get_byte get_byte
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+extern void jit_notify_guest_memory_write(uae_u32 address, uae_u32 size);
+#define JIT_NOTIFY_GUEST_WRITE(addr, size) jit_notify_guest_memory_write((addr), (size))
+#else
+#define JIT_NOTIFY_GUEST_WRITE(addr, size) do { } while (0)
+#endif
+
 static __inline__ void put_long(uaecptr addr, uae_u32 l)
 {
     if (trace_write_window_enabled())
         trace_write_log("L", addr, l);
-    if (addr == 0x5ffffffc)
+    if (is_low_nubus_open_bus_gap(addr) || addr == 0x5ffffffc)
         return;
     uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
     do_put_mem_long(m, l);
+    JIT_NOTIFY_GUEST_WRITE(addr, 4);
 }
 #define phys_put_long put_long
 static __inline__ void put_word(uaecptr addr, uae_u32 w)
 {
     if (trace_write_window_enabled())
         trace_write_log("W", addr, w);
+    if (is_low_nubus_open_bus_gap(addr))
+        return;
     uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
     do_put_mem_word(m, w);
+    JIT_NOTIFY_GUEST_WRITE(addr, 2);
 }
 #define phys_put_word put_word
 static __inline__ void put_byte(uaecptr addr, uae_u32 b)
 {
     if (trace_write_window_enabled())
         trace_write_log("B", addr, b);
-    if (is_50f_scanner_data(addr))
+    if (is_low_nubus_open_bus_gap(addr) || is_50f_scanner_data(addr))
         return;
     uae_u8 * const m = (uae_u8 *)do_get_real_address(addr);
     do_put_mem_byte(m, b);
+    JIT_NOTIFY_GUEST_WRITE(addr, 1);
 }
 #define phys_put_byte put_byte
 static __inline__ uae_u8 *get_real_address(uaecptr addr)

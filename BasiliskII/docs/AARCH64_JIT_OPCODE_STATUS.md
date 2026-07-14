@@ -18,17 +18,17 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 | 0x1 | MOVE.B | 88 | ✅ Safe | None | No get_n_addr usage |
 | 0x2 | MOVE.L/MOVEA.L | 108 | ✅ Safe | None | No get_n_addr usage |
 | 0x3 | MOVE.W/MOVEA.W | 108 | ✅ Safe | None | No get_n_addr usage |
-| 0x4 | CLR/NEG/NOT/MOVEM/LEA/PEA/JSR/JMP/RTS/LINK/UNLK/SWAP/EXT/TST/CHK | 197 | ✅ Fixed | None | 9 handlers use safe readlong/writelong path |
+| 0x4 | CLR/NEG/NBCD/NOT/MOVEM/LEA/PEA/JSR/JMP/RTS/LINK/UNLK/SWAP/EXT/TST/CHK | 197 | ✅ Fixed/audited | None | 9 handlers use safe readlong/writelong; NBCD shares the exact BCD lifecycle |
 | 0x5 | ADDQ/SUBQ/Scc/DBcc | 178 | ✅ Safe | None | No get_n_addr usage |
 | 0x6 | Bcc/BSR/BRA | 42 | ✅ Safe | None | No get_n_addr usage |
 | 0x7 | MOVEQ/EMUL_OP | 1 | ✅ Safe | None | No get_n_addr usage |
-| 0x8 | OR/DIV/SBCD | 54 | ✅ Safe | None | No get_n_addr usage |
+| 0x8 | OR/DIV/SBCD | 54 | ✅ Audited | None | DIVS/DIVL zero/overflow and patched joins; SBCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
 | 0x9 | SUB/SUBA/SUBX | 86 | ✅ Safe | None | No get_n_addr usage |
 | 0xA | A-line traps | — | ✅ Interpreter | None | A-line handled by runtime helper |
 | 0xB | CMP/CMPA/CMPM/EOR | 86 | ✅ Safe | None | No get_n_addr usage |
-| 0xC | AND/MUL/ABCD/EXG | 79 | ✅ Safe | None | No get_n_addr usage |
+| 0xC | AND/MUL/ABCD/EXG | 79 | ✅ Audited | None | MULL explicit result ownership, full-product flags, aliases, and allocator lifetime; ABCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
 | 0xD | ADD/ADDA/ADDX | 86 | ✅ Safe | None | No get_n_addr usage |
-| 0xE | ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR | 36 | ✅ Safe | None | No get_n_addr usage |
+| 0xE | ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR | 36 | ✅ Audited | None | Register-count and fixed-memory flag/count/alias/X ownership complete; no get_n_addr usage |
 | 0xF | MOVE16/FPU/cpSAVE/cpRESTORE | 27 | ✅ Safe | None | No get_n_addr usage |
 
 ## Fixes Applied
@@ -59,6 +59,10 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Long-multiply result/flag/allocator lifecycle | current structural audit | Explicit Dl/Dh/source ownership, full-product N/Z/V, high-before-low alias ordering, and generator value locking under a forced S1-to-Dl collision; see `AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md` |
+| Fixed-memory shifts and ROX ownership | `01a04904` | `jff`/`jnf` memory-shift lifecycle, branchless C/V, and one RMW X binding under forced allocator pressure; see `AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md` |
+| Division zero/overflow lifecycle | `47ed4dea` | Signed 32/32 overflow, conditional result preservation, signed-overflow Z, aliases, and all 28 DIVL joins; see `AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md` |
+| BCD arithmetic/flag/A7 family | `1aeb577e` | `ABCD`/`SBCD`/`NBCD` share exact 68040 correction and X/C/sticky-Z handling; ordered byte predecrement uses `areg_byteinc[]`; see `AARCH64_JIT_AUDIT_BCD.md` |
 | A-line trap L2 helper | `adc83002` | Runtime helper for A-line exception control flow |
 | 64-bit PC_P truncation | `91f2e0f8` | add_l/sub_l_ri routes through arm_ADD_l for PC_P |
 | Endblock pc_p store | `80afe33d` | Unconditional regs.pc_p store on hot chain |

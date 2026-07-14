@@ -63,9 +63,11 @@
 // move from sysreg
 #define MRS_NZCV_x(Xt)    _W((0b1101010100111 << 19) | (MIN_EL0 << 16) | (0b0100 << 12) | (0b0010 << 8) | (0b000 << 5) | (Xt))
 #define MRS_FPCR_x(Xt)    _W((0b1101010100111 << 19) | (MIN_EL0 << 16) | (0b0100 << 12) | (0b0100 << 8) | (0b000 << 5) | (Xt))
+#define MRS_FPSR_x(Xt)    _W((0b1101010100111 << 19) | (MIN_EL0 << 16) | (0b0100 << 12) | (0b0100 << 8) | (0b001 << 5) | (Xt))
 // move to sysreg
 #define MSR_NZCV_x(Xt)		_W((0b1101010100011 << 19) | (MIN_EL0 << 16) | (0b0100 << 12) | (0b0010 << 8) | (0b000 << 5) | (Xt))
 #define MSR_FPCR_x(Xt)    _W((0b1101010100011 << 19) | (MIN_EL0 << 16) | (0b0100 << 12) | (0b0100 << 8) | (0b000 << 5) | (Xt))
+#define MSR_FPSR_x(Xt)    _W((0b1101010100011 << 19) | (MIN_EL0 << 16) | (0b0100 << 12) | (0b0100 << 8) | (0b001 << 5) | (Xt))
 
 
 /*----------------------------------------
@@ -429,6 +431,7 @@
 #define EOR_xxCflag(Xd,Xn)        _W(immCflag | immOP_EOR | ((Xn) << 5) | (Xd))
 #define CLEAR_xxZflag(Xd,Xn)      _W(immZflagInv | immOP_AND | ((Xn) << 5) | (Xd))
 #define CLEAR_xxCflag(Xd,Xn)      _W(immCflagInv | immOP_AND | ((Xn) << 5) | (Xd))
+#define CLEAR_xxVflag(Xd,Xn)      _W(immVflagInv | immOP_AND | ((Xn) << 5) | (Xd))
 #define SET_xxZflag(Xd,Xn)        _W(immZflag | immOP_ORR | ((Xn) << 5) | (Xd))
 #define SET_xxVflag(Xd,Xn)        _W(immVflag | immOP_ORR | ((Xn) << 5) | (Xd))
 #define SET_xxCflag(Xd,Xn)        _W(immCflag | immOP_ORR | ((Xn) << 5) | (Xd))

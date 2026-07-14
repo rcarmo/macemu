@@ -108,8 +108,12 @@ extern uae_u32 start_pc;
 
 struct blockinfo_t;
 
+#define JIT_TRACE_SOURCE_BYTES 22
+
 typedef struct {
   uae_u16* location;
+  uae_u16 opcode;
+  uae_u8  source[JIT_TRACE_SOURCE_BYTES];
   uae_u8  specmem;
 } cpu_history;
 
@@ -197,7 +201,7 @@ extern uae_u32 needed_flags;
 extern uae_u8* comp_pc_p;
 extern void* pushall_call_handler;
 
-#define VREGS 22
+#define VREGS 24
 #define VFREGS 10
 
 #define INMEM 1
@@ -250,7 +254,9 @@ STATIC_INLINE int end_block(uae_u16 opcode)
 #define S1 19
 #define S2 20
 #define S3 21
-#define SCRATCH_REGS 3
+#define S4 22
+#define S5 23
+#define SCRATCH_REGS 5
 
 #define FP_RESULT 8
 #define FS1 9
@@ -372,6 +378,17 @@ extern uintptr get_const(int r);
 extern uae_u8* compemu_host_pc_from_const(uintptr pc_const);
 extern void register_branch(uintptr not_taken, uintptr taken, uae_u8 cond);
 extern void register_possible_exception(void);
+extern void register_possible_exception_at_successor(void);
+
+/* Deferred native exception requests carry the vector in the low word.  Any
+   operation whose format-2 frame needs the exact faulting opcode PC adds
+   OLDPC_VALID and stores that PC in regs.jit_exception_oldpc.  CHK also tags
+   its architecturally selected N value for publication at the common boundary.
+   Plain legacy requests (for example CHK2) remain untagged. */
+#define JIT_EXCEPTION_VECTOR_MASK 0x0000ffffu
+#define JIT_EXCEPTION_OLDPC_VALID 0x20000000u
+#define JIT_EXCEPTION_CHK_N_SET   0x40000000u
+#define JIT_EXCEPTION_CHK_N_VALID 0x80000000u
 
 #define comp_get_ibyte(o) do_get_mem_byte((uae_u8 *)(comp_pc_p + (o) + 1))
 #define comp_get_iword(o) do_get_mem_word((uae_u16 *)(comp_pc_p + (o)))

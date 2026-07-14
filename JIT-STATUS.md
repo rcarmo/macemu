@@ -171,11 +171,16 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 ## BasiliskII 68K JIT
 
-**Build:** ✅
-**Interpreter:** ✅ Boots Mac OS 7.x, idle loop reached
-**JIT optlev=0:** ✅ Full boot, zero SEGVs
-**JIT optlev=2:** ⚠️ Full-JIT default. The historical `040ba0xx` late-ROM spin is **FIXED (2026-06-22)** — see below. With three fixes (lazy-cache-flush staleness + cache-tag aliasing + dispatcher-diagnostic gating) the all-native boot clears the NuBus/Slot-Manager frontier and the `040026f8` aliasing frontier, and prints video-init markers (`VideoDriverOpen` → `SetEntries` → `SetGamma`). The `0402e8d0` slot-ROM `bfextu` blit freeze is **FIXED (2026-06-23, `8195ebc9`)**: it lived specifically in the **optlev-0 interpreter warm-up** (`exec_nostats`) path — itself an interpreter fallback the goal forbids. `optcount[0]` set `10→0` (translate on first execution, never whole-block-interpret); jit-test `302/302 fail_equiv=0`, boot advances past `0402e8d0` (d5→0). **Fixes (8195ebc9 + 18c78439):** optcount[0]=0 (eliminate optlev-0 interp warm-up; fixes 0402e8d0) and SPCFLAG_JIT_EXEC_RETURN cleared at any nesting depth (fixes the 04087926 nested-flush do_nothing spin). Boot now advances through video init + InitAll + SCSIReset. **Current frontier:** a later post-SCSI `0402e8d0` translated-block freeze. Desktop not yet reached.
-**JIT harness:** ✅ 301/301 vectors pass (score=100) when run on an idle box. Note: the harness spuriously fails (`INFRA missing REGDUMP`) under concurrent shared-box load from timeouts; individual vectors still pass.
+**Current structural-audit gate (2026-07-14):** ✅
+**Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible at SHA-256 `2ab571a7bb6ba26e4c37a19e2cfeb8604f51333c17504b164c55c2ad69f6d1b0`
+**JIT harness:** ✅ 647/647 risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
+**Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
+**Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
+
+This gate was run host-native on the Orange Pi 6 Plus (`CIX P1`/`CD8180` or `CD8160`, 12 AArch64 CPU cores, 16 GB-class RAM with about 14 GiB visible, Debian Trixie, NVMe root storage). It covers structural opcode-family repairs, helper and exception boundaries, guest-memory coherency, translated-source revalidation, cache-state separation, retirement-clock ownership, register-allocation pressure, and partial JIT initialization/teardown. `MV2SR.W` intentionally remains on its exact legacy semantic-service path pending stronger native proof.
+
+The older frontier narrative below is retained as historical diagnosis; it no longer describes the acceptance frontier of the structural-audit branch.
 
 #### `040ba0xx` ROOT CAUSE (2026-06-22) — LAZY translation-cache invalidation reused STALE blocks (FIXED)
 
@@ -200,7 +205,126 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**301 total vectors, all risky, score=100**
+**647 active risky vectors, score=100**
+
+The larger exact-native family inventories remain available as focused gates;
+the current `ROL`/`ROR` inventory is 92/92 and the accepted register-count
+`ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138.
+
+### Recent bug fixes (2026-07)
+
+- **ROL/ROR six-bit counts, carry lifecycle, aliases, and no-flags memory paths**
+  (2026-07-14): AArch64 register wrappers now preserve the 68040 low-six-bit
+  count before width-periodic rotation, distinguish count zero from non-zero
+  multiples for C, and support legal count/data aliases through explicit
+  `readreg()` then destination `rmw()` ownership. The generator selects
+  flag-producing helpers before emission instead of reconstructing flags from
+  a no-flags result, while memory `ROLW`/`RORW` no-flags handlers now call their
+  `jnf` helpers across every addressing mode. Patched runtime joins and
+  branchless carry publication replace fixed emitted skip distances. Focused
+  exact-native coverage passes 92/92; the complete active gate passes 647/647.
+  Full evidence is in `BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md`.
+
+- **Register-count ASL/ASR/LSL/LSR counts, overflow, X lifecycle, and aliases**
+  (2026-07-14): all register helpers implement the guest low-six-bit domain
+  rather than AArch64 W-form modulo-32 shifts. Runtime joins materialise old X
+  before branching, non-zero carry publication no longer creates unmatched
+  allocator ownership, and ASL overflow uses the complete sign-transition
+  contract including zero at large counts. AArch64 generated handlers accept
+  legal count/data aliases and retain other-backend containment. The focused
+  exact-native gate passes 138/138 and the accepted full corpus passed 579/579.
+  Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md`.
+
+- **DIVS/DIVL zero, overflow, flags, aliases, and branch geometry**
+  (2026-07-14): signed 32/32 DIVL now widens before division so
+  `INT32_MIN / -1` takes the architectural overflow path instead of inheriting
+  `SDIV.W` saturation. Conditional result registers use read/modify/write
+  allocation; all 28 DIVL zero/fit/overflow joins are patched structurally;
+  signed word and long overflow restore incoming Z after host fit comparisons.
+  Sixteen exact-PC vectors cover flag-live/no-flags, 32/64-bit signed/unsigned,
+  distinct and aliased result registers, source aliases, overflow, and precise
+  vector-5 state. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md`.
+
+- **ABCD/SBCD/NBCD arithmetic, flags, and A7 predecrement** (2026-07-13):
+  the old AArch64 helpers used per-digit approximations instead of the
+  authoritative 68040 correction equations, split flag-live from flag-dead
+  handling, and hard-coded one-byte source/destination predecrements. The
+  complete family now shares exact arithmetic cores and one X/C/sticky-Z
+  lifecycle, preserves N/V, patches all seven variable-length correction joins,
+  and uses `areg_byteinc[]` for both ordered predecrements. Exact-PC replay also
+  restores skipped register/CCR state and mutable memory before each trace/native
+  pass. Mismatch-first witnesses exposed invalid-nibble result/flag differences
+  and A7 ending one or two bytes high. The focused fail-closed gate passes 31/31,
+  including source-A7, destination-A7, `-(A7),-(A7)`, opcode-only, decimal-edge,
+  invalid-nibble, alias, X/C-chain, and sticky-Z cases. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md`.
+
+- **ADDX/SUBX and immediate-CCR flag lifecycle** (2026-07-13):
+  byte/word ADC now propagates incoming X through the shifted operand lane, and
+  byte/word ADC/SBC reconstruct Z from the architectural narrow result without
+  disturbing N/C/V or carry polarity. Selective sticky-Z merging no longer
+  relabels SUBX's inverted physical carry before X duplication. The authoritative
+  generator now derives ORI/ANDI/EORI-to-CCR masks from the guest immediate,
+  rather than from its JIT virtual-register identifier. Mismatch-first vectors
+  exposed wrong ADDX.B/W results and wrong SUBX.B/W/L X/C before repair. Focused
+  strict-native coverage passes 48/48; all twelve effective-zero AS/LS register
+  controls passed without an emitter change; the complete gate passes 476/476.
+  Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md`.
+
+- **Register-count ROXL/ROXR effective-zero flags and structural branches** (2026-07-13):
+  the AArch64 byte/word/long flag-setting helpers used numeric `CBNZ`/`B` instruction
+  displacements around variable-length flag emission. Their effective-zero path also
+  derived N/Z and cleared V but left C clear instead of copying unchanged X as required
+  by the 68040 contract. All six helpers now patch symbolic rotate/end targets and merge
+  X into NZCV.C after the size-correct result test. Forced-native vectors cover both
+  directions and all widths, the deepest low-six-bit modulo reductions (63→0 mod 9,
+  51→0 mod 17, 33→0 mod 33), raw count zero, zero/negative size results, stale-V clearing,
+  C=X, upper-bit preservation, and populated guest-register mappings. The generated
+  opcode surface has no separate no-flags ROX path: all 24 handlers call the flag-setting
+  family. Full validation passes 421/421 with zero fallback/null legal encodings.
+
+- **ARM64 native DBF exits use the runtime PC** (2026-07-04):
+  the remaining post-`151b1853` bad video/resource wall was narrowed to the
+  `04037520`/`0403754c` QuickDraw bitfield-copy loops. Forcing the real block
+  starts `04037520,04037528,04037530,0403754c,04037552` to optlev-0, or using
+  the DBcc barrier, cleared the bad `SetEntries table=04002478 count=1` wall;
+  Scc and BFEXT helper invalidation/splitting did not. Root cause: native DBF
+  (`cc=1`) was allowed to trace-follow one observed loop outcome. ARM64 DBF now
+  materializes `PC_P` from the pre-decrement counter and the DBcc runtime-PC
+  endblock path includes DBF/DBRA, so both loop and exit edges dispatch via the
+  actual runtime PC. Verified: `jit-test/run.sh` passes `318/318`, `fail_equiv=0`,
+  and default L2 reaches the later good `SetEntries table=000b8a48 count=255`.
+  This is still not boot-through; the next frontier is a later `newpc=10001000`
+  bad-PC path around `04002600/04002636/04002642`.
+
+- **ARM64 Bcc mid-block side exits use M68K-aware condition emission** (2026-07-03):
+  the block-link verifier and non-perturbing watchpoints pinned a real control divergence in
+  the ROM resource-type lookup block `04016cb0`: the block containing `04016d00: BLS`
+  side-exited to the found path (`04016d08`) when the interpreter stayed on the not-found
+  path. The end-of-block Bcc emitter already routes `HI/LS` through `compemu_raw_jcc_l_oponly`,
+  which handles the JIT's M68K carry convention; the mid-block side-exit emitter used raw
+  ARM `CC_B_i`, which is wrong for composite unsigned `HI/LS` conditions. Reusing
+  `compemu_raw_jcc_l_oponly` for side-exit skip branches fixes the resource-list growth
+  truncation: default L2 now grows the Resource Manager type-list backing store from
+  `d858=0x60` to `d858=0x130`, matching the interpreter-growth sequence. Verified:
+  `04016cb0` verifier `SKIP-NOREACH` control failure is cleared, `d858` hardware watchpoint
+  reaches `0x130`, and `jit-test/run.sh` passes `318/318`, `fail_equiv=0`,
+  `risky_fail_equiv=0`. This is still not boot-through: the final full-JIT video state remains
+  `SetEntries table=04002478 count=1` (patched run raises the resource map count but remains
+  short of the interpreter's `0x50` entries).
+
+- **ARM64 scratch-vreg range for generated 5-scratch bit-op handlers** (2026-07-03):
+  generated immediate memory bit-op handlers such as `BTST.B #7,(d8,An,Xn)` can allocate
+  five compiler scratch virtual registers (`S1..S5`). ARM64 had only defined `S1..S3`
+  (`VREGS=22`), so `S4/S5` were out-of-range virtual registers and bypassed the guarded
+  allocator path. Defining `S4/S5` and raising `VREGS/SCRATCH_REGS` routes those temporaries
+  through the normal skip-locked/spill-before-reuse allocator. Verified: `0403c02c`
+  block verifier now reports `mismatch=0`; `jit-test/run.sh` passes `318/318`,
+  `fail_equiv=0`, `risky_fail_equiv=0`. This is a correctness fix, not a boot-through claim:
+  full-JIT still reaches the later bad video/resource state (`SetEntries table=04002478 count=1`).
 
 ### Recent bug fixes (2026-06)
 

@@ -35,7 +35,7 @@ clean: ## Clean build artifacts
 
 test: test-jit ## Run all tests
 
-test-jit: build ## Run JIT opcode equivalence harness (301 vectors)
+test-jit: build ## Run JIT opcode equivalence harness (421 vectors)
 	./jit-test/run.sh
 
 test-headless: build ## Headless boot test (no display, no disk, 60s timeout)

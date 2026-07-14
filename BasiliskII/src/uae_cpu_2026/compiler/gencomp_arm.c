@@ -2352,14 +2352,14 @@ static void gen_dbcc(uae_u32 opcode, struct instr *curi, const char* ssize) {
 		break;
 	}
 	comprintf("\tsub_l_ri(offs,m68k_pc_offset-m68k_pc_offset_thisinst-2);\n");
-	comprintf("\tarm_ADD_l_ri(offs,(uintptr)comp_pc_p);\n");
+	comprintf("\tarm_ADD_l_ri_hostptr(offs,(uintptr)comp_pc_p);\n");
 	/* New PC,
 	 once the
 	 offset_68k is
 	 * also added */
 	/* Let's fold in the m68k_pc_offset at this point */
-	comprintf("\tarm_ADD_l_ri(offs,m68k_pc_offset);\n");
-	comprintf("\tarm_ADD_l_ri(PC_P,m68k_pc_offset);\n");
+	comprintf("\tarm_ADD_ptr_ri(offs,m68k_pc_offset);\n");
+	comprintf("\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\n");
 	comprintf("\tm68k_pc_offset=0;\n");
 
 	start_brace();
@@ -4380,11 +4380,11 @@ gen_opcode(unsigned long int opcode) {
 				"\tsub_l_ri(src,m68k_pc_offset-m68k_pc_offset_thisinst-2);\n");
 		/* Leave the following as "add" --- it will allow it to be optimized
 		 away due to src being a constant ;-) */
-		comprintf("\tarm_ADD_l_ri(src,(uintptr)comp_pc_p);\n");
+		comprintf("\tarm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);\n");
 		comprintf("\tmov_l_ri(PC_P,(uintptr)comp_pc_p);\n");
 		/* Now they are both constant. Might as well fold in m68k_pc_offset */
-		comprintf("\tarm_ADD_l_ri(src,m68k_pc_offset);\n");
-		comprintf("\tarm_ADD_l_ri(PC_P,m68k_pc_offset);\n");
+		comprintf("\tarm_ADD_ptr_ri(src,m68k_pc_offset);\n");
+		comprintf("\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\n");
 		comprintf("\tm68k_pc_offset=0;\n");
 
 		if (curi->cc >= 2) {

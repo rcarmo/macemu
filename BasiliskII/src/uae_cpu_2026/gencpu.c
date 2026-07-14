@@ -2415,14 +2415,15 @@ static void gen_opcode (unsigned long int opcode)
 	break;
 
      case i_EMULOP_RETURN:
-	printf ("\tm68k_emulop_return();\n");
+	printf ("\tm68k_dispatch_emulop(0x7100);\n");
 	m68k_pc_offset = 0;
 	break;
 	
      case i_EMULOP:
 	printf ("\n");
 	swap_opcode ();
-	printf ("\tm68k_emulop(opcode);\n");
+	printf ("\tm68k_dispatch_emulop(opcode);\n");
+	m68k_pc_offset = 0;
 	break;
 
      case i_NATFEAT_ID:

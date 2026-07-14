@@ -355,3 +355,26 @@ It is:
 4. only re-promote direct successor chaining after the full PC transfer contract is explicit and proven
 
 This is the right next technical lens for BasiliskII.
+
+---
+
+## 2026-07-09 contract update
+
+Hot-chain coherence is now normalized at the common emitter boundary:
+
+- `compemu_raw_set_pc_full_from_reg()` publishes `regs.pc_p`, `regs.pc_oldp`, and the guest `regs.pc` derived through `MEMBaseDiff`;
+- `compemu_raw_set_pc_full_const()` applies the same rule to constant successors;
+- `compemu_raw_endblock_pc_inreg()` and `compemu_raw_endblock_pc_isconst()` invoke those helpers before any countdown or `spcflags` branch can return to C.
+
+This closes the stale-source-PC window that could repeat an already-retired block when a special condition arrived at the block boundary. A source-level structural gate checks ordering on every build because ordinary opcode equivalence cannot deterministically schedule that asynchronous edge.
+
+## 2026-07-11 value-class update
+
+Pointer width is no longer inferred from an immediate's numeric magnitude in
+generic addition. The backend now distinguishes modulo-2^32 guest addition,
+signed guest-displacement plus host-base conversion, and pointer-width
+increment as separate MIDFUNC contracts. Bcc/DBcc generation names the host-PC
+conversion explicitly; indexed-EA displacements remain guest arithmetic.
+
+See `AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md` for the defect,
+reachability proof, regression, and landing gates.

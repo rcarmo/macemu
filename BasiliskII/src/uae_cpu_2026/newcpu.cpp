@@ -1572,21 +1572,6 @@ static void restore_regs(struct M68kRegisters &r)
 
 void m68k_emulop(uae_u32 opcode)
 {
-    if (opcode == 0xa02d || opcode == 0xa03f || opcode == 0xa051) {
-        fprintf(stderr,
-            "ALINE_EMULOP op=%04x pc=%08x sr=%04x intmask=%u spc=%08x d0=%08x d1=%08x d2=%08x a0=%08x a1=%08x a7=%08x\n",
-            (unsigned)opcode,
-            (unsigned)m68k_getpc(),
-            (unsigned)regs.sr,
-            (unsigned)regs.intmask,
-            (unsigned)regs.spcflags,
-            (unsigned)m68k_dreg(regs,0),
-            (unsigned)m68k_dreg(regs,1),
-            (unsigned)m68k_dreg(regs,2),
-            (unsigned)m68k_areg(regs,0),
-            (unsigned)m68k_areg(regs,1),
-            (unsigned)m68k_areg(regs,7));
-    }
 #if 0
 	struct M68kRegisters r = {};
 	save_regs(r);
@@ -1602,9 +1587,6 @@ void m68k_emulop(uae_u32 opcode)
 		r.a[i] = m68k_areg(regs, i);
 	}
 	MakeSR();
-	if (opcode == 0x7100)
-		fprintf(stderr, "EMULOP_DIAG: nzcv=0x%08x sr=0x%04x\n",
-			(unsigned)regflags.nzcv, (unsigned)regs.sr);
 	r.sr = regs.sr;
 	if (trace_d6_enabled())
 		fprintf(stderr, "TRACE_D6 m68k_emulop enter opcode=%04x pc=%08x d6=%08x d7=%08x a4=%08x a5=%08x\n", (unsigned)opcode, m68k_getpc(), r.d[6], r.d[7], r.a[4], r.a[5]);
@@ -1650,6 +1632,23 @@ void m68k_emulop(uae_u32 opcode)
 	regs.sr = r.sr;
 	MakeFromSR();
 #endif
+}
+
+void m68k_dispatch_emulop(uae_u32 opcode)
+{
+	if (opcode == M68K_EXEC_RETURN) {
+		/* EXEC_RETURN is a privileged host-call terminator.  It deliberately
+		   leaves the guest PC at the sentinel so the enclosing Execute68k*
+		   call owns restoration of its caller's PC and stack frame. */
+		if (!regs.s)
+			Exception(8, 0);
+		else
+			m68k_emulop_return();
+		return;
+	}
+
+	m68k_emulop(opcode);
+	m68k_incpc(2);
 }
 
 #if 0
@@ -2187,6 +2186,11 @@ int m68k_do_specialties(void)
 	return 0;
 }
 
+#if defined(CPU_AARCH64) && defined(USE_JIT)
+extern "C" bool jit_guest_instruction_observer_enabled(void);
+extern "C" void jit_guest_path_record_nostats(uae_u32 pc);
+#endif
+
 void m68k_do_execute (void)
 {
     uae_u32 pc;
@@ -2202,6 +2206,10 @@ void m68k_do_execute (void)
 		SPCFLAGS_CLEAR(SPCFLAG_JIT_END_COMPILE | SPCFLAG_JIT_EXEC_RETURN);
 #endif
 	regs.fault_pc = pc = m68k_getpc();
+#if defined(CPU_AARCH64) && defined(USE_JIT)
+	if (jit_guest_instruction_observer_enabled())
+		jit_guest_path_record_nostats(pc);
+#endif
 	if ((unsigned)m68k_areg(regs, 1) >= 0x1e00 && (unsigned)m68k_areg(regs, 1) < 0x1e40)
 		basilisk_trace_after_table_ready = true;
 	nojit_insn_count++;

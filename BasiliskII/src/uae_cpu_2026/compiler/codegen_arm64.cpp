@@ -230,6 +230,102 @@ LENDFUNC(WRITE,RMW,1,compemu_raw_inc_opcount,(IM16 op))
 
 STATIC_INLINE void compemu_raw_call(uintptr t);
 
+/* Runtime diagnostics are observers, not allocator boundaries.  Preserve the
+   complete AAPCS64 caller-saved state they can destroy so enabling a trace
+   cannot alter guest execution.  Guest FP0-FP7 use callee-saved d8-d15; d0-d7
+   cover the allocator's caller-saved FP_RESULT/FS1 and emitter scratch values. */
+static constexpr int JIT_OBSERVER_SAVE_SIZE = 240;
+static constexpr int JIT_OBSERVER_X18_OFF = 144;
+static constexpr int JIT_OBSERVER_NZCV_OFF = 152;
+static constexpr int JIT_OBSERVER_FPCR_OFF = 160;
+static constexpr int JIT_OBSERVER_FPSR_OFF = 168;
+static constexpr int JIT_OBSERVER_D0_OFF = 176;
+
+STATIC_INLINE void compemu_raw_observer_save(void)
+{
+	SUB_xxi(RSP_INDEX, RSP_INDEX, JIT_OBSERVER_SAVE_SIZE);
+	for (int r = 0; r < 18; r += 2)
+		STP_xxXi(r, r + 1, RSP_INDEX, r * 8);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF);
+	MRS_NZCV_x(R18_INDEX);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
+	MRS_FPCR_x(R18_INDEX);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
+	MRS_FPSR_x(R18_INDEX);
+	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
+	for (int r = 0; r < 8; ++r)
+		STR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8);
+}
+
+STATIC_INLINE void compemu_raw_observer_restore(void)
+{
+	for (int r = 0; r < 8; ++r)
+		LDR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
+	MSR_FPSR_x(R18_INDEX);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
+	MSR_FPCR_x(R18_INDEX);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
+	MSR_NZCV_x(R18_INDEX);
+	for (int r = 0; r < 18; r += 2)
+		LDP_xxXi(r, r + 1, RSP_INDEX, r * 8);
+	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF);
+	ADD_xxi(RSP_INDEX, RSP_INDEX, JIT_OBSERVER_SAVE_SIZE);
+}
+
+STATIC_INLINE void compemu_raw_call_observer_i(uintptr target, uintptr arg1)
+{
+	compemu_raw_observer_save();
+	LOAD_U64(REG_PAR1, arg1);
+	compemu_raw_call(target);
+	compemu_raw_observer_restore();
+}
+
+STATIC_INLINE void compemu_raw_call_observer_ii(uintptr target, uintptr arg1, uintptr arg2)
+{
+	compemu_raw_observer_save();
+	LOAD_U64(REG_PAR1, arg1);
+	LOAD_U64(REG_PAR2, arg2);
+	compemu_raw_call(target);
+	compemu_raw_observer_restore();
+}
+
+/* Call an observational/runtime-coherency service with one value held in a
+   native register plus an immediate.  Reload the value from the observer save
+   frame so this also works when value_reg is one of the ABI argument regs. */
+STATIC_INLINE void compemu_raw_call_observer_ri(uintptr target, int value_reg, uintptr arg2)
+{
+	compemu_raw_observer_save();
+	if (value_reg <= R18_INDEX) {
+		const int value_off = value_reg == R18_INDEX ? JIT_OBSERVER_X18_OFF : value_reg * 8;
+		LDR_xXi(REG_PAR1, RSP_INDEX, value_off);
+	} else {
+		/* X19-X28 are callee-saved and therefore deliberately absent from the
+		   observer frame.  Allocated guest addresses may live in X19-X26; copy
+		   their still-live value directly instead of indexing beyond the frame. */
+		MOV_xx(REG_PAR1, value_reg);
+	}
+	LOAD_U64(REG_PAR2, arg2);
+	compemu_raw_call(target);
+	compemu_raw_observer_restore();
+}
+
+/* In strict mode the 68k cache-control model keeps translation enabled while
+   guest instruction caching is disabled.  Every generated direct guest store,
+   including FPU stores, must therefore invalidate overlapping translated RAM
+   before the compiled block can dispatch again. */
+STATIC_INLINE void emit_strict_cache_disabled_write_barrier(int address_reg, uae_u32 size)
+{
+	if (jit_strict_cache_disabled_coherence()) {
+		/* Invalidation protects later dispatches.  Also end the current block
+		   after this instruction: an FPU store can overwrite a later opcode
+		   which has already been folded into the block being emitted. */
+		jit_emitted_guest_memory_write = true;
+		compemu_raw_call_observer_ri((uintptr)jit_notify_guest_memory_write,
+			address_reg, size);
+	}
+}
+
 LOWFUNC(WRITE,READ,1,compemu_raw_cmp_pc,(IMPTR s))
 {
 	/* s is always >= NATMEM_OFFSET and < NATMEM_OFFSET + max. Amiga mem */
@@ -243,16 +339,32 @@ LOWFUNC(WRITE,READ,1,compemu_raw_cmp_pc,(IMPTR s))
 }
 LENDFUNC(WRITE,READ,1,compemu_raw_cmp_pc,(IMPTR s))
 
+/* Publish one self-consistent architectural PC snapshot.  Any emitted path
+   which can leave compiled code must do this before testing/branching to a C
+   dispatcher.  Publishing only pc_p leaves m68k_getpc() dependent on the
+   previous block's pc/pc_oldp base and can re-enter at an already-retired PC. */
+STATIC_INLINE void compemu_raw_set_pc_full_from_reg(RR4 rr_pc)
+{
+	const uintptr idx_pcp = (uintptr)&regs.pc_p - (uintptr)&regs;
+	const uintptr idx_pc = (uintptr)&regs.pc - (uintptr)&regs;
+	const uintptr idx_oldp = (uintptr)&regs.pc_oldp - (uintptr)&regs;
+	STR_xXi(rr_pc, R_REGSTRUCT, idx_pcp);
+	STR_xXi(rr_pc, R_REGSTRUCT, idx_oldp);
+	LOAD_U64(REG_WORK3, (uintptr)&MEMBaseDiff);
+	LDR_xXi(REG_WORK3, REG_WORK3, 0);
+	SUB_xxx(REG_WORK3, rr_pc, REG_WORK3);
+	STR_wXi(REG_WORK3, R_REGSTRUCT, idx_pc);
+}
+
+STATIC_INLINE void compemu_raw_set_pc_full_const(IMPTR host_pc)
+{
+	LOAD_U64(REG_WORK2, host_pc);
+	compemu_raw_set_pc_full_from_reg(REG_WORK2);
+}
+
 LOWFUNC(NONE,WRITE,1,compemu_raw_set_pc_i,(IMPTR s))
 {
 	LOAD_U64(REG_WORK1, s);
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(REG_WORK1, RSP_INDEX, -16);
-		LDR_xXi(REG_PAR1, RSP_INDEX, 0);
-		LOAD_U32(REG_PAR2, 9);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(REG_WORK1, RSP_INDEX, 16);
-	}
 	uintptr idx = (uintptr) &(regs.pc_p) - (uintptr) &regs;
 	STR_xXi(REG_WORK1, R_REGSTRUCT, idx);
 }
@@ -260,13 +372,6 @@ LENDFUNC(NONE,WRITE,1,compemu_raw_set_pc_i,(IMPTR s))
 
 LOWFUNC(NONE,WRITE,1,compemu_raw_set_pc_from_reg,(RR4 rr_pc))
 {
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(rr_pc, RSP_INDEX, -16);
-		MOV_xx(REG_PAR1, rr_pc);
-		LOAD_U32(REG_PAR2, 10);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(rr_pc, RSP_INDEX, 16);
-	}
 	const uintptr idx_pcp = (uintptr)&(regs.pc_p) - (uintptr)&regs;
 	const uintptr idx_pc = (uintptr)&(regs.pc) - (uintptr)&regs;
 	const uintptr idx_oldp = (uintptr)&(regs.pc_oldp) - (uintptr)&regs;
@@ -282,13 +387,6 @@ LENDFUNC(NONE,WRITE,1,compemu_raw_set_pc_from_reg,(RR4 rr_pc))
 LOWFUNC(NONE,WRITE,2,compemu_raw_set_pc_full_i,(IM32 guest_pc, IMPTR host_pc))
 {
 	LOAD_U64(REG_WORK1, host_pc);
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(REG_WORK1, RSP_INDEX, -16);
-		LDR_xXi(REG_PAR1, RSP_INDEX, 0);
-		LOAD_U32(REG_PAR2, 11);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(REG_WORK1, RSP_INDEX, 16);
-	}
 	const uintptr idx_pcp = (uintptr)&(regs.pc_p) - (uintptr)&regs;
 	const uintptr idx_pc = (uintptr)&(regs.pc) - (uintptr)&regs;
 	const uintptr idx_oldp = (uintptr)&(regs.pc_oldp) - (uintptr)&regs;
@@ -392,10 +490,14 @@ LENDFUNC(WRITE,RMW,1,compemu_raw_inc_m,(MEMRW d))
 
 STATIC_INLINE void compemu_raw_call(uintptr t)
 {
-	LOAD_U64(REG_WORK1, t);
+	/* x0-x7 carry AAPCS64 arguments.  In particular REG_WORK1 is x2, so
+	   using it for the call target destroys argument 3 before BLR.  x18 is
+	   permanently reserved from the JIT allocator; use it as the call-only
+	   target scratch regardless of the current helper's arity. */
+	LOAD_U64(R18_INDEX, t);
 
 	STR_xXpre(RLR_INDEX, RSP_INDEX, -16);
-	BLR_x(REG_WORK1);
+	BLR_x(R18_INDEX);
 	LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);
 }
 
@@ -658,14 +760,6 @@ LENDFUNC(NONE,NONE,1,compemu_raw_init_r_regstruct,(IMPTR s))
 // Handle end of compiled block
 LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 {
-	/* Increment global counter (for diagnostics) */
-	{
-		extern int32_t jit_endblock_inreg_count;
-		LOAD_U64(REG_WORK3, (uintptr)&jit_endblock_inreg_count);
-		LDR_wXi(REG_WORK1, REG_WORK3, 0);
-		ADD_wwi(REG_WORK1, REG_WORK1, 1);
-		STR_wXi(REG_WORK1, REG_WORK3, 0);
-	}
 	// countdown -= scaled_cycles(totcycles);
 	LOAD_U64(REG_WORK3, (uintptr)&countdown);
 	LDR_wXi(REG_WORK1, REG_WORK3, 0);
@@ -677,15 +771,14 @@ LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 	}
 	STR_wXi(REG_WORK1, REG_WORK3, 0);
 
+	/* Commit the retired successor before either the countdown or spcflags
+	   slow exit can return to C.  This is also the canonical state observed by
+	   a directly chained successor. */
+	compemu_raw_set_pc_full_from_reg(rr_pc);
+
 	uae_u32* branch_hot = (uae_u32*)get_target();
 	TBZ_xii(REG_WORK1, 31, 0); // non-negative countdown continues on the hot chain path
 
-	/* Slow exit: persist the already-computed successor PC and return to the
-	   dispatcher without chaining into the next block. */
-	{
-		uintptr offs_pc = (uintptr)&regs.pc_p - (uintptr)&regs;
-		STR_xXi(rr_pc, R_REGSTRUCT, offs_pc);
-	}
 	uae_u32* branchadd = (uae_u32*)get_target();
 	B_i(0);
 	write_jmp_target(branchadd, (uintptr)popall_do_nothing);
@@ -700,34 +793,6 @@ LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 		B_i(0);
 		write_jmp_target(br_dn_hot, (uintptr)popall_do_nothing);
 	}
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(rr_pc, RSP_INDEX, -16);
-		MOV_xx(REG_PAR1, rr_pc);
-		LOAD_U32(REG_PAR2, 4);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(rr_pc, RSP_INDEX, 16);
-	}
-	/* ARM64: always store regs.pc_p on hot chain */
-	{
-		uintptr offs_pc = (uintptr)&regs.pc_p - (uintptr)&regs;
-		STR_xXi(rr_pc, R_REGSTRUCT, offs_pc);
-	}
-#if 1 /* Re-enabled: same as endblock_pc_isconst — see daea9c94 */
-#if defined(CPU_AARCH64)
-	/* ARM64: persist full PC triple on hot chain, same as endblock_pc_isconst. */
-	{
-		uintptr offs_pcp = (uintptr)&regs.pc_p - (uintptr)&regs;
-		uintptr offs_pc = (uintptr)&regs.pc - (uintptr)&regs;
-		uintptr offs_oldp = (uintptr)&regs.pc_oldp - (uintptr)&regs;
-		STR_xXi(rr_pc, R_REGSTRUCT, offs_pcp);
-		STR_xXi(rr_pc, R_REGSTRUCT, offs_oldp);
-		LOAD_U64(REG_WORK3, (uintptr)&MEMBaseDiff);
-		LDR_xXi(REG_WORK3, REG_WORK3, 0);
-		SUB_xxx(REG_WORK3, rr_pc, REG_WORK3);
-		STR_wXi(REG_WORK3, R_REGSTRUCT, offs_pc);
-	}
-#endif
-#endif
 	UBFIZ_xxii(rr_pc, rr_pc, 0, 18);  // mask to TAGMASK width (0x3ffff = 18 bits)
 	/* Clear bit 0 to ensure even cacheline index (handler slot, not bi slot).
 	   cacheline(x)=((x>>1)&(TAGMASK>>1))<<1; TAGMASK>>1=0x1ffff -> 17 bits.
@@ -758,21 +823,12 @@ STATIC_INLINE uae_u32* compemu_raw_endblock_pc_isconst(IM32 cycles, IMPTR v)
 	}
 	STR_wXi(REG_WORK1, REG_WORK3, 0);
 
+	/* Commit the same complete successor snapshot for every exit path. */
+	compemu_raw_set_pc_full_const(v);
+
 	uae_u32* branch_hot = (uae_u32*)get_target();
 	TBZ_xii(REG_WORK1, 31, 0); // non-negative countdown continues on the hot chain path
 
-	/* Slow exit: persist the constant successor PC in guest state and return
-	   to the dispatcher without chaining. */
-	LOAD_U64(REG_WORK1, v);
-	if (jit_trace_setpc_env()) {
-		STR_xXpre(REG_WORK1, RSP_INDEX, -16);
-		LDR_xXi(REG_PAR1, RSP_INDEX, 0);
-		LOAD_U32(REG_PAR2, 6);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-		LDR_xXpost(REG_WORK1, RSP_INDEX, 16);
-	}
-	uintptr offs = (uintptr)&regs.pc_p - (uintptr)&regs;
-	STR_xXi(REG_WORK1, R_REGSTRUCT, offs);
 	uae_u32* branchadd = (uae_u32*)get_target();
 	B_i(0);
 	write_jmp_target(branchadd, (uintptr)popall_do_nothing);
@@ -787,40 +843,6 @@ STATIC_INLINE uae_u32* compemu_raw_endblock_pc_isconst(IM32 cycles, IMPTR v)
 		B_i(0);
 		write_jmp_target(br_dn_hot2, (uintptr)popall_do_nothing);
 	}
-	if (jit_trace_setpc_env()) {
-		LOAD_U64(REG_PAR1, v);
-		LOAD_U32(REG_PAR2, 5);
-		compemu_raw_call((uintptr)jit_trace_setpc_value);
-	}
-	/* ARM64: always store regs.pc_p = v on the hot chain path.
-	   Without this, chained successor blocks see stale regs.pc_p
-	   from the source block's flush(1), causing bad_pc_p guards
-	   to fire and flush the icache. */
-	{
-		LOAD_U64(REG_WORK2, v);
-		uintptr offs_pc = (uintptr)&regs.pc_p - (uintptr)&regs;
-		STR_xXi(REG_WORK2, R_REGSTRUCT, offs_pc);
-	}
-#if 1 /* Re-enabled: mid-block branch side-exit bug (daea9c94) was the bad_pc_p root cause */
-	/* ARM64: persist the full PC triple (pc_p, pc, pc_oldp) on the hot
-	   chain path. Without this, chained successor blocks that contain
-	   interpreter fallback instructions call m68k_getpc() which derives
-	   the guest PC from the stale (regs.pc, regs.pc_oldp) pair of the
-	   PREVIOUS block, producing wrong addresses.
-	   This matches what popall_execute_normal_setpc does. */
-	{
-		LOAD_U64(REG_WORK2, v);
-		uintptr offs_pcp = (uintptr)&regs.pc_p - (uintptr)&regs;
-		uintptr offs_pc = (uintptr)&regs.pc - (uintptr)&regs;
-		uintptr offs_oldp = (uintptr)&regs.pc_oldp - (uintptr)&regs;
-		STR_xXi(REG_WORK2, R_REGSTRUCT, offs_pcp);   // regs.pc_p = v
-		STR_xXi(REG_WORK2, R_REGSTRUCT, offs_oldp);  // regs.pc_oldp = v
-		LOAD_U64(REG_WORK3, (uintptr)&MEMBaseDiff);
-		LDR_xXi(REG_WORK3, REG_WORK3, 0);
-		SUB_xxx(REG_WORK3, REG_WORK2, REG_WORK3);    // guest_pc = v - MEMBaseDiff
-		STR_wXi(REG_WORK3, R_REGSTRUCT, offs_pc);     // regs.pc = guest_pc
-	}
-#endif
 	tba = (uae_u32*)get_target();
 	B_i(0); // <target set by caller>
 
@@ -1367,8 +1389,3 @@ LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))
 	}
 }
 LENDFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))
-
-/* Global dispatch counter for periodic spcflags checks in direct dispatch.
- * Decremented by compiled endblock code. When <= 0, spcflags is checked
- * and the counter is reset. */
-int32_t jit_endblock_inreg_count = 0;

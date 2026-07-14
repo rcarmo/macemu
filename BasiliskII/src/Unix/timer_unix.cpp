@@ -67,22 +67,48 @@ static void host_uptime(tm_time_t & t) {
  *  Return microseconds since boot (64 bit)
  */
 
+static uint64 deterministic_microseconds = 0;
+
+static bool deterministic_microseconds_enabled(void)
+{
+	static int enabled = -1;
+	if (enabled < 0) {
+		const char *env = getenv("B2_JIT_RETIREMENT_TICK_EVERY");
+		enabled = env && *env && strtoul(env, NULL, 0) != 0;
+	}
+	return enabled != 0;
+}
+
+void TimerAdvanceDeterministicTick(void)
+{
+	if (deterministic_microseconds_enabled())
+		deterministic_microseconds += 16667;
+}
+
 void Microseconds(uint32 &hi, uint32 &lo)
 {
 	D(bug("Microseconds\n"));
+	uint64 tl;
+	if (deterministic_microseconds_enabled()) {
+		/* Guest-retirement diagnostics must not reintroduce host wall-clock
+		   nondeterminism through Time Manager or Microseconds() reads. The
+		   virtual clock advances only with the injected 60 Hz source. */
+		tl = deterministic_microseconds;
+	} else {
 #if defined(__MACH__)
-	tm_time_t t;
-	mach_current_time(t);
-	uint64 tl = (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
+		tm_time_t t;
+		mach_current_time(t);
+		tl = (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
 #else
-	tm_time_t t;
-	host_uptime(t);
+		tm_time_t t;
+		host_uptime(t);
 	#if defined(HAVE_CLOCK_GETTIME)
-		uint64 tl = (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
+		tl = (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
 	#else
-		uint64 tl = (uint64)t.tv_sec * 1000000 + t.tv_usec;
+		tl = (uint64)t.tv_sec * 1000000 + t.tv_usec;
 	#endif
 #endif
+	}
 	hi = tl >> 32;
 	lo = tl;
 }
@@ -94,6 +120,18 @@ void Microseconds(uint32 &hi, uint32 &lo)
 
 uint32 TimerDateTime(void)
 {
+	static int fixed_time_initialized = 0;
+	static bool fixed_time_enabled = false;
+	static uint32 fixed_time = 0;
+	if (!fixed_time_initialized) {
+		fixed_time_initialized = 1;
+		const char *env = getenv("B2_FIXED_TIMER_DATE_TIME");
+		fixed_time_enabled = env && *env;
+		if (fixed_time_enabled)
+			fixed_time = (uint32)strtoul(env, NULL, 0);
+	}
+	if (fixed_time_enabled)
+		return fixed_time;
 	return TimeToMacTime(time(NULL));
 }
 
@@ -104,6 +142,20 @@ uint32 TimerDateTime(void)
 
 void timer_current_time(tm_time_t &t)
 {
+	if (deterministic_microseconds_enabled()) {
+		/* Retirement-capture mode intentionally freezes Time Manager expiry while
+		   replacing the 60 Hz source with a guest-instruction schedule. Returning
+		   host realtime here would still make PrimeTime() queue deadlines differ
+		   between ordinary and strict runs, even though expiry is not polled. Keep
+		   every emulated sub-second clock on the same diagnostic epoch. */
+		t.tv_sec = deterministic_microseconds / 1000000;
+#if defined(HAVE_CLOCK_GETTIME) || defined(__MACH__)
+		t.tv_nsec = (deterministic_microseconds % 1000000) * 1000;
+#else
+		t.tv_usec = deterministic_microseconds % 1000000;
+#endif
+		return;
+	}
 #if defined(__MACH__)
 	mach_current_time(t);
 #elif defined(HAVE_CLOCK_GETTIME)

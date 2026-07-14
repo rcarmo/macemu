@@ -9,7 +9,33 @@ This document describes the work done to bring up the experimental AArch64 (ARM6
 
 The codebase is a fork of the Koenig/cebix/aranym JIT originally written for x86, ported to ARM (32-bit) by contributors, with an ARM64 backend added experimentally. Since the initial bringup, the work has fixed a long series of structural and semantic bugs: byte-order mismatches, IRQ deliverability, legacy carry/X handling, boundary cycle charging, verifier misuse, ARM64 endblock slow-path bugs, short-branch decode on ARM64, 32-bit host-PC construction bugs, word-to-address-register self-alias clobbers, A-line trap control-flow modeling, 64-bit pointer truncation in the legacy `add_l`/`sub_l_ri` helpers, the `endblock_pc_isconst` direct-chain stale-state bug, and EMUL_OP barrier requirements. **Pure L2 now runs at 93.75% ROM coverage + 100% RAM, with SCSIGet × 7 + SCSISelect × 7, zero crashes, zero `bad_pc_p`, and 634M dispatches/120s with direct `B` chaining.**
 
-## Current status (2026-06-13)
+## Structural-audit status (2026-07-14)
+
+The active branch is governed by family-level, fail-closed validation rather
+than the older workload-frontier narrative below. The complete deterministic
+corpus contains 523 risky vectors; legal 68040 encodings are classified as
+native-generated code, ordered semantic services, or architectural traps, with
+no null/interpreter fallback slots. Strict native runs reject opt-level-zero,
+fallback, and unstated execution.
+
+The current `ABCD`/`SBCD`/`NBCD` tranche repairs the complete BCD family:
+
+- exact 68040 correction equations, including invalid nibbles;
+- one X/C/sticky-Z lifecycle which preserves N/V and has no no-flags split;
+- patched ARM64 targets for all variable-length correction joins;
+- source/destination `areg_byteinc[]` predecrement, including both two-byte
+  decrements of `-(A7),-(A7)`;
+- exact-opcode replay with register/CCR and mutable-memory restoration.
+
+Focused BCD strict-native validation passes 31/31. The subsequent division
+lifecycle tranche structurally patches all 28 DIVL zero/fit/overflow joins,
+repairs signed 32/32 overflow and conditional destination preservation, and
+restores incoming Z for signed word/long overflow. Its exact-PC gate passes
+16/16; see `AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md`.
+`MV2SR.W` intentionally remains on its exact legacy semantic-service path
+pending stronger native proof.
+
+## Historical status (2026-06-13)
 
 ### Interpreter and JIT baselines
 
