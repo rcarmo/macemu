@@ -17,13 +17,24 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 32 | 43 | 0 | 55 |
-| midfunc | 422 | 152 | 0 | 117 | 153 |
-| emitter_api | 294 | 0 | 0 | 90 | 204 |
+| generator | 130 | 32 | 44 | 0 | 54 |
+| midfunc | 422 | 152 | 0 | 119 | 151 |
+| emitter_api | 294 | 0 | 0 | 91 | 203 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
+
+## Configured-root and registration corrections
+
+Configured, macro-expanded AArch64 roots and final registration state correct classifications that a raw token scan gets wrong:
+
+- `frndint_rr` is unreachable: its only call is under inactive `USE_X86_FPUCW`;
+- `sub_w_ri` is unreachable: its apparent uses were comments, while live DBcc decrement uses `dbcc_dec_w` -> `jnf_SUB_w_imm`;
+- emitter `SUBS_wwish` is consequently unreachable because its sole implementation consumer is `sub_w_ri`;
+- generator `i_MV2SR` is serviced because every legal slot is unconditionally replaced by `op_fullsr_mv2sr_w_comp_ff`, while the superseded `jnf_MV2SR_w` MIDFUNC is unreachable.
+
+The explicit BFINS, MOVEM, MOVE16, MOVE.L, TAS, and DIVS legacy-MIDFUNC rows also require positive generator or post-registration provider evidence; zero textual references alone do not classify them.
 
 ## Highest-risk unreviewed families
 
@@ -67,6 +78,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 - codegen emitter API definitions: **294**;
 - raw boundary functions: **82**;
 - runtime helper boundaries: **69**;
+- FPU roots come from the macro-expanded source selected by the current Makefile defines, not inactive preprocessor branches or unused compatibility macros;
 - the script fails closed if any known layer census or accepted report changes.
 
 ## Regeneration

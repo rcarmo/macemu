@@ -54,6 +54,69 @@ const source = Object.fromEntries(Object.entries(paths).map(([key, path]) => [ke
 if (!source.makefile.includes("-DUSE_JIT_FPU"))
   throw new Error("current build no longer enables USE_JIT_FPU; recompute conditional FPU reachability");
 
+/* Follow the configured translation unit rather than reading both sides of
+   compemu_fpp.cpp's preprocessor branches. Full preprocessing is intentional:
+   the ARM64 compatibility header maps legacy FPU names through macros, and the
+   expanded call sites are stronger reachability evidence than unused macro
+   definitions. Keep only lines attributed to the requested source file so
+   declarations and unrelated inline bodies from included headers do not become
+   roots merely because the preprocessor saw them. */
+const configuredDefines = [...source.makefile.matchAll(/-D([A-Za-z_][A-Za-z0-9_]*)/g)]
+  .map((match) => `-D${match[1]}`);
+const unixDir = resolve(root, "BasiliskII/src/Unix");
+const configuredIncludes = [
+  "BasiliskII/src/include",
+  "BasiliskII/src/Unix",
+  "BasiliskII/src/CrossPlatform",
+  "BasiliskII/src/uae_cpu_2026",
+  "BasiliskII/src/slirp",
+].map((path) => `-I${resolve(root, path)}`);
+const configuredExpandedSource = (path: string, directivesOnly = false): string => {
+  const target = resolve(root, path);
+  const result = Bun.spawnSync([
+    "g++", "-E", ...(directivesOnly ? ["-fdirectives-only"] : []), "-x", "c++",
+    ...configuredIncludes,
+    ...configuredDefines,
+    target,
+  ], { cwd: unixDir, stdout: "pipe", stderr: "pipe" });
+  if (result.exitCode !== 0)
+    throw new Error(`configured preprocessing failed for ${path}: ${result.stderr.toString().trim()}`);
+
+  const active: string[] = [];
+  let inTarget = false;
+  for (const line of result.stdout.toString().split("\n")) {
+    const marker = line.match(/^#\s+\d+\s+"([^"]+)"/);
+    if (marker) {
+      const markerPath = marker[1];
+      inTarget = !markerPath.startsWith("<") && resolve(unixDir, markerPath) === target;
+    } else if (inTarget) {
+      active.push(line);
+    }
+  }
+  return active.join("\n");
+};
+const configuredGenerated = configuredExpandedSource(paths.generated);
+const configuredGencomp = configuredExpandedSource(paths.gencomp);
+const configuredMid1 = configuredExpandedSource(paths.mid1);
+const configuredMid2 = configuredExpandedSource(paths.mid2);
+const configuredSupport = configuredExpandedSource(paths.support);
+const configuredCompat = configuredExpandedSource(paths.compat);
+const configuredFpp = configuredExpandedSource(paths.fpp);
+const configuredFppCompat = configuredExpandedSource(paths.fppCompat);
+
+/* Directive-only preprocessing retains API spellings while still removing
+   comments and inactive #if branches. Use it where macro expansion would hide
+   the emitter/raw boundary that the inventory is meant to classify. */
+const activeGenerated = configuredExpandedSource(paths.generated, true);
+const activeGencomp = configuredExpandedSource(paths.gencomp, true);
+const activeMid1 = configuredExpandedSource(paths.mid1, true);
+const activeMid2 = configuredExpandedSource(paths.mid2, true);
+const activeSupport = configuredExpandedSource(paths.support, true);
+const activeCompat = configuredExpandedSource(paths.compat, true);
+const activeFpp = configuredExpandedSource(paths.fpp, true);
+const activeFppCompat = configuredExpandedSource(paths.fppCompat, true);
+const activeCodegen = configuredExpandedSource(paths.codegen, true);
+
 const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:i_|jff_|jnf_)?(?:ADDX|SUBX|ANDSR|EORSR|ORSR)(?:_|$)/, "AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md"],
   [/^(?:i_|jff_|jnf_)?(?:ABCD|SBCD|NBCD)(?:_|$)/, "AARCH64_JIT_AUDIT_BCD.md"],
@@ -73,7 +136,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
 const serviceGenerator = new Set([
   "i_MVPRM", "i_MVPMR", "i_CHK2", "i_PACK", "i_UNPK",
   "i_BFTST", "i_BFEXTU", "i_BFCHG", "i_BFEXTS", "i_BFCLR", "i_BFFFO", "i_BFSET", "i_BFINS",
-  "i_MVSR2", "i_MVR2USP", "i_MVUSP2R", "i_RESET", "i_STOP", "i_RTE", "i_MOVEC2", "i_MOVE2C",
+  "i_MVSR2", "i_MV2SR", "i_MVR2USP", "i_MVUSP2R", "i_RESET", "i_STOP", "i_RTE", "i_MOVEC2", "i_MOVE2C",
   "i_CINVA", "i_CINVL", "i_CINVP", "i_CPUSHA", "i_CPUSHL", "i_CPUSHP",
   "i_BKPT", "i_CALLM", "i_RTM", "i_TRAP", "i_TRAPcc", "i_EMULOP", "i_EMULOP_RETURN", "i_RTS", "i_BSR",
   /* These four are always replaced by explicit runtime boundaries. FPP, FScc,
@@ -132,12 +195,41 @@ const midNames = new Set(midDefs.map((entry) => entry.name));
 if (midDefs.length !== 422 || midNames.size !== 422)
   throw new Error(`MIDFUNC census changed: definitions=${midDefs.length} unique=${midNames.size}, expected 422`);
 
+/* Reparse configured MIDFUNC bodies for graph edges. The raw definitions keep
+   authoritative file/line metadata, while preprocessing removes comments and
+   inactive branches that must not manufacture callees. */
+const parseConfiguredMidBodies = (texts: string[], label: string) => {
+  const bodies = new Map<string, string>();
+  for (const text of texts) {
+    const pattern = /^MIDFUNC\(\s*\d+\s*,\s*([A-Za-z0-9_]+)\s*,/gm;
+    for (const match of text.matchAll(pattern)) {
+      const name = match[1];
+      const endPattern = new RegExp(`^MENDFUNC\\(\\s*\\d+\\s*,\\s*${esc(name)}\\s*,`, "gm");
+      endPattern.lastIndex = match.index!;
+      const endMatch = endPattern.exec(text);
+      if (!endMatch) throw new Error(`missing ${label} MENDFUNC for ${name}`);
+      if (bodies.has(name)) throw new Error(`duplicate ${label} MIDFUNC for ${name}`);
+      bodies.set(name, text.slice(match.index!, endMatch.index));
+    }
+  }
+  if (bodies.size !== midDefs.length)
+    throw new Error(`${label} MIDFUNC census changed: ${bodies.size}, expected ${midDefs.length}`);
+  return bodies;
+};
+const configuredMidBodies = parseConfiguredMidBodies([configuredMid1, configuredMid2], "configured");
+const activeMidBodies = parseConfiguredMidBodies([activeMid1, activeMid2], "directive-only");
+for (const def of midDefs) {
+  const configuredBody = configuredMidBodies.get(def.name);
+  if (!configuredBody) throw new Error(`configured MIDFUNC disappeared: ${def.name}`);
+  def.body = configuredBody;
+}
+
 /* MV2SR.W is present in generated output but every legal slot is replaced
    unconditionally after registration. Other unused MIDFUNCs are classified by
    the actual root/call graph; do not guess from naming conventions. In
    particular, USE_JIT_FPU makes f* MIDFUNCs reachable when compfpu is enabled. */
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w";
-const rootMidText = `${source.generated}\n${source.support}\n${source.compat}\n${source.fpp}\n${source.fppCompat}`;
+const rootMidText = `${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`;
 const rootMid = new Set<string>();
 for (const name of midNames) {
   if (countToken(rootMidText, name) > 0 && !overriddenMidfunc(name)) rootMid.add(name);
@@ -162,13 +254,46 @@ for (let changed = true; changed;) {
   }
 }
 
+/* These formerly ambiguous rows have positive control-path evidence in
+   addition to call-graph absence. Keep the proof local and fail closed if a
+   future generator or configured root makes any of them reachable. */
+const structuralUnreachableMid = new Map<string, string>([
+  ["jff_BFINS_dd", "all BFINS slots are post-registration op_bitfield_comp_ff services; the legacy inline BFINS MIDFUNC is not selectable"],
+  ["jnf_MVMEL_l", "i_MVMEL selects repaired genmovemel cursor/read primitives; the legacy fixed-offset MIDFUNC is not selected"],
+  ["jnf_MOVE16", "i_MOVE16 selects genmov16 and its direct/special-memory primitives; the legacy MOVE16 MIDFUNC is not selected"],
+  ["jff_MOVE_l", "i_MOVE routes long flags through genflags and storage through genastore; the legacy MOVE.L MIDFUNC is not selected"],
+  ["jnf_TAS", "i_TAS unconditionally selects jff_TAS because TAS defines CCR; no no-flags TAS path is selected"],
+  ["jnf_DIVS", "i_DIVS unconditionally selects jff_DIVS for divide exception and overflow flag semantics"],
+  ["frndint_rr", "its only source call is inside inactive USE_X86_FPUCW code in the configured AArch64 build"],
+  ["sub_w_ri", "raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead"],
+]);
+const structuralProofTokens: Array<[string, string, string[]]> = [
+  ["jff_BFINS_dd", source.support, ["table68k[opcode].mnemo == i_BFINS", "op_bitfield_comp_ff"]],
+  ["jnf_MVMEL_l", source.gencomp, ["case i_MVMEL:", "genmovemel (opcode);"]],
+  ["jnf_MOVE16", source.gencomp, ["case i_MOVE16:", "genmov16(opcode,curi);"]],
+  ["jff_MOVE_l", source.gencomp, ["case i_MOVE:", "genflags (flag_logical", "genastore (\"src\""]],
+  ["jnf_TAS", source.gencomp, ["case i_TAS:", "jff_TAS(src)"]],
+  ["jnf_DIVS", source.gencomp, ["case i_DIVS:", "jff_DIVS(dst, src)"]],
+  ["sub_w_ri", source.compat, ["void dbcc_dec_w(W2 d) { jnf_SUB_w_imm(d, 1); }"]],
+];
+for (const [name, text, tokens] of structuralProofTokens) {
+  if (tokens.some((token) => !text.includes(token)))
+    throw new Error(`structural unreachable proof changed for ${name}`);
+}
+for (const name of structuralUnreachableMid.keys()) {
+  if (!midNames.has(name)) throw new Error(`structural unreachable MIDFUNC disappeared: ${name}`);
+  if (reachableMid.has(name)) throw new Error(`structural unreachable MIDFUNC became reachable: ${name}`);
+}
+if (countToken(configuredFpp, "frndint_rr") !== 0)
+  throw new Error("configured AArch64 FPU path now reaches frndint_rr");
+
 const rows: Row[] = [];
 for (const def of midDefs) {
   const references = countToken(rootMidText, def.name) + [...midDefs].reduce((sum, item) => item.name === def.name ? sum : sum + countToken(item.body, def.name), 0);
   const audit = acceptedAudit(def.name);
   const status: Status = !reachableMid.has(def.name) ? "unreachable" : audit ? "audited" : "unreviewed";
   const evidence = status === "unreachable"
-    ? (overriddenMidfunc(def.name) ? "post-registration AArch64 semantic-service override" : "no path from generated/support compiler roots")
+    ? (structuralUnreachableMid.get(def.name) ?? (overriddenMidfunc(def.name) ? "post-registration AArch64 semantic-service override" : "no path from configured generated/support/FPU compiler roots"))
     : audit ? `BasiliskII/docs/${audit}` : "reachable; no accepted family-level closure report";
   rows.push({ layer: "midfunc", name: def.name, status, evidence, file: def.file, line: def.line, references, risk: riskOf(def.name, "midfunc"), family: familyOf(def.name) });
 }
@@ -184,12 +309,15 @@ const serviceEvidenceAliases = new Map([
   ["i_RTS", "op_rts_comp_ff"],
   ["i_EMULOP", "op_emulop_comp_ff"],
   ["i_EMULOP_RETURN", "op_emulop_comp_ff"],
+  /* MV2SR is selected by its complete legal opcode range rather than a
+     mnemonic comparison; its generated MIDFUNC is deliberately unreachable. */
+  ["i_MV2SR", "op_fullsr_mv2sr_w_comp_ff"],
 ]);
 for (const name of serviceGenerator) {
   if (!uniqueGen.has(name)) throw new Error(`semantic-service generator row disappeared: ${name}`);
   const evidenceToken = serviceEvidenceAliases.get(name) ?? name;
-  if (countToken(source.support, evidenceToken) === 0)
-    throw new Error(`semantic-service row has no post-registration/coverage-map evidence: ${name}`);
+  if (countToken(configuredSupport, evidenceToken) === 0)
+    throw new Error(`semantic-service row has no configured post-registration/coverage-map evidence: ${name}`);
 }
 for (const [name, found] of uniqueGen) {
   const audit = acceptedAudit(name);
@@ -215,10 +343,10 @@ for (const name of [...runtimeNames].sort()) {
   let text = source.support;
   let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
   if (index < 0) { file = paths.compat; text = source.compat; index = text.search(new RegExp(`\\b${esc(name)}\\b`)); }
-  const allText = `${source.generated}\n${source.gencomp}\n${source.support}\n${source.compat}`;
+  const allText = `${configuredGenerated}\n${configuredGencomp}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}\n${midDefs.filter((item) => reachableMid.has(item.name)).map((item) => item.body).join("\n")}`;
   const references = countToken(allText, name);
   const declarationAndDefinition = countToken(source.helperHeader, name) + 1;
-  const reachable = references > declarationAndDefinition || countToken(source.generated, name) > 0 || countToken(source.gencomp, name) > 0;
+  const reachable = references > declarationAndDefinition || countToken(configuredGenerated, name) > 0 || countToken(configuredGencomp, name) > 0;
   rows.push({
     layer: "runtime_boundary", name, status: reachable ? "serviced" : "unreachable",
     evidence: reachable ? "explicit flushed/end-block runtime semantic boundary" : "definition/declaration has no generated or registration caller",
@@ -239,7 +367,9 @@ for (const name of [...rawNames].sort()) {
     const candidateText = load(candidate); const candidateIndex = candidateText.search(new RegExp(`\\b${esc(name)}\\b`));
     if (candidateIndex >= 0) { file = candidate; text = candidateText; index = candidateIndex; break; }
   }
-  const references = rawFiles.reduce((sum, path) => sum + countToken(load(path), name), 0);
+  const activeReachableMid = [...reachableMid].map((mid) => activeMidBodies.get(mid) ?? "").join("\n");
+  const configuredRawText = `${activeGenerated}\n${activeGencomp}\n${activeCodegen}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
+  const references = countToken(configuredRawText, name);
   const status: Status = auditedRaw.test(name) ? "audited" : references <= 1 ? "unreachable" : "unreviewed";
   const evidence = status === "audited"
     ? "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
@@ -262,7 +392,8 @@ for (let i = 0; i < starts.length; i++) {
 const emitterNames = new Set(emitterDefinitions.keys());
 if (emitterDefinitions.size !== 294)
   throw new Error(`emitter API census changed: ${emitterDefinitions.size}, expected 294`);
-const emitterRootText = `${source.codegen}\n${source.support}\n${source.compat}\n${source.fpp}\n${source.fppCompat}\n${midDefs.filter((item) => reachableMid.has(item.name)).map((item) => item.body).join("\n")}`;
+const activeReachableMid = [...reachableMid].map((mid) => activeMidBodies.get(mid) ?? "").join("\n");
+const emitterRootText = `${activeGenerated}\n${activeGencomp}\n${activeCodegen}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 const reachableEmitter = new Set<string>();
 for (const name of emitterNames) if (countToken(emitterRootText, name) > 0) reachableEmitter.add(name);
 for (let changed = true; changed;) {
@@ -272,12 +403,19 @@ for (let changed = true; changed;) {
     for (const target of emitterNames) if (!reachableEmitter.has(target) && countToken(chunk, target) > 0) { reachableEmitter.add(target); changed = true; }
   }
 }
+const structuralUnreachableEmitter = new Map<string, string>([
+  ["SUBS_wwish", "only used by unreachable sub_w_ri; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm"],
+]);
+for (const name of structuralUnreachableEmitter.keys()) {
+  if (!emitterNames.has(name)) throw new Error(`structural unreachable emitter disappeared: ${name}`);
+  if (reachableEmitter.has(name)) throw new Error(`structural unreachable emitter became reachable: ${name}`);
+}
 for (const [name, def] of emitterDefinitions) {
   const references = countToken(emitterRootText, name) + countToken(source.codegenHeader, name) - 1;
   const status: Status = reachableEmitter.has(name) ? "unreviewed" : "unreachable";
   rows.push({
     layer: "emitter_api", name, status,
-    evidence: status === "unreachable" ? "no path from reachable AArch64 compiler/emitter roots" : "reachable encoder API; requires opcode/width/branch-range contract classification",
+    evidence: status === "unreachable" ? (structuralUnreachableEmitter.get(name) ?? "no path from reachable AArch64 compiler/emitter roots") : "reachable encoder API; requires opcode/width/branch-range contract classification",
     file: paths.codegenHeader, line: def.line, references, risk: riskOf(name, "emitter_api"), family: familyOf(name),
   });
 }
@@ -307,13 +445,13 @@ const selectedFamilies = [...highFamilies.entries()].sort((a, b) => Math.max(...
 const md: string[] = [];
 md.push("# AArch64 JIT authoritative closure inventory", "", "Generated by `bun jit-test/closure-inventory.ts` from the merged canonical source tree.", "", "## Classification policy", "", "- **audited**: an accepted contract/family report covers the entry;", "- **serviced**: every reachable configuration routes the generator/runtime entry through an explicit ordered semantic boundary;", "- **unreachable**: no path exists from current generated/support/FPU roots, or an unconditional post-registration service override replaces the implementation;", "- **unreviewed**: reachable source with no accepted exact family/contract classification.", "", "The current Makefile enables `USE_JIT_FPU`. Therefore native `compfpu` paths remain reachable even though disabling `compfpu` installs a semantic service; a conditional service does not classify that native path as serviced or unreachable.", "", "Registration, a green corpus, and Finder boot do not by themselves promote an entry to **audited**.", "", "## Census", "", "| Layer | Total | Audited | Serviced | Unreachable | Unreviewed |", "|---|---:|---:|---:|---:|---:|");
 for (const item of summary) md.push(`| ${item.layer} | ${item.total} | ${item.counts.audited} | ${item.counts.serviced} | ${item.counts.unreachable} | ${item.counts.unreviewed} |`);
-md.push("", `Detailed rows: \`${rel(csvPath)}\`.`, "", "## Highest-risk unreviewed families", "", "Risk is a deterministic triage score, not a correctness verdict.", "", "| Risk | Family | Layers / entries |", "|---:|---|---|");
+md.push("", `Detailed rows: \`${rel(csvPath)}\`.`, "", "## Configured-root and registration corrections", "", "Configured, macro-expanded AArch64 roots and final registration state correct classifications that a raw token scan gets wrong:", "", "- `frndint_rr` is unreachable: its only call is under inactive `USE_X86_FPUCW`;", "- `sub_w_ri` is unreachable: its apparent uses were comments, while live DBcc decrement uses `dbcc_dec_w` -> `jnf_SUB_w_imm`;", "- emitter `SUBS_wwish` is consequently unreachable because its sole implementation consumer is `sub_w_ri`;", "- generator `i_MV2SR` is serviced because every legal slot is unconditionally replaced by `op_fullsr_mv2sr_w_comp_ff`, while the superseded `jnf_MV2SR_w` MIDFUNC is unreachable.", "", "The explicit BFINS, MOVEM, MOVE16, MOVE.L, TAS, and DIVS legacy-MIDFUNC rows also require positive generator or post-registration provider evidence; zero textual references alone do not classify them.", "", "## Highest-risk unreviewed families", "", "Risk is a deterministic triage score, not a correctness verdict.", "", "| Risk | Family | Layers / entries |", "|---:|---|---|");
 for (const [family, items] of selectedFamilies) md.push(`| ${Math.max(...items.map((row) => row.risk))} | \`${family}\` | ${items.slice(0, 8).map((row) => `${row.layer}:\`${row.name}\``).join(", ")}${items.length > 8 ? `, +${items.length - 8}` : ""} |`);
 const nextFamily = selectedFamilies[0];
 const nextFamilyText = nextFamily
   ? `\`${nextFamily[0]}\` is the highest-risk family still classified as unreviewed. Its current rows are ${nextFamily[1].map((row) => `${row.layer}:\`${row.name}\``).join(", ")}. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.`
   : "No unreviewed family remains in the current source-derived inventory.";
-md.push("", "## Accepted closure target", "", "`MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.", "", "## Next selected family", "", nextFamilyText, "", "## Mechanical invariants", "", `- unique \`gencomp.c\` mnemonic cases: **${uniqueGen.size}**;`, `- unique AArch64 MIDFUNC definitions: **${midDefs.length}**;`, `- codegen emitter API definitions: **${emitterDefinitions.size}**;`, `- raw boundary functions: **${rawNames.size}**;`, `- runtime helper boundaries: **${runtimeNames.size}**;`, "- the script fails closed if any known layer census or accepted report changes.", "", "## Regeneration", "", "```sh", "bun jit-test/closure-inventory.ts", "git diff --check", "```", "");
+md.push("", "## Accepted closure target", "", "`MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.", "", "## Next selected family", "", nextFamilyText, "", "## Mechanical invariants", "", `- unique \`gencomp.c\` mnemonic cases: **${uniqueGen.size}**;`, `- unique AArch64 MIDFUNC definitions: **${midDefs.length}**;`, `- codegen emitter API definitions: **${emitterDefinitions.size}**;`, `- raw boundary functions: **${rawNames.size}**;`, `- runtime helper boundaries: **${runtimeNames.size}**;`, "- FPU roots come from the macro-expanded source selected by the current Makefile defines, not inactive preprocessor branches or unused compatibility macros;", "- the script fails closed if any known layer census or accepted report changes.", "", "## Regeneration", "", "```sh", "bun jit-test/closure-inventory.ts", "git diff --check", "```", "");
 writeFileSync(mdPath, md.join("\n"));
 
 console.log(`CLOSURE_INVENTORY rows=${rows.length} generator=${uniqueGen.size} midfunc=${midDefs.length} emitter_api=${emitterDefinitions.size} raw_boundary=${rawNames.size} runtime_boundary=${runtimeNames.size}`);

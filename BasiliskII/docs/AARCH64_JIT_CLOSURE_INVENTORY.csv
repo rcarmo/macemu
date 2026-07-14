@@ -42,7 +42,7 @@ emitter_api,BEQ_i,unreviewed,BEQ_i,87,21,BasiliskII/src/uae_cpu_2026/compiler/co
 emitter_api,BFI_wwii,unreviewed,BFI_wwii,60,135,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,353,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BFI_xxii,unreviewed,BFI_xxii,60,24,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,354,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BFXIL_wwii,unreviewed,BFXIL_wwii,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,361,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,BFXIL_xxii,unreviewed,BFXIL_xxii,60,26,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,362,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,BFXIL_xxii,unreviewed,BFXIL_xxii,60,25,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,362,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BGE_i,unreviewed,BGE_i,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,93,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BGT_i,unreviewed,BGT_i,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,95,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BHI_i,unreachable,BHI_i,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,91,no path from reachable AArch64 compiler/emitter roots
@@ -156,7 +156,7 @@ emitter_api,LDRB_wXi,unreachable,LDRB_wXi,60,0,BasiliskII/src/uae_cpu_2026/compi
 emitter_api,LDRB_wXx,unreviewed,LDRB_wXx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,138,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,LDRH_wXi,unreviewed,LDRH_wXi,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,139,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,LDRH_wXx,unreviewed,LDRH_wXx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,140,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,LSL_wwi,unreviewed,LSL_wwi,60,68,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,330,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,LSL_wwi,unreviewed,LSL_wwi,60,67,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,330,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,LSL_www,unreviewed,LSL_www,60,18,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,328,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,LSL_xxi,unreviewed,LSL_xxi,60,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,331,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,LSL_xxx,unreviewed,LSL_xxx,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,329,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -229,7 +229,7 @@ emitter_api,SCVTF_dw,unreviewed,SCVTF_dw,60,4,BasiliskII/src/uae_cpu_2026/compil
 emitter_api,SCVTF_dx,unreachable,SCVTF_dx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,477,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SCVTF_sw,unreachable,SCVTF_sw,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,476,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SDIV_www,unreviewed,SDIV_www,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,231,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SDIV_xxx,unreviewed,SDIV_xxx,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,232,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SDIV_xxx,unreviewed,SDIV_xxx,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,232,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SET_LOW8_xx,unreviewed,SET_LOW8_xx,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,447,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SET_xxbit,unreviewed,SET_xxbit,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,441,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SET_xxCflag,unreachable,SET_xxCflag,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,437,no path from reachable AArch64 compiler/emitter roots
@@ -261,7 +261,7 @@ emitter_api,SUB_wwwEX,unreachable,SUB_wwwEX,80,0,BasiliskII/src/uae_cpu_2026/com
 emitter_api,SUB_xxi,unreviewed,SUB_xxi,80,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,253,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SUB_xxx,unreviewed,SUB_xxx,80,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,255,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SUBS_wwi,unreviewed,SUBS_wwi,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,257,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SUBS_wwish,unreviewed,SUBS_wwish,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,260,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SUBS_wwish,unreachable,SUBS_wwish,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,260,only used by unreachable sub_w_ri; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm
 emitter_api,SUBS_www,unreviewed,SUBS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,262,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SUBS_wwwLSLi,unreviewed,SUBS_wwwLSLi,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,264,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SUBS_xxi,unreachable,SUBS_xxi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,258,no path from reachable AArch64 compiler/emitter roots
@@ -286,7 +286,7 @@ emitter_api,UBFM_xxii,unreviewed,UBFM_xxii,60,2,BasiliskII/src/uae_cpu_2026/comp
 emitter_api,UBFX_wwii,unreviewed,UBFX_wwii,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,365,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UBFX_xxii,unreviewed,UBFX_xxii,60,24,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,366,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UDIV_www,unreviewed,UDIV_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,233,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,UDIV_xxx,unreviewed,UDIV_xxx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,234,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,UDIV_xxx,unreviewed,UDIV_xxx,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,234,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UMULH_xxx,unreachable,UMULH_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,219,no path from reachable AArch64 compiler/emitter roots
 emitter_api,UMULL_xww,unreviewed,UMULL_xww,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,222,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UXTB_ww,unreviewed,UXTB_ww,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,279,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -370,7 +370,7 @@ generator,i_MOVES,serviced,MOVES,72,1,BasiliskII/src/uae_cpu_2026/compiler/genco
 generator,i_MULL,audited,MULL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3510,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 generator,i_MULS,unreviewed,MULS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2655,native generator case; no accepted family-level closure report
 generator,i_MULU,unreviewed,MULU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2640,native generator case; no accepted family-level closure report
-generator,i_MV2SR,unreviewed,MV2SR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2006,native generator case; no accepted family-level closure report
+generator,i_MV2SR,serviced,MV2SR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2006,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_MVMEL,audited,MVMEL,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2078,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
 generator,i_MVMLE,audited,MVMLE,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2085,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
 generator,i_MVPMR,serviced,MVPMR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1944,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
@@ -426,61 +426,61 @@ generator,i_UNPK,serviced,UNPK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp
 midfunc,arm_ADD_l,unreviewed,arm_ADD,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,592,reachable; no accepted family-level closure report
 midfunc,arm_ADD_l_ri,audited,arm_ADD_l_ri,68,5,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,688,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,arm_ADD_l_ri_hostptr,audited,arm_ADD_l_ri_hostptr,68,122,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,649,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,arm_ADD_l_ri8,unreachable,arm_ADD_l_ri8,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,709,no path from generated/support compiler roots
-midfunc,arm_ADD_ldiv8,unreachable,arm_ADD_ldiv8,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,630,no path from generated/support compiler roots
+midfunc,arm_ADD_l_ri8,unreachable,arm_ADD_l_ri8,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,709,no path from configured generated/support/FPU compiler roots
+midfunc,arm_ADD_ldiv8,unreachable,arm_ADD_ldiv8,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,630,no path from configured generated/support/FPU compiler roots
 midfunc,arm_ADD_ptr_ri,audited,arm_ADD_ptr_ri,68,247,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,665,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,arm_SUB_l_ri8,unreachable,arm_SUB_l_ri8,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,732,no path from generated/support compiler roots
+midfunc,arm_SUB_l_ri8,unreachable,arm_SUB_l_ri8,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,732,no path from configured generated/support/FPU compiler roots
 midfunc,call_helper,audited,call_helper,68,42,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1405,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
 midfunc,dbcc_cond_move_ne_w,unreviewed,dbcc_cond_move_ne,68,30,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1380,reachable; no accepted family-level closure report
 midfunc,dbf_dec_test_ne_w,unreviewed,dbf_dec_test_ne,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1366,reachable; no accepted family-level closure report
 midfunc,discard_flags_in_nzcv,audited,discard_flags_in_nzcv,68,32,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,182,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,disp_ea20_target_add,audited,disp_ea20_target_add,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,241,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,disp_ea20_target_mov,audited,disp_ea20_target_mov,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,266,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,dont_care_fflags,unreviewed,dont_care_fflags,68,35,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,844,reachable; no accepted family-level closure report
-midfunc,dont_care_flags,audited,dont_care_flags,68,2278,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,153,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
+midfunc,dont_care_fflags,unreviewed,dont_care_fflags,68,34,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,844,reachable; no accepted family-level closure report
+midfunc,dont_care_flags,audited,dont_care_flags,68,2112,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,153,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,f_forget_about,unreviewed,f_forget_about,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,836,reachable; no accepted family-level closure report
 midfunc,fabs_rr,unreviewed,fabs_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1068,reachable; no accepted family-level closure report
 midfunc,fadd_rr,unreviewed,fadd_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1098,reachable; no accepted family-level closure report
-midfunc,fcuts_r,unreachable,fcuts_r,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1168,no path from generated/support compiler roots
+midfunc,fcuts_r,unreachable,fcuts_r,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1168,no path from configured generated/support/FPU compiler roots
 midfunc,fdiv_rr,unreviewed,fdiv_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1088,reachable; no accepted family-level closure report
-midfunc,fflags_into_flags,unreviewed,fflags_into_flags,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1254,reachable; no accepted family-level closure report
-midfunc,ffunc_rr,unreviewed,ffunc_rr,68,5,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1206,reachable; no accepted family-level closure report
-midfunc,fmod_rr,unreachable,fmod_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1148,no path from generated/support compiler roots
-midfunc,fmov_b_rr,unreachable,fmov_b_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,893,no path from generated/support compiler roots
+midfunc,fflags_into_flags,unreviewed,fflags_into_flags,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1254,reachable; no accepted family-level closure report
+midfunc,ffunc_rr,unreviewed,ffunc_rr,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1206,reachable; no accepted family-level closure report
+midfunc,fmod_rr,unreachable,fmod_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1148,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_b_rr,unreachable,fmov_b_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,893,no path from configured generated/support/FPU compiler roots
 midfunc,fmov_d_ri_0,unreviewed,fmov_d_ri_0,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,990,reachable; no accepted family-level closure report
 midfunc,fmov_d_ri_1,unreviewed,fmov_d_ri_1,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,998,reachable; no accepted family-level closure report
-midfunc,fmov_d_ri_10,unreachable,fmov_d_ri_10,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1006,no path from generated/support compiler roots
-midfunc,fmov_d_ri_100,unreachable,fmov_d_ri_100,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1014,no path from generated/support compiler roots
+midfunc,fmov_d_ri_10,unreachable,fmov_d_ri_10,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1006,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_d_ri_100,unreachable,fmov_d_ri_100,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1014,no path from configured generated/support/FPU compiler roots
 midfunc,fmov_d_rm,unreviewed,fmov_d_rm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1022,reachable; no accepted family-level closure report
-midfunc,fmov_d_rrr,unreachable,fmov_d_rrr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,903,no path from generated/support compiler roots
-midfunc,fmov_l_ri,unreachable,fmov_l_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,915,no path from generated/support compiler roots
-midfunc,fmov_l_rr,unreviewed,fmov_l_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,863,reachable; no accepted family-level closure report
+midfunc,fmov_d_rrr,unreachable,fmov_d_rrr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,903,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_l_ri,unreachable,fmov_l_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,915,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_l_rr,unreviewed,fmov_l_rr,68,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,863,reachable; no accepted family-level closure report
 midfunc,fmov_rm,unreviewed,fmov_rm,68,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1038,reachable; no accepted family-level closure report
-midfunc,fmov_rr,unreviewed,fmov_rr,68,5,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,850,reachable; no accepted family-level closure report
+midfunc,fmov_rr,unreviewed,fmov_rr,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,850,reachable; no accepted family-level closure report
 midfunc,fmov_s_ri,unreviewed,fmov_s_ri,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,939,reachable; no accepted family-level closure report
-midfunc,fmov_s_rr,unreachable,fmov_s_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,873,no path from generated/support compiler roots
-midfunc,fmov_to_b_rr,unreachable,fmov_to_b_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,979,no path from generated/support compiler roots
-midfunc,fmov_to_d_rrr,unreachable,fmov_to_d_rrr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1046,no path from generated/support compiler roots
-midfunc,fmov_to_l_rr,unreviewed,fmov_to_l_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,948,reachable; no accepted family-level closure report
-midfunc,fmov_to_s_rr,unreviewed,fmov_to_s_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,958,reachable; no accepted family-level closure report
-midfunc,fmov_to_w_rr,unreachable,fmov_to_w_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,968,no path from generated/support compiler roots
-midfunc,fmov_w_rr,unreachable,fmov_w_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,883,no path from generated/support compiler roots
+midfunc,fmov_s_rr,unreachable,fmov_s_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,873,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_to_b_rr,unreachable,fmov_to_b_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,979,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_to_d_rrr,unreachable,fmov_to_d_rrr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1046,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_to_l_rr,unreviewed,fmov_to_l_rr,68,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,948,reachable; no accepted family-level closure report
+midfunc,fmov_to_s_rr,unreviewed,fmov_to_s_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,958,reachable; no accepted family-level closure report
+midfunc,fmov_to_w_rr,unreachable,fmov_to_w_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,968,no path from configured generated/support/FPU compiler roots
+midfunc,fmov_w_rr,unreachable,fmov_w_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,883,no path from configured generated/support/FPU compiler roots
 midfunc,fmovs_rm,unreviewed,fmovs_rm,68,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1030,reachable; no accepted family-level closure report
-midfunc,fmovs_rr,unreachable,fmovs_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1196,no path from generated/support compiler roots
+midfunc,fmovs_rr,unreachable,fmovs_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1196,no path from configured generated/support/FPU compiler roots
 midfunc,fmul_rr,unreviewed,fmul_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1108,reachable; no accepted family-level closure report
 midfunc,fneg_rr,unreviewed,fneg_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1078,reachable; no accepted family-level closure report
 midfunc,forget_about,unreviewed,forget_about,68,304,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,582,reachable; no accepted family-level closure report
-midfunc,fp_from_double_mr,unreviewed,fp_from_double_mr,68,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1286,reachable; no accepted family-level closure report
-midfunc,fp_from_exten_mr,unreviewed,fp_from_exten_mr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1261,reachable; no accepted family-level closure report
-midfunc,fp_fscc_ri,unreachable,fp_fscc_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1307,no path from generated/support compiler roots
+midfunc,fp_from_double_mr,unreviewed,fp_from_double_mr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1286,reachable; no accepted family-level closure report
+midfunc,fp_from_exten_mr,unreviewed,fp_from_exten_mr,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1261,reachable; no accepted family-level closure report
+midfunc,fp_fscc_ri,unreachable,fp_fscc_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1307,no path from configured generated/support/FPU compiler roots
 midfunc,fp_to_double_rm,unreviewed,fp_to_double_rm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1297,reachable; no accepted family-level closure report
-midfunc,fp_to_exten_rm,unreviewed,fp_to_exten_rm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1274,reachable; no accepted family-level closure report
+midfunc,fp_to_exten_rm,unreviewed,fp_to_exten_rm,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1274,reachable; no accepted family-level closure report
 midfunc,fpowx_rr,unreviewed,fpowx_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1230,reachable; no accepted family-level closure report
 midfunc,frem1_rr,unreviewed,frem1_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1176,reachable; no accepted family-level closure report
-midfunc,frndint_rr,unreviewed,frndint_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1128,reachable; no accepted family-level closure report
-midfunc,frndintz_rr,unreachable,frndintz_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1138,no path from generated/support compiler roots
-midfunc,fsgldiv_rr,unreachable,fsgldiv_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1158,no path from generated/support compiler roots
-midfunc,fsglmul_rr,unreachable,fsglmul_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1186,no path from generated/support compiler roots
+midfunc,frndint_rr,unreachable,frndint_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1128,its only source call is inside inactive USE_X86_FPUCW code in the configured AArch64 build
+midfunc,frndintz_rr,unreachable,frndintz_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1138,no path from configured generated/support/FPU compiler roots
+midfunc,fsgldiv_rr,unreachable,fsgldiv_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1158,no path from configured generated/support/FPU compiler roots
+midfunc,fsglmul_rr,unreachable,fsglmul_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1186,no path from configured generated/support/FPU compiler roots
 midfunc,fsqrt_rr,unreviewed,fsqrt_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1058,reachable; no accepted family-level closure report
 midfunc,fsub_rr,unreviewed,fsub_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1118,reachable; no accepted family-level closure report
 midfunc,jff_ABCD_b,audited,ABCD,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8084,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
@@ -490,9 +490,9 @@ midfunc,jff_ADD_l,unreviewed,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jff_ADD_l_imm,unreviewed,ADD_l_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,310,reachable; no accepted family-level closure report
 midfunc,jff_ADD_w,unreviewed,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,290,reachable; no accepted family-level closure report
 midfunc,jff_ADD_w_imm,unreviewed,ADD_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,275,reachable; no accepted family-level closure report
-midfunc,jff_ADDX_b,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,510,no path from generated/support compiler roots
-midfunc,jff_ADDX_l,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,592,no path from generated/support compiler roots
-midfunc,jff_ADDX_w,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,551,no path from generated/support compiler roots
+midfunc,jff_ADDX_b,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,510,no path from configured generated/support/FPU compiler roots
+midfunc,jff_ADDX_l,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,592,no path from configured generated/support/FPU compiler roots
+midfunc,jff_ADDX_w,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,551,no path from configured generated/support/FPU compiler roots
 midfunc,jff_AND_b,unreviewed,AND,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,789,reachable; no accepted family-level closure report
 midfunc,jff_AND_b_imm,unreviewed,AND_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,771,reachable; no accepted family-level closure report
 midfunc,jff_AND_l,unreviewed,AND,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,865,reachable; no accepted family-level closure report
@@ -522,14 +522,14 @@ midfunc,jff_BCLR_b,unreviewed,BCLR,90,18,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,jff_BCLR_b_imm,unreviewed,BCLR_b_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1856,reachable; no accepted family-level closure report
 midfunc,jff_BCLR_l,unreviewed,BCLR,90,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1912,reachable; no accepted family-level closure report
 midfunc,jff_BCLR_l_imm,unreviewed,BCLR_l_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1871,reachable; no accepted family-level closure report
-midfunc,jff_BFINS_dd,unreachable,BFINS_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2190,no path from generated/support compiler roots
-midfunc,jff_BFINS_di,unreachable,BFINS_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2046,no path from generated/support compiler roots
-midfunc,jff_BFINS_id,unreachable,BFINS_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2116,no path from generated/support compiler roots
-midfunc,jff_BFINS_ii,unreachable,BFINS_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1963,no path from generated/support compiler roots
-midfunc,jff_BFINS2_dd,unreachable,BFINS2_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2406,no path from generated/support compiler roots
-midfunc,jff_BFINS2_di,unreachable,BFINS2_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2262,no path from generated/support compiler roots
-midfunc,jff_BFINS2_id,unreachable,BFINS2_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2332,no path from generated/support compiler roots
-midfunc,jff_BFINS2_ii,unreachable,BFINS2_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1996,no path from generated/support compiler roots
+midfunc,jff_BFINS_dd,unreachable,BFINS_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2190,all BFINS slots are post-registration op_bitfield_comp_ff services; the legacy inline BFINS MIDFUNC is not selectable
+midfunc,jff_BFINS_di,unreachable,BFINS_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2046,no path from configured generated/support/FPU compiler roots
+midfunc,jff_BFINS_id,unreachable,BFINS_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2116,no path from configured generated/support/FPU compiler roots
+midfunc,jff_BFINS_ii,unreachable,BFINS_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1963,no path from configured generated/support/FPU compiler roots
+midfunc,jff_BFINS2_dd,unreachable,BFINS2_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2406,no path from configured generated/support/FPU compiler roots
+midfunc,jff_BFINS2_di,unreachable,BFINS2_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2262,no path from configured generated/support/FPU compiler roots
+midfunc,jff_BFINS2_id,unreachable,BFINS2_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2332,no path from configured generated/support/FPU compiler roots
+midfunc,jff_BFINS2_ii,unreachable,BFINS2_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1996,no path from configured generated/support/FPU compiler roots
 midfunc,jff_BSET_b,unreviewed,BSET,90,18,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2547,reachable; no accepted family-level closure report
 midfunc,jff_BSET_b_imm,unreviewed,BSET_b_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2517,reachable; no accepted family-level closure report
 midfunc,jff_BSET_l,unreviewed,BSET,90,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2573,reachable; no accepted family-level closure report
@@ -538,20 +538,20 @@ midfunc,jff_BTST_b,unreviewed,BTST,90,20,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,jff_BTST_b_imm,unreviewed,BTST_b_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2613,reachable; no accepted family-level closure report
 midfunc,jff_BTST_l,unreviewed,BTST,90,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2666,reachable; no accepted family-level closure report
 midfunc,jff_BTST_l_imm,unreviewed,BTST_l_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2627,reachable; no accepted family-level closure report
-midfunc,jff_CLR_b,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2743,no path from generated/support compiler roots
-midfunc,jff_CLR_l,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2777,no path from generated/support compiler roots
-midfunc,jff_CLR_w,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2760,no path from generated/support compiler roots
+midfunc,jff_CLR_b,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2743,no path from configured generated/support/FPU compiler roots
+midfunc,jff_CLR_l,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2777,no path from configured generated/support/FPU compiler roots
+midfunc,jff_CLR_w,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2760,no path from configured generated/support/FPU compiler roots
 midfunc,jff_CMP_b,unreviewed,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2820,reachable; no accepted family-level closure report
 midfunc,jff_CMP_b_imm,unreviewed,CMP_b_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2799,reachable; no accepted family-level closure report
 midfunc,jff_CMP_l,unreviewed,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2934,reachable; no accepted family-level closure report
 midfunc,jff_CMP_l_imm,unreviewed,CMP_l_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2898,reachable; no accepted family-level closure report
 midfunc,jff_CMP_w,unreviewed,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2870,reachable; no accepted family-level closure report
 midfunc,jff_CMP_w_imm,unreviewed,CMP_w_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2848,reachable; no accepted family-level closure report
-midfunc,jff_CMPA_l,unreachable,CMPA,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3014,no path from generated/support compiler roots
-midfunc,jff_CMPA_l_imm,unreachable,CMPA_l_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2999,no path from generated/support compiler roots
-midfunc,jff_CMPA_w,unreachable,CMPA,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2981,no path from generated/support compiler roots
-midfunc,jff_CMPA_w_imm,unreachable,CMPA_w_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2966,no path from generated/support compiler roots
-midfunc,jff_DBCC,unreachable,DBCC,92,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3037,no path from generated/support compiler roots
+midfunc,jff_CMPA_l,unreachable,CMPA,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3014,no path from configured generated/support/FPU compiler roots
+midfunc,jff_CMPA_l_imm,unreachable,CMPA_l_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2999,no path from configured generated/support/FPU compiler roots
+midfunc,jff_CMPA_w,unreachable,CMPA,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2981,no path from configured generated/support/FPU compiler roots
+midfunc,jff_CMPA_w_imm,unreachable,CMPA_w_imm,88,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2966,no path from configured generated/support/FPU compiler roots
+midfunc,jff_DBCC,unreachable,DBCC,92,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3037,no path from configured generated/support/FPU compiler roots
 midfunc,jff_DIVLS32,audited,DIVLS,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3506,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jff_DIVLS64,audited,DIVLS,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3710,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jff_DIVLU32,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3431,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
@@ -565,9 +565,9 @@ midfunc,jff_EOR_l_imm,unreviewed,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/comp
 midfunc,jff_EOR_w,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3932,reachable; no accepted family-level closure report
 midfunc,jff_EOR_w_imm,unreviewed,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3912,reachable; no accepted family-level closure report
 midfunc,jff_EORSR,audited,EORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4000,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-midfunc,jff_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4078,no path from generated/support compiler roots
-midfunc,jff_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4115,no path from generated/support compiler roots
-midfunc,jff_EXT_w,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4096,no path from generated/support compiler roots
+midfunc,jff_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4078,no path from configured generated/support/FPU compiler roots
+midfunc,jff_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4115,no path from configured generated/support/FPU compiler roots
+midfunc,jff_EXT_w,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4096,no path from configured generated/support/FPU compiler roots
 midfunc,jff_LSL_b_imm,audited,LSL_b_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4275,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jff_LSL_b_reg,audited,LSL_b_reg,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4357,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jff_LSL_l_imm,audited,LSL_l_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4331,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
@@ -584,27 +584,27 @@ midfunc,jff_LSR_w_reg,audited,LSR_w_reg,68,1,BasiliskII/src/uae_cpu_2026/compile
 midfunc,jff_LSRW,audited,LSRW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4890,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jff_MOVE_b,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5051,reachable; no accepted family-level closure report
 midfunc,jff_MOVE_b_imm,unreviewed,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4993,reachable; no accepted family-level closure report
-midfunc,jff_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5101,no path from generated/support compiler roots
-midfunc,jff_MOVE_l_imm,unreachable,MOVE_l_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5036,no path from generated/support compiler roots
+midfunc,jff_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5101,i_MOVE routes long flags through genflags and storage through genastore; the legacy MOVE.L MIDFUNC is not selected
+midfunc,jff_MOVE_l_imm,unreachable,MOVE_l_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5036,no path from configured generated/support/FPU compiler roots
 midfunc,jff_MOVE_w,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5076,reachable; no accepted family-level closure report
 midfunc,jff_MOVE_w_imm,unreviewed,MOVE_w_imm,94,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5010,reachable; no accepted family-level closure report
-midfunc,jff_MULS,unreachable,MULS,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5313,no path from generated/support compiler roots
+midfunc,jff_MULS,unreachable,MULS,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5313,no path from configured generated/support/FPU compiler roots
 midfunc,jff_MULS32,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5339,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jff_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5398,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-midfunc,jff_MULU,unreachable,MULU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5448,no path from generated/support compiler roots
+midfunc,jff_MULU,unreachable,MULU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5448,no path from configured generated/support/FPU compiler roots
 midfunc,jff_MULU32,audited,MULU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5487,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jff_MULU64,audited,MULU,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5521,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jff_MV2SCCR,unreviewed,MV2SCCR,68,24,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8887,reachable; no accepted family-level closure report
 midfunc,jff_NBCD_b,audited,NBCD,68,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8112,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
-midfunc,jff_NEG_b,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5584,no path from generated/support compiler roots
-midfunc,jff_NEG_l,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5614,no path from generated/support compiler roots
-midfunc,jff_NEG_w,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5599,no path from generated/support compiler roots
-midfunc,jff_NEGX_b,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5696,no path from generated/support compiler roots
-midfunc,jff_NEGX_l,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5754,no path from generated/support compiler roots
-midfunc,jff_NEGX_w,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5725,no path from generated/support compiler roots
-midfunc,jff_NOT_b,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5849,no path from generated/support compiler roots
-midfunc,jff_NOT_l,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5887,no path from generated/support compiler roots
-midfunc,jff_NOT_w,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5868,no path from generated/support compiler roots
+midfunc,jff_NEG_b,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5584,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NEG_l,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5614,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NEG_w,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5599,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NEGX_b,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5696,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NEGX_l,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5754,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NEGX_w,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5725,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NOT_b,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5849,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NOT_l,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5887,no path from configured generated/support/FPU compiler roots
+midfunc,jff_NOT_w,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5868,no path from configured generated/support/FPU compiler roots
 midfunc,jff_OR_b,unreviewed,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6036,reachable; no accepted family-level closure report
 midfunc,jff_OR_b_imm,unreviewed,OR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6016,reachable; no accepted family-level closure report
 midfunc,jff_OR_l,unreviewed,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6119,reachable; no accepted family-level closure report
@@ -641,10 +641,10 @@ midfunc,jff_SUB_l,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jff_SUB_l_imm,unreviewed,SUB_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7645,reachable; no accepted family-level closure report
 midfunc,jff_SUB_w,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7625,reachable; no accepted family-level closure report
 midfunc,jff_SUB_w_imm,unreviewed,SUB_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7609,reachable; no accepted family-level closure report
-midfunc,jff_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7832,no path from generated/support compiler roots
-midfunc,jff_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7912,no path from generated/support compiler roots
-midfunc,jff_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7872,no path from generated/support compiler roots
-midfunc,jff_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8233,no path from generated/support compiler roots
+midfunc,jff_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7832,no path from configured generated/support/FPU compiler roots
+midfunc,jff_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7912,no path from configured generated/support/FPU compiler roots
+midfunc,jff_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7872,no path from configured generated/support/FPU compiler roots
+midfunc,jff_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8233,no path from configured generated/support/FPU compiler roots
 midfunc,jff_TAS,unreviewed,TAS,97,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8776,reachable; no accepted family-level closure report
 midfunc,jff_TST_b,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8279,reachable; no accepted family-level closure report
 midfunc,jff_TST_b_imm,unreviewed,TST_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8271,reachable; no accepted family-level closure report
@@ -654,7 +654,7 @@ midfunc,jff_TST_w,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jff_TST_w_imm,unreviewed,TST_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8295,reachable; no accepted family-level closure report
 midfunc,jnf_ADD_b,unreviewed,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,135,reachable; no accepted family-level closure report
 midfunc,jnf_ADD_b_imm,unreviewed,ADD_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,115,reachable; no accepted family-level closure report
-midfunc,jnf_ADD_im8,unreachable,ADD_im8,80,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,99,no path from generated/support compiler roots
+midfunc,jnf_ADD_im8,unreachable,ADD_im8,80,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,99,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_ADD_l,unreviewed,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,221,reachable; no accepted family-level closure report
 midfunc,jnf_ADD_l_imm,unreviewed,ADD_l_imm,80,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,200,reachable; no accepted family-level closure report
 midfunc,jnf_ADD_w,unreviewed,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,180,reachable; no accepted family-level closure report
@@ -663,9 +663,9 @@ midfunc,jnf_ADDA_l,unreviewed,ADDA,68,26,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,jnf_ADDA_l_imm,unreviewed,ADDA_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,392,reachable; no accepted family-level closure report
 midfunc,jnf_ADDA_w,unreviewed,ADDA,68,26,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,377,reachable; no accepted family-level closure report
 midfunc,jnf_ADDA_w_imm,unreviewed,ADDA_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,356,reachable; no accepted family-level closure report
-midfunc,jnf_ADDX_b,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,445,no path from generated/support compiler roots
-midfunc,jnf_ADDX_l,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,483,no path from generated/support compiler roots
-midfunc,jnf_ADDX_w,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,464,no path from generated/support compiler roots
+midfunc,jnf_ADDX_b,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,445,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ADDX_l,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,483,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ADDX_w,unreachable,ADDX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,464,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_AND_b,unreviewed,AND,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,684,reachable; no accepted family-level closure report
 midfunc,jnf_AND_b_imm,unreviewed,AND_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,668,reachable; no accepted family-level closure report
 midfunc,jnf_AND_l,unreviewed,AND,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,756,reachable; no accepted family-level closure report
@@ -689,29 +689,29 @@ midfunc,jnf_BCLR_b,unreviewed,BCLR,90,18,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,jnf_BCLR_b_imm,unreviewed,BCLR_b_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1797,reachable; no accepted family-level closure report
 midfunc,jnf_BCLR_l,unreviewed,BCLR,90,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1837,reachable; no accepted family-level closure report
 midfunc,jnf_BCLR_l_imm,unreviewed,BCLR_l_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1805,reachable; no accepted family-level closure report
-midfunc,jnf_BFINS_dd,unreachable,BFINS_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2153,no path from generated/support compiler roots
-midfunc,jnf_BFINS_di,unreachable,BFINS_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2015,no path from generated/support compiler roots
-midfunc,jnf_BFINS_id,unreachable,BFINS_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2081,no path from generated/support compiler roots
-midfunc,jnf_BFINS_ii,unreachable,BFINS_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1949,no path from generated/support compiler roots
-midfunc,jnf_BFINS2_dd,unreachable,BFINS2_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2369,no path from generated/support compiler roots
-midfunc,jnf_BFINS2_di,unreachable,BFINS2_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2231,no path from generated/support compiler roots
-midfunc,jnf_BFINS2_id,unreachable,BFINS2_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2297,no path from generated/support compiler roots
-midfunc,jnf_BFINS2_ii,unreachable,BFINS2_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1980,no path from generated/support compiler roots
+midfunc,jnf_BFINS_dd,unreachable,BFINS_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2153,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS_di,unreachable,BFINS_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2015,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS_id,unreachable,BFINS_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2081,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS_ii,unreachable,BFINS_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1949,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS2_dd,unreachable,BFINS2_dd,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2369,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS2_di,unreachable,BFINS2_di,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2231,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS2_id,unreachable,BFINS2_id,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2297,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_BFINS2_ii,unreachable,BFINS2_ii,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1980,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_BSET_b,unreviewed,BSET,90,18,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2477,reachable; no accepted family-level closure report
 midfunc,jnf_BSET_b_imm,unreviewed,BSET_b_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2461,reachable; no accepted family-level closure report
 midfunc,jnf_BSET_l,unreviewed,BSET,90,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2498,reachable; no accepted family-level closure report
 midfunc,jnf_BSET_l_imm,unreviewed,BSET_l_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2469,reachable; no accepted family-level closure report
 midfunc,jnf_CHK_l,audited,CHK,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8176,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
 midfunc,jnf_CHK_w,audited,CHK,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8143,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
-midfunc,jnf_CLR_b,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2709,no path from generated/support compiler roots
-midfunc,jnf_CLR_l,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2737,no path from generated/support compiler roots
-midfunc,jnf_CLR_w,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2723,no path from generated/support compiler roots
+midfunc,jnf_CLR_b,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2709,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_CLR_l,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2737,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_CLR_w,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2723,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_DIVLS32,audited,DIVLS,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3461,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jnf_DIVLS64,audited,DIVLS,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3667,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jnf_DIVLU32,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3401,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jnf_DIVLU64,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3568,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-midfunc,jnf_DIVS,unreachable,DIVS,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3239,no path from generated/support compiler roots
-midfunc,jnf_DIVU,unreachable,DIVU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3105,no path from generated/support compiler roots
+midfunc,jnf_DIVS,unreachable,DIVS,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3239,i_DIVS unconditionally selects jff_DIVS for divide exception and overflow flag semantics
+midfunc,jnf_DIVU,unreachable,DIVU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3105,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_EOR_b,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3789,reachable; no accepted family-level closure report
 midfunc,jnf_EOR_b_imm,unreviewed,EOR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3778,reachable; no accepted family-level closure report
 midfunc,jnf_EOR_l,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3852,reachable; no accepted family-level closure report
@@ -719,9 +719,9 @@ midfunc,jnf_EOR_l_imm,unreviewed,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/comp
 midfunc,jnf_EOR_w,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3820,reachable; no accepted family-level closure report
 midfunc,jnf_EOR_w_imm,unreviewed,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3809,reachable; no accepted family-level closure report
 midfunc,jnf_EORSR_w,audited,EORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9113,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-midfunc,jnf_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4032,no path from generated/support compiler roots
-midfunc,jnf_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4063,no path from generated/support compiler roots
-midfunc,jnf_EXT_w,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4047,no path from generated/support compiler roots
+midfunc,jnf_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4032,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4063,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_EXT_w,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4047,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_LSL_b_imm,audited,LSL_b_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4155,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jnf_LSL_b_reg,audited,LSL_b_reg,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4217,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jnf_LSL_l_imm,audited,LSL_l_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4197,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
@@ -745,23 +745,23 @@ midfunc,jnf_MEM_READ_OFF_w,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026
 midfunc,jnf_MEM_READ24_OFF_b,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8604,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_READ24_OFF_l,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8642,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_READ24_OFF_w,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8628,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READMEMBANK,audited,MEM_READMEMBANK,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8700,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READMEMBANK,audited,MEM_READMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8700,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE_OFF_b,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8400,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE_OFF_l,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8444,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE_OFF_w,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8426,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE24_OFF_b,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8530,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE24_OFF_l,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8580,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MEM_WRITE24_OFF_w,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8565,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITEMEMBANK,audited,MEM_WRITEMEMBANK,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8736,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITEMEMBANK,audited,MEM_WRITEMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8736,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MOVE_b,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4953,reachable; no accepted family-level closure report
 midfunc,jnf_MOVE_b_imm,unreviewed,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4920,reachable; no accepted family-level closure report
-midfunc,jnf_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4987,no path from generated/support compiler roots
+midfunc,jnf_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4987,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_MOVE_w,unreviewed,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4970,reachable; no accepted family-level closure report
 midfunc,jnf_MOVE_w_imm,unreviewed,MOVE_w_imm,94,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4936,reachable; no accepted family-level closure report
-midfunc,jnf_MOVE16,unreachable,MOVE16,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5217,no path from generated/support compiler roots
-midfunc,jnf_MOVEA_l,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5270,no path from generated/support compiler roots
-midfunc,jnf_MOVEA_w,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5255,no path from generated/support compiler roots
-midfunc,jnf_MOVEA_w_imm,unreachable,MOVEA_w_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5249,no path from generated/support compiler roots
+midfunc,jnf_MOVE16,unreachable,MOVE16,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5217,i_MOVE16 selects genmov16 and its direct/special-memory primitives; the legacy MOVE16 MIDFUNC is not selected
+midfunc,jnf_MOVEA_l,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5270,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_MOVEA_w,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5255,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_MOVEA_w_imm,unreachable,MOVEA_w_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5249,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_MULS,unreviewed,MULS,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5289,reachable; no accepted family-level closure report
 midfunc,jnf_MULS32,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5328,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5389,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
@@ -769,21 +769,21 @@ midfunc,jnf_MULU,unreviewed,MULU,68,22,BasiliskII/src/uae_cpu_2026/compiler/comp
 midfunc,jnf_MULU32,audited,MULU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5476,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MULU64,audited,MULU,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5512,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MV2SR_w,unreachable,MV2SR,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9030,post-registration AArch64 semantic-service override
-midfunc,jnf_MVMEL_l,unreachable,MVMEL,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5144,no path from generated/support compiler roots
-midfunc,jnf_MVMEL_w,unreachable,MVMEL,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5130,no path from generated/support compiler roots
-midfunc,jnf_MVMLE_l,unreachable,MVMLE,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5187,no path from generated/support compiler roots
-midfunc,jnf_MVMLE_w,unreachable,MVMLE,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5174,no path from generated/support compiler roots
-midfunc,jnf_MVR2USP,unreachable,MVR2USP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1422,no path from generated/support compiler roots
-midfunc,jnf_MVUSP2R,unreachable,MVUSP2R,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1431,no path from generated/support compiler roots
-midfunc,jnf_NEG_b,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5550,no path from generated/support compiler roots
-midfunc,jnf_NEG_l,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5574,no path from generated/support compiler roots
-midfunc,jnf_NEG_w,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5562,no path from generated/support compiler roots
-midfunc,jnf_NEGX_b,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5642,no path from generated/support compiler roots
-midfunc,jnf_NEGX_l,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5679,no path from generated/support compiler roots
-midfunc,jnf_NEGX_w,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5660,no path from generated/support compiler roots
-midfunc,jnf_NOT_b,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5794,no path from generated/support compiler roots
-midfunc,jnf_NOT_l,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5834,no path from generated/support compiler roots
-midfunc,jnf_NOT_w,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5814,no path from generated/support compiler roots
+midfunc,jnf_MVMEL_l,unreachable,MVMEL,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5144,i_MVMEL selects repaired genmovemel cursor/read primitives; the legacy fixed-offset MIDFUNC is not selected
+midfunc,jnf_MVMEL_w,unreachable,MVMEL,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5130,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_MVMLE_l,unreachable,MVMLE,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5187,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_MVMLE_w,unreachable,MVMLE,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5174,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_MVR2USP,unreachable,MVR2USP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1422,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_MVUSP2R,unreachable,MVUSP2R,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1431,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NEG_b,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5550,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NEG_l,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5574,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NEG_w,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5562,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NEGX_b,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5642,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NEGX_l,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5679,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NEGX_w,unreachable,NEGX,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5660,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NOT_b,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5794,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NOT_l,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5834,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_NOT_w,unreachable,NOT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5814,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_OR_b,unreviewed,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5929,reachable; no accepted family-level closure report
 midfunc,jnf_OR_b_imm,unreviewed,OR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5913,reachable; no accepted family-level closure report
 midfunc,jnf_OR_l,unreviewed,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6001,reachable; no accepted family-level closure report
@@ -805,47 +805,47 @@ midfunc,jnf_ROR_l_imm,audited,ROR_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compile
 midfunc,jnf_ROR_w,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6984,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
 midfunc,jnf_ROR_w_imm,audited,ROR_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6862,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
 midfunc,jnf_RORW,audited,RORW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7119,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROXL_b,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6565,no path from generated/support compiler roots
-midfunc,jnf_ROXL_l,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6640,no path from generated/support compiler roots
-midfunc,jnf_ROXL_w,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6604,no path from generated/support compiler roots
-midfunc,jnf_ROXR_b,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7160,no path from generated/support compiler roots
-midfunc,jnf_ROXR_l,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7229,no path from generated/support compiler roots
-midfunc,jnf_ROXR_w,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7196,no path from generated/support compiler roots
-midfunc,jnf_SCC,unreachable,SCC,92,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7414,no path from generated/support compiler roots
+midfunc,jnf_ROXL_b,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6565,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXL_l,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6640,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXL_w,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6604,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXR_b,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7160,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXR_l,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7229,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXR_w,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7196,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SCC,unreachable,SCC,92,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7414,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_SUB_b,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7477,reachable; no accepted family-level closure report
 midfunc,jnf_SUB_b_imm,unreviewed,SUB_b_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7457,reachable; no accepted family-level closure report
 midfunc,jnf_SUB_l,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7558,reachable; no accepted family-level closure report
 midfunc,jnf_SUB_l_imm,unreviewed,SUB_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7538,reachable; no accepted family-level closure report
 midfunc,jnf_SUB_w,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7518,reachable; no accepted family-level closure report
 midfunc,jnf_SUB_w_imm,unreviewed,SUB_w_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7497,reachable; no accepted family-level closure report
-midfunc,jnf_SUBA_l,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7744,no path from generated/support compiler roots
-midfunc,jnf_SUBA_l_imm,unreachable,SUBA_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7724,no path from generated/support compiler roots
-midfunc,jnf_SUBA_w,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7709,no path from generated/support compiler roots
-midfunc,jnf_SUBA_w_imm,unreachable,SUBA_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7691,no path from generated/support compiler roots
-midfunc,jnf_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7775,no path from generated/support compiler roots
-midfunc,jnf_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7815,no path from generated/support compiler roots
-midfunc,jnf_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7795,no path from generated/support compiler roots
-midfunc,jnf_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8218,no path from generated/support compiler roots
-midfunc,jnf_TAS,unreachable,TAS,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8767,no path from generated/support compiler roots
+midfunc,jnf_SUBA_l,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7744,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBA_l_imm,unreachable,SUBA_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7724,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBA_w,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7709,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBA_w_imm,unreachable,SUBA_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7691,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7775,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7815,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7795,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8218,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_TAS,unreachable,TAS,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8767,i_TAS unconditionally selects jff_TAS because TAS defines CCR; no no-flags TAS path is selected
 midfunc,jnf_TRAPV,audited,TRAPV,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8794,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-midfunc,lea_l_brr,audited,lea_l_brr,68,1172,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,313,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
+midfunc,lea_l_brr,audited,lea_l_brr,68,1171,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,313,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,lea_l_brr_indexed,audited,lea_l_brr_indexed,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,364,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,lea_l_rr_indexed,audited,lea_l_rr_indexed,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,406,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,live_flags,audited,live_flags,68,1491,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,145,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
-midfunc,make_flags_live,audited,make_flags_live,68,785,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,214,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
+midfunc,live_flags,audited,live_flags,68,1407,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,145,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
+midfunc,make_flags_live,audited,make_flags_live,68,621,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,214,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,mov_b_ri,unreviewed,mov_b_ri,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,515,reachable; no accepted family-level closure report
-midfunc,mov_l_mi,audited,mov_l_mi,68,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,220,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
-midfunc,mov_l_mr,audited,mov_l_mr,68,232,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,462,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
-midfunc,mov_l_ri,unreviewed,mov_l_ri,68,2433,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,509,reachable; no accepted family-level closure report
-midfunc,mov_l_rm,audited,mov_l_rm,68,19,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,488,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
-midfunc,mov_l_rr,unreviewed,mov_l_rr,68,2528,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,439,reachable; no accepted family-level closure report
+midfunc,mov_l_mi,audited,mov_l_mi,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,220,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
+midfunc,mov_l_mr,audited,mov_l_mr,68,228,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,462,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
+midfunc,mov_l_ri,unreviewed,mov_l_ri,68,2430,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,509,reachable; no accepted family-level closure report
+midfunc,mov_l_rm,audited,mov_l_rm,68,17,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,488,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
+midfunc,mov_l_rr,unreviewed,mov_l_rr,68,2349,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,439,reachable; no accepted family-level closure report
 midfunc,preserve_flags_before_nzcv_clobber,audited,preserve_flags_before_nzcv_clobber,68,104,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,164,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
-midfunc,roxr_b_ri,unreachable,roxr_b_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1322,no path from generated/support compiler roots
+midfunc,roxr_b_ri,unreachable,roxr_b_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1322,no path from configured generated/support/FPU compiler roots
 midfunc,save_and_discard_flags_in_nzcv,audited,save_and_discard_flags_in_nzcv,68,28,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,197,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,sign_extend_16_rr,audited,sign_extend_16_rr,68,159,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,291,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,sub_l_ri,unreviewed,sub_l_ri,68,157,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,534,reachable; no accepted family-level closure report
-midfunc,sub_w_ri,unreviewed,sub_w_ri,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,561,reachable; no accepted family-level closure report
-raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3221,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+midfunc,sub_l_ri,unreviewed,sub_l_ri,68,156,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,534,reachable; no accepted family-level closure report
+midfunc,sub_w_ri,unreachable,sub_w_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,561,raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead
+raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3221,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call,audited,compemu_raw_call,86,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,231,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call_observer_i,audited,compemu_raw_call_observer_i,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,276,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call_observer_ii,audited,compemu_raw_call_observer_ii,86,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,284,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
@@ -855,15 +855,15 @@ raw_boundary,compemu_raw_check_checksum,unreviewed,compemu_raw_check_checksum,60
 raw_boundary,compemu_raw_cmp_pc,audited,compemu_raw_cmp_pc,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,329,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_dec_m,unreviewed,compemu_raw_dec_m,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,469,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_endblock_pc_inreg,audited,compemu_raw_endblock_pc_inreg,86,13,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,761,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isconst,86,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,809,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isconst,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,809,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_exec_nostats,unreviewed,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,663,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_execute_normal,unreviewed,compemu_raw_execute_normal,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,624,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_execute_normal_cycles,unreviewed,compemu_raw_execute_normal_cycles,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,634,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_fmov_mr_drop,unreviewed,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,862,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_fmov_rm,unreviewed,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,873,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_handle_except,unreviewed,compemu_raw_handle_except,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,604,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_inc_m,unreviewed,compemu_raw_inc_m,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,480,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_inc_opcount,unreviewed,compemu_raw_inc_opcount,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,220,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_inc_m,unreviewed,compemu_raw_inc_m,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,480,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_inc_opcount,unreviewed,compemu_raw_inc_opcount,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,220,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_init_r_regstruct,unreviewed,compemu_raw_init_r_regstruct,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,748,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_jcc_l_oponly,unreviewed,compemu_raw_jcc_l_oponly,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,511,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_jmp,audited,compemu_raw_jmp,86,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,680,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
@@ -873,7 +873,7 @@ raw_boundary,compemu_raw_maybe_do_nothing,unreviewed,compemu_raw_maybe_do_nothin
 raw_boundary,compemu_raw_maybe_recompile,audited,compemu_raw_maybe_recompile,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,672,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_mov_l_mi,unreviewed,compemu_raw_mov_l_mi,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,400,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_mov_l_mr,unreviewed,compemu_raw_mov_l_mr,60,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,420,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_mov_l_ri,unreviewed,compemu_raw_mov_l_ri,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,437,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_mov_l_ri,unreviewed,compemu_raw_mov_l_ri,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,437,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_mov_l_rm,unreviewed,compemu_raw_mov_l_rm,60,25,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,443,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_mov_l_rr,unreviewed,compemu_raw_mov_l_rr,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,459,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_observer_restore,audited,compemu_raw_observer_restore,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,260,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
@@ -885,43 +885,43 @@ raw_boundary,compemu_raw_set_pc_full_i,audited,compemu_raw_set_pc_full_i,86,8,Ba
 raw_boundary,compemu_raw_set_pc_i,audited,compemu_raw_set_pc_i,86,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,365,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_fabs_rr,unreviewed,raw_fabs_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1033,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fadd_rr,unreviewed,raw_fadd_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1051,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fcuts_r,unreviewed,raw_fcuts_r,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1098,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fcuts_r,unreviewed,raw_fcuts_r,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1098,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fdiv_rr,unreviewed,raw_fdiv_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1045,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fflags_into_flags,unreviewed,raw_fflags_into_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1278,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_ffunc_rr,unreviewed,raw_ffunc_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1129,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_flags_to_reg,audited,raw_flags_to_reg,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,192,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,raw_fmod_rr,unreviewed,raw_fmod_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1081,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_b_rr,unreviewed,raw_fmov_b_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmod_rr,unreviewed,raw_fmod_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1081,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_b_rr,unreviewed,raw_fmov_b_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_d_ri_0,unreviewed,raw_fmov_d_ri_0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,980,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_d_ri_1,unreviewed,raw_fmov_d_ri_1,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,986,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_ri_10,unreviewed,raw_fmov_d_ri_10,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,992,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_ri_100,unreviewed,raw_fmov_d_ri_100,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,998,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_ri_10,unreviewed,raw_fmov_d_ri_10,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,992,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_ri_100,unreviewed,raw_fmov_d_ri_100,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,998,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_d_rm,unreviewed,raw_fmov_d_rm,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1005,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_rrr,unreviewed,raw_fmov_d_rrr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,911,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_l_rr,unreviewed,raw_fmov_l_rr,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,884,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_rrr,unreviewed,raw_fmov_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,911,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_l_rr,unreviewed,raw_fmov_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,884,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_rr,unreviewed,raw_fmov_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,856,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_s_rr,unreviewed,raw_fmov_s_rr,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,890,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_b_rr,unreviewed,raw_fmov_to_b_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,956,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_d_rrr,unreviewed,raw_fmov_to_d_rrr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1020,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_s_rr,unreviewed,raw_fmov_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,890,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_b_rr,unreviewed,raw_fmov_to_b_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,956,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_d_rrr,unreviewed,raw_fmov_to_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1020,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_to_l_rr,unreviewed,raw_fmov_to_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,918,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_to_s_rr,unreviewed,raw_fmov_to_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,925,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_w_rr,unreviewed,raw_fmov_to_w_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,932,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_w_rr,unreviewed,raw_fmov_w_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,897,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_w_rr,unreviewed,raw_fmov_to_w_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,932,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_w_rr,unreviewed,raw_fmov_w_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,897,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmovs_rm,unreviewed,raw_fmovs_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1012,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmovs_rr,unreviewed,raw_fmovs_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1122,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmovs_rr,unreviewed,raw_fmovs_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1122,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmul_rr,unreviewed,raw_fmul_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1057,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fneg_rr,unreviewed,raw_fneg_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1039,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fp_from_double_mr,unreviewed,raw_fp_from_double_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1264,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fp_from_exten_mr,unreviewed,raw_fp_from_exten_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1165,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_fscc_ri,unreviewed,raw_fp_fscc_ri,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1283,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_fscc_ri,unreviewed,raw_fp_fscc_ri,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1283,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fp_to_double_rm,unreviewed,raw_fp_to_double_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1271,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fp_to_exten_rm,unreviewed,raw_fp_to_exten_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1218,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fpowx_rr,unreviewed,raw_fpowx_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1143,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_frem1_rr,unreviewed,raw_frem1_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1105,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_frndint_rr,unreviewed,raw_frndint_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1069,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_frndintz_rr,unreviewed,raw_frndintz_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1075,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fsgldiv_rr,unreviewed,raw_fsgldiv_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1089,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fsglmul_rr,unreviewed,raw_fsglmul_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1113,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_frndint_rr,unreviewed,raw_frndint_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1069,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_frndintz_rr,unreviewed,raw_frndintz_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1075,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsgldiv_rr,unreviewed,raw_fsgldiv_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1089,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsglmul_rr,unreviewed,raw_fsglmul_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1113,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fsqrt_rr,unreviewed,raw_fsqrt_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1027,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fsub_rr,unreviewed,raw_fsub_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1063,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_pop_preserved_regs,audited,raw_pop_preserved_regs,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,92,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
