@@ -416,7 +416,7 @@ generator,i_SUB,unreviewed,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp
 generator,i_SUBA,unreviewed,SUBA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1605,native generator case; no accepted family-level closure report
 generator,i_SUBX,audited,SUBX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1623,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 generator,i_SWAP,unreviewed,SWAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2024,native generator case; no accepted family-level closure report
-generator,i_TAS,unreviewed,TAS,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3657,native generator case; no accepted family-level closure report
+generator,i_TAS,audited,TAS,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3657,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
 generator,i_TRAP,serviced,TRAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2092,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_TRAPcc,serviced,TRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3437,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_TRAPV,audited,TRAPV,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2198,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
@@ -645,7 +645,7 @@ midfunc,jff_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,jff_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7912,no path from configured generated/support/FPU compiler roots
 midfunc,jff_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7872,no path from configured generated/support/FPU compiler roots
 midfunc,jff_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8233,no path from configured generated/support/FPU compiler roots
-midfunc,jff_TAS,unreviewed,TAS,97,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8776,reachable; no accepted family-level closure report
+midfunc,jff_TAS,audited,TAS,97,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8776,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
 midfunc,jff_TST_b,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8279,reachable; no accepted family-level closure report
 midfunc,jff_TST_b_imm,unreviewed,TST_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8271,reachable; no accepted family-level closure report
 midfunc,jff_TST_l,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8327,reachable; no accepted family-level closure report

@@ -384,6 +384,17 @@ declare -a NEGX_NATIVE_MATRIX_NAMES=(
     negx_b_absl_special_native negx_b_a7_postinc_native negx_b_a7_predec_native
 )
 TEST_ORDER+=("${NEGX_NATIVE_MATRIX_NAMES[@]}")
+# TAS is a mandatory flag-live byte RMW family.  Sample flags from the original
+# byte before setting bit 7, preserve X and Dn upper lanes, then prove every
+# writable EA, A7 byte geometry, and normal/special-memory writeback natively.
+declare -a TAS_NATIVE_MATRIX_NAMES=(
+    tas_b_d0_zero_x0_native tas_b_d0_zero_x1_native
+    tas_b_d0_positive_x1_native tas_b_d0_negative_x0_native
+    tas_b_aind_special_native tas_b_postinc_native tas_b_predec_native
+    tas_b_d16_native tas_b_indexed_special_native tas_b_absw_native
+    tas_b_absl_special_native tas_b_a7_postinc_native tas_b_a7_predec_native
+)
+TEST_ORDER+=("${TAS_NATIVE_MATRIX_NAMES[@]}")
 # Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
@@ -1091,6 +1102,24 @@ NATIVE_REPLAY_BYTES[negx_b_a7_predec_native]="A000 00"
 SPECIAL_MEMORY_TESTS[negx_b_aind_special_native]=1
 SPECIAL_MEMORY_TESTS[negx_w_indexed_special_native]=1
 SPECIAL_MEMORY_TESTS[negx_b_absl_special_native]=1
+for _tas_name in "${TAS_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_tas_name"]=1
+    NATIVE_REPLAY_PC["$_tas_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_tas_name"]=2
+done
+unset _tas_name
+NATIVE_REPLAY_BYTES[tas_b_aind_special_native]="A000 00"
+NATIVE_REPLAY_BYTES[tas_b_postinc_native]="A000 7F"
+NATIVE_REPLAY_BYTES[tas_b_predec_native]="A000 80"
+NATIVE_REPLAY_BYTES[tas_b_d16_native]="A010 FF"
+NATIVE_REPLAY_BYTES[tas_b_indexed_special_native]="A002 00"
+NATIVE_REPLAY_BYTES[tas_b_absw_native]="6000 01"
+NATIVE_REPLAY_BYTES[tas_b_absl_special_native]="A000 80"
+NATIVE_REPLAY_BYTES[tas_b_a7_postinc_native]="A000 00"
+NATIVE_REPLAY_BYTES[tas_b_a7_predec_native]="A000 7F"
+SPECIAL_MEMORY_TESTS[tas_b_aind_special_native]=1
+SPECIAL_MEMORY_TESTS[tas_b_indexed_special_native]=1
+SPECIAL_MEMORY_TESTS[tas_b_absl_special_native]=1
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -1250,6 +1279,35 @@ EXPECTED_REG_FIELDS[negx_l_absw_native]="D0=80000000 D2=0000271B SR=2718"
 EXPECTED_REG_FIELDS[negx_b_absl_special_native]="D0=A5A50000 D2=00002700 SR=2704"
 EXPECTED_REG_FIELDS[negx_b_a7_postinc_native]="D0=A5A50080 D2=0000271B A7=0000A002 SR=2718"
 EXPECTED_REG_FIELDS[negx_b_a7_predec_native]="D0=A5A500FF D2=00002719 A7=0000A000 SR=2718"
+# Exact-opcode TAS matrix.  Register forms prove original-byte N/Z, V/C clear,
+# X preservation, and upper-lane retention.  Memory forms snapshot SR before a
+# verification load so its own flag update cannot masquerade as TAS evidence.
+TESTS[tas_b_d0_zero_x0_native]="4AC0"
+TESTS[tas_b_d0_zero_x1_native]="4AC0"
+TESTS[tas_b_d0_positive_x1_native]="4AC0"
+TESTS[tas_b_d0_negative_x0_native]="4AC0"
+TESTS[tas_b_aind_special_native]="4AD0 40C2 1010"
+TESTS[tas_b_postinc_native]="4AD8 40C2 1028 FFFF"
+TESTS[tas_b_predec_native]="4AE0 40C2 1010"
+TESTS[tas_b_d16_native]="4AE8 0010 40C2 1028 0010"
+TESTS[tas_b_indexed_special_native]="4AF0 1000 40C2 1030 1000"
+TESTS[tas_b_absw_native]="4AF8 6000 40C2 1038 6000"
+TESTS[tas_b_absl_special_native]="4AF9 0000 A000 40C2 1039 0000 A000"
+TESTS[tas_b_a7_postinc_native]="4ADF 40C2 102F FFFE"
+TESTS[tas_b_a7_predec_native]="4AE7 40C2 1017"
+EXPECTED_REG_FIELDS[tas_b_d0_zero_x0_native]="D0=A5A50080 SR=2704"
+EXPECTED_REG_FIELDS[tas_b_d0_zero_x1_native]="D0=A5A50080 SR=2714"
+EXPECTED_REG_FIELDS[tas_b_d0_positive_x1_native]="D0=A5A500FF SR=2710"
+EXPECTED_REG_FIELDS[tas_b_d0_negative_x0_native]="D0=A5A50080 SR=2708"
+EXPECTED_REG_FIELDS[tas_b_aind_special_native]="D0=A5A50080 D2=00002714 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[tas_b_postinc_native]="D0=A5A500FF D2=00002710 A0=0000A001 SR=2718"
+EXPECTED_REG_FIELDS[tas_b_predec_native]="D0=A5A50080 D2=00002708 A0=0000A000 SR=2708"
+EXPECTED_REG_FIELDS[tas_b_d16_native]="D0=A5A500FF D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[tas_b_indexed_special_native]="D0=A5A50080 D1=00000002 D2=00002704 A0=0000A000 SR=2708"
+EXPECTED_REG_FIELDS[tas_b_absw_native]="D0=A5A50081 D2=00002710 SR=2718"
+EXPECTED_REG_FIELDS[tas_b_absl_special_native]="D0=A5A50080 D2=00002718 SR=2718"
+EXPECTED_REG_FIELDS[tas_b_a7_postinc_native]="D0=A5A50080 D2=00002714 A7=0000A002 SR=2718"
+EXPECTED_REG_FIELDS[tas_b_a7_predec_native]="D0=A5A500FF D2=00002700 A7=0000A000 SR=2708"
 # ADDX_BASIC: ORI #0x10,CCR (set X); MOVEQ #5,D0; MOVEQ #3,D1; ADDX.L D1,D0
 # 5 + 3 + X(1) = 9
 # ORI.B #0x10,CCR = 003C 0010; MOVEQ #5,D0 = 7005; MOVEQ #3,D1 = 7203; ADDX.L D1,D0 = D181
@@ -2966,6 +3024,21 @@ INIT_REGS[negx_b_absl_special_native]="A5A50000 $_NEGX_INIT_ZERO_TAIL 00002700"
 INIT_REGS[negx_b_a7_postinc_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00002704"
 INIT_REGS[negx_b_a7_predec_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 00002714"
 unset _negx_width _NEGX_INIT_ZERO_TAIL
+_TAS_INIT_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[tas_b_d0_zero_x0_native]="A5A50000 $_TAS_INIT_ZERO_TAIL 0000270F"
+INIT_REGS[tas_b_d0_zero_x1_native]="A5A50000 $_TAS_INIT_ZERO_TAIL 0000271F"
+INIT_REGS[tas_b_d0_positive_x1_native]="A5A5007F $_TAS_INIT_ZERO_TAIL 0000271F"
+INIT_REGS[tas_b_d0_negative_x0_native]="A5A50080 $_TAS_INIT_ZERO_TAIL 00002707"
+INIT_REGS[tas_b_aind_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[tas_b_postinc_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[tas_b_predec_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A001 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002707"
+INIT_REGS[tas_b_d16_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[tas_b_indexed_special_native]="A5A50000 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000270F"
+INIT_REGS[tas_b_absw_native]="A5A50000 $_TAS_INIT_ZERO_TAIL 0000271F"
+INIT_REGS[tas_b_absl_special_native]="A5A50000 $_TAS_INIT_ZERO_TAIL 0000271F"
+INIT_REGS[tas_b_a7_postinc_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[tas_b_a7_predec_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 00002707"
+unset _TAS_INIT_ZERO_TAIL
 # Exact-anchor replay skips each setup prefix, so restore the audited operands
 # explicitly rather than collapsing every pre-existing CHK.W case to 0 <= 0.
 INIT_REGS[chk_w_in_range]="00000008 00000014 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002700"
@@ -3276,6 +3349,12 @@ for _negx_name in "${NEGX_NATIVE_MATRIX_NAMES[@]}"; do
     ((_negx_sentinel_id+=1))
 done
 unset _negx_name _negx_sentinel_id
+_tas_sentinel_id=1
+for _tas_name in "${TAS_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_tas_name"] 'a607%04x' "$_tas_sentinel_id"
+    ((_tas_sentinel_id+=1))
+done
+unset _tas_name _tas_sentinel_id
 SENTINEL_A6[addx_basic]="a60100d4"
 SENTINEL_A6[subx_basic]="a60100d5"
 SENTINEL_A6[ext_word]="a60100d6"
@@ -4706,6 +4785,10 @@ for _negx_name in "${NEGX_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_negx_name"]=1
 done
 unset _negx_name
+for _tas_name in "${TAS_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_tas_name"]=1
+done
+unset _tas_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

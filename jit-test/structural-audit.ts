@@ -650,6 +650,111 @@ for (const contract of [
   requireText(allocatorSource, contract, "NEGX constant-backed RMW pressure hook");
 }
 
+/* TAS is always architecturally flag-live.  Its only reachable MIDFUNC must
+ * sample the original signed byte before setting bit 7, clear V/C through TST,
+ * preserve X outside NZCV, and keep every memory EA live through read/RMW/write.
+ * The no-flags namesake and legacy runtime helper are unreachable. */
+const tasGenerator = functionBody(
+  gencompSource,
+  "\t case i_TAS:",
+  "     case i_FPP:",
+  "TAS generator",
+);
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tstart_needflags();\\n");',
+  'comprintf("\\tjff_TAS(src);\\n");',
+  'comprintf("\\tlive_flags();\\n");',
+  'comprintf("\\tend_needflags();\\n");',
+  'genastore ("src", curi->smode, "srcreg", curi->size, "src");',
+]) {
+  requireText(tasGenerator, contract, "TAS mandatory flag-live routing");
+}
+if (tasGenerator.includes("jnf_TAS")) {
+  fail("TAS mandatory flag-live routing: no-flags handler became reachable");
+}
+const tasMidfunc = functionBody(
+  midfunc2Source,
+  "MIDFUNC(1,jff_TAS,(RW1 d))",
+  "MENDFUNC(1,jff_TAS,(RW1 d))",
+  "TAS original-byte flag lifecycle",
+);
+for (const contract of [
+  "d = rmw(d);",
+  "SIGNED8_REG_2_REG(REG_WORK1, d);",
+  "TST_ww(REG_WORK1, REG_WORK1);",
+  "MOV_wi(REG_WORK2, 0x80);",
+  "ORR_www(d, d, REG_WORK2);",
+  "flags_carry_inverted = false;",
+  "unlock2(d);",
+]) {
+  requireText(tasMidfunc, contract, "TAS original-byte flag lifecycle");
+}
+requireBefore(tasMidfunc, "SIGNED8_REG_2_REG(REG_WORK1, d);", "TST_ww(REG_WORK1, REG_WORK1);", "TAS signed-byte N/Z sampling");
+requireBefore(tasMidfunc, "TST_ww(REG_WORK1, REG_WORK1);", "ORR_www(d, d, REG_WORK2);", "TAS flags before bit set");
+requireBefore(tasMidfunc, "ORR_www(d, d, REG_WORK2);", "flags_carry_inverted = false;", "TAS carry publication");
+if ((generatedSource.match(/\bjff_TAS\(src\);/g) || []).length !== 16) {
+  fail("generated TAS family: expected eight flag-live and eight nominal no-flags handlers");
+}
+if (generatedSource.includes("jnf_TAS(src)") || gencompSource.includes("jnf_TAS(src)")) {
+  fail("generated TAS family: unreachable no-flags handler has a caller");
+}
+const tasRegisterLive = functionBody(generatedSource, "void REGPARAM2 op_4ac0_0_comp_ff", "void REGPARAM2 op_4ad0_0_comp_ff", "generated TAS register flag-live");
+const tasRegisterNominalNf = functionBody(generatedSource, "void REGPARAM2 op_4ac0_0_comp_nf", "void REGPARAM2 op_4ad0_0_comp_nf", "generated TAS register nominal no-flags");
+for (const body of [tasRegisterLive, tasRegisterNominalNf]) {
+  requireBefore(body, "jff_TAS(src);", "mov_b_rr(srcreg, src);", "generated TAS Dn upper-lane writeback");
+}
+for (const [opcode, nextOpcode] of [
+  ["4ad0", "4ad8"], ["4ad8", "4ae0"], ["4ae0", "4ae8"], ["4ae8", "4af0"],
+  ["4af0", "4af8"], ["4af8", "4af9"], ["4af9", "4c00"],
+] as const) {
+  for (const suffix of ["ff", "nf"] as const) {
+    const body = functionBody(
+      generatedSource,
+      `void REGPARAM2 op_${opcode}_0_comp_${suffix}`,
+      `void REGPARAM2 op_${nextOpcode}_0_comp_${suffix}`,
+      `generated TAS memory ${opcode}/${suffix}`,
+    );
+    requireBefore(body, "readbyte(srca, src, scratchie);", "jff_TAS(src);", `TAS ${opcode}/${suffix} read-before-RMW`);
+    requireBefore(body, "jff_TAS(src);", "writebyte(srca, src, scratchie);", `TAS ${opcode}/${suffix} RMW-before-write`);
+  }
+}
+for (const contract of [
+  "lea_l_brr(srcreg + 8,srcreg + 8, areg_byteinc[srcreg]);",
+  "lea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);",
+]) {
+  requireText(generatedSource, contract, "TAS A7 byte geometry");
+}
+const tasExactVectors = [
+  "tas_b_d0_zero_x0_native", "tas_b_d0_zero_x1_native",
+  "tas_b_d0_positive_x1_native", "tas_b_d0_negative_x0_native",
+  "tas_b_aind_special_native", "tas_b_postinc_native", "tas_b_predec_native",
+  "tas_b_d16_native", "tas_b_indexed_special_native", "tas_b_absw_native",
+  "tas_b_absl_special_native", "tas_b_a7_postinc_native", "tas_b_a7_predec_native",
+];
+for (const name of tasExactVectors) requireText(harnessSource, name, `TAS exact-native vector ${name}`);
+for (const contract of [
+  'for _tas_name in "${TAS_NATIVE_MATRIX_NAMES[@]}"',
+  'NATIVE_REPLAY_TESTS["$_tas_name"]=1',
+  'NATIVE_REPLAY_PC["$_tas_name"]=0x1000',
+  'NATIVE_REPLAY_COUNT["$_tas_name"]=2',
+  "SPECIAL_MEMORY_TESTS[tas_b_aind_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[tas_b_indexed_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[tas_b_absl_special_native]=1",
+]) {
+  requireText(harnessSource, contract, "TAS exact-native/memory gate");
+}
+requireText(activeRiskySource, "tas_b_absw_native", "TAS active-risky sentinel");
+for (const contract of [
+  "tas_b_ea_value_collision",
+  "[tas_b_ea_value_collision]=8",
+  "[tas_b_ea_value_collision]=20",
+  "[tas_b_ea_value_collision]=1",
+  '[tas_b_ea_value_collision]="A000 00"',
+]) {
+  requireText(regallocPressureSource, contract, "TAS EA/value allocator ownership");
+}
+
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
 // immediate; lock the family to direct instruction-stream decoding.
@@ -2703,6 +2808,11 @@ console.log("METRIC structural_negx_no_flags_lifecycle=1");
 console.log(`METRIC structural_negx_exact_native_vectors=${negxExactVectors.length}`);
 console.log("METRIC structural_negx_memory_ea_classes=9");
 console.log("METRIC structural_negx_allocator_pressure_widths=3");
+console.log("METRIC structural_tas_mandatory_flag_live=1");
+console.log("METRIC structural_tas_original_byte_flags=1");
+console.log(`METRIC structural_tas_exact_native_vectors=${tasExactVectors.length}`);
+console.log("METRIC structural_tas_memory_ea_classes=9");
+console.log("METRIC structural_tas_allocator_pressure=1");
 console.log("METRIC structural_bcd_patched_branch_joins=7");
 console.log("METRIC structural_bcd_a7_predecrement_geometry=1");
 console.log("METRIC structural_bcd_exact_pc_memory_replay=1");

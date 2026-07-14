@@ -114,6 +114,7 @@ nbcd_basic
 negx_with_x
 negx_zero
 negx_l_min_x0_overflow_native
+tas_b_absw_native
 sbcd_basic
 subx_basic
 dbne_loop_cmpi
