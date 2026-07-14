@@ -1907,17 +1907,27 @@ gen_opcode (unsigned int opcode)
 #ifdef DISABLE_I_CMPM_CMP
     failure;
 #endif
+	/* The first compare operand remains live while the second EA/value is
+	 * acquired.  CMPM in particular performs two ordered memory reads; own the
+	 * first fetched value so the second private destination cannot reuse its
+	 * host mapping before flag publication. */
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tint __cmpsrclock=jit_value_lock(src);\n");
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace ();
 	genflags (flag_cmp, curi->size, "", "src", "dst");
+	comprintf("\tjit_value_unlock(__cmpsrclock);\n");
 	break;
 
      case i_CMPA:
 #ifdef DISABLE_I_CMPA
     failure;
 #endif
+	/* CMPA uses the shared long CMP lowering after widening the fetched source.
+	 * Retain that source across destination acquisition and widening as the same
+	 * two-operand ownership contract used by CMP/CMPM. */
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	comprintf("\tint __cmpasrclock=jit_value_lock(src);\n");
 	genamode (curi->dmode, "dstreg", sz_long, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	start_brace();
 	comprintf("\tint tmps=scratchie++;\n");
@@ -1928,6 +1938,7 @@ gen_opcode (unsigned int opcode)
 	 default: assert(0);
 	}
 	genflags (flag_cmp, sz_long, "", "tmps", "dst");
+	comprintf("\tjit_value_unlock(__cmpasrclock);\n");
 	break;
 	/* The next two are coded a little unconventional, but they are doing
 	 * weird things... */

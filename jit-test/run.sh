@@ -494,6 +494,27 @@ declare -a BITOP_NATIVE_MATRIX_NAMES=(
     bitop_core_btst_imm_destination_zero_native bitop_core_btst_dyn_destination_set_native
 )
 TEST_ORDER+=("${BITOP_NATIVE_MATRIX_NAMES[@]}")
+# Complete live compare lifecycle: CMP/CMPI/CMPM/CMPA share jff_CMP_{b,w,l}
+# after EA fetch and CMPA widening. Cover constants, aliases, all widths,
+# ordered dual-memory reads/writeback, no-flags access semantics, and X/NZVC.
+declare -a CMP_NATIVE_MATRIX_NAMES=(
+    cmp_core_b_reg_borrow_native cmp_core_w_reg_overflow_native
+    cmp_core_l_reg_alias_equal_native cmp_core_b_imm_const_overflow_native
+    cmp_core_w_imm_runtime_overflow_native cmp_core_l_imm_const_overflow_native
+    cmp_core_l_reg_distinct_borrow_native cmp_core_b_aind_special_native
+    cmp_core_w_postinc_native cmp_core_l_predec_native cmp_core_b_d16_native
+    cmp_core_w_index_special_native cmp_core_l_absw_native
+    cmp_core_b_absl_special_native cmp_core_w_pc_d16_native
+    cmp_core_l_pc_index_native cmp_core_b_postinc_noflags_native
+    cmpm_core_b_distinct_native cmpm_core_w_distinct_native
+    cmpm_core_l_distinct_native cmpm_core_b_same_a0_native
+    cmpm_core_b_same_a7_native cmpm_core_w_special_native
+    cmpm_core_l_noflags_native cmpa_core_w_imm_negative_native
+    cmpa_core_w_postinc_alias_native cmpa_core_w_d16_negative_native
+    cmpa_core_l_areg_alias_native cmpa_core_l_aind_special_native
+    cmpa_core_w_pc_index_native cmpa_core_l_postinc_noflags_native
+)
+TEST_ORDER+=("${CMP_NATIVE_MATRIX_NAMES[@]}")
 # Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
@@ -1258,6 +1279,12 @@ for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_bitop_name"]=2
 done
 unset _bitop_name
+for _cmp_name in "${CMP_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_cmp_name"]=1
+    NATIVE_REPLAY_PC["$_cmp_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_cmp_name"]=2
+done
+unset _cmp_name
 SPECIAL_MEMORY_TESTS[move_core_b_aind_to_dn_special_native]=1
 SPECIAL_MEMORY_TESTS[move_core_w_index_to_dn_special_native]=1
 SPECIAL_MEMORY_TESTS[move_core_b_absl_to_dn_special_native]=1
@@ -1274,6 +1301,11 @@ SPECIAL_MEMORY_TESTS[bitop_core_bchg_imm_aind_zero_special_native]=1
 SPECIAL_MEMORY_TESTS[bitop_core_bset_dyn_index_one_special_native]=1
 SPECIAL_MEMORY_TESTS[bitop_core_bclr_imm_absl_one_special_native]=1
 SPECIAL_MEMORY_TESTS[bitop_core_btst_dyn_aind_set_special_native]=1
+SPECIAL_MEMORY_TESTS[cmp_core_b_aind_special_native]=1
+SPECIAL_MEMORY_TESTS[cmp_core_w_index_special_native]=1
+SPECIAL_MEMORY_TESTS[cmp_core_b_absl_special_native]=1
+SPECIAL_MEMORY_TESTS[cmpm_core_w_special_native]=1
+SPECIAL_MEMORY_TESTS[cmpa_core_l_aind_special_native]=1
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -1637,6 +1669,95 @@ TEST_MEMORY_BYTES[bitop_core_bset_imm_pc_d16_zero_native]="0FF0 00"
 TEST_MEMORY_BYTES[bitop_core_bclr_dyn_pc_index_one_native]="0FF0 01"
 TEST_MEMORY_BYTES[bitop_core_btst_imm_pc_d16_set_native]="0FF0 80"
 TEST_MEMORY_BYTES[bitop_core_btst_dyn_pc_index_zero_native]="0FF0 00"
+
+# Exact-native compare matrix. CMP/CMPM compute destination-source, preserve X,
+# and replace NZVC. CMPA.W sign-extends its source before the shared long CMP.
+TESTS[cmp_core_b_reg_borrow_native]="B001 40C2"
+TESTS[cmp_core_w_reg_overflow_native]="B041 40C2"
+TESTS[cmp_core_l_reg_alias_equal_native]="B080 40C2"
+TESTS[cmp_core_b_imm_const_overflow_native]="707F 0C00 00FF 40C2"
+TESTS[cmp_core_w_imm_runtime_overflow_native]="0C40 0001 40C2"
+TESTS[cmp_core_l_imm_const_overflow_native]="203C 8000 0000 0C80 0000 0001 40C2"
+TESTS[cmp_core_l_reg_distinct_borrow_native]="B081 40C2"
+TESTS[cmp_core_b_aind_special_native]="B010 40C2"
+TESTS[cmp_core_w_postinc_native]="B058 40C2"
+TESTS[cmp_core_l_predec_native]="B0A0 40C2"
+TESTS[cmp_core_b_d16_native]="B028 0010 40C2"
+TESTS[cmp_core_w_index_special_native]="B070 1000 40C2"
+TESTS[cmp_core_l_absw_native]="B0B8 6000 40C2"
+TESTS[cmp_core_b_absl_special_native]="B039 0000 A000 40C2"
+TESTS[cmp_core_w_pc_d16_native]="B07A FFEE 40C2"
+TESTS[cmp_core_l_pc_index_native]="B0BB 1000 40C2"
+TESTS[cmp_core_b_postinc_noflags_native]="B018 7400 40C3"
+TESTS[cmpm_core_b_distinct_native]="B308 40C2"
+TESTS[cmpm_core_w_distinct_native]="B348 40C2"
+TESTS[cmpm_core_l_distinct_native]="B388 40C2"
+TESTS[cmpm_core_b_same_a0_native]="B108 40C2"
+TESTS[cmpm_core_b_same_a7_native]="BF0F 40C2"
+TESTS[cmpm_core_w_special_native]="B348 40C2"
+TESTS[cmpm_core_l_noflags_native]="B388 7400 40C3"
+TESTS[cmpa_core_w_imm_negative_native]="B0FC FFFF 40C2"
+TESTS[cmpa_core_w_postinc_alias_native]="B0D8 40C2"
+TESTS[cmpa_core_w_d16_negative_native]="B2E8 0010 40C2"
+TESTS[cmpa_core_l_areg_alias_native]="B1C8 40C2"
+TESTS[cmpa_core_l_aind_special_native]="B3D0 40C2"
+TESTS[cmpa_core_w_pc_index_native]="B0FB 1000 40C2"
+TESTS[cmpa_core_l_postinc_noflags_native]="B1D8 7400 40C3"
+
+EXPECTED_REG_FIELDS[cmp_core_b_reg_borrow_native]="D0=A5A50000 D1=00000001 D2=22222719 SR=2719"
+EXPECTED_REG_FIELDS[cmp_core_w_reg_overflow_native]="D0=A5A58000 D1=00000001 D2=22222712 SR=2712"
+EXPECTED_REG_FIELDS[cmp_core_l_reg_alias_equal_native]="D0=80000000 D2=22222714 SR=2714"
+EXPECTED_REG_FIELDS[cmp_core_b_imm_const_overflow_native]="D0=0000007F D2=2222271B SR=271B"
+EXPECTED_REG_FIELDS[cmp_core_w_imm_runtime_overflow_native]="D0=A5A58000 D2=22222712 SR=2712"
+EXPECTED_REG_FIELDS[cmp_core_l_imm_const_overflow_native]="D0=80000000 D2=22222712 SR=2712"
+EXPECTED_REG_FIELDS[cmp_core_l_reg_distinct_borrow_native]="D0=00000000 D1=FFFFFFFF D2=22222711 SR=2711"
+EXPECTED_REG_FIELDS[cmp_core_b_aind_special_native]="D0=A5A5007F D2=2222271B A0=0000A000 SR=271B"
+EXPECTED_REG_FIELDS[cmp_core_w_postinc_native]="D0=A5A58000 D2=22222712 A0=0000A002 SR=2712"
+EXPECTED_REG_FIELDS[cmp_core_l_predec_native]="D0=00000000 D2=22222719 A0=0000A000 SR=2719"
+EXPECTED_REG_FIELDS[cmp_core_b_d16_native]="D0=A5A50000 D2=22222719 A0=0000A000 SR=2719"
+EXPECTED_REG_FIELDS[cmp_core_w_index_special_native]="D0=A5A57FFF D1=00000002 D2=2222271B A0=0000A000 SR=271B"
+EXPECTED_REG_FIELDS[cmp_core_l_absw_native]="D0=00000000 D2=22222711 SR=2711"
+EXPECTED_REG_FIELDS[cmp_core_b_absl_special_native]="D0=A5A5007F D2=2222271B SR=271B"
+EXPECTED_REG_FIELDS[cmp_core_w_pc_d16_native]="D0=A5A58000 D2=22222712 SR=2712"
+EXPECTED_REG_FIELDS[cmp_core_l_pc_index_native]="D0=00000000 D1=FFFFFFEE D2=22222711 SR=2711"
+EXPECTED_REG_FIELDS[cmp_core_b_postinc_noflags_native]="D2=00000000 D3=33332714 A0=0000A001 SR=2714"
+EXPECTED_REG_FIELDS[cmpm_core_b_distinct_native]="D2=22222710 A0=0000A001 A1=0000A101 SR=2710"
+EXPECTED_REG_FIELDS[cmpm_core_w_distinct_native]="D2=2222271B A0=0000A002 A1=0000A102 SR=271B"
+EXPECTED_REG_FIELDS[cmpm_core_l_distinct_native]="D2=22222711 A0=0000A004 A1=0000A104 SR=2711"
+EXPECTED_REG_FIELDS[cmpm_core_b_same_a0_native]="D2=22222714 A0=0000A002 SR=2714"
+EXPECTED_REG_FIELDS[cmpm_core_b_same_a7_native]="D2=22222710 A7=0000A004 SR=2710"
+EXPECTED_REG_FIELDS[cmpm_core_w_special_native]="D2=22222719 A0=0000A002 A1=0000A102 SR=2719"
+EXPECTED_REG_FIELDS[cmpm_core_l_noflags_native]="D2=00000000 D3=33332714 A0=0000A004 A1=0000A104 SR=2714"
+EXPECTED_REG_FIELDS[cmpa_core_w_imm_negative_native]="D2=22222711 A0=00000000 SR=2711"
+EXPECTED_REG_FIELDS[cmpa_core_w_postinc_alias_native]="D2=22222710 A0=0000A002 SR=2710"
+EXPECTED_REG_FIELDS[cmpa_core_w_d16_negative_native]="D2=22222711 A0=0000A000 A1=00007FFF SR=2711"
+EXPECTED_REG_FIELDS[cmpa_core_l_areg_alias_native]="D2=22222714 A0=80000000 SR=2714"
+EXPECTED_REG_FIELDS[cmpa_core_l_aind_special_native]="D2=22222711 A0=0000A000 A1=00000000 SR=2711"
+EXPECTED_REG_FIELDS[cmpa_core_w_pc_index_native]="D1=FFFFFFEE D2=22222711 A0=00000000 SR=2711"
+EXPECTED_REG_FIELDS[cmpa_core_l_postinc_noflags_native]="D2=00000000 D3=33332714 A0=0000A004 SR=2714"
+
+TEST_MEMORY_BYTES[cmp_core_b_aind_special_native]="A000 80"
+TEST_MEMORY_BYTES[cmp_core_w_postinc_native]="A000 00 A001 01"
+TEST_MEMORY_BYTES[cmp_core_l_predec_native]="A000 00 A001 00 A002 00 A003 01"
+TEST_MEMORY_BYTES[cmp_core_b_d16_native]="A010 01"
+TEST_MEMORY_BYTES[cmp_core_w_index_special_native]="A002 80 A003 00"
+TEST_MEMORY_BYTES[cmp_core_l_absw_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+TEST_MEMORY_BYTES[cmp_core_b_absl_special_native]="A000 80"
+TEST_MEMORY_BYTES[cmp_core_w_pc_d16_native]="0FF0 00 0FF1 01"
+TEST_MEMORY_BYTES[cmp_core_l_pc_index_native]="0FF0 FF 0FF1 FF 0FF2 FF 0FF3 FF"
+TEST_MEMORY_BYTES[cmp_core_b_postinc_noflags_native]="A000 7E"
+TEST_MEMORY_BYTES[cmpm_core_b_distinct_native]="A000 01 A100 02"
+TEST_MEMORY_BYTES[cmpm_core_w_distinct_native]="A000 80 A001 00 A100 7F A101 FF"
+TEST_MEMORY_BYTES[cmpm_core_l_distinct_native]="A000 FF A001 FF A002 FF A003 FF A100 00 A101 00 A102 00 A103 00"
+TEST_MEMORY_BYTES[cmpm_core_b_same_a0_native]="A000 01 A001 01"
+TEST_MEMORY_BYTES[cmpm_core_b_same_a7_native]="A000 01 A002 02"
+TEST_MEMORY_BYTES[cmpm_core_w_special_native]="A000 00 A001 01 A100 00 A101 00"
+TEST_MEMORY_BYTES[cmpm_core_l_noflags_native]="A000 12 A001 34 A002 56 A003 78 A100 87 A101 65 A102 43 A103 21"
+TEST_MEMORY_BYTES[cmpa_core_w_postinc_alias_native]="A000 00 A001 01"
+TEST_MEMORY_BYTES[cmpa_core_w_d16_negative_native]="A010 80 A011 00"
+TEST_MEMORY_BYTES[cmpa_core_l_aind_special_native]="A000 FF A001 FF A002 FF A003 FF"
+TEST_MEMORY_BYTES[cmpa_core_w_pc_index_native]="0FF0 FF 0FF1 FF"
+TEST_MEMORY_BYTES[cmpa_core_l_postinc_noflags_native]="A000 12 A001 34 A002 56 A003 78"
 
 # Exact-native MOVE lifecycle matrix. Register/immediate forms publish NZ from
 # the selected width, clear VC, preserve X and retain untouched Dn upper lanes.
@@ -3586,6 +3707,41 @@ INIT_REGS[bitop_core_btst_dyn_pc_index_zero_native]="00000007 FFFFFFEE 22222222 
 INIT_REGS[bitop_core_btst_imm_destination_zero_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271B"
 INIT_REGS[bitop_core_btst_dyn_destination_set_native]="00000007 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 
+_CMP_REG_TAIL="22222222 33333333 44444444 55555555 66666666 77777777"
+_CMP_A_TAIL="00002200 00002300 00002400 00002500 00002600 007EFF00 0000271F"
+INIT_REGS[cmp_core_b_reg_borrow_native]="A5A50000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_w_reg_overflow_native]="A5A58000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_l_reg_alias_equal_native]="80000000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_b_imm_const_overflow_native]="00000000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_w_imm_runtime_overflow_native]="A5A58000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_l_imm_const_overflow_native]="00000000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_l_reg_distinct_borrow_native]="00000000 FFFFFFFF $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_b_aind_special_native]="A5A5007F 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_w_postinc_native]="A5A58000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_l_predec_native]="00000000 00000001 $_CMP_REG_TAIL 0000A004 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_b_d16_native]="A5A50000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_w_index_special_native]="A5A57FFF 00000002 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_l_absw_native]="00000000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_b_absl_special_native]="A5A5007F 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_w_pc_d16_native]="A5A58000 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_l_pc_index_native]="00000000 FFFFFFEE $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmp_core_b_postinc_noflags_native]="A5A5007F 00000001 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpm_core_b_distinct_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpm_core_w_distinct_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpm_core_l_distinct_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpm_core_b_same_a0_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpm_core_b_same_a7_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 00002200 00002300 00002400 00002500 00002600 0000A000 0000271F"
+INIT_REGS[cmpm_core_w_special_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpm_core_l_noflags_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_w_imm_negative_native]="A5A50000 11111111 $_CMP_REG_TAIL 00000000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_w_postinc_alias_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_w_d16_negative_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 00007FFF $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_l_areg_alias_native]="A5A50000 11111111 $_CMP_REG_TAIL 80000000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_l_aind_special_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 00000000 $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_w_pc_index_native]="A5A50000 FFFFFFEE $_CMP_REG_TAIL 00000000 0000A100 $_CMP_A_TAIL"
+INIT_REGS[cmpa_core_l_postinc_noflags_native]="A5A50000 11111111 $_CMP_REG_TAIL 0000A000 0000A100 $_CMP_A_TAIL"
+unset _CMP_REG_TAIL _CMP_A_TAIL
+
 _MOVE_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[move_core_b_reg_negative_native]="A5A50000 00000080 $_MOVE_ZERO_TAIL 00002717"
 INIT_REGS[move_core_b_reg_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
@@ -3996,6 +4152,12 @@ for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"; do
     ((_bitop_sentinel_id+=1))
 done
 unset _bitop_name _bitop_sentinel_id
+_cmp_sentinel_id=1
+for _cmp_name in "${CMP_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_cmp_name"] 'a60e%04x' "$_cmp_sentinel_id"
+    ((_cmp_sentinel_id+=1))
+done
+unset _cmp_name _cmp_sentinel_id
 SENTINEL_A6[addx_basic]="a60100d4"
 SENTINEL_A6[subx_basic]="a60100d5"
 SENTINEL_A6[ext_word]="a60100d6"
@@ -5454,6 +5616,10 @@ for _bitop_name in "${BITOP_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_bitop_name"]=1
 done
 unset _bitop_name
+for _cmp_name in "${CMP_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_cmp_name"]=1
+done
+unset _cmp_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

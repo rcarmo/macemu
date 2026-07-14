@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 43 | 44 | 0 | 43 |
-| midfunc | 422 | 192 | 0 | 118 | 112 |
+| generator | 130 | 46 | 44 | 0 | 40 |
+| midfunc | 422 | 198 | 0 | 118 | 106 |
 | emitter_api | 294 | 0 | 0 | 91 | 203 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,16 +42,11 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 88 | `CMP` | generator:`i_CMP`, midfunc:`jff_CMP_b`, midfunc:`jff_CMP_l`, midfunc:`jff_CMP_w` |
-| 88 | `CMP_b_imm` | midfunc:`jff_CMP_b_imm` |
-| 88 | `CMP_l_imm` | midfunc:`jff_CMP_l_imm` |
-| 88 | `CMP_w_imm` | midfunc:`jff_CMP_w_imm` |
 | 88 | `CMP_wi` | emitter_api:`CMP_wi` |
 | 88 | `CMP_ww` | emitter_api:`CMP_ww` |
 | 88 | `CMP_wwLSLi` | emitter_api:`CMP_wwLSLi` |
 | 88 | `CMP_xi` | emitter_api:`CMP_xi` |
 | 88 | `CMP_xx` | emitter_api:`CMP_xx` |
-| 88 | `CMPA` | generator:`i_CMPA` |
 | 88 | `NEG` | generator:`i_NEG` |
 | 88 | `NEG_ww` | emitter_api:`NEG_ww` |
 | 87 | `B_i` | emitter_api:`B_i` |
@@ -62,6 +57,11 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 87 | `BR_x` | emitter_api:`BR_x` |
 | 87 | `CBNZ_wi` | emitter_api:`CBNZ_wi` |
 | 87 | `CBNZ_xi` | emitter_api:`CBNZ_xi` |
+| 87 | `CBZ_wi` | emitter_api:`CBZ_wi` |
+| 87 | `CBZ_xi` | emitter_api:`CBZ_xi` |
+| 87 | `TBNZ_wii` | emitter_api:`TBNZ_wii` |
+| 87 | `TBZ_wii` | emitter_api:`TBZ_wii` |
+| 87 | `TBZ_xii` | emitter_api:`TBZ_xii` |
 
 ## Accepted closure targets
 
@@ -70,7 +70,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`CMP` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_CMP`, midfunc:`jff_CMP_b`, midfunc:`jff_CMP_l`, midfunc:`jff_CMP_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`CMP_wi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`CMP_wi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

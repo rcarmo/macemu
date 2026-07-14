@@ -1116,6 +1116,97 @@ for (const active of ["bitop_core_bchg_dyn_l_alias_native", "bitop_core_bset_dyn
   requireText(activeRiskySource, active, `classic bit-op active-risky ${active}`);
 requireText(allocatorSource, "const bool explicit_target = force_target >= 0 && r == force_target;", "private RMW pressure targeting");
 
+/* CMP, CMPM, and CMPA share the live jff_CMP_{b,w,l} lowering. CMPA widens
+ * its source in generated code; the namesake jff_CMPA MIDFUNCs are dead. */
+const compareGenerator = functionBody(gencompSource, "     case i_CMPM:", "     case i_MVPRM:", "compare generator family");
+const cmpGenerator = functionBody(compareGenerator, "case i_CMPM:", "case i_CMPA:", "CMP/CMPM generator");
+const cmpaGenerator = functionBody(gencompSource, "     case i_CMPA:", "     case i_MVPRM:", "CMPA generator");
+for (const contract of [
+  "case i_CMPM:", "case i_CMP:", "case i_CMPA:",
+  'comprintf("\\tint __cmpsrclock=jit_value_lock(src);\\n");',
+  'genflags (flag_cmp, curi->size, "", "src", "dst");',
+  'comprintf("\\tjit_value_unlock(__cmpsrclock);\\n");',
+  'comprintf("\\tint __cmpasrclock=jit_value_lock(src);\\n");',
+  'case sz_word: comprintf("\\tsign_extend_16_rr(tmps,src);\\n"); break;',
+  'case sz_long: comprintf("tmps=src;\\n"); break;',
+  'genflags (flag_cmp, sz_long, "", "tmps", "dst");',
+  'comprintf("\\tjit_value_unlock(__cmpasrclock);\\n");',
+]) requireText(compareGenerator, contract, "compare generator lifecycle");
+requireBefore(cmpGenerator, "jit_value_lock(src)", 'genamode (curi->dmode', "CMP/CMPM source lock before destination acquisition");
+requireBefore(cmpGenerator, 'genflags (flag_cmp, curi->size', "jit_value_unlock(__cmpsrclock)", "CMP/CMPM unlock after flags");
+requireBefore(cmpaGenerator, "jit_value_lock(src)", "sign_extend_16_rr(tmps,src)", "CMPA source lock before widening");
+requireBefore(cmpaGenerator, 'genflags (flag_cmp, sz_long', "jit_value_unlock(__cmpasrclock)", "CMPA unlock after flags");
+
+const generatedCmpLocks = (generatedSource.match(/int __cmpsrclock=jit_value_lock\(src\);/g) || []).length;
+const generatedCmpUnlocks = (generatedSource.match(/jit_value_unlock\(__cmpsrclock\);/g) || []).length;
+const generatedCmpaLocks = (generatedSource.match(/int __cmpasrclock=jit_value_lock\(src\);/g) || []).length;
+const generatedCmpaUnlocks = (generatedSource.match(/jit_value_unlock\(__cmpasrclock\);/g) || []).length;
+if (generatedCmpLocks !== 136 || generatedCmpUnlocks !== 136)
+  fail(`generated CMP/CMPM source ownership: locks=${generatedCmpLocks} unlocks=${generatedCmpUnlocks}`);
+if (generatedCmpaLocks !== 48 || generatedCmpaUnlocks !== 48)
+  fail(`generated CMPA source ownership: locks=${generatedCmpaLocks} unlocks=${generatedCmpaUnlocks}`);
+for (const [token, expected] of [["cmp_b(dst,src);", 22], ["cmp_w(dst,src);", 23], ["cmp_l(dst,src);", 23]] as const) {
+  const found = generatedSource.split(token).length - 1;
+  if (found !== expected) fail(`generated compare route ${token}: expected ${expected}, found ${found}`);
+}
+if (generatedSource.includes("jff_CMPA_") || generatedSource.includes("jnf_CMPA_"))
+  fail("generated compare family unexpectedly calls dead namesake CMPA MIDFUNCs");
+
+const compareBody = (name: string, args: string) => functionBody(
+  midfunc2Source, `MIDFUNC(2,${name},(${args}))`, `MENDFUNC(2,${name},(${args}))`, name,
+);
+for (const [width, rr, imm, shift] of [
+  ["b", "RR1", "IM8", "24"], ["w", "RR2", "IM16", "16"], ["l", "RR4", "IM32", ""],
+] as const) {
+  const dynamicBody = compareBody(`jff_CMP_${width}`, `${rr} d, ${rr} s`);
+  const immediateBody = compareBody(`jff_CMP_${width}_imm`, `${rr} d, ${imm} v`);
+  for (const body of [dynamicBody, immediateBody]) {
+    for (const contract of [
+      "MRS_NZCV_x(REG_WORK3);", "EOR_xxCflag(REG_WORK3, REG_WORK3);",
+      "MSR_NZCV_x(REG_WORK3);", "flags_carry_inverted = false;",
+    ]) requireText(body, contract, `CMP.${width} borrow-polarity publication`);
+    for (const forbidden of ["FLAGX", "rmw(", "writereg(", "set_const("])
+      if (body.includes(forbidden)) fail(`CMP.${width} mutates data/X via ${forbidden}`);
+  }
+  if (shift) {
+    requireText(dynamicBody, `CMP_wwLSLi(REG_WORK1, s, ${shift});`, `CMP.${width} dynamic width isolation`);
+    requireText(immediateBody, `CMP_wwLSLi(REG_WORK1, REG_WORK2, ${shift});`, `CMP.${width} immediate width isolation`);
+  } else {
+    requireText(dynamicBody, "CMP_ww(d, s);", "CMP.L dynamic 32-bit subtract");
+    requireText(immediateBody, "uae_u32 newv", "CMP.L constant-folded subtraction");
+    requireText(immediateBody, "if(((uae_u32)v) > ((uae_u32)live.state[d].val))", "CMP.L constant borrow");
+  }
+}
+for (const [start, end, label] of [
+  ["void REGPARAM2 op_b108_0_comp_nf", "void REGPARAM2 op_b110_0_comp_nf", "CMPM.B no-flags"],
+  ["void REGPARAM2 op_b1d8_0_comp_nf", "void REGPARAM2 op_b1e0_0_comp_nf", "CMPA.L postincrement no-flags"],
+] as const) {
+  const body = functionBody(generatedSource, start, end, label);
+  requireText(body, "jit_value_lock(src)", `${label} source ownership`);
+  if (body.includes("start_needflags()") || /\bcmp_[bwl]\(/.test(body))
+    fail(`${label} emits a flag-producing compare`);
+}
+const cmpmNf = functionBody(generatedSource, "void REGPARAM2 op_b108_0_comp_nf", "void REGPARAM2 op_b110_0_comp_nf", "CMPM.B no-flags dual read");
+if ((cmpmNf.match(/readbyte\(/g) || []).length !== 2)
+  fail("CMPM.B no-flags must retain both ordered reads");
+if ((cmpmNf.match(/lea_l_brr\(/g) || []).length !== 2)
+  fail("CMPM.B no-flags must retain both postincrements");
+
+const focusedCompareCount = (harnessSource.match(/^TESTS\[(?:cmp|cmpm|cmpa)_core_/gm) || []).length;
+if (focusedCompareCount !== 31) fail(`compare exact-native matrix: expected 31, found ${focusedCompareCount}`);
+for (const contract of [
+  'for _cmp_name in "${CMP_NATIVE_MATRIX_NAMES[@]}"',
+  "cmp_core_b_aind_special_native", "cmp_core_w_index_special_native",
+  "cmpm_core_w_special_native", "cmpa_core_l_aind_special_native",
+]) requireText(harnessSource, contract, "compare exact-native gate");
+for (const contract of [
+  "cmpm_b_source_dst_collision", "cmpa_w_postinc_source_dst_collision",
+  "[cmpm_b_source_dst_collision]=21", "[cmpm_b_source_dst_collision]=23",
+  "[cmpa_w_postinc_source_dst_collision]=21", "[cmpa_w_postinc_source_dst_collision]=22",
+]) requireText(regallocPressureSource, contract, "compare allocator pressure");
+for (const active of ["cmpm_core_b_distinct_native", "cmpa_core_w_postinc_alias_native"])
+  requireText(activeRiskySource, active, `compare active-risky ${active}`);
+
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
 // immediate; lock the family to direct instruction-stream decoding.
@@ -3268,4 +3359,9 @@ console.log("METRIC structural_bitop_exact_native_vectors=29");
 console.log("METRIC structural_bitop_memory_ea_locks=108");
 console.log("METRIC structural_bitop_unsigned_constant_fold=1");
 console.log("METRIC structural_bitop_allocator_pressure=1");
+console.log("METRIC structural_compare_shared_midfunc_routes=6");
+console.log("METRIC structural_compare_exact_native_vectors=31");
+console.log("METRIC structural_cmp_cmpm_source_locks=136");
+console.log("METRIC structural_cmpa_source_locks=48");
+console.log("METRIC structural_compare_allocator_pressure=2");
 console.log("METRIC structural_runtime_helper_logical_opcode=1");
