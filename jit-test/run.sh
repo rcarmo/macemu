@@ -443,6 +443,36 @@ declare -a MOVE16_NATIVE_MATRIX_NAMES=(
     move16_core_postpost_special_native
 )
 TEST_ORDER+=("${MOVE16_NATIVE_MATRIX_NAMES[@]}")
+# Scc consumes but never changes CCR. Pair all sixteen conditions in Dn form,
+# then exercise every writable memory EA, An/A7 byte geometry, special-memory
+# routing, upper-lane retention, and exact native entry.
+declare -a SCC_NATIVE_MATRIX_NAMES=(
+    scc_core_tf_dreg_native scc_core_hi_ls_dreg_native
+    scc_core_cc_cs_dreg_native scc_core_ne_eq_dreg_native
+    scc_core_vc_vs_dreg_native scc_core_pl_mi_dreg_native
+    scc_core_ge_lt_dreg_native scc_core_gt_le_dreg_native
+    scc_core_aind_hi_special_native scc_core_postinc_t_native
+    scc_core_predec_f_native scc_core_d16_eq_native
+    scc_core_index_vs_special_native scc_core_absw_mi_native
+    scc_core_absl_gt_special_native scc_core_a7_postinc_t_native
+    scc_core_a7_predec_f_native
+)
+TEST_ORDER+=("${SCC_NATIVE_MATRIX_NAMES[@]}")
+# DBcc is a flags-preserving dynamic block edge. Cover DBT, DBF terminal/branch/
+# wrap states and both members of every conditional pair, with upper-word,
+# displacement, successor, and exact native evidence.
+declare -a DBCC_NATIVE_MATRIX_NAMES=(
+    dbcc_core_dbt_true_native
+    dbcc_core_dbf_terminal_native dbcc_core_dbf_branch_native dbcc_core_dbf_wrap_native
+    dbcc_core_hi_true_native dbcc_core_ls_false_branch_native
+    dbcc_core_cc_true_native dbcc_core_cs_false_branch_native
+    dbcc_core_ne_true_native dbcc_core_eq_false_branch_native
+    dbcc_core_vc_true_native dbcc_core_vs_false_branch_native
+    dbcc_core_pl_true_native dbcc_core_mi_false_branch_native
+    dbcc_core_ge_true_native dbcc_core_lt_false_branch_native
+    dbcc_core_gt_true_native dbcc_core_le_false_branch_native
+)
+TEST_ORDER+=("${DBCC_NATIVE_MATRIX_NAMES[@]}")
 # Immediate-to-CCR values are compile-time guest immediates, not JIT virtual-register IDs.
 # Cover each logical operation, all five CCR bits, preservation/toggling, and entry
 # from the subtraction carry-inverted lifecycle.
@@ -1189,6 +1219,18 @@ for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_move16_name"]=2
 done
 unset _move16_name
+for _scc_name in "${SCC_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_scc_name"]=1
+    NATIVE_REPLAY_PC["$_scc_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_scc_name"]=2
+done
+unset _scc_name
+for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_dbcc_name"]=1
+    NATIVE_REPLAY_PC["$_dbcc_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_dbcc_name"]=2
+done
+unset _dbcc_name
 SPECIAL_MEMORY_TESTS[move_core_b_aind_to_dn_special_native]=1
 SPECIAL_MEMORY_TESTS[move_core_w_index_to_dn_special_native]=1
 SPECIAL_MEMORY_TESTS[move_core_b_absl_to_dn_special_native]=1
@@ -1198,6 +1240,9 @@ SPECIAL_MEMORY_TESTS[move_core_b_dn_to_absl_special_native]=1
 SPECIAL_MEMORY_TESTS[movea_core_w_aind_special_native]=1
 SPECIAL_MEMORY_TESTS[movea_core_w_index_special_native]=1
 SPECIAL_MEMORY_TESTS[move16_core_postpost_special_native]=1
+SPECIAL_MEMORY_TESTS[scc_core_aind_hi_special_native]=1
+SPECIAL_MEMORY_TESTS[scc_core_index_vs_special_native]=1
+SPECIAL_MEMORY_TESTS[scc_core_absl_gt_special_native]=1
 # NOP: trivial decode/execute path sanity check
 TESTS[nop]="4E71 4E71"
 # Strict-mode zero RAM must be traced once, compiled at L2, and replayed
@@ -1386,6 +1431,100 @@ EXPECTED_REG_FIELDS[tas_b_absw_native]="D0=A5A50081 D2=00002710 SR=2718"
 EXPECTED_REG_FIELDS[tas_b_absl_special_native]="D0=A5A50080 D2=00002718 SR=2718"
 EXPECTED_REG_FIELDS[tas_b_a7_postinc_native]="D0=A5A50080 D2=00002714 A7=0000A002 SR=2718"
 EXPECTED_REG_FIELDS[tas_b_a7_predec_native]="D0=A5A500FF D2=00002700 A7=0000A000 SR=2708"
+
+# Exact-native Scc condition and destination lifecycle. Dn pairs evaluate a
+# condition and its inverse from one unchanged CCR state. Memory forms capture
+# SR before the verification load and expose both stored byte and EA writeback.
+TESTS[scc_core_tf_dreg_native]="50C0 51C1"
+TESTS[scc_core_hi_ls_dreg_native]="52C0 53C1"
+TESTS[scc_core_cc_cs_dreg_native]="54C0 55C1"
+TESTS[scc_core_ne_eq_dreg_native]="56C0 57C1"
+TESTS[scc_core_vc_vs_dreg_native]="58C0 59C1"
+TESTS[scc_core_pl_mi_dreg_native]="5AC0 5BC1"
+TESTS[scc_core_ge_lt_dreg_native]="5CC0 5DC1"
+TESTS[scc_core_gt_le_dreg_native]="5EC0 5FC1"
+TESTS[scc_core_aind_hi_special_native]="52D0 40C2 1010"
+TESTS[scc_core_postinc_t_native]="50D8 40C2 1028 FFFF"
+TESTS[scc_core_predec_f_native]="51E0 40C2 1010"
+TESTS[scc_core_d16_eq_native]="57E8 0010 40C2 1028 0010"
+TESTS[scc_core_index_vs_special_native]="59F0 1000 40C2 1030 1000"
+TESTS[scc_core_absw_mi_native]="5BF8 6000 40C2 1038 6000"
+TESTS[scc_core_absl_gt_special_native]="5EF9 0000 A000 40C2 1039 0000 A000"
+TESTS[scc_core_a7_postinc_t_native]="50DF 40C2 102F FFFE"
+TESTS[scc_core_a7_predec_f_native]="51E7 40C2 1017"
+for _scc_dreg_name in scc_core_tf_dreg_native scc_core_hi_ls_dreg_native scc_core_cc_cs_dreg_native scc_core_ne_eq_dreg_native scc_core_vc_vs_dreg_native scc_core_pl_mi_dreg_native scc_core_ge_lt_dreg_native scc_core_gt_le_dreg_native; do
+    EXPECTED_REG_FIELDS["$_scc_dreg_name"]="D0=A5A500FF D1=B6B60000"
+done
+unset _scc_dreg_name
+EXPECTED_REG_FIELDS[scc_core_tf_dreg_native]+=" SR=271F"
+EXPECTED_REG_FIELDS[scc_core_hi_ls_dreg_native]+=" SR=2710"
+EXPECTED_REG_FIELDS[scc_core_cc_cs_dreg_native]+=" SR=2714"
+EXPECTED_REG_FIELDS[scc_core_ne_eq_dreg_native]+=" SR=2718"
+EXPECTED_REG_FIELDS[scc_core_vc_vs_dreg_native]+=" SR=2711"
+EXPECTED_REG_FIELDS[scc_core_pl_mi_dreg_native]+=" SR=2712"
+EXPECTED_REG_FIELDS[scc_core_ge_lt_dreg_native]+=" SR=271A"
+EXPECTED_REG_FIELDS[scc_core_gt_le_dreg_native]+=" SR=271A"
+EXPECTED_REG_FIELDS[scc_core_aind_hi_special_native]="D0=A5A500FF D2=00002710 A0=0000A000"
+EXPECTED_REG_FIELDS[scc_core_postinc_t_native]="D0=A5A500FF D2=0000271F A0=0000A001"
+EXPECTED_REG_FIELDS[scc_core_predec_f_native]="D0=A5A50000 D2=0000271F A0=0000A000"
+EXPECTED_REG_FIELDS[scc_core_d16_eq_native]="D0=A5A500FF D2=00002714 A0=0000A000"
+EXPECTED_REG_FIELDS[scc_core_index_vs_special_native]="D0=A5A500FF D1=00000002 D2=00002712 A0=0000A000"
+EXPECTED_REG_FIELDS[scc_core_absw_mi_native]="D0=A5A500FF D2=00002718"
+EXPECTED_REG_FIELDS[scc_core_absl_gt_special_native]="D0=A5A500FF D2=0000271A"
+EXPECTED_REG_FIELDS[scc_core_a7_postinc_t_native]="D0=A5A500FF D2=0000271F A7=0000A002"
+EXPECTED_REG_FIELDS[scc_core_a7_predec_f_native]="D0=A5A50000 D2=0000271F A7=0000A000"
+TEST_MEMORY_BYTES[scc_core_aind_hi_special_native]="A000 00"
+TEST_MEMORY_BYTES[scc_core_postinc_t_native]="A000 00"
+TEST_MEMORY_BYTES[scc_core_predec_f_native]="A000 FF"
+TEST_MEMORY_BYTES[scc_core_d16_eq_native]="A010 00"
+TEST_MEMORY_BYTES[scc_core_index_vs_special_native]="A002 00"
+TEST_MEMORY_BYTES[scc_core_absw_mi_native]="6000 00"
+TEST_MEMORY_BYTES[scc_core_absl_gt_special_native]="A000 00"
+TEST_MEMORY_BYTES[scc_core_a7_postinc_t_native]="A000 00"
+TEST_MEMORY_BYTES[scc_core_a7_predec_f_native]="A000 FF"
+
+# Exact-native DBcc dynamic-edge lifecycle. The +8 displacement is relative to
+# DBcc's extension-word PC and lands on the second MOVEA marker, skipping the
+# first on a taken decrement branch. MOVEA and the appended sentinel do not
+# alter CCR, so the final dump proves DBcc's flag preservation directly.
+_DBCC_TRUE_HEX_SUFFIX="0008 227C 1111 1111 247C 2222 2222"
+TESTS[dbcc_core_dbt_true_native]="50C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_dbf_terminal_native]="51C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_dbf_branch_native]="51C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_dbf_wrap_native]="51C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_hi_true_native]="52C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_ls_false_branch_native]="53C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_cc_true_native]="54C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_cs_false_branch_native]="55C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_ne_true_native]="56C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_eq_false_branch_native]="57C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_vc_true_native]="58C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_vs_false_branch_native]="59C8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_pl_true_native]="5AC8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_mi_false_branch_native]="5BC8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_ge_true_native]="5CC8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_lt_false_branch_native]="5DC8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_gt_true_native]="5EC8 $_DBCC_TRUE_HEX_SUFFIX"
+TESTS[dbcc_core_le_false_branch_native]="5FC8 $_DBCC_TRUE_HEX_SUFFIX"
+unset _DBCC_TRUE_HEX_SUFFIX
+EXPECTED_REG_FIELDS[dbcc_core_dbt_true_native]="D0=A5A50001 A1=11111111 A2=22222222 SR=271F"
+EXPECTED_REG_FIELDS[dbcc_core_dbf_terminal_native]="D0=A5A5FFFF A1=11111111 A2=22222222 SR=271F"
+EXPECTED_REG_FIELDS[dbcc_core_dbf_branch_native]="D0=A5A50000 A1=0000A100 A2=22222222 SR=271F"
+EXPECTED_REG_FIELDS[dbcc_core_dbf_wrap_native]="D0=A5A5FFFE A1=0000A100 A2=22222222 SR=271F"
+for _dbcc_true_name in dbcc_core_hi_true_native dbcc_core_cc_true_native dbcc_core_ne_true_native dbcc_core_vc_true_native dbcc_core_pl_true_native dbcc_core_ge_true_native dbcc_core_gt_true_native; do
+    EXPECTED_REG_FIELDS["$_dbcc_true_name"]="D0=A5A50001 A1=11111111 A2=22222222"
+done
+for _dbcc_false_name in dbcc_core_ls_false_branch_native dbcc_core_cs_false_branch_native dbcc_core_eq_false_branch_native dbcc_core_vs_false_branch_native dbcc_core_mi_false_branch_native dbcc_core_lt_false_branch_native dbcc_core_le_false_branch_native; do
+    EXPECTED_REG_FIELDS["$_dbcc_false_name"]="D0=A5A50000 A1=0000A100 A2=22222222"
+done
+unset _dbcc_true_name _dbcc_false_name
+for _dbcc_name in dbcc_core_hi_true_native dbcc_core_ls_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=2710"; done
+for _dbcc_name in dbcc_core_cc_true_native dbcc_core_cs_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=2714"; done
+for _dbcc_name in dbcc_core_ne_true_native dbcc_core_eq_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=2718"; done
+for _dbcc_name in dbcc_core_vc_true_native dbcc_core_vs_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=2711"; done
+for _dbcc_name in dbcc_core_pl_true_native dbcc_core_mi_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=2712"; done
+for _dbcc_name in dbcc_core_ge_true_native dbcc_core_lt_false_branch_native dbcc_core_gt_true_native dbcc_core_le_false_branch_native; do EXPECTED_REG_FIELDS["$_dbcc_name"]+=" SR=271A"; done
+unset _dbcc_name
 
 # Exact-native MOVE lifecycle matrix. Register/immediate forms publish NZ from
 # the selected width, clear VC, preserve X and retain untouched Dn upper lanes.
@@ -3261,6 +3400,47 @@ INIT_REGS[tas_b_a7_postinc_native]="A5A50000 00000000 00000000 00000000 00000000
 INIT_REGS[tas_b_a7_predec_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 00002707"
 unset _TAS_INIT_ZERO_TAIL
 
+_SCC_DREG_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[scc_core_tf_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 0000271F"
+INIT_REGS[scc_core_hi_ls_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 00002710"
+INIT_REGS[scc_core_cc_cs_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 00002714"
+INIT_REGS[scc_core_ne_eq_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 00002718"
+INIT_REGS[scc_core_vc_vs_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 00002711"
+INIT_REGS[scc_core_pl_mi_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 00002712"
+INIT_REGS[scc_core_ge_lt_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 0000271A"
+INIT_REGS[scc_core_gt_le_dreg_native]="A5A50000 B6B600FF $_SCC_DREG_TAIL 0000271A"
+unset _SCC_DREG_TAIL
+INIT_REGS[scc_core_aind_hi_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002710"
+INIT_REGS[scc_core_postinc_t_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[scc_core_predec_f_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A001 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[scc_core_d16_eq_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002714"
+INIT_REGS[scc_core_index_vs_special_native]="A5A50000 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002712"
+INIT_REGS[scc_core_absw_mi_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002718"
+INIT_REGS[scc_core_absl_gt_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271A"
+INIT_REGS[scc_core_a7_postinc_t_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[scc_core_a7_predec_f_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 0000271F"
+
+_DBCC_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A100 0000A200 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[dbcc_core_dbt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271F"
+INIT_REGS[dbcc_core_dbf_terminal_native]="A5A50000 $_DBCC_INIT_TAIL 0000271F"
+INIT_REGS[dbcc_core_dbf_branch_native]="A5A50001 $_DBCC_INIT_TAIL 0000271F"
+INIT_REGS[dbcc_core_dbf_wrap_native]="A5A5FFFF $_DBCC_INIT_TAIL 0000271F"
+INIT_REGS[dbcc_core_hi_true_native]="A5A50001 $_DBCC_INIT_TAIL 00002710"
+INIT_REGS[dbcc_core_ls_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 00002710"
+INIT_REGS[dbcc_core_cc_true_native]="A5A50001 $_DBCC_INIT_TAIL 00002714"
+INIT_REGS[dbcc_core_cs_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 00002714"
+INIT_REGS[dbcc_core_ne_true_native]="A5A50001 $_DBCC_INIT_TAIL 00002718"
+INIT_REGS[dbcc_core_eq_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 00002718"
+INIT_REGS[dbcc_core_vc_true_native]="A5A50001 $_DBCC_INIT_TAIL 00002711"
+INIT_REGS[dbcc_core_vs_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 00002711"
+INIT_REGS[dbcc_core_pl_true_native]="A5A50001 $_DBCC_INIT_TAIL 00002712"
+INIT_REGS[dbcc_core_mi_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 00002712"
+INIT_REGS[dbcc_core_ge_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271A"
+INIT_REGS[dbcc_core_lt_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 0000271A"
+INIT_REGS[dbcc_core_gt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271A"
+INIT_REGS[dbcc_core_le_false_branch_native]="A5A50001 $_DBCC_INIT_TAIL 0000271A"
+unset _DBCC_INIT_TAIL
+
 _MOVE_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[move_core_b_reg_negative_native]="A5A50000 00000080 $_MOVE_ZERO_TAIL 00002717"
 INIT_REGS[move_core_b_reg_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
@@ -3653,6 +3833,18 @@ for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
     ((_move16_sentinel_id+=1))
 done
 unset _move16_name _move16_sentinel_id
+_scc_sentinel_id=1
+for _scc_name in "${SCC_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_scc_name"] 'a60b%04x' "$_scc_sentinel_id"
+    ((_scc_sentinel_id+=1))
+done
+unset _scc_name _scc_sentinel_id
+_dbcc_sentinel_id=1
+for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_dbcc_name"] 'a60c%04x' "$_dbcc_sentinel_id"
+    ((_dbcc_sentinel_id+=1))
+done
+unset _dbcc_name _dbcc_sentinel_id
 SENTINEL_A6[addx_basic]="a60100d4"
 SENTINEL_A6[subx_basic]="a60100d5"
 SENTINEL_A6[ext_word]="a60100d6"
@@ -5099,6 +5291,14 @@ for _move16_name in "${MOVE16_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_move16_name"]=1
 done
 unset _move16_name
+for _scc_name in "${SCC_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_scc_name"]=1
+done
+unset _scc_name
+for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_dbcc_name"]=1
+done
+unset _dbcc_name
 
 # Preflight harness invariants: deterministic mapping and sentinel hygiene.
 declare -A _seen_test_names=()

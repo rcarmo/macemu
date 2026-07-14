@@ -890,6 +890,130 @@ for (const contract of [
   requireText(body, contract, "MOVE inverse source/destination pressure contract");
 }
 
+/* DBcc/Scc share condition consumption and CCR preservation, but their write
+ * lifecycles differ: DBcc owns a low-word counter plus a dynamic block edge;
+ * Scc owns a Boolean byte plus a Dn lane or complete writable EA. */
+const dbccGenerator = functionBody(gencompSource, "     case i_DBcc:", "     case i_Scc:", "DBcc generator lifecycle");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (curi->dmode, "dstreg", curi->size, "offs", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tm68k_pc_offset=0;\\n");',
+  'comprintf("\\tint nsrc=scratchie++;\\n");',
+  'comprintf("\\tmov_l_rr(nsrc,src);\\n");',
+  'comprintf("\\tpreserve_flags_before_nzcv_clobber();\\n");',
+  'comprintf("\\tdbf_dec_test_ne_w(src);\\n");',
+  'register_branch(v1,v2,%d);',
+  'comprintf("\\tdbcc_cond_move_ne_w(PC_P, offs, nsrc);\\n");',
+  'comprintf("\\tdbcc_dec_w(src);\\n");',
+  'comprintf("\\tcmov_l_rr(offs,PC_P,%d);\\n",',
+  'comprintf("\\tcmov_l_rr(src,nsrc,%d);\\n",',
+  'comprintf("\\tsave_and_discard_flags_in_nzcv();\\n");',
+  'genastore ("src", curi->smode, "srcreg", curi->size, "src");',
+  'comprintf("\\tdiscard_flags_in_nzcv();\\n");',
+  'gen_update_next_handler();',
+]) requireText(dbccGenerator, contract, "DBcc counter/edge/CCR lifecycle");
+requireBefore(dbccGenerator, "mov_l_rr(nsrc,src)", "dbf_dec_test_ne_w(src)", "DBF copy-before-decrement");
+requireBefore(dbccGenerator, "dbcc_dec_w(src)", "cmov_l_rr(offs,PC_P", "DBcc decrement-before-condition restore");
+if (dbccGenerator.lastIndexOf("cmov_l_rr(src,nsrc") >= dbccGenerator.lastIndexOf("dbcc_cond_move_ne_w")) {
+  fail("DBcc condition-before-terminal test: conditional restore must precede the terminal selection");
+}
+requireBefore(dbccGenerator, "dbcc_cond_move_ne_w", "save_and_discard_flags_in_nzcv", "DBcc terminal-before-CCR save");
+if (dbccGenerator.lastIndexOf('genastore ("src"') >= dbccGenerator.lastIndexOf("discard_flags_in_nzcv")) {
+  fail("DBcc writeback-before-final flag discard: final discard must follow counter storage");
+}
+const dbccBoundaryStart = allocatorSource.indexOf("/* DBcc loop back-edge:");
+const dbccBoundaryEnd = allocatorSource.indexOf("freescratch();", dbccBoundaryStart);
+if (dbccBoundaryStart < 0 || dbccBoundaryEnd < 0) fail("missing DBcc dynamic runtime-PC boundary");
+const dbccBoundary = allocatorSource.slice(dbccBoundaryStart, dbccBoundaryEnd);
+for (const contract of [
+  "((dop & 0xF0F8) == 0x50C8)",
+  "(((dop >> 8) & 0xf) >= 1)",
+  "live.flags_are_important = 1;",
+  "flush(1);",
+  "compemu_raw_mov_l_rm(REG_PC_TMP, (uintptr)&regs.pc_p);",
+  "compemu_raw_endblock_pc_inreg(REG_PC_TMP, retired_cycles);",
+  "forced_interpreter_barrier = true;",
+]) requireText(dbccBoundary, contract, "DBcc dynamic runtime-PC boundary");
+
+const dbccCmov = functionBody(compatSource, "void cmov_l_rr(", "/* jit_value_lock / jit_value_unlock", "DBcc conditional move helper");
+for (const contract of [
+  "FIX_INVERTED_CARRY",
+  "if (cc == 7)",
+  "CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CC);",
+  "CSEL_xxxc(d, REG_WORK2, REG_WORK3, NATIVE_CC_EQ);",
+  "else if (cc == 6)",
+  "CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CS);",
+  "CSEL_xxxc(d, src, REG_WORK3, NATIVE_CC_EQ);",
+  "unlock2(src);",
+]) requireText(dbccCmov, contract, "DBcc M68K HI/LS composite conditions");
+if (dbccCmov.includes("unlock2(s);")) {
+  fail("DBcc conditional move released a virtual source ID instead of its physical host register");
+}
+
+const sccGenerator = functionBody(gencompSource, "     case i_Scc:", "\t case i_DIVU:", "Scc generator lifecycle");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __sccealock=jit_value_lock(srca);\\n");',
+  'comprintf("\\tmake_flags_live();\\n");',
+  'comprintf("\\tjnf_SCC(val,%d);\\n", curi->cc);',
+  'genastore ("val", curi->smode, "srcreg", curi->size, "src");',
+  'comprintf("\\tjit_value_unlock(__sccealock);\\n");',
+]) requireText(sccGenerator, contract, "Scc condition/value/EA lifecycle");
+if (sccGenerator.includes("setcc(") || sccGenerator.includes("sub_b_ri(")) {
+  fail("Scc direct condition lifecycle regressed to legacy setcc/subtract lowering");
+}
+requireBefore(sccGenerator, "jit_value_lock(srca)", "jnf_SCC(val", "Scc EA lock before condition result");
+requireBefore(sccGenerator, "jnf_SCC(val", 'genastore ("val"', "Scc condition before store");
+requireBefore(sccGenerator, 'genastore ("val"', "jit_value_unlock(__sccealock)", "Scc unlock after store");
+
+const sccMidfunc = functionBody(midfunc2Source, "MIDFUNC(2,jnf_SCC,(W1 d, IM8 cc))", "MENDFUNC(2,jnf_SCC,(W1 d, IM8 cc))", "direct Scc MIDFUNC");
+for (const contract of [
+  "FIX_INVERTED_CARRY", "case 0:", "case 1:",
+  "case 2: /* HI = !C && !Z;", "NATIVE_CC_CC", "NATIVE_CC_NE", "AND_www",
+  "case 3: /* LS = C || Z;", "NATIVE_CC_CS", "NATIVE_CC_EQ", "ORR_www",
+  "case 4: native_cc = NATIVE_CC_CC;", "case 5: native_cc = NATIVE_CC_CS;",
+  "case 6: native_cc = NATIVE_CC_NE;", "case 7: native_cc = NATIVE_CC_EQ;",
+  "case 8: native_cc = NATIVE_CC_VC;", "case 9: native_cc = NATIVE_CC_VS;",
+  "case 10: native_cc = NATIVE_CC_PL;", "case 11: native_cc = NATIVE_CC_MI;",
+  "case 12: native_cc = NATIVE_CC_GE;", "case 13: native_cc = NATIVE_CC_LT;",
+  "case 14: native_cc = NATIVE_CC_GT;", "case 15: native_cc = NATIVE_CC_LE;",
+  "CSETM_wc(REG_WORK1, native_cc);", "BFI_wwii(d, REG_WORK1, 0, 8);",
+]) requireText(sccMidfunc, contract, "complete direct Scc condition map");
+
+const generatedSccCalls = (generatedSource.match(/\bjnf_SCC\(val,/g) || []).length;
+const generatedSccLocks = (generatedSource.match(/int __sccealock=jit_value_lock\(srca\);/g) || []).length;
+const generatedSccUnlocks = (generatedSource.match(/jit_value_unlock\(__sccealock\);/g) || []).length;
+if (generatedSccCalls !== 256 || generatedSccLocks !== 224 || generatedSccUnlocks !== 224) {
+  fail(`generated Scc lifecycle: calls=${generatedSccCalls} locks=${generatedSccLocks} unlocks=${generatedSccUnlocks}`);
+}
+for (const [token, count] of [
+  ["dbf_dec_test_ne_w(src);", 2],
+  ["cmov_l_rr(offs,PC_P", 28],
+  ["dbcc_cond_move_ne_w(PC_P", 30],
+] as const) {
+  const found = generatedSource.split(token).length - 1;
+  if (found !== count) fail(`generated DBcc lifecycle ${token}: expected ${count}, found ${found}`);
+}
+for (const [prefix, count] of [["scc_core_", 17], ["dbcc_core_", 18]] as const) {
+  const found = (harnessSource.match(new RegExp(`^TESTS\\[${prefix}`, "gm")) || []).length;
+  if (found !== count) fail(`${prefix} exact-native matrix: expected ${count}, found ${found}`);
+}
+for (const contract of [
+  'for _scc_name in "${SCC_NATIVE_MATRIX_NAMES[@]}"',
+  'for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"',
+  "SPECIAL_MEMORY_TESTS[scc_core_aind_hi_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[scc_core_index_vs_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[scc_core_absl_gt_special_native]=1",
+]) requireText(harnessSource, contract, "DBcc/Scc exact-native gate");
+for (const contract of [
+  "scc_b_ea_value_collision", "dbcc_w_counter_copy_collision",
+  "[scc_b_ea_value_collision]=20", "[scc_b_ea_value_collision]=21",
+  "[dbcc_w_counter_copy_collision]=0", "[dbcc_w_counter_copy_collision]=21",
+]) requireText(regallocPressureSource, contract, "DBcc/Scc allocator pressure");
+for (const active of ["scc_core_aind_hi_special_native", "dbcc_core_hi_true_native"]) {
+  requireText(activeRiskySource, active, `DBcc/Scc active-risky ${active}`);
+}
+
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
 // immediate; lock the family to direct instruction-stream decoding.
@@ -2444,8 +2568,14 @@ requireText(
 
 requireText(gencompSource, "NATIVE_CC_VC,NATIVE_CC_VS", "ARM64 overflow condition codegen");
 const arm64OverflowCases = "#if defined(CPU_aarch64) || defined(CPU_AARCH64)\n\t case 8:\n\t case 9:";
-if (gencompSource.split(arm64OverflowCases).length - 1 !== 3) {
-  fail("ARM64 overflow condition codegen: Bcc/DBcc/Scc must all handle VC/VS natively");
+if (gencompSource.split(arm64OverflowCases).length - 1 !== 2) {
+  fail("ARM64 overflow condition codegen: Bcc/DBcc must handle VC/VS natively");
+}
+for (const contract of [
+  "case 8: native_cc = NATIVE_CC_VC; break;",
+  "case 9: native_cc = NATIVE_CC_VS; break;",
+]) {
+  requireText(shiftSource, contract, "direct AArch64 Scc overflow condition mapping");
 }
 if (allocatorSource.split("switch (real_opcode & 0x0038)").length - 1 < 2) {
   fail("full-SR EA decoding: mode field must exclude the register bits in both directions");
@@ -3026,4 +3156,9 @@ console.log("METRIC structural_move_exact_native_vectors=31");
 console.log("METRIC structural_movea_exact_native_vectors=10");
 console.log("METRIC structural_move16_exact_native_vectors=7");
 console.log("METRIC structural_move_inverse_allocator_pressure=1");
+console.log("METRIC structural_scc_direct_condition_map=16");
+console.log("METRIC structural_scc_exact_native_vectors=17");
+console.log("METRIC structural_dbcc_dynamic_edge_lifecycle=1");
+console.log("METRIC structural_dbcc_exact_native_vectors=18");
+console.log("METRIC structural_dbcc_scc_allocator_pressure=2");
 console.log("METRIC structural_runtime_helper_logical_opcode=1");

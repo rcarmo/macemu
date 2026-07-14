@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 37 | 44 | 0 | 49 |
-| midfunc | 422 | 161 | 0 | 119 | 142 |
+| generator | 130 | 39 | 44 | 0 | 47 |
+| midfunc | 422 | 164 | 0 | 118 | 140 |
 | emitter_api | 294 | 0 | 0 | 91 | 203 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,8 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 92 | `DBcc` | generator:`i_DBcc` |
-| 92 | `Scc` | generator:`i_Scc` |
 | 90 | `BCHG` | generator:`i_BCHG`, midfunc:`jff_BCHG_b`, midfunc:`jff_BCHG_l`, midfunc:`jnf_BCHG_b`, midfunc:`jnf_BCHG_l` |
 | 90 | `BCHG_b_imm` | midfunc:`jff_BCHG_b_imm`, midfunc:`jnf_BCHG_b_imm` |
 | 90 | `BCHG_l_imm` | midfunc:`jff_BCHG_l_imm`, midfunc:`jnf_BCHG_l_imm` |
@@ -62,6 +60,8 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 88 | `CMP_w_imm` | midfunc:`jff_CMP_w_imm` |
 | 88 | `CMP_wi` | emitter_api:`CMP_wi` |
 | 88 | `CMP_ww` | emitter_api:`CMP_ww` |
+| 88 | `CMP_wwLSLi` | emitter_api:`CMP_wwLSLi` |
+| 88 | `CMP_xi` | emitter_api:`CMP_xi` |
 
 ## Accepted closure targets
 
@@ -70,7 +70,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`DBcc` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_DBcc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`BCHG` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_BCHG`, midfunc:`jff_BCHG_b`, midfunc:`jff_BCHG_l`, midfunc:`jnf_BCHG_b`, midfunc:`jnf_BCHG_l`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

@@ -7413,29 +7413,44 @@ MENDFUNC(2,jff_ROXR_l,(RW4 d, RR4 i))
  */
 MIDFUNC(2,jnf_SCC,(W1 d, IM8 cc))
 {
+	/* The generator passes the architectural 0..15 M68K condition number,
+	   never a generator-host/x86 or target-native encoding. Normalise the
+	   carry representation once, then map the complete family explicitly.
+	   CSETM publishes the required 0xff byte while preserving NZCV. */
 	FIX_INVERTED_CARRY
-
 	INIT_WREG_b(d);
 
+	int native_cc = -1;
 	switch (cc) {
-		case 9: // LS
-			CSETM_wc(REG_WORK1, NATIVE_CC_CS);
-			CSETM_wc(REG_WORK2, NATIVE_CC_EQ);
-			ORR_www(REG_WORK1, REG_WORK1, REG_WORK2);
-			break;
-
-		case 8: // HI
-			CSETM_wc(REG_WORK1, NATIVE_CC_CC);
-			CSETM_wc(REG_WORK2, NATIVE_CC_NE);
-			AND_www(REG_WORK1, REG_WORK1, REG_WORK2);
-			break;
-
-		default:
-			CSETM_wc(REG_WORK1, cc);
-			break;
+	case 0: /* T */  LOAD_U32(REG_WORK1, 0xffffffff); break;
+	case 1: /* F */  MOV_wi(REG_WORK1, 0); break;
+	case 2: /* HI = !C && !Z; ARM HI uses the opposite C polarity. */
+		CSETM_wc(REG_WORK1, NATIVE_CC_CC);
+		CSETM_wc(REG_WORK2, NATIVE_CC_NE);
+		AND_www(REG_WORK1, REG_WORK1, REG_WORK2);
+		break;
+	case 3: /* LS = C || Z; ARM LS uses the opposite C polarity. */
+		CSETM_wc(REG_WORK1, NATIVE_CC_CS);
+		CSETM_wc(REG_WORK2, NATIVE_CC_EQ);
+		ORR_www(REG_WORK1, REG_WORK1, REG_WORK2);
+		break;
+	case 4: native_cc = NATIVE_CC_CC; break;
+	case 5: native_cc = NATIVE_CC_CS; break;
+	case 6: native_cc = NATIVE_CC_NE; break;
+	case 7: native_cc = NATIVE_CC_EQ; break;
+	case 8: native_cc = NATIVE_CC_VC; break;
+	case 9: native_cc = NATIVE_CC_VS; break;
+	case 10: native_cc = NATIVE_CC_PL; break;
+	case 11: native_cc = NATIVE_CC_MI; break;
+	case 12: native_cc = NATIVE_CC_GE; break;
+	case 13: native_cc = NATIVE_CC_LT; break;
+	case 14: native_cc = NATIVE_CC_GT; break;
+	case 15: native_cc = NATIVE_CC_LE; break;
+	default: jit_abort("invalid Scc condition %d", cc); break;
 	}
+	if (native_cc >= 0)
+		CSETM_wc(REG_WORK1, native_cc);
 	BFI_wwii(d, REG_WORK1, 0, 8);
-
 	unlock2(d);
 }
 MENDFUNC(2,jnf_SCC,(W1 d, IM8 cc))

@@ -2570,45 +2570,24 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);
+	/* Memory Scc computes its Boolean byte after the complete effective address
+	   (and any An writeback) is live. Own that pre-write EA across condition
+	   materialisation and the store; otherwise a scratch result allocation can
+	   evict the address mapping and redirect the write. */
+	if (curi->smode != Dreg)
+	    comprintf("\tint __sccealock=jit_value_lock(srca);\n");
 	start_brace ();
 	comprintf ("\tint val = scratchie++;\n");
 
-	/* We set val to 0 if we really should use 255, and to 1 for real 0 */
-	switch(curi->cc) {
-	 case 0:  /* Unconditional set */
-	    comprintf("\tmov_l_ri(val,0);\n");
-	    break;
-	 case 1:
-	    /* Unconditional not-set */
-	    comprintf("\tmov_l_ri(val,1);\n");
-	    break;
-#if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	 case 8:
-	 case 9:
-#else
-	 case 8: failure; break;
-	 case 9: failure; break;
-#endif
-	 case 2:
-	 case 3:
-	 case 4:
-	 case 5:
-	 case 6:
-	 case 7:
-	 case 10:
-	 case 11:
-	 case 12:
-	 case 13:
-	 case 14:
-	 case 15:
-	    comprintf("\tmake_flags_live();\n"); /* Load the flags */
-	    /* All condition codes can be inverted by changing the LSB */
-	    comprintf("\tsetcc(val,%d);\n",
-		      cond_codes[curi->cc]^1); break;
-	 default: assert(0);
-	}
-	comprintf("\tsub_b_ri(val,1);\n");
+	/* Keep the architectural condition number intact through generation. The
+	   AArch64 MIDFUNC maps all sixteen M68K conditions directly and emits the
+	   final 0xff/0x00 byte without the legacy x86 setcc/subtract convention. */
+	if (curi->cc >= 2)
+	    comprintf("\tmake_flags_live();\n");
+	comprintf("\tjnf_SCC(val,%d);\n", curi->cc);
 	genastore ("val", curi->smode, "srcreg", curi->size, "src");
+	if (curi->smode != Dreg)
+	    comprintf("\tjit_value_unlock(__sccealock);\n");
 	break;
 
 	 case i_DIVU:

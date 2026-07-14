@@ -125,6 +125,7 @@ DECLARE_MIDFUNC(jnf_MVR2USP(RR4 s));
 DECLARE_MIDFUNC(jnf_MVUSP2R(W4 d));
 DECLARE_MIDFUNC(jnf_TAS(RW1 d));
 DECLARE_MIDFUNC(jff_TAS(RW1 d));
+DECLARE_MIDFUNC(jnf_SCC(W1 d, IM8 cc));
 
 /* Declarations for jff_/jnf_ midfuncs used by native codegen
  * (implementations in compemu_midfunc_arm64_2.cpp) */

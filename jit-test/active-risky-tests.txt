@@ -691,3 +691,5 @@ movem_l_pc_modes_native
 move_core_b_aind_to_dn_special_native
 movea_core_w_postinc_alias_native
 move16_core_postpost_special_native
+scc_core_aind_hi_special_native
+dbcc_core_hi_true_native

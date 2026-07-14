@@ -466,15 +466,34 @@ void cmov_l_rr(RW4 d, RR4 s, uae_s32 cc)
 {
 	if (d == s)
 		return;
+	FIX_INVERTED_CARRY
 	d = rmw(d);
-	if (isconst(s)) {
+	const bool s_is_const = isconst(s);
+	int src = s;
+	if (s_is_const) {
 		LOAD_U32(REG_WORK1, live.state[s].val);
-		CSEL_xxxc(d, REG_WORK1, d, legacy_x86_cc_to_native(cc));
+		src = REG_WORK1;
 	} else {
-		s = readreg(s);
-		CSEL_xxxc(d, s, d, legacy_x86_cc_to_native(cc));
-		unlock2(s);
+		src = readreg(s);
 	}
+
+	/* gencomp passes flags_x86.h condition numbers. M68K HI/LS use C as
+	   borrow, so they are not ARM HI/LS after the JIT's carry normalization:
+	   HI is !C&&!Z, LS is C||Z. Preserve the original destination in a work
+	   register and compose both predicates without modifying NZCV. */
+	if (cc == 7) { /* x86 HI */
+		MOV_xx(REG_WORK2, d);
+		CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CC);
+		CSEL_xxxc(d, REG_WORK2, REG_WORK3, NATIVE_CC_EQ);
+	} else if (cc == 6) { /* x86 LS */
+		MOV_xx(REG_WORK2, d);
+		CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CS);
+		CSEL_xxxc(d, src, REG_WORK3, NATIVE_CC_EQ);
+	} else {
+		CSEL_xxxc(d, src, d, legacy_x86_cc_to_native(cc));
+	}
+	if (!s_is_const)
+		unlock2(src);
 	unlock2(d);
 }
 
