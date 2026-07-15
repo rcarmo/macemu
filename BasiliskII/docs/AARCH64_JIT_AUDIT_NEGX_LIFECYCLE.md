@@ -21,7 +21,7 @@ flags, memory-RMW, effective-address, and allocator-lifetime family:
   absolute-long memory forms;
 - byte postincrement and predecrement through A7's two-byte geometry;
 - normal and forced special-memory helper paths;
-- exact-PC native entry and forced source/destination allocator pressure.
+- exact-PC native entry plus forced source/result and result/effective-address allocator pressure.
 
 The audit is source-led. It follows the configured generated compiler rather
 than similarly named definitions, ROM encounter order, or textual occurrence.
@@ -101,6 +101,22 @@ REGPRESSURE cell=negx_w_source_dst_collision status=PASS pin=0 skip=1 natexec=1 
 REGPRESSURE cell=negx_l_source_dst_collision status=PASS pin=0 skip=1 natexec=1 interpop=1
 ```
 
+### Corrective EA-ownership extension
+
+The subsequent NEG family audit forced the private result scratch onto the
+still-live pre-write effective address, a collision class not exercised by the
+three original source/result cells. Before repair, `NEGX.B (A0)+` executed
+natively but left memory at `01` instead of `FE` and ended at SR `2710` instead
+of `2718`; the allocator reported `REGPRESSURE_PIN_HIT scratch_vreg=22
+pin_vreg=20`.
+
+The authoritative `i_NEGX` generator now locks `srca` after `genamode()` and
+releases it only after `genastore()`. Regeneration emits 42 balanced
+`__negxealock` pairs across all flag-live and no-flags memory handlers. The
+permanent `negx_b_postinc_result_ea_collision` cell now reports `skip=1`,
+`natexec=1`, `interpop=1`, and exact interpreter/JIT equality. See
+`AARCH64_JIT_AUDIT_NEG_LIFECYCLE.md` for the paired NEG/NEGX fault witness.
+
 The interpreter and JIT dumps are identical in each cell. This is a positive
 lifetime proof, not a baseline register-rich pass.
 
@@ -124,7 +140,8 @@ METRIC structural_negx_narrow_lane_flags=1
 METRIC structural_negx_no_flags_lifecycle=1
 METRIC structural_negx_exact_native_vectors=27
 METRIC structural_negx_memory_ea_classes=9
-METRIC structural_negx_allocator_pressure_widths=3
+METRIC structural_negx_generated_ea_locks=42
+METRIC structural_negx_allocator_pressure_cells=4
 ```
 
 ## Acceptance evidence

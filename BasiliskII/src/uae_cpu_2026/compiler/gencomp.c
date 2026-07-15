@@ -1736,11 +1736,19 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Memory NEG retains the fetched operand's effective address across result
+	   allocation, flag publication, and final writeback.  Own the pre-write EA
+	   explicitly: a private result scratch must not reuse its host mapping and
+	   silently redirect or suppress the store. */
+	if (curi->smode != Dreg)
+	    comprintf("\tint __negealock=jit_value_lock(srca);\n");
 	start_brace ();
 	comprintf("\tint dst=scratchie++;\n");
 	comprintf("\tmov_l_ri(dst,0);\n");
 	genflags (flag_sub, curi->size, "", "src", "dst");
 	genastore ("dst", curi->smode, "srcreg", curi->size, "src");
+	if (curi->smode != Dreg)
+	    comprintf("\tjit_value_unlock(__negealock);\n");
 	break;
 
      case i_NEGX:
@@ -1749,11 +1757,17 @@ gen_opcode (unsigned int opcode)
 #endif
 	isaddx;
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* NEGX has the same memory RMW ownership contract as NEG; X sampling and
+	   sticky-Z publication extend, rather than shorten, the EA lifetime. */
+	if (curi->smode != Dreg)
+	    comprintf("\tint __negxealock=jit_value_lock(srca);\n");
 	start_brace ();
 	comprintf("\tint dst=scratchie++;\n");
 	comprintf("\tmov_l_ri(dst,0);\n");
 	genflags (flag_subx, curi->size, "", "src", "dst");
 	genastore ("dst", curi->smode, "srcreg", curi->size, "src");
+	if (curi->smode != Dreg)
+	    comprintf("\tjit_value_unlock(__negxealock);\n");
 	break;
 
      case i_NBCD:

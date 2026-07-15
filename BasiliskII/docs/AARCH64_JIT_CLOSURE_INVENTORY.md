@@ -17,9 +17,9 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 46 | 44 | 0 | 40 |
+| generator | 130 | 47 | 44 | 0 | 39 |
 | midfunc | 422 | 198 | 0 | 118 | 106 |
-| emitter_api | 294 | 5 | 0 | 91 | 198 |
+| emitter_api | 294 | 6 | 0 | 91 | 197 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,8 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 88 | `NEG` | generator:`i_NEG` |
-| 88 | `NEG_ww` | emitter_api:`NEG_ww` |
 | 87 | `B_i` | emitter_api:`B_i` |
 | 87 | `BCC_i` | emitter_api:`BCC_i` |
 | 87 | `BCS_i` | emitter_api:`BCS_i` |
@@ -62,6 +60,8 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `ADD_l_imm` | midfunc:`jff_ADD_l_imm`, midfunc:`jnf_ADD_l_imm` |
 | 80 | `ADD_w_imm` | midfunc:`jff_ADD_w_imm`, midfunc:`jnf_ADD_w_imm` |
 | 80 | `ADD_wwi` | emitter_api:`ADD_wwi` |
+| 80 | `ADD_www` | emitter_api:`ADD_www` |
+| 80 | `ADD_wwwEX` | emitter_api:`ADD_wwwEX` |
 
 ## Accepted closure targets
 
@@ -70,7 +70,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`NEG` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_NEG`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`B_i` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`B_i`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

@@ -343,6 +343,14 @@ const compareEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-compare-conformance.sh",
   import.meta.url,
 )).text();
+const negEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-neg-conformance.cpp",
+  import.meta.url,
+)).text();
+const negEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-neg-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -351,6 +359,12 @@ const generatedSource = await Bun.file(new URL(
   "../BasiliskII/src/Unix/compemu.cpp",
   import.meta.url,
 )).text();
+for (const contract of [
+  'echo "$reason" >&2\n    exit 1',
+  'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
+  '[ "$RISKY_TOTAL" -ne "$TOTAL" ] || [ "$RISKY_PASS" -ne "$RISKY_TOTAL" ]',
+  "exit 1\nfi\nexit 0",
+]) requireText(harnessSource, contract, "top-level harness fail-closed status");
 const newcpuSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/newcpu.cpp",
   import.meta.url,
@@ -537,6 +551,98 @@ for (const generatedCall of ["adc_b(dst,src);", "adc_w(dst,src);", "sbb_b(dst,sr
   requireText(generatedSource, generatedCall, "generated ADDX/SUBX legacy-helper reachability");
 }
 
+/* NEG is generated as zero-source through the shared SUB lifecycle.  Memory
+ * destinations additionally own the pre-write EA from fetch through result
+ * allocation, flags and ordered storage.  Directly prove the separately live
+ * generic NEG_ww encoder rather than treating M68K execution as encoder proof. */
+const negGenerator = functionBody(
+  gencompSource,
+  "     case i_NEG:",
+  "     case i_NEGX:",
+  "NEG generator",
+);
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'if (curi->smode != Dreg)',
+  'comprintf("\\tint __negealock=jit_value_lock(srca);\\n");',
+  'comprintf("\\tint dst=scratchie++;\\n");',
+  'comprintf("\\tmov_l_ri(dst,0);\\n");',
+  'genflags (flag_sub, curi->size, "", "src", "dst");',
+  'genastore ("dst", curi->smode, "srcreg", curi->size, "src");',
+  'comprintf("\\tjit_value_unlock(__negealock);\\n");',
+]) {
+  requireText(negGenerator, contract, "NEG semantic/EA lifecycle");
+}
+requireBefore(negGenerator, 'jit_value_lock(srca)', 'genflags (flag_sub', "NEG EA ownership");
+requireBefore(negGenerator, 'genastore ("dst"', 'jit_value_unlock(__negealock)', "NEG EA ownership");
+const generatedNegLocks = (generatedSource.match(/int __negealock=jit_value_lock\(srca\);/g) || []).length;
+const generatedNegUnlocks = (generatedSource.match(/jit_value_unlock\(__negealock\);/g) || []).length;
+if (generatedNegLocks !== 42 || generatedNegUnlocks !== 42) {
+  fail(`generated NEG EA ownership: locks=${generatedNegLocks} unlocks=${generatedNegUnlocks}`);
+}
+for (const [opcode, nextOpcode, width, move] of [
+  ["4400", "4410", "b", "mov_b_rr"],
+  ["4440", "4450", "w", "mov_w_rr"],
+  ["4480", "4490", "l", "mov_l_rr"],
+] as const) {
+  const liveBody = functionBody(
+    generatedSource,
+    `void REGPARAM2 op_${opcode}_0_comp_ff`,
+    `void REGPARAM2 op_${nextOpcode}_0_comp_ff`,
+    `generated NEG.${width} flag-live`,
+  );
+  for (const contract of [
+    "mov_l_ri(dst,0)", `sub_${width}(dst,src)`, "duplicate_carry()", `${move}(srcreg, dst)`,
+  ]) requireText(liveBody, contract, `generated NEG.${width} flag-live`);
+  const deadBody = functionBody(
+    generatedSource,
+    `void REGPARAM2 op_${opcode}_0_comp_nf`,
+    `void REGPARAM2 op_${nextOpcode}_0_comp_nf`,
+    `generated NEG.${width} no-flags`,
+  );
+  for (const contract of ["mov_l_ri(dst,0)", "dont_care_flags()", `sub_${width}(dst,src)`, `${move}(srcreg, dst)`]) {
+    requireText(deadBody, contract, `generated NEG.${width} no-flags`);
+  }
+  if (deadBody.includes("start_needflags()") || deadBody.includes("duplicate_carry()")) {
+    fail(`generated NEG.${width} no-flags path still publishes dead flags`);
+  }
+}
+const negExactVectors = [
+  "neg_b_zero_native", "neg_w_zero_native", "neg_l_zero_native",
+  "neg_b_one_native", "neg_w_one_native", "neg_l_one_native",
+  "neg_b_min_overflow_native", "neg_w_min_overflow_native", "neg_l_min_overflow_native",
+  "neg_b_minus_one_native", "neg_w_minus_one_native", "neg_l_minus_one_native",
+  "neg_b_min_nf_native", "neg_w_min_nf_native", "neg_l_min_nf_native",
+  "neg_b_aind_special_native", "neg_w_postinc_native", "neg_l_predec_native",
+  "neg_b_d16_native", "neg_w_indexed_special_native", "neg_l_absw_native",
+  "neg_b_absl_special_native", "neg_b_a7_postinc_native", "neg_b_a7_predec_native",
+];
+for (const name of negExactVectors) requireText(harnessSource, name, `NEG exact-native vector ${name}`);
+for (const contract of [
+  'for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"',
+  'NATIVE_REPLAY_TESTS["$_neg_name"]=1',
+  'NATIVE_REPLAY_PC["$_neg_name"]=0x1000',
+  'NATIVE_REPLAY_COUNT["$_neg_name"]=2',
+  "SPECIAL_MEMORY_TESTS[neg_b_aind_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[neg_w_indexed_special_native]=1",
+  "SPECIAL_MEMORY_TESTS[neg_b_absl_special_native]=1",
+]) requireText(harnessSource, contract, "NEG exact-native/memory gate");
+requireText(activeRiskySource, "neg_l_min_overflow_native", "NEG active-risky sentinel");
+for (const contract of [
+  "neg_b_postinc_result_ea_collision", "[neg_b_postinc_result_ea_collision]=22",
+  "[neg_b_postinc_result_ea_collision]=20", "[neg_b_postinc_result_ea_collision]=1",
+]) requireText(regallocPressureSource, contract, "NEG forced result/EA collision");
+requireText(codegenHeaderSource, "#define NEG_ww(Wd,Wm)", "reachable NEG_ww emitter declaration");
+const negEmitterCallsites = (shiftSource.match(/\bNEG_ww\(/g) || []).length;
+if (negEmitterCallsites !== 6) fail(`reachable NEG_ww emitter callers=${negEmitterCallsites} expected=6`);
+for (const contract of ["NEG_ww(d, m)", "neg_ww_word(10, 9)", "0x4b0903eau", "emitter_neg_native_vectors", "vectors == 7"]) {
+  requireText(negEmitterProbeSource, contract, "NEG_ww direct emitter probe");
+}
+for (const contract of ["-std=c++17", "-Wall -Wextra -Werror", "emitter-neg-conformance.cpp"]) {
+  requireText(negEmitterHarnessSource, contract, "NEG_ww emitter harness");
+}
+requireText(harnessSource, 'emitter-neg-conformance.sh', "NEG_ww mandatory harness gate");
+
 /* NEGX does not call the similarly named jff_/jnf_NEGX_* legacy MIDFUNCs.
  * Its live generator creates zero - source - X through flag_subx and the
  * shared sbb_b/w/l compatibility layer. Lock both generated flag lifecycles,
@@ -551,12 +657,21 @@ const negxGenerator = functionBody(
 for (const contract of [
   "isaddx;",
   'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __negxealock=jit_value_lock(srca);\\n");',
   'comprintf("\\tint dst=scratchie++;\\n");',
   'comprintf("\\tmov_l_ri(dst,0);\\n");',
   'genflags (flag_subx, curi->size, "", "src", "dst");',
   'genastore ("dst", curi->smode, "srcreg", curi->size, "src");',
+  'comprintf("\\tjit_value_unlock(__negxealock);\\n");',
 ]) {
   requireText(negxGenerator, contract, "NEGX shared SUBX lowering");
+}
+requireBefore(negxGenerator, 'jit_value_lock(srca)', 'genflags (flag_subx', "NEGX EA ownership");
+requireBefore(negxGenerator, 'genastore ("dst"', 'jit_value_unlock(__negxealock)', "NEGX EA ownership");
+const generatedNegxLocks = (generatedSource.match(/int __negxealock=jit_value_lock\(srca\);/g) || []).length;
+const generatedNegxUnlocks = (generatedSource.match(/jit_value_unlock\(__negxealock\);/g) || []).length;
+if (generatedNegxLocks !== 42 || generatedNegxUnlocks !== 42) {
+  fail(`generated NEGX EA ownership: locks=${generatedNegxLocks} unlocks=${generatedNegxUnlocks}`);
 }
 for (const [opcode, nextOpcode, width, move] of [
   ["4000", "4010", "b", "mov_b_rr"],
@@ -654,6 +769,10 @@ for (const width of ["b", "w", "l"]) {
     requireText(regallocPressureSource, contract, `NEGX.${width} forced source/destination collision`);
   }
 }
+for (const contract of [
+  "negx_b_postinc_result_ea_collision", "[negx_b_postinc_result_ea_collision]=22",
+  "[negx_b_postinc_result_ea_collision]=20", "[negx_b_postinc_result_ea_collision]=1",
+]) requireText(regallocPressureSource, contract, "NEGX forced result/EA collision");
 for (const contract of [
   "Constant-backed scratch RMW values (NEGX)",
   "historical_const_scratch = r >= S1 && isconst(r)",
@@ -3317,13 +3436,23 @@ if (runtimeHelperBody.includes("cft_map(opcode)"))
 requireText(harnessSource, "TESTS[branch_flush_bgt_zero]", "cross-op BGT regression");
 
 console.log("METRIC structural_jit_object_layout_epoch=1");
+console.log("METRIC structural_harness_fail_closed_status=1");
 console.log("METRIC structural_bcd_flag_lifecycle=1");
+console.log("METRIC structural_neg_shared_sub_lowering=1");
+console.log(`METRIC structural_neg_exact_native_vectors=${negExactVectors.length}`);
+console.log("METRIC structural_neg_memory_ea_classes=9");
+console.log(`METRIC structural_neg_generated_ea_locks=${generatedNegLocks}`);
+console.log("METRIC structural_neg_allocator_pressure=1");
+console.log("METRIC structural_neg_emitter_apis=1");
+console.log(`METRIC structural_neg_emitter_callsites=${negEmitterCallsites}`);
+console.log("METRIC structural_neg_emitter_native_vectors=7");
 console.log("METRIC structural_negx_shared_subx_lowering=1");
 console.log("METRIC structural_negx_narrow_lane_flags=1");
 console.log("METRIC structural_negx_no_flags_lifecycle=1");
 console.log(`METRIC structural_negx_exact_native_vectors=${negxExactVectors.length}`);
 console.log("METRIC structural_negx_memory_ea_classes=9");
-console.log("METRIC structural_negx_allocator_pressure_widths=3");
+console.log(`METRIC structural_negx_generated_ea_locks=${generatedNegxLocks}`);
+console.log("METRIC structural_negx_allocator_pressure_cells=4");
 console.log("METRIC structural_tas_mandatory_flag_live=1");
 console.log("METRIC structural_tas_original_byte_flags=1");
 console.log(`METRIC structural_tas_exact_native_vectors=${tasExactVectors.length}`);

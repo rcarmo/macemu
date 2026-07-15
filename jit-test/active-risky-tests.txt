@@ -697,3 +697,4 @@ bitop_core_bchg_dyn_l_alias_native
 bitop_core_bset_dyn_index_one_special_native
 cmpm_core_b_distinct_native
 cmpa_core_w_postinc_alias_native
+neg_l_min_overflow_native
