@@ -76,6 +76,8 @@ const shiftSource = await Bun.file(new URL(
 const strictHarnessSource = await Bun.file(new URL("./strict-full-jit.sh", import.meta.url)).text();
 const regallocPressureSource = await Bun.file(new URL("./regalloc-pressure.sh", import.meta.url)).text();
 requireText(harnessSource, "rm -f obj/compemu*.o", "JIT object layout epoch");
+requireText(harnessSource, "nogui true", "opcode harness noninteractive execution");
+requireText(strictHarnessSource, "nogui true", "strict harness noninteractive execution");
 
 const callEmitter = bodyBetween(
   "STATIC_INLINE void compemu_raw_call(uintptr t)\n{",
@@ -335,6 +337,10 @@ const codegenHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h",
   import.meta.url,
 )).text();
+const branchPatchSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/arm64_branch_patch.h",
+  import.meta.url,
+)).text();
 const compareEmitterProbeSource = await Bun.file(new URL(
   "./emitter-compare-conformance.cpp",
   import.meta.url,
@@ -349,6 +355,14 @@ const negEmitterProbeSource = await Bun.file(new URL(
 )).text();
 const negEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-neg-conformance.sh",
+  import.meta.url,
+)).text();
+const branchEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-branch-conformance.cpp",
+  import.meta.url,
+)).text();
+const branchEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-branch-conformance.sh",
   import.meta.url,
 )).text();
 const gencompSource = await Bun.file(new URL(
@@ -642,6 +656,58 @@ for (const contract of ["-std=c++17", "-Wall -Wextra -Werror", "emitter-neg-conf
   requireText(negEmitterHarnessSource, contract, "NEG_ww emitter harness");
 }
 requireText(harnessSource, 'emitter-neg-conformance.sh', "NEG_ww mandatory harness gate");
+
+for (const contract of [
+  "#define B_i(i)", "#define BR_x(Xn)", "#define CC_B_i(cc,i)",
+  "#define CBNZ_wi(Wt,i)", "#define CBNZ_xi(Xt,i)",
+  "#define CBZ_wi(Wt,i)", "#define CBZ_xi(Xt,i)",
+  "#define TBNZ_xii(Xt,bit,i)", "#define TBNZ_wii(Wt,bit,i)",
+  "#define TBZ_xii(Xt,bit,i)", "#define TBZ_wii(Wt,bit,i)",
+  "((i) & 0x3fff) << 5", "((bit) & 0x20u) << 26",
+]) requireText(codegenHeaderSource, contract, "generic branch emitter encoding");
+if (codegenHeaderSource.includes("% 0x3fff"))
+  fail("generic branch emitter encoding: modulo cannot encode signed imm14 displacement");
+for (const contract of [
+  "byte_offset % 4 != 0", "ARM64_BRANCH_PATCH_UNALIGNED",
+  "(instruction & 0xfc000000) == 0x14000000",
+  "off > 0x1ffffff || off < -0x2000000", "ARM64_BRANCH_PATCH_B_RANGE",
+  "(instruction & 0x7e000000) == 0x36000000",
+  "off > 0x1fff || off < -0x2000", "ARM64_BRANCH_PATCH_TB_RANGE",
+  "instruction & 0xfff8001f",
+  "(instruction & 0x7e000000) == 0x34000000", "ARM64_BRANCH_PATCH_CB_RANGE",
+  "off > 0x3ffff || off < -0x40000",
+  "(instruction & 0xff000010) == 0x54000000", "ARM64_BRANCH_PATCH_BCOND_RANGE",
+  "ARM64_BRANCH_PATCH_UNSUPPORTED", "ARM64_BRANCH_PATCH_OK",
+]) requireText(branchPatchSource, contract, "branch patch width/range contract");
+const patchBranch = midfuncSource.slice(
+  requireText(midfuncSource, "STATIC_INLINE void write_jmp_target", "branch patch boundary"),
+  requireText(midfuncSource, "static inline void emit_jmp_target", "branch patch boundary"),
+);
+for (const contract of [
+  "arm64_patch_branch_instruction", "switch (status)",
+  "ARM64_BRANCH_PATCH_B_RANGE", "ARM64_BRANCH_PATCH_TB_RANGE",
+  "ARM64_BRANCH_PATCH_CB_RANGE", "ARM64_BRANCH_PATCH_BCOND_RANGE",
+  "unsupported branch patch instruction", "jit_abort(",
+]) requireText(patchBranch, contract, "branch patch fail-closed boundary");
+requireBefore(patchBranch, "arm64_patch_branch_instruction", "jit_begin_write_window", "validate branch before write window");
+if (patchBranch.includes("write_log("))
+  fail("branch patch width/range contract must fail closed instead of truncating after a warning");
+for (const contract of [
+  "expected_b(int immediate)", "expected_cc(unsigned condition, int immediate)",
+  "expected_cb(CompareBranch kind", "expected_tb(TestBranch kind",
+  "tb_word(TestBranch kind, unsigned reg, int bit, int immediate)",
+  "check_patch_word(", "check_patch_rejection(", "check_patch_native(",
+  "BNE_i negative displacement", "B.cond taken/not-taken",
+  "CBZ/CBNZ width and route", "TBZ/TBNZ bit, width, and route",
+  "emitter_branch_exact_words", "emitter_branch_native_vectors",
+  "emitter_branch_patch_exact_words", "emitter_branch_patch_rejections",
+  "patch_exact_words == 8 && patch_rejections == 10 && patch_native_vectors == 4",
+]) requireText(branchEmitterProbeSource, contract, "generic branch direct emitter probe");
+for (const contract of [
+  "-std=c++17", "-Wall -Wextra -Werror", "-fsanitize=undefined",
+  "-fno-sanitize-recover=all", "emitter-branch-conformance.cpp",
+]) requireText(branchEmitterHarnessSource, contract, "generic branch emitter harness");
+requireText(harnessSource, 'emitter-branch-conformance.sh', "generic branch mandatory harness gate");
 
 /* NEGX does not call the similarly named jff_/jnf_NEGX_* legacy MIDFUNCs.
  * Its live generator creates zero - source - X through flag_subx and the
@@ -3554,4 +3620,11 @@ console.log("METRIC structural_compare_allocator_pressure=2");
 console.log("METRIC structural_compare_emitter_apis=5");
 console.log("METRIC structural_compare_emitter_callsites=86");
 console.log("METRIC structural_compare_emitter_native_vectors=20");
+console.log("METRIC structural_branch_emitter_apis=21");
+console.log("METRIC structural_branch_emitter_exact_words=56");
+console.log("METRIC structural_branch_emitter_native_vectors=251");
+console.log("METRIC structural_branch_patch_exact_words=8");
+console.log("METRIC structural_branch_patch_rejections=10");
+console.log("METRIC structural_branch_patch_native_vectors=4");
+console.log("METRIC structural_branch_emitter_signed_range_edges=8");
 console.log("METRIC structural_runtime_helper_logical_opcode=1");

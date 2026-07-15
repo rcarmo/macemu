@@ -106,10 +106,10 @@
 
 /* test bit and branch */
 // these instructions do not affect condition flags
-#define TBNZ_xii(Xt,bit,i)  _W(((((bit) & 0x20) >> 5) << 31) | (0b0110111 << 24) | (((bit) & 0x1f) << 19) | ((((i)) % 0x3fff) << 5) | (Xt))
-#define TBNZ_wii(Wt,bit,i)  _W((0 << 31) | (0b0110111 << 24) | (((bit) & 0x1f) << 19) | ((((i)) % 0x3fff) << 5) | (Wt))
-#define TBZ_xii(Xt,bit,i)   _W(((((bit) & 0x20) >> 5) << 31) | (0b0110110 << 24) | (((bit) & 0x1f) << 19) | ((((i)) % 0x3fff) << 5) | (Xt))
-#define TBZ_wii(Wt,bit,i)   _W((0 << 31) | (0b0110110 << 24) | (((bit) & 0x1f) << 19) | ((((i)) % 0x3fff) << 5) | (Wt))
+#define TBNZ_xii(Xt,bit,i)  _W((((bit) & 0x20u) << 26) | (0b0110111 << 24) | (((bit) & 0x1f) << 19) | (((i) & 0x3fff) << 5) | (Xt))
+#define TBNZ_wii(Wt,bit,i)  _W((0 << 31) | (0b0110111 << 24) | (((bit) & 0x1f) << 19) | (((i) & 0x3fff) << 5) | (Wt))
+#define TBZ_xii(Xt,bit,i)   _W((((bit) & 0x20u) << 26) | (0b0110110 << 24) | (((bit) & 0x1f) << 19) | (((i) & 0x3fff) << 5) | (Xt))
+#define TBZ_wii(Wt,bit,i)   _W((0 << 31) | (0b0110110 << 24) | (((bit) & 0x1f) << 19) | (((i) & 0x3fff) << 5) | (Wt))
 
 
 /*----------------------------------------

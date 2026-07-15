@@ -27,6 +27,7 @@ jitcachesize 8192
 screen win/640/480
 nosound true
 nocdrom true
+nogui true
 ignoresegv true
 EOF
 }

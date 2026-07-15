@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 47 | 44 | 0 | 39 |
 | midfunc | 422 | 198 | 0 | 118 | 106 |
-| emitter_api | 294 | 6 | 0 | 91 | 197 |
+| emitter_api | 294 | 27 | 0 | 91 | 176 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,19 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 87 | `B_i` | emitter_api:`B_i` |
-| 87 | `BCC_i` | emitter_api:`BCC_i` |
-| 87 | `BCS_i` | emitter_api:`BCS_i` |
-| 87 | `BEQ_i` | emitter_api:`BEQ_i` |
-| 87 | `BNE_i` | emitter_api:`BNE_i` |
-| 87 | `BR_x` | emitter_api:`BR_x` |
-| 87 | `CBNZ_wi` | emitter_api:`CBNZ_wi` |
-| 87 | `CBNZ_xi` | emitter_api:`CBNZ_xi` |
-| 87 | `CBZ_wi` | emitter_api:`CBZ_wi` |
-| 87 | `CBZ_xi` | emitter_api:`CBZ_xi` |
-| 87 | `TBNZ_wii` | emitter_api:`TBNZ_wii` |
-| 87 | `TBZ_wii` | emitter_api:`TBZ_wii` |
-| 87 | `TBZ_xii` | emitter_api:`TBZ_xii` |
 | 80 | `ADD` | generator:`i_ADD`, midfunc:`jff_ADD_b`, midfunc:`jff_ADD_l`, midfunc:`jff_ADD_w`, midfunc:`jnf_ADD_b`, midfunc:`jnf_ADD_l`, midfunc:`jnf_ADD_w` |
 | 80 | `ADD_b_imm` | midfunc:`jff_ADD_b_imm`, midfunc:`jnf_ADD_b_imm` |
 | 80 | `ADD_l_imm` | midfunc:`jff_ADD_l_imm`, midfunc:`jnf_ADD_l_imm` |
@@ -62,6 +49,19 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `ADD_wwi` | emitter_api:`ADD_wwi` |
 | 80 | `ADD_www` | emitter_api:`ADD_www` |
 | 80 | `ADD_wwwEX` | emitter_api:`ADD_wwwEX` |
+| 80 | `ADD_wwwLSLi` | emitter_api:`ADD_wwwLSLi` |
+| 80 | `ADD_xxi` | emitter_api:`ADD_xxi` |
+| 80 | `ADD_xxwEX` | emitter_api:`ADD_xxwEX` |
+| 80 | `ADD_xxx` | emitter_api:`ADD_xxx` |
+| 80 | `AND` | generator:`i_AND`, midfunc:`jff_AND_b`, midfunc:`jff_AND_l`, midfunc:`jff_AND_w`, midfunc:`jnf_AND_b`, midfunc:`jnf_AND_l`, midfunc:`jnf_AND_w` |
+| 80 | `AND_b_imm` | midfunc:`jff_AND_b_imm`, midfunc:`jnf_AND_b_imm` |
+| 80 | `AND_l_imm` | midfunc:`jff_AND_l_imm`, midfunc:`jnf_AND_l_imm` |
+| 80 | `AND_w_imm` | midfunc:`jff_AND_w_imm`, midfunc:`jnf_AND_w_imm` |
+| 80 | `AND_ww3f` | emitter_api:`AND_ww3f` |
+| 80 | `AND_www` | emitter_api:`AND_www` |
+| 80 | `AND_xxx` | emitter_api:`AND_xxx` |
+| 80 | `EOR` | generator:`i_EOR`, midfunc:`jff_EOR_b`, midfunc:`jff_EOR_l`, midfunc:`jff_EOR_w`, midfunc:`jnf_EOR_b`, midfunc:`jnf_EOR_l`, midfunc:`jnf_EOR_w` |
+| 80 | `EOR_b_imm` | midfunc:`jff_EOR_b_imm`, midfunc:`jnf_EOR_b_imm` |
 
 ## Accepted closure targets
 
@@ -70,7 +70,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`B_i` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`B_i`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`ADD` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_ADD`, midfunc:`jff_ADD_b`, midfunc:`jff_ADD_l`, midfunc:`jff_ADD_w`, midfunc:`jnf_ADD_b`, midfunc:`jnf_ADD_l`, midfunc:`jnf_ADD_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

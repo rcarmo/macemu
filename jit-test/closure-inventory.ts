@@ -173,6 +173,7 @@ const riskOf = (name: string, layer: Layer): number => {
 const emitterAuditRules: Array<[RegExp, string]> = [
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
   [/^NEG_ww$/, "AARCH64_JIT_AUDIT_NEG_LIFECYCLE.md"],
+  [/^(?:B_i|BR_x|CC_B_i|B(?:CC|CS|EQ|GE|GT|HI|LE|LS|LT|MI|NE|PL|VC|VS)_i|CB(?:NZ|Z)_[wx]i|TBNZ_[wx]ii|TBZ_[wx]ii)$/, "AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
 ];
 const familyOf = (name: string) => name
   .replace(/^i_/, "")

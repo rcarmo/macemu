@@ -105,6 +105,9 @@ fi
 if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-neg-conformance.sh"; then
     emit_failure_metrics 1 "ARM64 NEG emitter conformance failed" 0
 fi
+if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-branch-conformance.sh"; then
+    emit_failure_metrics 1 "ARM64 branch emitter conformance failed" 0
+fi
 
 # Use a fresh copy-on-write clone of the base disk for this harness run so the
 # shared fixture is never mutated (clone shares extents; only deltas stored).
@@ -151,6 +154,7 @@ jitcachesize 8192
 screen win/640/480
 nosound true
 nocdrom true
+nogui true
 ignoresegv true
 EOF
 

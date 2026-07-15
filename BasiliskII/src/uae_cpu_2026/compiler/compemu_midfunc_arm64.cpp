@@ -31,6 +31,8 @@
  *
  */
 
+#include "arm64_branch_patch.h"
+
 /********************************************************************
  * CPU functions exposed to gencomp. Both CREATE and EMIT time      *
  ********************************************************************/
@@ -796,29 +798,46 @@ STATIC_INLINE void flush_cpu_icache(void *start, void *stop)
 
 STATIC_INLINE void write_jmp_target(uae_u32* jmpaddr, uintptr a)
 {
-	jit_begin_write_window();
-	uintptr off = (a - (uintptr)jmpaddr) >> 2;
-	if((*(jmpaddr) & 0xfc000000) == 0x14000000) {
-		/* branch always — 26-bit offset, ±128MB */
-		off = off & 0x3ffffff;
-		*(jmpaddr) = (*(jmpaddr) & 0xfc000000) | off;
-	} else if((*(jmpaddr) & 0x7c000000) == 0x34000000) {
-		/* TBZ/TBNZ/CBZ/CBNZ — 14-bit offset */
-		intptr soff = (intptr)((a - (uintptr)jmpaddr)) >> 2;
-		if (soff > 0x1fff || soff < -0x2000)
-			write_log("JIT: TBZ/TBNZ branch to target too long (%ld).\n", (long)soff);
-		off = off & 0x3fff;
-		*(jmpaddr) = (*(jmpaddr) & 0xfffc001f) | (off << 5);
-	} else {
-		/* conditional branch B.cond — 19-bit offset, ±1MB */
-		intptr soff = (intptr)((a - (uintptr)jmpaddr)) >> 2;
-		if (soff > 0x3ffff || soff < -0x40000)
-			write_log("JIT: B.cond to target too long (%ld) jmpaddr=%p target=%p.\n",
-				(long)soff, (void*)jmpaddr, (void*)a);
-		off = off & 0x7ffff;
-		*(jmpaddr) = (*(jmpaddr) & 0xff00001f) | (off << 5);
+	const uintptr base = (uintptr)jmpaddr;
+	const int64_t byte_offset = a >= base
+		? (int64_t)(a - base)
+		: -(int64_t)(base - a);
+	const uae_u32 instruction = *jmpaddr;
+	uae_u32 patched = 0;
+	const arm64_branch_patch_status status =
+		arm64_patch_branch_instruction(instruction, byte_offset, &patched);
+
+	switch (status) {
+	case ARM64_BRANCH_PATCH_OK:
+		break;
+	case ARM64_BRANCH_PATCH_UNALIGNED:
+		jit_abort("JIT: unaligned branch target jmpaddr=%p target=%p",
+			(void*)jmpaddr, (void*)a);
+		return;
+	case ARM64_BRANCH_PATCH_B_RANGE:
+		jit_abort("JIT: B target out of range (%ld) jmpaddr=%p target=%p",
+			(long)(byte_offset / 4), (void*)jmpaddr, (void*)a);
+		return;
+	case ARM64_BRANCH_PATCH_TB_RANGE:
+		jit_abort("JIT: TBZ/TBNZ target out of range (%ld) jmpaddr=%p target=%p",
+			(long)(byte_offset / 4), (void*)jmpaddr, (void*)a);
+		return;
+	case ARM64_BRANCH_PATCH_CB_RANGE:
+		jit_abort("JIT: CBZ/CBNZ target out of range (%ld) jmpaddr=%p target=%p",
+			(long)(byte_offset / 4), (void*)jmpaddr, (void*)a);
+		return;
+	case ARM64_BRANCH_PATCH_BCOND_RANGE:
+		jit_abort("JIT: B.cond target out of range (%ld) jmpaddr=%p target=%p",
+			(long)(byte_offset / 4), (void*)jmpaddr, (void*)a);
+		return;
+	case ARM64_BRANCH_PATCH_UNSUPPORTED:
+		jit_abort("JIT: unsupported branch patch instruction %08x at %p",
+			instruction, (void*)jmpaddr);
+		return;
 	}
 
+	jit_begin_write_window();
+	*jmpaddr = patched;
 	flush_cpu_icache((void *)jmpaddr, (void *)&jmpaddr[1]);
 	jit_end_write_window();
 }
