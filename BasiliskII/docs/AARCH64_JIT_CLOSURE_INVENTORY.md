@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 47 | 44 | 0 | 39 |
-| midfunc | 422 | 198 | 0 | 118 | 106 |
+| generator | 130 | 48 | 44 | 0 | 38 |
+| midfunc | 422 | 210 | 0 | 118 | 94 |
 | emitter_api | 294 | 27 | 0 | 91 | 176 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `ADD` | generator:`i_ADD`, midfunc:`jff_ADD_b`, midfunc:`jff_ADD_l`, midfunc:`jff_ADD_w`, midfunc:`jnf_ADD_b`, midfunc:`jnf_ADD_l`, midfunc:`jnf_ADD_w` |
-| 80 | `ADD_b_imm` | midfunc:`jff_ADD_b_imm`, midfunc:`jnf_ADD_b_imm` |
-| 80 | `ADD_l_imm` | midfunc:`jff_ADD_l_imm`, midfunc:`jnf_ADD_l_imm` |
-| 80 | `ADD_w_imm` | midfunc:`jff_ADD_w_imm`, midfunc:`jnf_ADD_w_imm` |
 | 80 | `ADD_wwi` | emitter_api:`ADD_wwi` |
 | 80 | `ADD_www` | emitter_api:`ADD_www` |
 | 80 | `ADD_wwwEX` | emitter_api:`ADD_wwwEX` |
@@ -62,15 +58,20 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `AND_xxx` | emitter_api:`AND_xxx` |
 | 80 | `EOR` | generator:`i_EOR`, midfunc:`jff_EOR_b`, midfunc:`jff_EOR_l`, midfunc:`jff_EOR_w`, midfunc:`jnf_EOR_b`, midfunc:`jnf_EOR_l`, midfunc:`jnf_EOR_w` |
 | 80 | `EOR_b_imm` | midfunc:`jff_EOR_b_imm`, midfunc:`jnf_EOR_b_imm` |
+| 80 | `EOR_l_imm` | midfunc:`jff_EOR_l_imm`, midfunc:`jnf_EOR_l_imm` |
+| 80 | `EOR_w_imm` | midfunc:`jff_EOR_w_imm`, midfunc:`jnf_EOR_w_imm` |
+| 80 | `EOR_www` | emitter_api:`EOR_www` |
+| 80 | `EOR_wwwLSLi` | emitter_api:`EOR_wwwLSLi` |
 
 ## Accepted closure targets
 
 - `MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
 - `NEGX` (`i_NEGX`) is closed by `AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md`. Its six `jff_/jnf_NEGX_{b,w,l}` namesakes remain unreachable; the live generator uses the shared repaired `flag_subx` -> `sbb_b/w/l` lifecycle.
+- `ADD` (`i_ADD`) is closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The unused `jnf_ADD_im8` remains unreachable, while generic `ADD_*` encoder APIs remain independently unreviewed.
 
 ## Next selected family
 
-`ADD` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_ADD`, midfunc:`jff_ADD_b`, midfunc:`jff_ADD_l`, midfunc:`jff_ADD_w`, midfunc:`jnf_ADD_b`, midfunc:`jnf_ADD_l`, midfunc:`jnf_ADD_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`ADD_wwi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ADD_wwi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

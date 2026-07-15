@@ -382,6 +382,30 @@ TEST_ORDER+=(addx_b_distinct_reg_consumes_x addx_w_distinct_reg_consumes_x addx_
 TEST_ORDER+=(addx_b_zero_sticky_z_set addx_w_zero_sticky_z_set addx_l_zero_sticky_z_set addx_b_zero_without_x_sticky_z_set addx_w_zero_without_x_sticky_z_set addx_l_zero_without_x_sticky_z_set roxl_l_zero_count_copies_cleared_x subx_b_zero_sticky_z_set subx_w_zero_sticky_z_set subx_l_zero_sticky_z_set)
 TEST_ORDER+=(addx_b_zero_sticky_z_clear addx_w_zero_sticky_z_clear addx_l_zero_sticky_z_clear subx_b_zero_sticky_z_clear subx_w_zero_sticky_z_clear subx_l_zero_sticky_z_clear)
 TEST_ORDER+=(addx_b_overflow_with_x addx_w_overflow_with_x addx_l_overflow_with_x subx_b_overflow_with_x subx_w_overflow_with_x subx_l_overflow_with_x subx_b_without_x subx_w_without_x subx_l_without_x)
+# ADD is a two-operand arithmetic/RMW family. Audit width-edge NZVCX, constant
+# and register lowering, self aliases, nominal no-flags handlers, every readable
+# source and writable destination EA, A7 byte geometry, special memory, and exact
+# native entry. MIDFUNC operand ownership spans arithmetic; memory destinations
+# additionally retain their private pre-write EA through X publication/store.
+declare -a ADD_NATIVE_MATRIX_NAMES=(
+    add_core_b_reg_zero_native add_core_w_reg_overflow_native add_core_l_reg_carry_native
+    add_core_b_self_alias_native add_core_w_self_alias_native add_core_l_self_alias_native
+    add_core_b_imm_overflow_native add_core_w_imm_carry_native
+    add_core_l_imm_large_native add_core_l_imm_negative_native
+    add_core_b_reg_noflags_native add_core_w_reg_noflags_native add_core_l_reg_noflags_native
+    add_core_b_aind_source_special_native add_core_w_postinc_source_native
+    add_core_l_predec_source_native add_core_b_d16_source_native
+    add_core_w_index_source_special_native add_core_l_absw_source_native
+    add_core_b_absl_source_special_native add_core_w_pc16_source_native
+    add_core_l_pcindex_source_native
+    add_core_b_aind_dest_special_native add_core_w_postinc_dest_native
+    add_core_l_predec_dest_native add_core_b_d16_dest_native
+    add_core_w_index_dest_special_native add_core_l_absw_dest_native
+    add_core_b_absl_dest_special_native add_core_b_a7_postinc_dest_native
+    add_core_b_a7_predec_dest_native add_core_b_addi_postinc_dest_native
+    add_core_b_postinc_dest_native add_core_b_postinc_dest_noflags_native
+)
+TEST_ORDER+=("${ADD_NATIVE_MATRIX_NAMES[@]}")
 # NEG is lowered through shared SUB flags plus an explicit zero destination.
 # Audit every width and arithmetic edge, no-flags selection, each writable EA,
 # A7 byte geometry, normal/special memory, and exact native entry.
@@ -1231,6 +1255,39 @@ for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_rotate_name"]=2
 done
 unset _rotate_name
+for _add_name in "${ADD_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_add_name"]=1
+    NATIVE_REPLAY_PC["$_add_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_add_name"]=2
+done
+unset _add_name
+NATIVE_REPLAY_BYTES[add_core_b_aind_source_special_native]="A000 01"
+NATIVE_REPLAY_BYTES[add_core_w_postinc_source_native]="A000 00 A001 01"
+NATIVE_REPLAY_BYTES[add_core_l_predec_source_native]="A000 00 A001 00 A002 00 A003 01"
+NATIVE_REPLAY_BYTES[add_core_b_d16_source_native]="A010 FF"
+NATIVE_REPLAY_BYTES[add_core_w_index_source_special_native]="A002 00 A003 01"
+NATIVE_REPLAY_BYTES[add_core_l_absw_source_native]="6000 00 6001 00 6002 00 6003 01"
+NATIVE_REPLAY_BYTES[add_core_b_absl_source_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_w_pc16_source_native]="0FF0 00 0FF1 01"
+NATIVE_REPLAY_BYTES[add_core_l_pcindex_source_native]="0FF0 00 0FF1 00 0FF2 00 0FF3 01"
+NATIVE_REPLAY_BYTES[add_core_b_aind_dest_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_w_postinc_dest_native]="A000 FF A001 FF"
+NATIVE_REPLAY_BYTES[add_core_l_predec_dest_native]="A000 FF A001 FF A002 FF A003 FF"
+NATIVE_REPLAY_BYTES[add_core_b_d16_dest_native]="A010 FF"
+NATIVE_REPLAY_BYTES[add_core_w_index_dest_special_native]="A002 7F A003 FF"
+NATIVE_REPLAY_BYTES[add_core_l_absw_dest_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+NATIVE_REPLAY_BYTES[add_core_b_absl_dest_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_b_a7_postinc_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_b_a7_predec_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_b_addi_postinc_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_b_postinc_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[add_core_b_postinc_dest_noflags_native]="A000 7F"
+SPECIAL_MEMORY_TESTS[add_core_b_aind_source_special_native]=1
+SPECIAL_MEMORY_TESTS[add_core_w_index_source_special_native]=1
+SPECIAL_MEMORY_TESTS[add_core_b_absl_source_special_native]=1
+SPECIAL_MEMORY_TESTS[add_core_b_aind_dest_special_native]=1
+SPECIAL_MEMORY_TESTS[add_core_w_index_dest_special_native]=1
+SPECIAL_MEMORY_TESTS[add_core_b_absl_dest_special_native]=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_neg_name"]=1
     NATIVE_REPLAY_PC["$_neg_name"]=0x1000
@@ -1447,6 +1504,104 @@ TESTS[negx_with_x]="003C 0010 7005 4080"
 # ANDI #0xEF,CCR clears X; MOVEQ #0,D0; NEGX.L D0
 # ANDI.B #imm,CCR = 023C 00EF; MOVEQ #0,D0 = 7000; NEGX.L D0 = 4080
 TESTS[negx_zero]="023C 00EF 7000 4080"
+# Exact-opcode ADD matrix. Every case begins at the ADD opcode; B2_TEST_INIT
+# supplies the operand/CCR state and exact-PC replay requires native execution.
+TESTS[add_core_b_reg_zero_native]="D001"
+TESTS[add_core_w_reg_overflow_native]="D041"
+TESTS[add_core_l_reg_carry_native]="D081"
+TESTS[add_core_b_self_alias_native]="D000"
+TESTS[add_core_w_self_alias_native]="D040"
+TESTS[add_core_l_self_alias_native]="D080"
+TESTS[add_core_b_imm_overflow_native]="0600 0001"
+TESTS[add_core_w_imm_carry_native]="0640 FFFF"
+TESTS[add_core_l_imm_large_native]="0680 1234 5678"
+TESTS[add_core_l_imm_negative_native]="0680 FFFF FFFF"
+# Full-SR replacement kills every ADD output flag while preserving the result.
+TESTS[add_core_b_reg_noflags_native]="D001 46FC 2700"
+TESTS[add_core_w_reg_noflags_native]="D041 46FC 2700"
+TESTS[add_core_l_reg_noflags_native]="D081 46FC 2700"
+# Readable memory sources retain their source EA and snapshot arithmetic flags.
+TESTS[add_core_b_aind_source_special_native]="D011 40C2"
+TESTS[add_core_w_postinc_source_native]="D059 40C2"
+TESTS[add_core_l_predec_source_native]="D0A1 40C2"
+TESTS[add_core_b_d16_source_native]="D029 0010 40C2"
+TESTS[add_core_w_index_source_special_native]="D071 2000 40C2"
+TESTS[add_core_l_absw_source_native]="D0B8 6000 40C2"
+TESTS[add_core_b_absl_source_special_native]="D039 0000 A000 40C2"
+TESTS[add_core_w_pc16_source_native]="D07A FFEE 40C2"
+TESTS[add_core_l_pcindex_source_native]="D0BB 1000 40C2"
+# Writable memory destinations snapshot arithmetic SR, reload the stored result,
+# and thereby expose data, EA/writeback, MIDFUNC operands, and pre-write EA ownership.
+TESTS[add_core_b_aind_dest_special_native]="D110 40C2 1010"
+TESTS[add_core_w_postinc_dest_native]="D158 40C2 3028 FFFE"
+TESTS[add_core_l_predec_dest_native]="D1A0 40C2 2010"
+TESTS[add_core_b_d16_dest_native]="D128 0010 40C2 1028 0010"
+TESTS[add_core_w_index_dest_special_native]="D170 1000 40C2 3030 1000"
+TESTS[add_core_l_absw_dest_native]="D1B8 6000 40C2 2038 6000"
+TESTS[add_core_b_absl_dest_special_native]="D139 0000 A000 40C2 1039 0000 A000"
+TESTS[add_core_b_a7_postinc_dest_native]="D11F 40C2 102F FFFE"
+TESTS[add_core_b_a7_predec_dest_native]="D127 40C2 1017"
+TESTS[add_core_b_addi_postinc_dest_native]="0618 0001 40C2 1028 FFFF"
+TESTS[add_core_b_postinc_dest_native]="D118 40C2 1028 FFFF"
+# The SR replacement immediately after ADD makes the postincrement destination
+# case a nominal no-flags path; the later reload validates stored data only.
+TESTS[add_core_b_postinc_dest_noflags_native]="D118 46FC 2700 1028 FFFF"
+EXPECTED_REG_FIELDS[add_core_b_reg_zero_native]="D0=A5A50000 D1=00000001 SR=2715"
+EXPECTED_REG_FIELDS[add_core_w_reg_overflow_native]="D0=A5A58000 D1=00000001 SR=270A"
+EXPECTED_REG_FIELDS[add_core_l_reg_carry_native]="D0=00000000 D1=00000001 SR=2715"
+EXPECTED_REG_FIELDS[add_core_b_self_alias_native]="D0=A5A50000 SR=2717"
+EXPECTED_REG_FIELDS[add_core_w_self_alias_native]="D0=A5A50000 SR=2717"
+EXPECTED_REG_FIELDS[add_core_l_self_alias_native]="D0=00000000 SR=2717"
+EXPECTED_REG_FIELDS[add_core_b_imm_overflow_native]="D0=A5A50080 SR=270A"
+EXPECTED_REG_FIELDS[add_core_w_imm_carry_native]="D0=A5A50000 SR=2715"
+EXPECTED_REG_FIELDS[add_core_l_imm_large_native]="D0=12345679 SR=2700"
+EXPECTED_REG_FIELDS[add_core_l_imm_negative_native]="D0=00000000 SR=2715"
+EXPECTED_REG_FIELDS[add_core_b_reg_noflags_native]="D0=A5A50080 D1=00000001 SR=2700"
+EXPECTED_REG_FIELDS[add_core_w_reg_noflags_native]="D0=A5A58000 D1=00000001 SR=2700"
+EXPECTED_REG_FIELDS[add_core_l_reg_noflags_native]="D0=80000000 D1=00000001 SR=2700"
+EXPECTED_REG_FIELDS[add_core_b_aind_source_special_native]="D0=A5A50080 D2=0000270A A1=0000A000 SR=270A"
+EXPECTED_REG_FIELDS[add_core_w_postinc_source_native]="D0=A5A50000 D2=00002715 A1=0000A002 SR=2715"
+EXPECTED_REG_FIELDS[add_core_l_predec_source_native]="D0=80000000 D2=0000270A A1=0000A000 SR=270A"
+EXPECTED_REG_FIELDS[add_core_b_d16_source_native]="D0=A5A50000 D2=00002715 A1=0000A000 SR=2715"
+EXPECTED_REG_FIELDS[add_core_w_index_source_special_native]="D0=A5A58000 D2=0000270A A1=0000A000 SR=270A"
+EXPECTED_REG_FIELDS[add_core_l_absw_source_native]="D0=00000000 D2=00002715 SR=2715"
+EXPECTED_REG_FIELDS[add_core_b_absl_source_special_native]="D0=A5A50000 D2=00002715 SR=2715"
+EXPECTED_REG_FIELDS[add_core_w_pc16_source_native]="D0=A5A58000 D2=0000270A SR=270A"
+EXPECTED_REG_FIELDS[add_core_l_pcindex_source_native]="D0=00000000 D1=FFFFFFEE D2=00002715 SR=2715"
+EXPECTED_REG_FIELDS[add_core_b_aind_dest_special_native]="D0=A5A50000 D2=00002715 A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[add_core_w_postinc_dest_native]="D0=A5A50000 D2=00002715 A0=0000A002 SR=2714"
+EXPECTED_REG_FIELDS[add_core_l_predec_dest_native]="D0=00000000 D2=00002715 A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_d16_dest_native]="D0=A5A50000 D2=00002715 A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[add_core_w_index_dest_special_native]="D0=A5A58000 D1=00000002 D2=0000270A A0=0000A000 SR=2708"
+EXPECTED_REG_FIELDS[add_core_l_absw_dest_native]="D0=00000000 D2=00002715 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_absl_dest_special_native]="D0=A5A50000 D2=00002715 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_a7_postinc_dest_native]="D0=A5A50000 D2=00002715 A7=0000A002 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_a7_predec_dest_native]="D0=A5A50000 D2=00002715 A7=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_addi_postinc_dest_native]="D0=A5A50000 D2=00002715 A0=0000A001 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_postinc_dest_native]="D0=A5A50000 D2=00002715 A0=0000A001 SR=2714"
+EXPECTED_REG_FIELDS[add_core_b_postinc_dest_noflags_native]="D0=A5A50080 A0=0000A001 SR=2708"
+TEST_MEMORY_BYTES[add_core_b_aind_source_special_native]="A000 01"
+TEST_MEMORY_BYTES[add_core_w_postinc_source_native]="A000 00 A001 01"
+TEST_MEMORY_BYTES[add_core_l_predec_source_native]="A000 00 A001 00 A002 00 A003 01"
+TEST_MEMORY_BYTES[add_core_b_d16_source_native]="A010 FF"
+TEST_MEMORY_BYTES[add_core_w_index_source_special_native]="A002 00 A003 01"
+TEST_MEMORY_BYTES[add_core_l_absw_source_native]="6000 00 6001 00 6002 00 6003 01"
+TEST_MEMORY_BYTES[add_core_b_absl_source_special_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_w_pc16_source_native]="0FF0 00 0FF1 01"
+TEST_MEMORY_BYTES[add_core_l_pcindex_source_native]="0FF0 00 0FF1 00 0FF2 00 0FF3 01"
+TEST_MEMORY_BYTES[add_core_b_aind_dest_special_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_w_postinc_dest_native]="A000 FF A001 FF"
+TEST_MEMORY_BYTES[add_core_l_predec_dest_native]="A000 FF A001 FF A002 FF A003 FF"
+TEST_MEMORY_BYTES[add_core_b_d16_dest_native]="A010 FF"
+TEST_MEMORY_BYTES[add_core_w_index_dest_special_native]="A002 7F A003 FF"
+TEST_MEMORY_BYTES[add_core_l_absw_dest_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+TEST_MEMORY_BYTES[add_core_b_absl_dest_special_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_b_a7_postinc_dest_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_b_a7_predec_dest_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_b_addi_postinc_dest_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_b_postinc_dest_native]="A000 FF"
+TEST_MEMORY_BYTES[add_core_b_postinc_dest_noflags_native]="A000 7F"
+
 # Exact-opcode NEG matrix. Register forms begin with the audited opcode so
 # B2_TEST_INIT supplies the operand/CCR state at exact native entry.  The matrix
 # proves width truncation and upper-lane preservation, all NZVCX outcomes,
@@ -3697,6 +3852,43 @@ TESTS[fuzz_flags_4]="003C 001A D584 4A82"
 
 declare -A SENTINEL_A6
 declare -A INIT_REGS   # optional initial register state (D0-D7 A0-A7 [SR])
+_ADD_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+_ADD_D1_ONE_TAIL="00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[add_core_b_reg_zero_native]="A5A500FF $_ADD_D1_ONE_TAIL 0000271F"
+INIT_REGS[add_core_w_reg_overflow_native]="A5A57FFF $_ADD_D1_ONE_TAIL 0000271F"
+INIT_REGS[add_core_l_reg_carry_native]="FFFFFFFF $_ADD_D1_ONE_TAIL 0000271F"
+INIT_REGS[add_core_b_self_alias_native]="A5A50080 $_ADD_ZERO_TAIL 00002700"
+INIT_REGS[add_core_w_self_alias_native]="A5A58000 $_ADD_ZERO_TAIL 00002700"
+INIT_REGS[add_core_l_self_alias_native]="80000000 $_ADD_ZERO_TAIL 00002700"
+INIT_REGS[add_core_b_imm_overflow_native]="A5A5007F $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_w_imm_carry_native]="A5A50001 $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_l_imm_large_native]="00000001 $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_l_imm_negative_native]="00000001 $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_b_reg_noflags_native]="A5A5007F $_ADD_D1_ONE_TAIL 0000271F"
+INIT_REGS[add_core_w_reg_noflags_native]="A5A57FFF $_ADD_D1_ONE_TAIL 0000271F"
+INIT_REGS[add_core_l_reg_noflags_native]="7FFFFFFF $_ADD_D1_ONE_TAIL 0000271F"
+INIT_REGS[add_core_b_aind_source_special_native]="A5A5007F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_w_postinc_source_native]="A5A5FFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_l_predec_source_native]="7FFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A004 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_b_d16_source_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_w_index_source_special_native]="A5A57FFF 00000000 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_l_absw_source_native]="FFFFFFFF $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_b_absl_source_special_native]="A5A50001 $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_w_pc16_source_native]="A5A57FFF $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_l_pcindex_source_native]="FFFFFFFF FFFFFFEE 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_b_aind_dest_special_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_w_postinc_dest_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_l_predec_dest_native]="00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A004 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_b_d16_dest_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_w_index_dest_special_native]="A5A50001 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_l_absw_dest_native]="00000001 $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_b_absl_dest_special_native]="A5A50001 $_ADD_ZERO_TAIL 0000271F"
+INIT_REGS[add_core_b_a7_postinc_dest_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[add_core_b_a7_predec_dest_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 0000271F"
+INIT_REGS[add_core_b_addi_postinc_dest_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_b_postinc_dest_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[add_core_b_postinc_dest_noflags_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+unset _ADD_ZERO_TAIL _ADD_D1_ONE_TAIL
 _NEG_INIT_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[neg_b_zero_native]="A5A50000 $_NEG_INIT_ZERO_TAIL 0000271F"
 INIT_REGS[neg_w_zero_native]="A5A50000 $_NEG_INIT_ZERO_TAIL 0000271F"
@@ -4238,6 +4430,12 @@ SENTINEL_A6[abcd_basic]="a60100d0"
 SENTINEL_A6[sbcd_basic]="a60100d1"
 SENTINEL_A6[negx_with_x]="a60100d2"
 SENTINEL_A6[negx_zero]="a60100d3"
+_add_sentinel_id=1
+for _add_name in "${ADD_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_add_name"] 'a6ad%04x' "$_add_sentinel_id"
+    ((_add_sentinel_id+=1))
+done
+unset _add_name _add_sentinel_id
 _neg_sentinel_id=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_neg_name"] 'a60f%04x' "$_neg_sentinel_id"
@@ -5724,6 +5922,10 @@ for _rotate_name in "${ROTATE_REGISTER_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_rotate_name"]=1
 done
 unset _rotate_name
+for _add_name in "${ADD_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_add_name"]=1
+done
+unset _add_name
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_neg_name"]=1
 done

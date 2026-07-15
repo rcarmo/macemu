@@ -36,7 +36,7 @@ sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 # tick independently.
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
 MOVEM_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007ef000 2700"
-declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision neg_b_postinc_result_ea_collision negx_b_postinc_result_ea_collision tas_b_ea_value_collision move_b_mem_source_dst_collision scc_b_ea_value_collision dbcc_w_counter_copy_collision bitop_b_ea_value_collision cmpm_b_source_dst_collision cmpa_w_postinc_source_dst_collision)
+declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision neg_b_postinc_result_ea_collision negx_b_postinc_result_ea_collision tas_b_ea_value_collision move_b_mem_source_dst_collision scc_b_ea_value_collision dbcc_w_counter_copy_collision bitop_b_ea_value_collision cmpm_b_source_dst_collision cmpa_w_postinc_source_dst_collision add_b_postinc_source_dreg_collision add_b_postinc_x_ea_collision)
 if [[ -n "${B2_REGPRESSURE_CELLS:-}" ]]; then
   read -r -a CELLS <<<"${B2_REGPRESSURE_CELLS//,/ }"
 fi
@@ -97,6 +97,14 @@ declare -A CELL_HEX=(
   # destination into S3 before widening the source. Force S3 toward S2; the
   # fetched word must remain owned until the shared long compare consumes it.
   [cmpa_w_postinc_source_dst_collision]="B0D8 40C2 2C7C A6AA 55D9"
+  # ADD.B (A0)+,D0 fetches a private S1 source before acquiring architectural
+  # destination D0. Force D0 toward S1: the source must remain owned until the
+  # arithmetic consumes it, rather than becoming the destination allocation.
+  [add_b_postinc_source_dreg_collision]="D018 40C2 2C7C A6AA 55DB"
+  # ADD.B D0,(A0)+ retains private S1 as its pre-write EA while flag-live
+  # lowering publishes X through FLAGX. Force FLAGX toward S1: the ADD
+  # lifecycle must own the EA through carry duplication and the ordered store.
+  [add_b_postinc_x_ea_collision]="D118 40C2 1028 FFFF 2C7C A6AA 55DC"
 )
 declare -A CELL_MEMORY_BYTES=(
   [neg_b_postinc_result_ea_collision]="A000 01"
@@ -106,6 +114,8 @@ declare -A CELL_MEMORY_BYTES=(
   [bitop_b_ea_value_collision]="A000 00"
   [cmpm_b_source_dst_collision]="A000 01 A100 02"
   [cmpa_w_postinc_source_dst_collision]="A000 00 A001 01"
+  [add_b_postinc_source_dreg_collision]="A000 01"
+  [add_b_postinc_x_ea_collision]="A000 FF"
 )
 declare -A CELL_INIT=(
   [mulu_w_d16_a0_live_a0]="$INIT"
@@ -124,6 +134,8 @@ declare -A CELL_INIT=(
   [bitop_b_ea_value_collision]="00000000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
   [cmpm_b_source_dst_collision]="A5A50000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 0000A100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
   [cmpa_w_postinc_source_dst_collision]="A5A50000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 0000A100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
+  [add_b_postinc_source_dreg_collision]="A5A5007F 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2700"
+  [add_b_postinc_x_ea_collision]="A5A50001 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2700"
 )
 declare -A CELL_PC=(
   [mulu_w_d16_a0_live_a0]=0x00001018
@@ -142,6 +154,8 @@ declare -A CELL_PC=(
   [bitop_b_ea_value_collision]=0x00001000
   [cmpm_b_source_dst_collision]=0x00001000
   [cmpa_w_postinc_source_dst_collision]=0x00001000
+  [add_b_postinc_source_dreg_collision]=0x00001000
+  [add_b_postinc_x_ea_collision]=0x00001000
 )
 declare -A CELL_ALIAS_VREG=(
   [mulu_w_d16_a0_live_a0]=8
@@ -160,6 +174,8 @@ declare -A CELL_ALIAS_VREG=(
   [bitop_b_ea_value_collision]=20
   [cmpm_b_source_dst_collision]=21
   [cmpa_w_postinc_source_dst_collision]=21
+  [add_b_postinc_source_dreg_collision]=21
+  [add_b_postinc_x_ea_collision]=20
 )
 declare -A CELL_SCRATCH_VREG=(
   [mulu_w_d16_a0_live_a0]=22
@@ -178,6 +194,8 @@ declare -A CELL_SCRATCH_VREG=(
   [bitop_b_ea_value_collision]=21
   [cmpm_b_source_dst_collision]=23
   [cmpa_w_postinc_source_dst_collision]=22
+  [add_b_postinc_source_dreg_collision]=0
+  [add_b_postinc_x_ea_collision]=17
 )
 declare -A CELL_REQUIRE_PIN=(
   [mulu_w_d16_a0_live_a0]=0
@@ -196,6 +214,8 @@ declare -A CELL_REQUIRE_PIN=(
   [bitop_b_ea_value_collision]=0
   [cmpm_b_source_dst_collision]=0
   [cmpa_w_postinc_source_dst_collision]=0
+  [add_b_postinc_source_dreg_collision]=0
+  [add_b_postinc_x_ea_collision]=0
 )
 declare -A CELL_REQUIRE_SKIP=(
   [mulu_w_d16_a0_live_a0]=0
@@ -214,6 +234,8 @@ declare -A CELL_REQUIRE_SKIP=(
   [bitop_b_ea_value_collision]=1
   [cmpm_b_source_dst_collision]=1
   [cmpa_w_postinc_source_dst_collision]=1
+  [add_b_postinc_source_dreg_collision]=1
+  [add_b_postinc_x_ea_collision]=1
 )
 run_one(){
   local cell="$1"

@@ -1666,10 +1666,17 @@ gen_opcode (unsigned int opcode)
 #ifdef DISABLE_I_ADD
     failure;
 #endif
+	/* Memory ADD retains the pre-write destination EA while arithmetic and X
+	 * publication allocate registers; postincrement/predecrement may already
+	 * have changed the architectural base before the ordered store. */
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	if (curi->dmode != Dreg)
+	    comprintf("\tint __adddstealock=jit_value_lock(dsta);\n");
 	genflags (flag_add, curi->size, "", "src", "dst");
 	genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");
+	if (curi->dmode != Dreg)
+	    comprintf("\tjit_value_unlock(__adddstealock);\n");
 	break;
 
      case i_ADDA:

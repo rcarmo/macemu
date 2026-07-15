@@ -404,6 +404,23 @@ function functionBody(
   return text.slice(start, end);
 }
 
+/* Generator-level ownership remains deliberately singular. Two-operand ADD
+ * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
+ * pre-write memory EA crosses that call and uses this explicit pin. */
+for (const contract of [
+  "int g_jvlock_reg=-1;",
+  "int g_jvlock_active=0;",
+  "g_jvlock_active = 1;",
+  "setlock(hr);",
+  "if (hr >= 0) unlock2(hr);",
+]) requireText(compatSource, contract, "singular generator JIT value ownership");
+for (const contract of [
+  "extern int g_jvlock_reg; extern int g_jvlock_active;",
+  "g_jvlock_active && g_jvlock_reg >= 0",
+  "live.state[r].realreg == g_jvlock_reg",
+  "disassociate(r);",
+]) requireText(allocatorSource, contract, "singular generator JIT value ownership");
+
 for (const contract of [
   "declare -A NATIVE_REPLAY_BYTES",
   'env_vars+=(B2_TEST_REPLAY_BYTES="$replay_bytes")',
@@ -564,6 +581,140 @@ if (legacySetZeroBody.includes("flags_carry_inverted = false")) {
 for (const generatedCall of ["adc_b(dst,src);", "adc_w(dst,src);", "sbb_b(dst,src);", "sbb_w(dst,src);"]) {
   requireText(generatedSource, generatedCall, "generated ADDX/SUBX legacy-helper reachability");
 }
+
+/* ADD's MIDFUNC register initialisers own both operands while arithmetic
+ * allocates its destination. Memory destinations additionally pin the private
+ * pre-write EA through X publication and ordered storage; this is the value
+ * that cannot be reconstructed after postincrement/predecrement writeback. */
+const addGenerator = functionBody(gencompSource, "     case i_ADD:", "     case i_ADDA:", "ADD generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __adddstealock=jit_value_lock(dsta);\\n");',
+  'genflags (flag_add, curi->size, "", "src", "dst");',
+  'genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");',
+  'comprintf("\\tjit_value_unlock(__adddstealock);\\n");',
+]) requireText(addGenerator, contract, "ADD EA lifecycle");
+if (addGenerator.includes("__addsrclock")) {
+  fail("ADD generator reintroduced a redundant source lock outside MIDFUNC operand ownership");
+}
+requireBefore(addGenerator, "jit_value_lock(dsta)", "genflags (flag_add", "ADD EA before arithmetic");
+requireBefore(addGenerator, 'genastore ("dst"', "jit_value_unlock(__adddstealock)", "ADD EA through store");
+const generatedAddFunctions = (generatedSource.match(/void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^{]*\/\* ADD \*\//g) || []).length;
+const generatedAddSourceLocks = (generatedSource.match(/int __addsrclock=jit_value_lock\(src\);/g) || []).length;
+const generatedAddSourceUnlocks = (generatedSource.match(/jit_value_unlock\(__addsrclock\);/g) || []).length;
+const generatedAddEaLocks = (generatedSource.match(/int __adddstealock=jit_value_lock\(dsta\);/g) || []).length;
+const generatedAddEaUnlocks = (generatedSource.match(/jit_value_unlock\(__adddstealock\);/g) || []).length;
+if (generatedAddFunctions !== 208 || generatedAddSourceLocks !== 0 || generatedAddSourceUnlocks !== 0 ||
+    generatedAddEaLocks !== 126 || generatedAddEaUnlocks !== 126) {
+  fail(`generated ADD ownership: functions=${generatedAddFunctions} source=${generatedAddSourceLocks}/${generatedAddSourceUnlocks} ea=${generatedAddEaLocks}/${generatedAddEaUnlocks}`);
+}
+for (const contract of [
+  "MIDFUNC(2,jnf_ADD_b,(RW1 d, RR1 s))",
+  "MIDFUNC(2,jnf_ADD_w,(RW2 d, RR2 s))",
+  "MIDFUNC(2,jnf_ADD_l,(RW4 d, RR4 s))",
+  "MIDFUNC(2,jff_ADD_b,(RW1 d, RR1 s))",
+  "MIDFUNC(2,jff_ADD_w,(RW2 d, RR2 s))",
+  "MIDFUNC(2,jff_ADD_l,(RW4 d, RR4 s))",
+  "BFI_wwii(d, REG_WORK1, 0, 8);",
+  "BFI_wwii(d, REG_WORK1, 0, 16);",
+  "BFXIL_xxii(d, REG_WORK1, 24, 8);",
+  "BFXIL_xxii(d, REG_WORK1, 16, 16);",
+  "ADDS_www(d, d, s);",
+  "DUPLICACTE_CARRY",
+]) requireText(midfunc2Source, contract, "ADD width/flags lowering");
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_ADD_${width},`,
+    `MENDFUNC(2,${variant}_ADD_${width},`,
+    `${variant}_ADD_${width} operand ownership`,
+  );
+  requireText(body, `INIT_REGS_${width}(d, s);`, `${variant}_ADD_${width} operand acquisition`);
+  requireText(body, "EXIT_REGS(d, s);", `${variant}_ADD_${width} operand release`);
+  requireBefore(body, `INIT_REGS_${width}(d, s);`, "EXIT_REGS(d, s);", `${variant}_ADD_${width} operand lifecycle`);
+}
+for (const contract of [
+  "add_b_postinc_source_dreg_collision",
+  '[add_b_postinc_source_dreg_collision]=21',
+  '[add_b_postinc_source_dreg_collision]=0',
+  '[add_b_postinc_source_dreg_collision]=1',
+  "add_b_postinc_x_ea_collision",
+  '[add_b_postinc_x_ea_collision]=20',
+  '[add_b_postinc_x_ea_collision]=17',
+  '[add_b_postinc_x_ea_collision]=1',
+]) requireText(regallocPressureSource, contract, "ADD source/EA/X allocator pressure");
+
+const addExactVectors = [
+  "add_core_b_reg_zero_native", "add_core_w_reg_overflow_native", "add_core_l_reg_carry_native",
+  "add_core_b_self_alias_native", "add_core_w_self_alias_native", "add_core_l_self_alias_native",
+  "add_core_b_imm_overflow_native", "add_core_w_imm_carry_native",
+  "add_core_l_imm_large_native", "add_core_l_imm_negative_native",
+  "add_core_b_reg_noflags_native", "add_core_w_reg_noflags_native", "add_core_l_reg_noflags_native",
+  "add_core_b_aind_source_special_native", "add_core_w_postinc_source_native",
+  "add_core_l_predec_source_native", "add_core_b_d16_source_native",
+  "add_core_w_index_source_special_native", "add_core_l_absw_source_native",
+  "add_core_b_absl_source_special_native", "add_core_w_pc16_source_native",
+  "add_core_l_pcindex_source_native", "add_core_b_aind_dest_special_native",
+  "add_core_w_postinc_dest_native", "add_core_l_predec_dest_native",
+  "add_core_b_d16_dest_native", "add_core_w_index_dest_special_native",
+  "add_core_l_absw_dest_native", "add_core_b_absl_dest_special_native",
+  "add_core_b_a7_postinc_dest_native", "add_core_b_a7_predec_dest_native",
+  "add_core_b_addi_postinc_dest_native", "add_core_b_postinc_dest_native",
+  "add_core_b_postinc_dest_noflags_native",
+];
+for (const fragment of [
+  "declare -a ADD_NATIVE_MATRIX_NAMES=(",
+  'TEST_ORDER+=("${ADD_NATIVE_MATRIX_NAMES[@]}")',
+  'for _add_name in "${ADD_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_add_name"]=1\n    NATIVE_REPLAY_PC["$_add_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_add_name"]=2',
+  'for _add_name in "${ADD_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_add_name"]=1',
+]) requireText(harnessSource, fragment, "ADD exact-native matrix/replay contract");
+for (const name of addExactVectors) {
+  for (const fragment of [
+    `TESTS[${name}]=`,
+    `EXPECTED_REG_FIELDS[${name}]=`,
+    `INIT_REGS[${name}]=`,
+  ]) requireText(harnessSource, fragment, `ADD exact-native vector ${name}`);
+}
+const addMemoryVectors = [
+  "add_core_b_aind_source_special_native", "add_core_w_postinc_source_native",
+  "add_core_l_predec_source_native", "add_core_b_d16_source_native",
+  "add_core_w_index_source_special_native", "add_core_l_absw_source_native",
+  "add_core_b_absl_source_special_native", "add_core_w_pc16_source_native",
+  "add_core_l_pcindex_source_native", "add_core_b_aind_dest_special_native",
+  "add_core_w_postinc_dest_native", "add_core_l_predec_dest_native",
+  "add_core_b_d16_dest_native", "add_core_w_index_dest_special_native",
+  "add_core_l_absw_dest_native", "add_core_b_absl_dest_special_native",
+  "add_core_b_a7_postinc_dest_native", "add_core_b_a7_predec_dest_native",
+  "add_core_b_addi_postinc_dest_native", "add_core_b_postinc_dest_native",
+  "add_core_b_postinc_dest_noflags_native",
+];
+for (const name of addMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `ADD memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `ADD native memory replay ${name}`);
+}
+for (const name of [
+  "add_core_b_aind_source_special_native", "add_core_w_index_source_special_native",
+  "add_core_b_absl_source_special_native", "add_core_b_aind_dest_special_native",
+  "add_core_w_index_dest_special_native", "add_core_b_absl_dest_special_native",
+]) requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `ADD special-memory route ${name}`);
+for (const name of [
+  "add_core_b_reg_noflags_native", "add_core_w_reg_noflags_native",
+  "add_core_l_reg_noflags_native", "add_core_b_postinc_dest_noflags_native",
+]) requireText(harnessSource, `TESTS[${name}]=`, `ADD no-flags vector ${name}`);
+requireText(
+  harnessSource,
+  'TESTS[add_core_b_postinc_dest_native]="D118 40C2 1028 FFFF"',
+  "ADD.B D0,(A0)+ exact-native regression",
+);
+requireText(
+  activeRiskySource,
+  "add_core_b_postinc_dest_native",
+  "ADD.B D0,(A0)+ active mismatch-first regression",
+);
 
 /* NEG is generated as zero-source through the shared SUB lifecycle.  Memory
  * destinations additionally own the pre-write EA from fetch through result
@@ -3504,6 +3655,16 @@ requireText(harnessSource, "TESTS[branch_flush_bgt_zero]", "cross-op BGT regress
 console.log("METRIC structural_jit_object_layout_epoch=1");
 console.log("METRIC structural_harness_fail_closed_status=1");
 console.log("METRIC structural_bcd_flag_lifecycle=1");
+console.log("METRIC structural_add_shared_midfunc_routes=6");
+console.log(`METRIC structural_add_exact_native_vectors=${addExactVectors.length}`);
+console.log("METRIC structural_add_readable_ea_classes=9");
+console.log("METRIC structural_add_writable_ea_classes=7");
+console.log(`METRIC structural_add_memory_vectors=${addMemoryVectors.length}`);
+console.log("METRIC structural_add_midfunc_operand_routes=6");
+console.log(`METRIC structural_add_redundant_generator_source_locks=${generatedAddSourceLocks}`);
+console.log(`METRIC structural_add_generated_ea_locks=${generatedAddEaLocks}`);
+console.log("METRIC structural_add_noflags_vectors=4");
+console.log("METRIC structural_add_allocator_pressure=2");
 console.log("METRIC structural_neg_shared_sub_lowering=1");
 console.log(`METRIC structural_neg_exact_native_vectors=${negExactVectors.length}`);
 console.log("METRIC structural_neg_memory_ea_classes=9");

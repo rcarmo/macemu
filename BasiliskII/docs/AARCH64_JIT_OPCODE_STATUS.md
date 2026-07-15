@@ -34,7 +34,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 | 0xA | A-line traps | — | ✅ Interpreter | None | A-line handled by runtime helper |
 | 0xB | CMP/CMPA/CMPM/EOR | 86 | ✅ Safe | None | No get_n_addr usage |
 | 0xC | AND/MUL/ABCD/EXG | 79 | ✅ Audited | None | MULL explicit result ownership, full-product flags, aliases, and allocator lifetime; ABCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
-| 0xD | ADD/ADDA/ADDX | 86 | ✅ Safe | None | No get_n_addr usage |
+| 0xD | ADD/ADDA/ADDX | 86 | ✅ Pointer-safe | None | No get_n_addr usage; `ADD` lifecycle is separately audited, while `ADDA`/`ADDX` remain governed by the closure inventory |
 | 0xE | ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR | 36 | ✅ Audited | None | Register-count and fixed-memory flag/count/alias/X ownership complete; no get_n_addr usage |
 | 0xF | MOVE16/FPU/cpSAVE/cpRESTORE | 27 | ✅ Safe | None | No get_n_addr usage |
 
@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| ADD pre-write EA and arithmetic lifecycle | current structural audit | Six shared MIDFUNC operand routes plus 126 generated memory-EA pins through ordered storage; 34 exact-native vectors and two focused allocator collisions; see `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` |
 | MOVEM cursor/base/extension lifecycle | current structural audit | Private load/store cursors, delayed update-mode publication, 68020+ base-in-mask predecrement semantics, exact PC-relative replay, special-memory service, and forced cursor/base allocator pressure; see `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md` |
 | Long-multiply result/flag/allocator lifecycle | `4bb12cca` | Explicit Dl/Dh/source ownership, full-product N/Z/V, high-before-low alias ordering, and generator value locking under a forced S1-to-Dl collision; see `AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md` |
 | Fixed-memory shifts and ROX ownership | `01a04904` | `jff`/`jnf` memory-shift lifecycle, branchless C/V, and one RMW X binding under forced allocator pressure; see `AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md` |

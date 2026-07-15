@@ -947,7 +947,7 @@ The older `B2_JIT_BARRIER_FAMILIES` variable is still useful for coarse family t
 | a | A-line traps | native active unless `aline` barrier is explicitly restored |
 | b | CMP/CMPA/EOR | native active |
 | c | AND/MUL/ABCD/EXG | native active |
-| d | ADD/ADDA/ADDX | native active in current L2 tests |
+| d | ADD/ADDA/ADDX | native active; `ADD` has complete structural/exact-native lifecycle evidence in `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md`, while `ADDA`/`ADDX` remain separate closure families |
 | e | Shifts/Rotates | native active |
 
 ### Boot Progress Metrics

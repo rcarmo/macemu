@@ -104,4 +104,4 @@ After the signed X-bit-selector correction, all evidence was regenerated against
 - generated `compemu.cpp`: byte-stable across three observations at SHA-256 `4a7a7d01f2f2fb76e418ffdcd8bcad7e43bd0aa49ef33c25d7ff773a9c331e84`;
 - synchronized closure regeneration: 997/997 rows, promoting 21 branch APIs to audited and leaving emitter totals at 27 audited, 91 unreachable, and 176 unreviewed.
 
-The next mechanically selected unreviewed semantic family is `ADD`; this report does not classify or imply correctness for that family.
+At this report's publication the next mechanically selected semantic family was `ADD`; it is subsequently closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md`. This branch-emitter report does not supply that later semantic evidence.
