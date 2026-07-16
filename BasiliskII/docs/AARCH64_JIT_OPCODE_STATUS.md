@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Generic ADD emitter width/field/no-flags contracts | current structural audit | Seven reachable AArch64 encoder APIs, 12 exact words, 46 direct native vectors, and 72 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_ADD_EMITTERS.md` |
 | ADD pre-write EA and arithmetic lifecycle | current structural audit | Six shared MIDFUNC operand routes plus 126 generated memory-EA pins through ordered storage; 34 exact-native vectors and two focused allocator collisions; see `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` |
 | MOVEM cursor/base/extension lifecycle | current structural audit | Private load/store cursors, delayed update-mode publication, 68020+ base-in-mask predecrement semantics, exact PC-relative replay, special-memory service, and forced cursor/base allocator pressure; see `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md` |
 | Long-multiply result/flag/allocator lifecycle | `4bb12cca` | Explicit Dl/Dh/source ownership, full-product N/Z/V, high-before-low alias ordering, and generator value locking under a forced S1-to-Dl collision; see `AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md` |

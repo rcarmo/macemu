@@ -349,6 +349,14 @@ const compareEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-compare-conformance.sh",
   import.meta.url,
 )).text();
+const addEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-add-conformance.cpp",
+  import.meta.url,
+)).text();
+const addEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-add-conformance.sh",
+  import.meta.url,
+)).text();
 const negEmitterProbeSource = await Bun.file(new URL(
   "./emitter-neg-conformance.cpp",
   import.meta.url,
@@ -1600,6 +1608,75 @@ for (const contract of [
 for (const contract of ["-Wall -Wextra -Werror", "emitter-compare-conformance.cpp"])
   requireText(compareEmitterHarnessSource, contract, "generic CMP conformance build");
 requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh"', "generic CMP bounded acceptance gate");
+
+/* The generic ADD encoders are a separate seven-API cross-caller layer. Audit
+ * every raw source spelling, legal immediate/extension/shift fields, exact A64
+ * words, native width behavior, and the non-flag-setting contract. */
+for (const contract of [
+  "#define ADD_wwwEX(Wd,Wn,Wm,ex)    _W((0b00001011001 << 21) | ((Wm) << 16) | ((ex) << 13) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define ADD_xxwEX(Xd,Xn,Wm,ex)    _W((0b10001011001 << 21) | ((Wm) << 16) | ((ex) << 13) | (0 << 10) | ((Xn) << 5) | (Xd))",
+  "#define ADD_wwi(Wd,Wn,i12)        _W((0b0001000100 << 22) | (((i12) & 0xfff) << 10) | ((Wn) << 5) | (Wd))",
+  "#define ADD_xxi(Xd,Xn,i12)        _W((0b1001000100 << 22) | (((i12) & 0xfff) << 10) | ((Xn) << 5) | (Xd))",
+  "#define ADD_www(Wd,Wn,Wm)         _W((0b00001011000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define ADD_xxx(Xd,Xn,Xm)         _W((0b10001011000 << 21) | ((Xm) << 16) | (0 << 10) | ((Xn) << 5) | (Xd))",
+  "#define ADD_wwwLSLi(Wd,Wn,Wm,i)   _W((0b00001011000 << 21) | ((Wm) << 16) | (((i) & 0x1f) << 10) | ((Wn) << 5) | (Wd))",
+]) requireText(codegenHeaderSource, contract, "generic ADD emitter encoding");
+
+const addEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for (const [name, expected] of [
+  ["ADD_wwi", 17], ["ADD_xxi", 7], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
+  ["ADD_www", 27], ["ADD_xxx", 3], ["ADD_wwwLSLi", 8],
+] as const) {
+  const found = (addEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== expected) fail(`generic ${name} raw caller census: expected ${expected}, found ${found}`);
+}
+const lastArgs = (pattern: RegExp) => [...addEmitterCallers.matchAll(pattern)].map((match) => match[1].trim());
+const expectArgs = (label: string, found: string[], expected: string[]) => {
+  if (JSON.stringify(found) !== JSON.stringify(expected))
+    fail(`${label} caller arguments changed: ${found.join(",")}`);
+};
+expectArgs("ADD_wwi imm12", lastArgs(/\bADD_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
+  "offset", "offset", "i32", "i", "v & 0xff", "v & 0xff", "v & 0xff",
+  "v", "v", "v", "tmp", "v", "live.state[s].val", "6", "0x60", "1", "1",
+]);
+expectArgs("ADD_xxi imm12", lastArgs(/\bADD_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
+  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "4", "4",
+]);
+expectArgs("ADD_wwwEX extension", lastArgs(/\bADD_wwwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), ["EX_SXTH"]);
+expectArgs("ADD_xxwEX extension", lastArgs(/\bADD_xxwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
+  "6", "EX_SXTW", "EX_UXTW", "EX_UXTW", "EX_UXTW", "EX_UXTW", "EX_UXTW", "EX_UXTW", "EX_UXTW",
+]);
+expectArgs("ADD_wwwLSLi shift", lastArgs(/\bADD_wwwLSLi\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
+  "shift & 0x1f", "shift & 0x1f", "shft", "shft", "2", "1", "1", "1",
+]);
+for (const contract of [
+  "if(offset >= 0 && offset <= 0xfff) {\n\t\t\tADD_xxi(d, s, offset);",
+  "if(offset >= 0 && offset <= 0xfff) {\n\t\tADD_wwi(d, s, offset);",
+  "if (offset > 0 && offset <= 0xfff) {\n\t\tADD_xxi(d, d, offset);",
+  "if (i32 <= 0xfff) {\n\t\tADD_wwi(d, d, i32);",
+  "MIDFUNC(2,arm_ADD_l_ri8,(RW4 d, IM8 i))",
+]) requireText(midfuncSource, contract, "generic ADD immediate caller bound");
+for (const contract of [
+  "if(v >= 0 && v <= 0xfff)", "if(tmp >= 0 && tmp <= 0xfff)",
+  "live.state[s].val >= 0 && live.state[s].val <= 0xfff",
+]) requireText(midfunc2Source, contract, "generic ADD immediate caller bound");
+requireText(codegenSource, "static constexpr int JIT_OBSERVER_SAVE_SIZE = 240;", "generic ADD observer-stack immediate bound");
+requireText(compatSource, "if (offset > 0 && offset <= 4095) {\n\t\tADD_xxi(tmp, base, offset);", "generic ADD compatibility immediate bound");
+if ((midfuncSource.match(/case 1: shft=0; break;\n\t\tcase 2: shft=1; break;\n\t\tcase 4: shft=2; break;\n\t\tcase 8: shft=3; break;/g) || []).length !== 2)
+  fail("generic ADD indexed-EA shift bounds changed");
+for (const contract of [
+  "0x11000149u", "0x113ffd49u", "0x9100018bu", "0x913ffd8bu",
+  "0x0b2f01cdu", "0x0b2fc1cdu", "0x8b324230u", "0x8b32c230u",
+  "0x0b150293u", "0x8b1802f6u", "0x0b1b0359u", "0x0b1b7f59u",
+  "ADD_wwi preserves NZCV", "ADD_xxi preserves NZCV", "ADD_wwwEX preserves NZCV",
+  "ADD_xxwEX preserves NZCV", "ADD_www preserves NZCV", "ADD_xxx preserves NZCV",
+  "ADD_wwwLSLi preserves NZCV", "PROT_READ | PROT_WRITE",
+  "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 12 && result_vectors == 39 && flag_vectors == 7",
+]) requireText(addEmitterProbeSource, contract, "generic ADD native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-add-conformance.cpp"])
+  requireText(addEmitterHarnessSource, contract, "generic ADD conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh"', "generic ADD bounded acceptance gate");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
@@ -3781,6 +3858,10 @@ console.log("METRIC structural_compare_allocator_pressure=2");
 console.log("METRIC structural_compare_emitter_apis=5");
 console.log("METRIC structural_compare_emitter_callsites=86");
 console.log("METRIC structural_compare_emitter_native_vectors=20");
+console.log("METRIC structural_add_emitter_apis=7");
+console.log("METRIC structural_add_emitter_raw_callsites=72");
+console.log("METRIC structural_add_emitter_exact_words=12");
+console.log("METRIC structural_add_emitter_native_vectors=46");
 console.log("METRIC structural_branch_emitter_apis=21");
 console.log("METRIC structural_branch_emitter_exact_words=56");
 console.log("METRIC structural_branch_emitter_native_vectors=251");

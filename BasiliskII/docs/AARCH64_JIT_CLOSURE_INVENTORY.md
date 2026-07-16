@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 48 | 44 | 0 | 38 |
 | midfunc | 422 | 210 | 0 | 118 | 94 |
-| emitter_api | 294 | 27 | 0 | 91 | 176 |
+| emitter_api | 294 | 34 | 0 | 91 | 169 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,13 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `ADD_wwi` | emitter_api:`ADD_wwi` |
-| 80 | `ADD_www` | emitter_api:`ADD_www` |
-| 80 | `ADD_wwwEX` | emitter_api:`ADD_wwwEX` |
-| 80 | `ADD_wwwLSLi` | emitter_api:`ADD_wwwLSLi` |
-| 80 | `ADD_xxi` | emitter_api:`ADD_xxi` |
-| 80 | `ADD_xxwEX` | emitter_api:`ADD_xxwEX` |
-| 80 | `ADD_xxx` | emitter_api:`ADD_xxx` |
 | 80 | `AND` | generator:`i_AND`, midfunc:`jff_AND_b`, midfunc:`jff_AND_l`, midfunc:`jff_AND_w`, midfunc:`jnf_AND_b`, midfunc:`jnf_AND_l`, midfunc:`jnf_AND_w` |
 | 80 | `AND_b_imm` | midfunc:`jff_AND_b_imm`, midfunc:`jnf_AND_b_imm` |
 | 80 | `AND_l_imm` | midfunc:`jff_AND_l_imm`, midfunc:`jnf_AND_l_imm` |
@@ -62,16 +55,23 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `EOR_w_imm` | midfunc:`jff_EOR_w_imm`, midfunc:`jnf_EOR_w_imm` |
 | 80 | `EOR_www` | emitter_api:`EOR_www` |
 | 80 | `EOR_wwwLSLi` | emitter_api:`EOR_wwwLSLi` |
+| 80 | `EOR_xxbit` | emitter_api:`EOR_xxbit` |
+| 80 | `EOR_xxCflag` | emitter_api:`EOR_xxCflag` |
+| 80 | `OR` | generator:`i_OR`, midfunc:`jff_OR_b`, midfunc:`jff_OR_l`, midfunc:`jff_OR_w`, midfunc:`jnf_OR_b`, midfunc:`jnf_OR_l`, midfunc:`jnf_OR_w` |
+| 80 | `OR_b_imm` | midfunc:`jff_OR_b_imm`, midfunc:`jnf_OR_b_imm` |
+| 80 | `OR_l_imm` | midfunc:`jff_OR_l_imm`, midfunc:`jnf_OR_l_imm` |
+| 80 | `OR_w_imm` | midfunc:`jff_OR_w_imm`, midfunc:`jnf_OR_w_imm` |
+| 80 | `SUB` | generator:`i_SUB`, midfunc:`jff_SUB_b`, midfunc:`jff_SUB_l`, midfunc:`jff_SUB_w`, midfunc:`jnf_SUB_b`, midfunc:`jnf_SUB_l`, midfunc:`jnf_SUB_w` |
 
 ## Accepted closure targets
 
 - `MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
 - `NEGX` (`i_NEGX`) is closed by `AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md`. Its six `jff_/jnf_NEGX_{b,w,l}` namesakes remain unreachable; the live generator uses the shared repaired `flag_subx` -> `sbb_b/w/l` lifecycle.
-- `ADD` (`i_ADD`) is closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The unused `jnf_ADD_im8` remains unreachable, while generic `ADD_*` encoder APIs remain independently unreviewed.
+- `ADD` (`i_ADD`) is closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The unused `jnf_ADD_im8` remains unreachable. The seven reachable generic non-flag-setting ADD encoder APIs are independently closed by `AARCH64_JIT_AUDIT_ADD_EMITTERS.md`; `ADD_xxxLSLi` remains unreachable.
 
 ## Next selected family
 
-`ADD_wwi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ADD_wwi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`AND` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_AND`, midfunc:`jff_AND_b`, midfunc:`jff_AND_l`, midfunc:`jff_AND_w`, midfunc:`jnf_AND_b`, midfunc:`jnf_AND_l`, midfunc:`jnf_AND_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

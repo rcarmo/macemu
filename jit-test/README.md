@@ -47,7 +47,7 @@ After a successful build, `run.sh` executes `structural-audit.ts` before opcode 
 - explicit three-operand MULL ownership, staged 64-bit publication, full-product N/Z/V semantics, generator Dl value locking, and a forced S1-to-Dl collision witness;
 - complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, and ADD lifecycle ownership contracts;
 - 208 generated ADD handlers, six shared MIDFUNC operand routes, and 126 balanced pre-write memory-EA pins, with redundant generator source locking prohibited;
-- exact generic compare/NEG/branch-emitter encodings and native semantics, including signed TB displacement and CB/TB patch discrimination;
+- exact generic ADD/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension, shift, and NZCV-preservation contracts plus signed TB displacement and CB/TB patch discrimination;
 - exact-PC replay state, including deterministic restoration of memory bytes mutated by predecrement BCD and RMW vectors.
 
 Each passing invariant emits a `METRIC structural_*=1` line. A structural failure stops the run before equivalence results can mask the engine defect.

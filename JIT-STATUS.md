@@ -171,7 +171,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 ## BasiliskII 68K JIT
 
-**Current structural-audit gate (2026-07-15):** ✅
+**Current structural-audit gate (2026-07-16):** ✅
 **Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible at SHA-256 `07a4be8b0d94300d8290c9b63110815856e7f03d54a97053f5a8691a8b5e1f82`
 **JIT harness:** ✅ 695/695 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
@@ -213,6 +213,17 @@ the current `ADD` inventory is 34/34, the accepted `ROL`/`ROR` inventory is
 138/138.
 
 ### Recent bug fixes (2026-07)
+
+- **Generic ADD emitter width, field, and no-flags closure** (2026-07-16):
+  the seven reachable non-flag-setting AArch64 ADD APIs now have 12 independent
+  exact-word checks, 39 direct native result vectors, and seven explicit NZCV
+  preservation vectors. A fail-closed census covers all 72 raw source callers,
+  including imm12 guards, the configured zero/sign-extension options, and every
+  shifted-register count source. No encoder defect was found. The complete
+  active-risky gate remains 695/695 and all 18 allocator cells pass after a
+  clean deterministic build. The 997-row closure inventory promotes only these
+  seven APIs; `ADD_xxxLSLi` remains unreachable. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_EMITTERS.md`.
 
 - **ADD pre-write EA ownership and complete lifecycle closure** (2026-07-15):
   memory-destination `ADD` now pins its private effective address after fetch
