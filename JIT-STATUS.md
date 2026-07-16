@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair the native FPP ordinary-FMOVE source subfamily** (2026-07-16):
+  AArch64 integer FMOVE inputs no longer pass the host `temp_fp` pointer as a
+  virtual integer register through the legacy x86 compatibility shim. Dn and
+  immediate byte/word/long/single sources now use typed register-to-FP
+  conversions directly; double immediates and all FP0-FP7 copy/self-alias
+  routes are value-observed. The strict exact-native matrix passes **43/43**,
+  the active-risky corpus **904/904**, and allocator pressure **31/31**. This
+  remains a bounded no-promotion checkpoint: `i_FPP` is still unreviewed, with
+  explicit precision, memory-EA, store, and other FPP subfamilies outstanding.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_SOURCE_SUBTRANCHE.md`.
+
 - **Repair the native FPP FCMP/FTST condition-result subfamily**
   (2026-07-16): native FCMP no longer approximates comparison with floating
   subtraction, which misclassified equal infinities as NaN and leaked Infinity

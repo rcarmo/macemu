@@ -159,26 +159,42 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 		switch (size)
 		{
 		case 6: /* byte */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			fmov_b_rr(FS1, reg);
+#else
 			sign_extend_8_rr(S1, reg);
 			mov_l_mr((uintptr) temp_fp, S1);
 			delay2;
 			fmovi_rm(FS1, (uintptr) temp_fp);
+#endif
 			return FS1;
 		case 4: /* word */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			fmov_w_rr(FS1, reg);
+#else
 			sign_extend_16_rr(S1, reg);
 			mov_l_mr((uintptr) temp_fp, S1);
 			delay2;
 			fmovi_rm(FS1, (uintptr) temp_fp);
+#endif
 			return FS1;
 		case 0: /* long */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			fmov_l_rr(FS1, reg);
+#else
 			mov_l_mr((uintptr) temp_fp, reg);
 			delay2;
 			fmovi_rm(FS1, (uintptr) temp_fp);
+#endif
 			return FS1;
 		case 1: /* single precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			fmov_s_rr(FS1, reg);
+#else
 			mov_l_mr((uintptr) temp_fp, reg);
 			delay2;
 			fmovs_rm(FS1, (uintptr) temp_fp);
+#endif
 			return FS1;
 		default:
 			return -1;
@@ -292,15 +308,23 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 	{
 	case 0: /* long */
 		readlong(ad, S2, S3);
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_l_rr(FS1, S2);
+#else
 		mov_l_mr((uintptr) temp_fp, S2);
 		delay2;
 		fmovi_rm(FS1, (uintptr) temp_fp);
+#endif
 		break;
 	case 1: /* single precision */
 		readlong(ad, S2, S3);
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_s_rr(FS1, S2);
+#else
 		mov_l_mr((uintptr) temp_fp, S2);
 		delay2;
 		fmovs_rm(FS1, (uintptr) temp_fp);
+#endif
 		break;
 	case 2: /* extended precision */
 		readword(ad, S2, S3);
@@ -320,10 +344,14 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 		return -1;						/* Some silly "packed" stuff */
 	case 4: /* word */
 		readword(ad, S2, S3);
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_w_rr(FS1, S2);
+#else
 		sign_extend_16_rr(S2, S2);
 		mov_l_mr((uintptr) temp_fp, S2);
 		delay2;
 		fmovi_rm(FS1, (uintptr) temp_fp);
+#endif
 		break;
 	case 5: /* double precision */
 		readlong(ad, S2, S3);
@@ -336,10 +364,14 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 		break;
 	case 6: /* byte */
 		readbyte(ad, S2, S3);
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_b_rr(FS1, S2);
+#else
 		sign_extend_8_rr(S2, S2);
 		mov_l_mr((uintptr) temp_fp, S2);
 		delay2;
 		fmovi_rm(FS1, (uintptr) temp_fp);
+#endif
 		break;
 	default:
 		return -1;

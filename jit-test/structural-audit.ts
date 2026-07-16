@@ -425,6 +425,10 @@ const fppFtstMatrixSource = await Bun.file(new URL(
   "./fpp-ftst-native-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveSourceMatrix = await Bun.file(new URL(
+  "./fpp-fmove-source-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -551,6 +555,34 @@ console.log("METRIC structural_fpp_compare_exact_native_vectors=176");
 console.log("METRIC structural_fpp_ftst_exact_native_vectors=128");
 console.log("METRIC structural_fpp_exact_fpsr_classes=8");
 console.log("METRIC structural_fpp_integer_ccr_preservation=1");
+
+const getFpValueBody = functionBody(
+  fppCompilerSource,
+  "STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)",
+  "STATIC_INLINE int put_fp_value",
+  "native FPP source conversion",
+);
+for (const contract of [
+  "case 0: /* Dn */", "case 7:", "case 4: /* #imm */",
+  "fmov_b_rr(FS1, reg);", "fmov_w_rr(FS1, reg);",
+  "fmov_l_rr(FS1, reg);", "fmov_s_rr(FS1, reg);",
+  "fmov_b_rr(FS1, S2);", "fmov_w_rr(FS1, S2);",
+  "fmov_l_rr(FS1, S2);", "fmov_s_rr(FS1, S2);",
+]) requireText(getFpValueBody, contract, "native FPP source conversion");
+for (const contract of [
+  "type FmoveCase", "FP${reg}=", "fpRegistersMatch", "initD7",
+  "for (let source = 0; source < 8; source++)",
+  "fp_all_live_fp0_to_fp7", "B2_TEST_DUMP_FP: \"1\"", "B2_JIT_STRICT_FULL: \"1\"",
+  "B2_NATIVE_ASSERT_PC: anchorHex", "sr === \"271f\"",
+  "cow_clone", "cow_release", "expectedTotal = process.env.CASE ? 1 : 43",
+]) requireText(fppFmoveSourceMatrix, contract, "native ordinary FMOVE source matrix");
+if (/\b(?:FSMOVE|FDMOVE)\b/.test(fppFmoveSourceMatrix)) {
+  fail("ordinary FMOVE source matrix: explicit precision subfamily leaked into bounded scope");
+}
+console.log("METRIC structural_fpp_fmove_source_exact_native_vectors=43");
+console.log("METRIC structural_fpp_fmove_source_formats=6");
+console.log("METRIC structural_fpp_fmove_register_routes=8");
+console.log("METRIC structural_fpp_fmove_integer_ccr_preservation=1");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private

@@ -37,6 +37,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+static uint64_t double_bits_glue(double value)
+{
+	uint64_t bits;
+	memcpy(&bits, &value, sizeof(bits));
+	return bits;
+}
+
+static bool test_dump_fp_enabled_glue()
+{
+	const char *env = getenv("B2_TEST_DUMP_FP");
+	return env && *env && strcmp(env, "0") != 0;
+}
+
 static bool trace_d6_enabled_glue()
 {
 	static int cached = -1;
@@ -455,7 +468,7 @@ static bool run_opcode_test_mode_glue()
 		MakeSR();
 		fprintf(stderr,
 			"REGDUMP: D0=%08x D1=%08x D2=%08x D3=%08x D4=%08x D5=%08x D6=%08x D7=%08x "
-			"A0=%08x A1=%08x A2=%08x A3=%08x A4=%08x A5=%08x A6=%08x A7=%08x SR=%04x FPSR=%08x\n",
+			"A0=%08x A1=%08x A2=%08x A3=%08x A4=%08x A5=%08x A6=%08x A7=%08x SR=%04x FPSR=%08x",
 			(unsigned)m68k_dreg(regs, 0), (unsigned)m68k_dreg(regs, 1),
 			(unsigned)m68k_dreg(regs, 2), (unsigned)m68k_dreg(regs, 3),
 			(unsigned)m68k_dreg(regs, 4), (unsigned)m68k_dreg(regs, 5),
@@ -465,6 +478,18 @@ static bool run_opcode_test_mode_glue()
 			(unsigned)m68k_areg(regs, 4), (unsigned)m68k_areg(regs, 5),
 			(unsigned)m68k_areg(regs, 6), (unsigned)m68k_areg(regs, 7), (unsigned)regs.sr,
 			(unsigned)fpu_get_fpsr());
+		if (test_dump_fp_enabled_glue())
+			fprintf(stderr,
+			" FP0=%016llx FP1=%016llx FP2=%016llx FP3=%016llx FP4=%016llx FP5=%016llx FP6=%016llx FP7=%016llx",
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[0]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[1]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[2]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[3]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[4]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[5]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[6]),
+			(unsigned long long)double_bits_glue(regs.jit_fpregs[7]));
+		fputc('\n', stderr);
 		dump_test_mem_ranges_glue();
 	}
 
