@@ -45,8 +45,8 @@ After a successful build, `run.sh` executes `structural-audit.ts` before opcode 
 - one flag-live `ABCD`/`SBCD`/`NBCD` lifecycle, patched correction joins, and `areg_byteinc[]` source/destination predecrement geometry;
 - 28 structurally patched DIVL zero/fit/overflow joins, widened signed 32/32 fit checks, conditional-destination preservation, and saved-Z overflow materialisation;
 - explicit three-operand MULL ownership, staged 64-bit publication, full-product N/Z/V semantics, generator Dl value locking, and a forced S1-to-Dl collision witness;
-- complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, ADD, AND, EOR, and OR lifecycle ownership contracts;
-- 208 generated ADD handlers, six shared MIDFUNC operand routes, and 126 balanced pre-write memory-EA pins, with redundant generator source locking prohibited;
+- complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, ADD, SUB, AND, EOR, and OR lifecycle ownership contracts;
+- 208 generated ADD and 208 generated SUB handlers, six shared dynamic MIDFUNC operand routes per family, twelve reachable SUB dynamic/immediate routes, and 126 balanced pre-write memory-EA pins per family, with redundant generator source locking prohibited;
 - 156 generated AND, 96 generated EOR, and 156 generated OR handlers; twelve reachable register/immediate MIDFUNC routes per logical family; nine readable source and seven writable destination EA classes for OR/AND; and 84 balanced memory-EA pins per family across the shared OR/AND/EOR generator path;
 - exact generic ADD/AND/EOR/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension and shift, AND W/X width and aliasing, EOR register/shift/single-bit/C-bit compositions, non-flag-setting NZCV preservation, signed TB displacement, and CB/TB patch discrimination;
 - exact-PC replay state, including deterministic restoration of memory bytes mutated by predecrement BCD and RMW vectors.
@@ -55,11 +55,12 @@ Each passing invariant emits a `METRIC structural_*=1` line. A structural failur
 
 ## Current deterministic vectors
 
-The accepted active-risky corpus currently covers 761 vectors across:
+The accepted active-risky corpus currently covers 798 vectors across:
 - Decode/dispatch sanity (`nop`, `nop_triplet`)
 - Bit manipulation boundary behavior (`bitops`, `bitops_chg`, high-bit immediate `bitops_highbit`, high-bit toggle `bitops_chg_highbit`)
 - Core arithmetic/data movement (`move` + `moveq_signext` + moveq edge sign-extension checks, `alu` + negative roundtrip check, `addi/subi` incl. byte/word/long plus byte/word/long-boundary-wrap checks, `quick_ops` incl. long-negative roundtrip + word+word-wrap+long-wrap+byte+byte-wrap+address-register variants, `compare` + `cmpi` size coverage for both non-zero and zero immediates plus negative byte/word/long boundary forms, `muldiv`, `movem`, `misc` + `swap_roundtrip`, `not` size forms (`not_sizes`) plus explicit NOT.W/NOT.B upper-bit preservation checks, `clr` size forms (`clr_sizes`) plus byte/word partial-clear upper-bit preservation checks, `neg` size forms (`neg_sizes`) plus explicit zero-input NEG size path, `flags` incl. OR/AND/EOR-CCR path, `exg`, `imm_logic` incl. byte+word+long variants plus explicit byte/word/long high-bit edge logic checks, `tst` size forms on negative, zero, and positive inputs)
 - Complete ADD exact-native matrix: byte/word/long flag edges, self aliases, immediate and no-flags paths, all readable source and writable destination EAs, normal/special memory, A7 byte stepping, ordered RMW storage, and pre-write EA ownership
+- Complete SUB exact-native matrix: byte/word/long zero, overflow, borrow and ordinary results, self aliases, all dynamic/immediate flag-live and no-flags routes, every readable source and writable destination EA, normal/special memory, A7 byte stepping, ordered RMW storage, inverted C/borrow and X publication, and pre-write EA ownership
 - Complete AND exact-native matrix: byte/word/long N/Z, mandatory V/C clear, X preservation, immediate and no-flags paths, aliases, all readable source and writable destination EAs, normal/special memory, A7 byte stepping, and pre-write EA ownership
 - Complete OR exact-native matrix: all twelve byte/word/long Dn/immediate flag-live and no-flags routes, aliases, all nine readable source and all seven writable destination EA classes, normal/special memory, PC-relative source modes, A7 byte stepping, and source/destination allocator ownership
 - Complete EOR exact-native matrix: all twelve byte/word/long Dn/immediate flag-live and no-flags routes, aliases, every writable destination EA, normal/special memory, A7 byte stepping, and source/pre-write-EA allocator ownership
@@ -106,17 +107,19 @@ interpreter/JIT agreement.
 
 ## Allocator-pressure witnesses
 
-`jit-test/regalloc-pressure.sh` supplies 24 non-baseline allocator controls
+`jit-test/regalloc-pressure.sh` supplies 26 non-baseline allocator controls
 which must enter native code and match the interpreter byte-for-byte. They cover
 word-MUL, memory ROX, MULL, MOVEM, NEG/NEGX, TAS, MOVE, Scc/DBcc, classic bit
-operations, CMPM/CMPA, ADD, AND, EOR, and OR. The ADD cells separately force a
-fetched source toward its architectural destination and FLAGX toward the
-private pre-write EA. The AND and EOR cells force source-first RMW ownership and
-private writable-EA ownership. The OR cells force a fetched readable-memory
-source against D0 and a fetched writable RMW value against its private
-pre-write EA. This distinguishes MIDFUNC operand ownership from generator-level
-EA pins rather than assuming that a register-rich baseline pass exercises
-either collision.
+operations, CMPM/CMPA, ADD, SUB, AND, EOR, and OR. The ADD and SUB cells each
+force a fetched source toward its architectural destination and FLAGX toward
+the private pre-write EA. SUB's latter collision is the exact-native witness
+which reproduced stale destination data and incorrect CCR before the generator
+repair. The AND and EOR cells force source-first RMW ownership and private
+writable-EA ownership. The OR cells force a fetched readable-memory source
+against D0 and a fetched writable RMW value against its private pre-write EA.
+This distinguishes MIDFUNC operand ownership from generator-level EA pins
+rather than assuming that a register-rich baseline pass exercises either
+collision.
 
 ## Constraints
 

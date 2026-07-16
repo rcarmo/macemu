@@ -740,6 +740,147 @@ requireText(
   "ADD.B D0,(A0)+ active mismatch-first regression",
 );
 
+/* SUB mirrors ADD's source/destination shapes but has independent inverted
+ * carry/borrow and X publication. Its writable-memory forms must retain the
+ * private pre-write EA through arithmetic, carry duplication and storage. */
+const subGenerator = functionBody(gencompSource, "     case i_SUB:", "     case i_SUBA:", "SUB generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __subdstealock=jit_value_lock(dsta);\\n");',
+  'genflags (flag_sub, curi->size, "", "src", "dst");',
+  'genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");',
+  'comprintf("\\tjit_value_unlock(__subdstealock);\\n");',
+]) requireText(subGenerator, contract, "SUB EA lifecycle");
+if (subGenerator.includes("__subsrclock"))
+  fail("SUB generator reintroduced a redundant source lock outside MIDFUNC operand ownership");
+requireBefore(subGenerator, "jit_value_lock(dsta)", "genflags (flag_sub", "SUB EA before arithmetic");
+requireBefore(subGenerator, 'genastore ("dst"', "jit_value_unlock(__subdstealock)", "SUB EA through store");
+const generatedSubFunctions = (generatedSource.match(/void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^{]*\/\* SUB \*\//g) || []).length;
+const generatedSubFlagLive = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_ff[^\n]*\/\* SUB \*\//gm) || []).length;
+const generatedSubNoFlags = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_nf[^\n]*\/\* SUB \*\//gm) || []).length;
+const generatedSubSourceLocks = (generatedSource.match(/int __subsrclock=jit_value_lock\(src\);/g) || []).length;
+const generatedSubSourceUnlocks = (generatedSource.match(/jit_value_unlock\(__subsrclock\);/g) || []).length;
+const generatedSubEaLocks = (generatedSource.match(/int __subdstealock=jit_value_lock\(dsta\);/g) || []).length;
+const generatedSubEaUnlocks = (generatedSource.match(/jit_value_unlock\(__subdstealock\);/g) || []).length;
+if (generatedSubFunctions !== 208 || generatedSubFlagLive !== 104 || generatedSubNoFlags !== 104 ||
+    generatedSubSourceLocks !== 0 || generatedSubSourceUnlocks !== 0 ||
+    generatedSubEaLocks !== 126 || generatedSubEaUnlocks !== 126) {
+  fail(`generated SUB ownership: functions=${generatedSubFunctions} split=${generatedSubFlagLive}/${generatedSubNoFlags} source=${generatedSubSourceLocks}/${generatedSubSourceUnlocks} ea=${generatedSubEaLocks}/${generatedSubEaUnlocks}`);
+}
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_SUB_${width},`,
+    `MENDFUNC(2,${variant}_SUB_${width},`,
+    `${variant}_SUB_${width} operand/flags lifecycle`,
+  );
+  requireText(body, `COMPCALL(${variant}_SUB_${width}_imm)`, `${variant}_SUB_${width} constant source route`);
+  requireText(body, `INIT_REGS_${width}(d, s);`, `${variant}_SUB_${width} operand acquisition`);
+  requireText(body, "EXIT_REGS(d, s);", `${variant}_SUB_${width} operand release`);
+  requireBefore(body, `INIT_REGS_${width}(d, s);`, "EXIT_REGS(d, s);", `${variant}_SUB_${width} operand lifecycle`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    requireText(body, variant === "jff" ? `BFXIL_xxii(d, REG_WORK1, ${32 - bits}, ${bits});` : `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_SUB_${width} upper-lane preservation`);
+  } else {
+    requireText(body, variant === "jff" ? "SUBS_www(d, d, s);" : "SUB_www(d, d, s);", `${variant}_SUB_l full-width result`);
+  }
+  if (variant === "jff") {
+    requireText(body, "SUBS_", `${variant}_SUB_${width} flag-producing arithmetic`);
+    requireText(body, "flags_carry_inverted = true;", `${variant}_SUB_${width} borrow polarity`);
+    requireText(body, "DUPLICACTE_CARRY", `${variant}_SUB_${width} X publication`);
+  } else if (body.includes("SUBS_") || body.includes("DUPLICACTE_CARRY") || body.includes("flags_carry_inverted")) {
+    fail(`${variant}_SUB_${width} no-flags path publishes NZVCX metadata`);
+  }
+}
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_SUB_${width}_imm,`,
+    `MENDFUNC(2,${variant}_SUB_${width}_imm,`,
+    `${variant}_SUB_${width}_imm immediate/flags lifecycle`,
+  );
+  requireText(body, variant === "jff" ? "SUBS_" : "SUB_", `${variant}_SUB_${width}_imm arithmetic`);
+  if (variant === "jff") {
+    requireText(body, "flags_carry_inverted = true;", `${variant}_SUB_${width}_imm borrow polarity`);
+    requireText(body, "DUPLICACTE_CARRY", `${variant}_SUB_${width}_imm X publication`);
+  } else {
+    requireText(body, "if (isconst(d))", `${variant}_SUB_${width}_imm constant fold`);
+    if (body.includes("SUBS_") || body.includes("DUPLICACTE_CARRY") || body.includes("flags_carry_inverted"))
+      fail(`${variant}_SUB_${width}_imm no-flags path publishes NZVCX metadata`);
+  }
+}
+for (const contract of [
+  "sub_b_postinc_source_dreg_collision", "[sub_b_postinc_source_dreg_collision]=21",
+  "[sub_b_postinc_source_dreg_collision]=0", "[sub_b_postinc_source_dreg_collision]=1",
+  "sub_b_postinc_x_ea_collision", "[sub_b_postinc_x_ea_collision]=20",
+  "[sub_b_postinc_x_ea_collision]=17", "[sub_b_postinc_x_ea_collision]=1",
+]) requireText(regallocPressureSource, contract, "SUB source/EA/X allocator pressure");
+const subExactVectors = [
+  "sub_core_b_reg_zero_native", "sub_core_w_reg_overflow_native", "sub_core_l_reg_borrow_native",
+  "sub_core_b_self_alias_native", "sub_core_w_self_alias_native", "sub_core_l_self_alias_native",
+  "sub_core_b_imm_overflow_native", "sub_core_w_imm_borrow_native",
+  "sub_core_l_imm_large_native", "sub_core_l_imm_negative_native",
+  "sub_core_b_reg_noflags_native", "sub_core_w_reg_noflags_native", "sub_core_l_reg_noflags_native",
+  "sub_core_b_imm_noflags_native", "sub_core_w_imm_noflags_native", "sub_core_l_imm_noflags_native",
+  "sub_core_b_aind_source_special_native", "sub_core_w_postinc_source_native",
+  "sub_core_l_predec_source_native", "sub_core_b_d16_source_native",
+  "sub_core_w_index_source_special_native", "sub_core_l_absw_source_native",
+  "sub_core_b_absl_source_special_native", "sub_core_w_pc16_source_native",
+  "sub_core_l_pcindex_source_native", "sub_core_b_aind_dest_special_native",
+  "sub_core_w_postinc_dest_native", "sub_core_l_predec_dest_native",
+  "sub_core_b_d16_dest_native", "sub_core_w_index_dest_special_native",
+  "sub_core_l_absw_dest_native", "sub_core_b_absl_dest_special_native",
+  "sub_core_b_a7_postinc_dest_native", "sub_core_b_a7_predec_dest_native",
+  "sub_core_b_subi_postinc_dest_native", "sub_core_b_postinc_dest_native",
+  "sub_core_b_postinc_dest_noflags_native",
+];
+for (const fragment of [
+  "declare -a SUB_NATIVE_MATRIX_NAMES=(",
+  'TEST_ORDER+=("${SUB_NATIVE_MATRIX_NAMES[@]}")',
+  'for _sub_name in "${SUB_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_sub_name"]=1\n    NATIVE_REPLAY_PC["$_sub_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_sub_name"]=2',
+  'for _sub_name in "${SUB_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_sub_name"]=1',
+]) requireText(harnessSource, fragment, "SUB exact-native matrix/replay contract");
+for (const name of subExactVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`])
+    requireText(harnessSource, fragment, `SUB exact-native vector ${name}`);
+  requireText(activeRiskySource, name, `SUB active mismatch-first vector ${name}`);
+}
+const subMemoryVectors = [
+  "sub_core_b_aind_source_special_native", "sub_core_w_postinc_source_native",
+  "sub_core_l_predec_source_native", "sub_core_b_d16_source_native",
+  "sub_core_w_index_source_special_native", "sub_core_l_absw_source_native",
+  "sub_core_b_absl_source_special_native", "sub_core_w_pc16_source_native",
+  "sub_core_l_pcindex_source_native", "sub_core_b_aind_dest_special_native",
+  "sub_core_w_postinc_dest_native", "sub_core_l_predec_dest_native",
+  "sub_core_b_d16_dest_native", "sub_core_w_index_dest_special_native",
+  "sub_core_l_absw_dest_native", "sub_core_b_absl_dest_special_native",
+  "sub_core_b_a7_postinc_dest_native", "sub_core_b_a7_predec_dest_native",
+  "sub_core_b_subi_postinc_dest_native", "sub_core_b_postinc_dest_native",
+  "sub_core_b_postinc_dest_noflags_native",
+];
+for (const name of subMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `SUB memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `SUB native memory replay ${name}`);
+}
+for (const name of [
+  "sub_core_b_aind_source_special_native", "sub_core_w_index_source_special_native",
+  "sub_core_b_absl_source_special_native", "sub_core_b_aind_dest_special_native",
+  "sub_core_w_index_dest_special_native", "sub_core_b_absl_dest_special_native",
+]) requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `SUB special-memory route ${name}`);
+for (const name of [
+  "sub_core_b_reg_noflags_native", "sub_core_w_reg_noflags_native", "sub_core_l_reg_noflags_native",
+  "sub_core_b_imm_noflags_native", "sub_core_w_imm_noflags_native", "sub_core_l_imm_noflags_native",
+  "sub_core_b_postinc_dest_noflags_native",
+]) requireText(harnessSource, `TESTS[${name}]=`, `SUB no-flags vector ${name}`);
+requireText(harnessSource, 'TESTS[sub_core_b_postinc_dest_native]="9118 40C2 1028 FFFF"', "SUB.B D0,(A0)+ exact-native regression");
+
 /* AND shares generator routing with OR/EOR but has an independently accepted
  * semantic lifecycle. Writable logical destinations own the original EA from
  * fetch through the ordered store; register MIDFUNCs acquire source before RMW
@@ -4334,6 +4475,20 @@ console.log(`METRIC structural_add_redundant_generator_source_locks=${generatedA
 console.log(`METRIC structural_add_generated_ea_locks=${generatedAddEaLocks}`);
 console.log("METRIC structural_add_noflags_vectors=4");
 console.log("METRIC structural_add_allocator_pressure=2");
+console.log("METRIC structural_sub_shared_midfunc_routes=6");
+console.log("METRIC structural_sub_immediate_routes=6");
+console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);
+console.log("METRIC structural_sub_readable_ea_classes=9");
+console.log("METRIC structural_sub_writable_ea_classes=7");
+console.log(`METRIC structural_sub_memory_vectors=${subMemoryVectors.length}`);
+console.log("METRIC structural_sub_special_memory_routes=6");
+console.log("METRIC structural_sub_noflags_vectors=7");
+console.log(`METRIC structural_sub_generated_functions=${generatedSubFunctions}`);
+console.log(`METRIC structural_sub_generated_flag_live=${generatedSubFlagLive}`);
+console.log(`METRIC structural_sub_generated_noflags=${generatedSubNoFlags}`);
+console.log(`METRIC structural_sub_redundant_generator_source_locks=${generatedSubSourceLocks}`);
+console.log(`METRIC structural_sub_generated_ea_locks=${generatedSubEaLocks}`);
+console.log("METRIC structural_sub_allocator_pressure=2");
 console.log("METRIC structural_and_shared_midfunc_routes=6");
 console.log("METRIC structural_and_immediate_routes=6");
 console.log(`METRIC structural_and_exact_native_vectors=${andExactVectors.length}`);

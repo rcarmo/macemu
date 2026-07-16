@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 51 | 44 | 0 | 35 |
-| midfunc | 422 | 246 | 0 | 118 | 58 |
+| generator | 130 | 52 | 44 | 0 | 34 |
+| midfunc | 422 | 258 | 0 | 118 | 46 |
 | emitter_api | 294 | 42 | 0 | 91 | 161 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `SUB` | generator:`i_SUB`, midfunc:`jff_SUB_b`, midfunc:`jff_SUB_l`, midfunc:`jff_SUB_w`, midfunc:`jnf_SUB_b`, midfunc:`jnf_SUB_l`, midfunc:`jnf_SUB_w` |
-| 80 | `SUB_b_imm` | midfunc:`jff_SUB_b_imm`, midfunc:`jnf_SUB_b_imm` |
-| 80 | `SUB_l_imm` | midfunc:`jff_SUB_l_imm`, midfunc:`jnf_SUB_l_imm` |
-| 80 | `SUB_w_imm` | midfunc:`jff_SUB_w_imm`, midfunc:`jnf_SUB_w_imm` |
 | 80 | `SUB_wwi` | emitter_api:`SUB_wwi` |
 | 80 | `SUB_www` | emitter_api:`SUB_www` |
 | 80 | `SUB_xxi` | emitter_api:`SUB_xxi` |
@@ -62,6 +58,10 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 72 | `JSR` | generator:`i_JSR` |
 | 72 | `LEA` | generator:`i_LEA` |
 | 72 | `LINK` | generator:`i_LINK` |
+| 72 | `LPSTOP` | generator:`i_LPSTOP` |
+| 72 | `MMUOP` | generator:`i_MMUOP` |
+| 72 | `MMUOP030` | generator:`i_MMUOP030` |
+| 72 | `MULS` | generator:`i_MULS`, midfunc:`jnf_MULS` |
 
 ## Accepted closure targets
 
@@ -74,7 +74,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`SUB` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_SUB`, midfunc:`jff_SUB_b`, midfunc:`jff_SUB_l`, midfunc:`jff_SUB_w`, midfunc:`jnf_SUB_b`, midfunc:`jnf_SUB_l`, midfunc:`jnf_SUB_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`SUB_wwi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`SUB_wwi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

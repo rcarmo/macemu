@@ -142,5 +142,6 @@ Accepted evidence:
 - shell syntax, structural audit, deterministic closure regeneration, source
   hygiene, and diff hygiene are clean.
 
-The inventory next selects reachable `SUB` lifecycle rows. Generic `ORR_*`
-emitters remain separate. Whole-engine closure is not claimed.
+At this report's publication the inventory selected reachable `SUB` lifecycle
+rows; they are subsequently closed by `AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md`.
+Generic `ORR_*` emitters remain separate. Whole-engine closure is not claimed.

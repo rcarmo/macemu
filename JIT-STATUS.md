@@ -172,8 +172,8 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 ## BasiliskII 68K JIT
 
 **Current structural-audit gate (2026-07-16):** ✅
-**Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `3476e73b1d78da29814d529c8493909bf00f85e7928a0e0afa0cb3e3a8f459b5`
-**JIT harness:** ✅ 761/761 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `17e9d3510ceb4e479d6e64520b90433278f6a15cfcf1c7d5daf1d3f36a4d12e0`
+**JIT harness:** ✅ 798/798 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -214,6 +214,22 @@ inventory is 92/92, and the accepted register-count
 `ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138.
 
 ### Recent bug fixes (2026-07)
+
+- **Repair and close the complete SUB lifecycle** (2026-07-16): all 208
+  generated handlers and twelve reachable MIDFUNC routes are covered across
+  byte/word/long flag-live and no-flags tables, Dn and immediate lowering, all
+  nine readable and seven writable EA classes, aliases, A7 byte geometry,
+  special memory, and exact NZVCX borrow semantics. Exact-native allocator
+  pressure reproduced a production lifetime defect in `SUB.B D0,(A0)+`: FLAGX
+  collided with the unowned private pre-write EA, so the interpreter reloaded
+  `0xff` with SR `0x2718` while the JIT reloaded stale `0x00` with SR `0x2714`.
+  The generator now emits 126 balanced destination-EA pins and no redundant
+  source pins. Focused replay passes 37/37, full active-risky replay 798/798,
+  and allocator pressure 26/26; the two SUB cells retain exact native entry
+  with `skip=1` and `skip=2`. The deterministic 997-row inventory promotes
+  only `i_SUB` and its twelve lifecycle MIDFUNCs. Generic `SUB_*` / `SUBS_*`
+  emitters remain separate; `SUB_wwi` is selected next. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md`.
 
 - **Complete OR lifecycle, flags, EA classes, and allocator ownership**
   (2026-07-16): all 156 generated handlers and twelve reachable MIDFUNC routes
