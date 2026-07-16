@@ -49,7 +49,9 @@ enum
 	NATIVE_CC_LE = 13,
 	NATIVE_CC_AL = 14,
 
-	// For FBcc, we need some pseudo condition codes
+	// For FBcc, we need pseudo condition codes distinct from integer edges.
+	NATIVE_CC_F_F = 16 + 0,
+	NATIVE_CC_F_EQ = 16 + 1,
 	NATIVE_CC_F_OGT = 16 + 2,
 	NATIVE_CC_F_OGE = 16 + 3,
 	NATIVE_CC_F_OLT = 16 + 4,
@@ -62,6 +64,8 @@ enum
 	NATIVE_CC_F_UGE = 16 + 11,
 	NATIVE_CC_F_ULT = 16 + 12,
 	NATIVE_CC_F_ULE = 16 + 13,
+	NATIVE_CC_F_NE = 16 + 14,
+	NATIVE_CC_F_T = 16 + 15,
 	NATIVE_CC_F_NEVER = 32
 };
 

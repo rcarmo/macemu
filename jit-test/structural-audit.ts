@@ -405,6 +405,18 @@ const generatedSource = await Bun.file(new URL(
   "../BasiliskII/src/Unix/compemu.cpp",
   import.meta.url,
 )).text();
+const fppCompilerSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_fpp.cpp",
+  import.meta.url,
+)).text();
+const nativeFlagsSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/flags_arm.h",
+  import.meta.url,
+)).text();
+const fbccMatrixSource = await Bun.file(new URL(
+  "./fbcc-native-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -451,6 +463,53 @@ function matchingFunctionBodies(text: string, signatures: RegExp, context: strin
     fail(`${context}: missing closing brace`);
   });
 }
+
+const fbccCompilerBody = functionBody(
+  fppCompilerSource,
+  "void comp_fbcc_opp(uae_u32 opcode)",
+  "    /* Floating point conditions",
+  "native FBcc compiler",
+);
+for (const contract of [
+  "preserve_flags_before_nzcv_clobber();",
+  "fflags_into_flags();",
+  "register_branch(v1, v2, 16 + cc);",
+]) requireText(fbccCompilerBody, contract, "native FBcc compiler");
+const nativeFpConditions = nativeFlagsSource.match(/^\s*NATIVE_CC_F_[A-Z]+\s*=\s*16\s*\+\s*\d+/gm) ?? [];
+if (nativeFpConditions.length !== 16) {
+  fail(`native FBcc predicate namespace: expected 16 distinct IDs, found ${nativeFpConditions.length}`);
+}
+for (const contract of [
+  "case NATIVE_CC_F_F:", "case NATIVE_CC_F_EQ:", "case NATIVE_CC_F_OGT:",
+  "case NATIVE_CC_F_OGE:", "case NATIVE_CC_F_OLT:", "case NATIVE_CC_F_OLE:",
+  "case NATIVE_CC_F_OGL:", "case NATIVE_CC_F_OR:", "case NATIVE_CC_F_UN:",
+  "case NATIVE_CC_F_UEQ:", "case NATIVE_CC_F_UGT:", "case NATIVE_CC_F_UGE:",
+  "case NATIVE_CC_F_ULT:", "case NATIVE_CC_F_ULE:", "case NATIVE_CC_F_NE:",
+  "case NATIVE_CC_F_T:",
+]) requireText(codegenSource, contract, "native FBcc condition lowering");
+for (const contract of [
+  "jit_fpu_sync_to_shadow", "jit_fpu_sync_from_shadow",
+  "std::numeric_limits<double>::quiet_NaN()",
+  "std::numeric_limits<double>::infinity()",
+  "fpu_set_fpsr((fpu_get_fpsr() & ~FPSR_CCB) | fpcc)",
+]) requireText(compatSource, contract, "native FBcc architectural FPU boundary");
+for (const contract of [
+  "compemu_raw_call((uintptr)jit_fpu_sync_to_shadow)",
+  "compemu_raw_call((uintptr)jit_fpu_sync_from_shadow)",
+  "arm_branch_cc >= NATIVE_CC_F_F && arm_branch_cc <= NATIVE_CC_F_T",
+  "(arm_branch_cc - NATIVE_CC_F_F) ^ 0xf",
+  "live.flags_in_flags = TRASH",
+]) requireText(allocatorSource, contract, "native FBcc block lifecycle");
+for (const contract of [
+  "for (let cc = 0; cc < 16; cc++)",
+  'for (const width of ["word", "long"] as const)',
+  "B2_JIT_STRICT_FULL: \"1\"",
+  "B2_NATIVE_ASSERT_PC: anchorHex",
+  "sr === \"271f\"",
+  "pass === 160",
+  "cow_clone",
+  "cow_release",
+]) requireText(fbccMatrixSource, contract, "native FBcc fail-closed matrix");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
@@ -5124,6 +5183,12 @@ console.log("METRIC structural_ext_encoding_forms=3");
 console.log("METRIC structural_ext_result_classes=3");
 console.log("METRIC structural_ext_noflags_vectors=3");
 console.log("METRIC structural_ext_allocator_pressure=1");
+console.log("METRIC structural_fbcc_exact_native_vectors=160");
+console.log("METRIC structural_fbcc_conditions=16");
+console.log("METRIC structural_fbcc_fp_classes=5");
+console.log("METRIC structural_fbcc_displacement_widths=2");
+console.log("METRIC structural_fbcc_integer_ccr_preservation=1");
+console.log("METRIC structural_fbcc_fpu_boundary_sync=1");
 console.log("METRIC structural_sub_shared_midfunc_routes=6");
 console.log("METRIC structural_sub_immediate_routes=6");
 console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);

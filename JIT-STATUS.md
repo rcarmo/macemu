@@ -215,6 +215,20 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair and close the configured native FBcc generator lifecycle**
+  (2026-07-16): all sixteen 68881 predicates now lower through an explicit
+  AArch64 FP-condition namespace across word/long signed displacements and both
+  successors. The repair removes inherited x87 parity IDs, preserves integer
+  XNZVC across temporary `FCMP` NZCV, teaches mid-block exits FP predicate
+  complementation, and makes the previously declared MPFR/native-double
+  boundary real by importing/exporting FP registers plus FPSR condition state
+  on every C/JIT transition. The fail-closed focused matrix passes 160/160 at
+  exact native entry over positive, zero, negative, positive-NaN, and
+  negative-NaN classes; the
+  existing active-risky corpus remains 904/904. The deterministic 997-row
+  inventory promotes only `i_FBcc`. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md`.
+
 - **Close the complete EXT generator lifecycle** (2026-07-16): all six
   generated handlers (three per compiler table) are covered across EXT.W
   byte-to-word with upper-word preservation, EXT.L word-to-long, EXTB.L

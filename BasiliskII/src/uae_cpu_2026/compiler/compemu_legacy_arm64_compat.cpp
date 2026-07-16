@@ -2423,8 +2423,14 @@ extern "C" void jit_op_trapcc(void)
  * ================================================================ */
 #ifdef USE_JIT_FPU
 #include "fpu/fpu.h"
+#include <cmath>
+#include <limits>
 
-/* Sync MPFR FP registers → JIT shadow doubles (block entry) */
+/* Sync architectural FP registers and FPSR condition state to the native
+   double shadows whenever execution enters the JIT from C/interpreter code.
+   FP_RESULT is the JIT's lazy condition-code carrier: FBcc compares it with
+   zero, so materialise one canonical representative of each architectural
+   FP class rather than depending on a preceding native FPP instruction. */
 extern "C" void jit_fpu_sync_to_shadow(void)
 {
 #ifdef FPU_MPFR
@@ -2436,9 +2442,23 @@ extern "C" void jit_fpu_sync_to_shadow(void)
         regs.jit_fpregs[i] = (double)fpu.registers[i];
     }
 #endif
+    const uae_u32 fpcc = fpu_get_fpsr() & FPSR_CCB;
+    const bool negative = (fpcc & FPSR_CCB_NEGATIVE) != 0;
+    if (fpcc & FPSR_CCB_NAN)
+        regs.jit_fp_result = std::copysign(
+            std::numeric_limits<double>::quiet_NaN(), negative ? -1.0 : 1.0);
+    else if (fpcc & FPSR_CCB_INFINITY)
+        regs.jit_fp_result = negative
+            ? -std::numeric_limits<double>::infinity()
+            : std::numeric_limits<double>::infinity();
+    else if (fpcc & FPSR_CCB_ZERO)
+        regs.jit_fp_result = negative ? -0.0 : 0.0;
+    else
+        regs.jit_fp_result = negative ? -1.0 : 1.0;
 }
 
-/* Sync JIT shadow doubles → MPFR FP registers (block exit) */
+/* Publish native FP register and lazy condition state before returning to C.
+   Preserve FPSR quotient/exception fields; native FP_RESULT owns only CCB. */
 extern "C" void jit_fpu_sync_from_shadow(void)
 {
 #ifdef FPU_MPFR
@@ -2452,6 +2472,21 @@ extern "C" void jit_fpu_sync_from_shadow(void)
         fpu.registers[i] = (fpu_register)regs.jit_fpregs[i];
     }
 #endif
+    const double result = regs.jit_fp_result;
+    uae_u32 fpcc = 0;
+    if (std::isnan(result)) {
+        fpcc |= FPSR_CCB_NAN;
+        if (std::signbit(result))
+            fpcc |= FPSR_CCB_NEGATIVE;
+    } else {
+        if (std::signbit(result))
+            fpcc |= FPSR_CCB_NEGATIVE;
+        if (result == 0.0)
+            fpcc |= FPSR_CCB_ZERO;
+        else if (std::isinf(result))
+            fpcc |= FPSR_CCB_INFINITY;
+    }
+    fpu_set_fpsr((fpu_get_fpsr() & ~FPSR_CCB) | fpcc);
 }
 
 #endif /* USE_JIT_FPU */

@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Complete native FBcc generator lifecycle | current structural audit | All 16 FP predicates over positive/zero/negative/signed-NaN classes, word/long signed displacements, exact taken/not-taken successors, full integer CCR preservation, MPFR/native FPSR boundary synchronisation, and 160 strict exact-native vectors; see `AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md` |
 | Complete EXT generator lifecycle | current structural audit | Six generated handlers split 3/3 across compiler tables, EXT.W byte-to-word upper-lane preservation, EXT.L word-to-long, EXTB.L byte-to-long, fixed logical flags, 16 exact-native vectors, and one scratch/source allocator witness; see `AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md` |
 | Complete EXG generator lifecycle | current structural audit | Six generated handlers split 3/3 across compiler tables, all Dn/Dn, An/An, and Dn/An forms, exact simultaneous exchange, self aliases, maximum fields, roundtrips, 12 exact-native vectors, and one temporary/source allocator witness; see `AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md` |
 | Complete CLR generator lifecycle | current structural audit | 48 generated handlers split 24/24 across compiler tables, byte/word/long Dn and all writable memory forms, exact upper-lane and fixed-flag semantics, store-before-flags ordering, 15 exact-native vectors, and one EA/zero allocator witness; six namesake MIDFUNCs remain unreachable; see `AARCH64_JIT_AUDIT_CLR_LIFECYCLE.md` |

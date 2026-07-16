@@ -75,7 +75,9 @@ extern const uae_u32 ARM_CCR_MAP[];
 
 /* JIT FPU shadow register sync */
 #ifdef USE_JIT_FPU
+extern "C" {
 void jit_fpu_sync_to_shadow(void);
 void jit_fpu_sync_from_shadow(void);
+}
 #endif
 

@@ -769,6 +769,13 @@ void comp_fbcc_opp(uae_u32 opcode)
 	{
 		off = comp_get_ilong((m68k_pc_offset += 4) - 4);
 	}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* FBcc does not alter integer CCR. Save it before even the target-address
+	 * plumbing: legacy add/move helpers are permitted to clobber host NZCV, so
+	 * postponing this until just before FCMP preserves their temporary state
+	 * instead of the architectural entry flags. */
+	preserve_flags_before_nzcv_clobber();
+#endif
 	mov_l_ri(S1, (uintptr) (comp_pc_p + off - (m68k_pc_offset - start_68k_offset)));
 	mov_l_ri(PC_P, (uintptr) comp_pc_p);
 
@@ -785,6 +792,22 @@ void comp_fbcc_opp(uae_u32 opcode)
 	v2 = get_const(S1);
 	fflags_into_flags();
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64 FCMP publishes IEEE predicates directly in NZCV:
+	 *   less=1000, equal=0110, greater=0010, unordered=0011.
+	 * The inherited x87 implementation below composes C3/C2/C0 and passes
+	 * legacy parity IDs 10/11 through helpers that correctly reject them on
+	 * AArch64.  codegen_arm64 already defines the complete FBcc pseudo-condition
+	 * range (NATIVE_CC_F_* = 16 + guest condition), including ordered/unordered
+	 * compound predicates.  Values >=16 deliberately bypass the ordinary
+	 * x86-to-AArch64 integer-condition translation at block finalisation.
+	 * Bit 0x10 remains the architecturally identical signalling form and was
+	 * removed from cc above. */
+	/* Keep all sixteen FBcc edges in the pseudo-condition namespace. Besides
+	 * selecting compound FP predicates, this type tag tells block finalisation
+	 * to retain the saved integer CCR. */
+	register_branch(v1, v2, 16 + cc);
+#else
 	switch (cc)
 	{
 	case 0:
@@ -844,6 +867,7 @@ void comp_fbcc_opp(uae_u32 opcode)
 		mov_l_rr(PC_P, S1);
 		break;
 	}
+#endif
 }
 
 
@@ -2110,7 +2134,18 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);				/* Illegal instruction */
 				return;
 			}
-			fmov_rr(FP_RESULT, src);
+			/* fmov_rr intentionally elides self moves.  FP_RESULT is the
+			 * dedicated compare shadow, but a freshly initialised allocator may
+			 * assign the source itself to that virtual register.  In that case
+			 * the old code returned without materialising FP_RESULT, and the next
+			 * FBcc loaded zero/garbage or crashed.  Force a distinct temporary
+			 * through the normal FP ownership path before publishing the result. */
+			if (src == FP_RESULT) {
+				fmov_rr(FS1, src);
+				fmov_rr(FP_RESULT, FS1);
+			} else {
+				fmov_rr(FP_RESULT, src);
+			}
 			break;
 		default:
 			FAIL(1);

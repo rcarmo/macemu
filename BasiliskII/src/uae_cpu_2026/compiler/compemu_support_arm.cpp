@@ -61,6 +61,7 @@
 #include "fpu/flags.h"
 #include "comptbl_arm.h"
 #include "compemu_arm.h"
+#include "jit_native_helpers.h"
 #include <SDL2/SDL.h>
 
 extern "C" void jit_op_bftst(void);
@@ -6627,6 +6628,12 @@ STATIC_INLINE void create_popalls(void)
     current_compile_p = get_target();
     pushall_call_handler = get_target();
     raw_push_regs_to_preserve();
+#ifdef USE_JIT_FPU
+    /* Interpreter/C code owns the architectural MPFR state; every fresh JIT
+       entry must import both FP registers and FPSR condition state. Direct
+       native chains intentionally retain the existing shadows. */
+    compemu_raw_call((uintptr)jit_fpu_sync_to_shadow);
+#endif
 #ifdef JIT_DEBUG
     write_log("Address of regs: 0x%016x, regs.pc_p: 0x%016x\n", &regs, &regs.pc_p);
     write_log("Address of natmem_offset: 0x%016x, natmem_offset = 0x%016x\n", &natmem_offset, natmem_offset);
@@ -6648,6 +6655,9 @@ STATIC_INLINE void create_popalls(void)
 #endif
     popall_execute_normal = get_target();
     /* No fast dispatch for now - just the slow path */
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)execute_normal);
 
@@ -6658,6 +6668,9 @@ STATIC_INLINE void create_popalls(void)
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
 #endif
     popall_check_checksum = get_target();
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)check_checksum);
 
@@ -6668,22 +6681,37 @@ STATIC_INLINE void create_popalls(void)
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
 #endif
     popall_exec_nostats = get_target();
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)exec_nostats);
 
     popall_recompile_block = get_target();
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)recompile_block);
 
     popall_do_nothing = get_target();
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)do_nothing);
 
     popall_cache_miss = get_target();
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)cache_miss);
 
     popall_execute_exception = get_target();
+#ifdef USE_JIT_FPU
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)execute_exception);
 
@@ -7881,6 +7909,18 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     jit_compile_current_op_host_pc = 0;
                     jit_compile_current_op_m68k_pc = 0;
 #if defined(CPU_AARCH64)
+                    if (next_pc_p && taken_pc_p &&
+                        branch_cc >= NATIVE_CC_F_F && branch_cc <= NATIVE_CC_F_T) {
+                        /* FBcc's FCMP NZCV is an edge predicate, not integer
+                           CCR.  Its generator saved architectural CCR before
+                           target plumbing.  Mark the temporary host flags stale
+                           immediately after codegen, before any generic post-op
+                           path can flush or drop them. The block edge still
+                           consumes the physical NZCV; this is metadata-only. */
+                        live.flags_in_flags = TRASH;
+                        live.flags_on_stack = VALID;
+                        flags_carry_inverted = false;
+                    }
                     /* Trace compiled family-d instructions at runtime */
                     if (_verify_this_op ||
                         (((opcode >> 12) & 0xf) == 0xd && getenv("B2_JIT_TRACE_ADD")) ||
@@ -8055,17 +8095,32 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                                 arm_branch_cc = x86_to_arm[arm_branch_cc];
                         }
 #endif
+                        const bool is_fp_edge =
+                            arm_branch_cc >= NATIVE_CC_F_F && arm_branch_cc <= NATIVE_CC_F_T;
                         if (next_traced == taken_pc_p) {
                             side_exit_pc = next_pc_p;
-                            side_cond = arm_branch_cc ^ 1;
+                            /* ARM integer conditions use adjacent inverse IDs.
+                               FBcc's sixteen guest predicates use the 68881
+                               complement pairing cc ^ 15 instead. */
+                            side_cond = is_fp_edge
+                                ? (NATIVE_CC_F_F + ((arm_branch_cc - NATIVE_CC_F_F) ^ 0xf))
+                                : (arm_branch_cc ^ 1);
                         } else if (next_traced == next_pc_p) {
                             side_exit_pc = taken_pc_p;
                             side_cond = arm_branch_cc;
                         }
-                        if (side_cond >= 0 && side_cond < NATIVE_CC_AL) {
+                        const bool valid_side_cond =
+                            (side_cond >= 0 && side_cond < NATIVE_CC_AL) ||
+                            (side_cond >= NATIVE_CC_F_F && side_cond <= NATIVE_CC_F_T);
+                        if (valid_side_cond) {
                             bigstate saved_live = live;
                             flush(1);
-                            make_flags_live();
+                            /* Integer Bcc consumes architectural CCR, so restore
+                               it after the flush. FBcc must instead retain FCMP's
+                               temporary NZCV until this guard has consumed it;
+                               its architectural CCR is already saved in memory. */
+                            if (!is_fp_edge)
+                                make_flags_live();
                             /* Emit side exit for the non-traced branch path.
                                The traced path must skip over the side-exit code;
                                otherwise both outcomes fall through into the
@@ -8074,10 +8129,12 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                                Do not emit raw ARM CC_B_i here: M68K HI/LS are
                                not identical to ARM HI/LS after our carry
                                normalisation convention.  Use the same helper
-                               as end-of-block Bcc emission so composite
-                               unsigned conditions (HI/LS) get the required
-                               M68K carry handling. */
-                            const int skip_cond = side_cond ^ 1;
+                               as end-of-block Bcc emission so composite integer
+                               and floating-point conditions share one patch
+                               contract. */
+                            const int skip_cond = is_fp_edge
+                                ? (NATIVE_CC_F_F + ((side_cond - NATIVE_CC_F_F) ^ 0xf))
+                                : (side_cond ^ 1);
                             compemu_raw_jcc_l_oponly(skip_cond);
                             uae_u32* patch_skip = (uae_u32*)get_target() - 1;
                             /* Side exit: load PC and endblock */
@@ -8438,6 +8495,16 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #if defined(USE_DATA_BUFFER)
                 data_check_end(8, 128);
 #endif
+                if (cc >= NATIVE_CC_F_F && cc <= NATIVE_CC_F_T) {
+                    /* The FBcc generator saved integer CCR before FCMP. Mark
+                       the predicate NZCV as edge-only before flush: flush(1)
+                       must write registers and PC, but must not overwrite the
+                       saved CCR with FCMP. This changes metadata only; FCMP
+                       remains in hardware for the immediately following edge. */
+                    live.flags_in_flags = TRASH;
+                    live.flags_on_stack = VALID;
+                    flags_carry_inverted = false;
+                }
                 flush(1);                       // Emitted code of this call doesn't modify flags
                 compemu_raw_jcc_l_oponly(cc);   // Last emitted opcode is branch to target
                 branchadd = (uae_u32*)get_target() - 1;

@@ -513,6 +513,15 @@ STATIC_INLINE void compemu_raw_jcc_l_oponly(int cc)
 	FIX_INVERTED_CARRY
 
 	switch (cc) {
+		case NATIVE_CC_F_F: // Never
+			B_i(2);          // skip the caller-patched taken branch
+			B_i(0);
+			break;
+
+		case NATIVE_CC_F_EQ: // Equal
+			BEQ_i(0);
+			break;
+
 		case NATIVE_CC_HI: // HI
 			BEQ_i(2);										// beq no jump
 			BCC_i(0);										// bcc jump
@@ -591,6 +600,14 @@ STATIC_INLINE void compemu_raw_jcc_l_oponly(int cc)
 			BVS_i(2); 	// jump if NaN
 			BGT_i(2);		// do not jump if greater
 			// jump
+			B_i(0);
+			break;
+
+		case NATIVE_CC_F_NE: // Not equal
+			BNE_i(0);
+			break;
+
+		case NATIVE_CC_F_T: // Always
 			B_i(0);
 			break;
 

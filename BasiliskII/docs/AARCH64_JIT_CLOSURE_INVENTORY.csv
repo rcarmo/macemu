@@ -35,10 +35,10 @@ emitter_api,ASR_wwi,unreviewed,ASR_wwi,60,7,BasiliskII/src/uae_cpu_2026/compiler
 emitter_api,ASR_www,unreachable,ASR_www,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,324,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ASR_xxi,unreviewed,ASR_xxi,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,327,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,ASR_xxx,unreviewed,ASR_xxx,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,325,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,B_i,audited,B_i,87,77,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,77,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
+emitter_api,B_i,audited,B_i,87,80,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,77,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,BCC_i,audited,BCC_i,87,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,86,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,BCS_i,audited,BCS_i,87,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,85,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
-emitter_api,BEQ_i,audited,BEQ_i,87,21,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,83,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
+emitter_api,BEQ_i,audited,BEQ_i,87,22,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,83,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,BFI_wwii,unreviewed,BFI_wwii,60,136,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,353,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BFI_xxii,unreviewed,BFI_xxii,60,24,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,354,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,BFXIL_wwii,unreviewed,BFXIL_wwii,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,361,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -54,7 +54,7 @@ emitter_api,BLR_x,unreviewed,BLR_x,60,4,BasiliskII/src/uae_cpu_2026/compiler/cod
 emitter_api,BLS_i,audited,BLS_i,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,92,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,BLT_i,unreachable,BLT_i,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,94,no path from reachable AArch64 compiler/emitter roots
 emitter_api,BMI_i,audited,BMI_i,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,87,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
-emitter_api,BNE_i,audited,BNE_i,87,15,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,84,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
+emitter_api,BNE_i,audited,BNE_i,87,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,84,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,BPL_i,unreachable,BPL_i,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,88,no path from reachable AArch64 compiler/emitter roots
 emitter_api,BR_x,audited,BR_x,87,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,80,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,BVC_i,audited,BVC_i,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,90,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
@@ -343,7 +343,7 @@ generator,i_EOR,audited,EOR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,
 generator,i_EORSR,audited,EORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1573,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 generator,i_EXG,audited,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2113,BasiliskII/docs/AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md
 generator,i_EXT,audited,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2126,BasiliskII/docs/AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md
-generator,i_FBcc,unreviewed,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3749,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
+generator,i_FBcc,audited,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3749,BasiliskII/docs/AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md
 generator,i_FDBcc,serviced,FDBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3765,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_FPP,unreviewed,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3734,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
 generator,i_FRESTORE,serviced,FRESTORE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3798,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
@@ -456,7 +456,7 @@ midfunc,fmov_d_rrr,unreachable,fmov_d_rrr,68,0,BasiliskII/src/uae_cpu_2026/compi
 midfunc,fmov_l_ri,unreachable,fmov_l_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,934,no path from configured generated/support/FPU compiler roots
 midfunc,fmov_l_rr,unreviewed,fmov_l_rr,68,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,882,reachable; no accepted family-level closure report
 midfunc,fmov_rm,unreviewed,fmov_rm,68,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1057,reachable; no accepted family-level closure report
-midfunc,fmov_rr,unreviewed,fmov_rr,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,869,reachable; no accepted family-level closure report
+midfunc,fmov_rr,unreviewed,fmov_rr,68,24,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,869,reachable; no accepted family-level closure report
 midfunc,fmov_s_ri,unreviewed,fmov_s_ri,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,958,reachable; no accepted family-level closure report
 midfunc,fmov_s_rr,unreachable,fmov_s_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,892,no path from configured generated/support/FPU compiler roots
 midfunc,fmov_to_b_rr,unreachable,fmov_to_b_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,998,no path from configured generated/support/FPU compiler roots
@@ -838,39 +838,39 @@ midfunc,mov_l_mi,audited,mov_l_mi,68,2,BasiliskII/src/uae_cpu_2026/compiler/comp
 midfunc,mov_l_mr,audited,mov_l_mr,68,228,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,464,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
 midfunc,mov_l_ri,unreviewed,mov_l_ri,68,2398,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,511,reachable; no accepted family-level closure report
 midfunc,mov_l_rm,audited,mov_l_rm,68,17,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,490,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
-midfunc,mov_l_rr,unreviewed,mov_l_rr,68,2349,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,441,reachable; no accepted family-level closure report
-midfunc,preserve_flags_before_nzcv_clobber,audited,preserve_flags_before_nzcv_clobber,68,104,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,166,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
+midfunc,mov_l_rr,unreviewed,mov_l_rr,68,2345,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,441,reachable; no accepted family-level closure report
+midfunc,preserve_flags_before_nzcv_clobber,audited,preserve_flags_before_nzcv_clobber,68,105,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,166,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,roxr_b_ri,unreachable,roxr_b_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1341,no path from configured generated/support/FPU compiler roots
 midfunc,save_and_discard_flags_in_nzcv,audited,save_and_discard_flags_in_nzcv,68,28,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,199,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,sign_extend_16_rr,audited,sign_extend_16_rr,68,159,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,293,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,sub_l_ri,unreviewed,sub_l_ri,68,156,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,536,reachable; no accepted family-level closure report
 midfunc,sub_w_ri,unreachable,sub_w_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,563,raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead
-raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3221,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_call,audited,compemu_raw_call,86,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,231,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3222,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_call,audited,compemu_raw_call,86,19,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,231,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call_observer_i,audited,compemu_raw_call_observer_i,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,276,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call_observer_ii,audited,compemu_raw_call_observer_ii,86,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,284,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call_observer_ri,audited,compemu_raw_call_observer_ri,86,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,296,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call_r,audited,compemu_raw_call_r,86,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,504,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_check_checksum,unreviewed,compemu_raw_check_checksum,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,653,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_check_checksum,unreviewed,compemu_raw_check_checksum,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,670,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_cmp_pc,audited,compemu_raw_cmp_pc,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,329,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_dec_m,unreviewed,compemu_raw_dec_m,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,469,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_endblock_pc_inreg,audited,compemu_raw_endblock_pc_inreg,86,13,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,761,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isconst,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,809,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_exec_nostats,unreviewed,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,663,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_execute_normal,unreviewed,compemu_raw_execute_normal,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,624,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_execute_normal_cycles,unreviewed,compemu_raw_execute_normal_cycles,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,634,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_fmov_mr_drop,unreviewed,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,862,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_fmov_rm,unreviewed,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,873,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_handle_except,unreviewed,compemu_raw_handle_except,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,604,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_endblock_pc_inreg,audited,compemu_raw_endblock_pc_inreg,86,13,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,778,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isconst,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,826,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_exec_nostats,unreviewed,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,680,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_execute_normal,unreviewed,compemu_raw_execute_normal,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,641,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_execute_normal_cycles,unreviewed,compemu_raw_execute_normal_cycles,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,651,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_fmov_mr_drop,unreviewed,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,879,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_fmov_rm,unreviewed,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,890,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_handle_except,unreviewed,compemu_raw_handle_except,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,621,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_inc_m,unreviewed,compemu_raw_inc_m,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,480,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_inc_opcount,unreviewed,compemu_raw_inc_opcount,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,220,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_init_r_regstruct,unreviewed,compemu_raw_init_r_regstruct,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,748,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_init_r_regstruct,unreviewed,compemu_raw_init_r_regstruct,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,765,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_jcc_l_oponly,unreviewed,compemu_raw_jcc_l_oponly,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,511,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_jmp,audited,compemu_raw_jmp,86,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,680,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_jmp_pc_tag,audited,compemu_raw_jmp_pc_tag,86,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,693,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_maybe_cachemiss,audited,compemu_raw_maybe_cachemiss,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,712,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,compemu_raw_maybe_do_nothing,unreviewed,compemu_raw_maybe_do_nothing,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,720,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_maybe_recompile,audited,compemu_raw_maybe_recompile,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,672,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_jmp,audited,compemu_raw_jmp,86,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,697,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_jmp_pc_tag,audited,compemu_raw_jmp_pc_tag,86,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,710,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_maybe_cachemiss,audited,compemu_raw_maybe_cachemiss,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,729,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+raw_boundary,compemu_raw_maybe_do_nothing,unreviewed,compemu_raw_maybe_do_nothing,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,737,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_maybe_recompile,audited,compemu_raw_maybe_recompile,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,689,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_mov_l_mi,unreviewed,compemu_raw_mov_l_mi,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,400,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_mov_l_mr,unreviewed,compemu_raw_mov_l_mr,60,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,420,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_mov_l_ri,unreviewed,compemu_raw_mov_l_ri,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,437,reachable raw boundary; no exact closure classification
@@ -883,47 +883,47 @@ raw_boundary,compemu_raw_set_pc_full_const,audited,compemu_raw_set_pc_full_const
 raw_boundary,compemu_raw_set_pc_full_from_reg,audited,compemu_raw_set_pc_full_from_reg,86,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,346,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_set_pc_full_i,audited,compemu_raw_set_pc_full_i,86,8,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,387,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_set_pc_i,audited,compemu_raw_set_pc_i,86,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,365,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,raw_fabs_rr,unreviewed,raw_fabs_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1033,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fadd_rr,unreviewed,raw_fadd_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1051,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fcuts_r,unreviewed,raw_fcuts_r,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1098,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fdiv_rr,unreviewed,raw_fdiv_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1045,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fflags_into_flags,unreviewed,raw_fflags_into_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1278,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_ffunc_rr,unreviewed,raw_ffunc_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1129,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fabs_rr,unreviewed,raw_fabs_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1050,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fadd_rr,unreviewed,raw_fadd_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1068,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fcuts_r,unreviewed,raw_fcuts_r,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1115,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fdiv_rr,unreviewed,raw_fdiv_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1062,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fflags_into_flags,unreviewed,raw_fflags_into_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1295,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_ffunc_rr,unreviewed,raw_ffunc_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1146,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_flags_to_reg,audited,raw_flags_to_reg,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,192,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
-raw_boundary,raw_fmod_rr,unreviewed,raw_fmod_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1081,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_b_rr,unreviewed,raw_fmov_b_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_ri_0,unreviewed,raw_fmov_d_ri_0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,980,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_ri_1,unreviewed,raw_fmov_d_ri_1,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,986,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_ri_10,unreviewed,raw_fmov_d_ri_10,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,992,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_ri_100,unreviewed,raw_fmov_d_ri_100,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,998,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_rm,unreviewed,raw_fmov_d_rm,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1005,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_d_rrr,unreviewed,raw_fmov_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,911,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_l_rr,unreviewed,raw_fmov_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,884,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_rr,unreviewed,raw_fmov_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,856,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_s_rr,unreviewed,raw_fmov_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,890,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_b_rr,unreviewed,raw_fmov_to_b_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,956,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_d_rrr,unreviewed,raw_fmov_to_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1020,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_l_rr,unreviewed,raw_fmov_to_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,918,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_s_rr,unreviewed,raw_fmov_to_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,925,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_to_w_rr,unreviewed,raw_fmov_to_w_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,932,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_w_rr,unreviewed,raw_fmov_w_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,897,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmovs_rm,unreviewed,raw_fmovs_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1012,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmovs_rr,unreviewed,raw_fmovs_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1122,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmul_rr,unreviewed,raw_fmul_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1057,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fneg_rr,unreviewed,raw_fneg_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1039,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_from_double_mr,unreviewed,raw_fp_from_double_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1264,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_from_exten_mr,unreviewed,raw_fp_from_exten_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1165,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_fscc_ri,unreviewed,raw_fp_fscc_ri,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1283,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_to_double_rm,unreviewed,raw_fp_to_double_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1271,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_to_exten_rm,unreviewed,raw_fp_to_exten_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1218,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fpowx_rr,unreviewed,raw_fpowx_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1143,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_frem1_rr,unreviewed,raw_frem1_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1105,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_frndint_rr,unreviewed,raw_frndint_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1069,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_frndintz_rr,unreviewed,raw_frndintz_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1075,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fsgldiv_rr,unreviewed,raw_fsgldiv_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1089,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fsglmul_rr,unreviewed,raw_fsglmul_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1113,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fsqrt_rr,unreviewed,raw_fsqrt_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1027,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fsub_rr,unreviewed,raw_fsub_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1063,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmod_rr,unreviewed,raw_fmod_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1098,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_b_rr,unreviewed,raw_fmov_b_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,921,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_ri_0,unreviewed,raw_fmov_d_ri_0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,997,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_ri_1,unreviewed,raw_fmov_d_ri_1,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1003,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_ri_10,unreviewed,raw_fmov_d_ri_10,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1009,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_ri_100,unreviewed,raw_fmov_d_ri_100,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1015,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_rm,unreviewed,raw_fmov_d_rm,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1022,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_d_rrr,unreviewed,raw_fmov_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,928,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_l_rr,unreviewed,raw_fmov_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,901,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_rr,unreviewed,raw_fmov_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,873,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_s_rr,unreviewed,raw_fmov_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,907,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_b_rr,unreviewed,raw_fmov_to_b_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,973,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_d_rrr,unreviewed,raw_fmov_to_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1037,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_l_rr,unreviewed,raw_fmov_to_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,935,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_s_rr,unreviewed,raw_fmov_to_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,942,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_w_rr,unreviewed,raw_fmov_to_w_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,949,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_w_rr,unreviewed,raw_fmov_w_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,914,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmovs_rm,unreviewed,raw_fmovs_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1029,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmovs_rr,unreviewed,raw_fmovs_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1139,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmul_rr,unreviewed,raw_fmul_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1074,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fneg_rr,unreviewed,raw_fneg_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1056,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_from_double_mr,unreviewed,raw_fp_from_double_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1281,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_from_exten_mr,unreviewed,raw_fp_from_exten_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1182,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_fscc_ri,unreviewed,raw_fp_fscc_ri,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1300,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_to_double_rm,unreviewed,raw_fp_to_double_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1288,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_to_exten_rm,unreviewed,raw_fp_to_exten_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1235,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fpowx_rr,unreviewed,raw_fpowx_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1160,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_frem1_rr,unreviewed,raw_frem1_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1122,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_frndint_rr,unreviewed,raw_frndint_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1086,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_frndintz_rr,unreviewed,raw_frndintz_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1092,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsgldiv_rr,unreviewed,raw_fsgldiv_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1106,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsglmul_rr,unreviewed,raw_fsglmul_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1130,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsqrt_rr,unreviewed,raw_fsqrt_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1044,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsub_rr,unreviewed,raw_fsub_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1080,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_pop_preserved_regs,audited,raw_pop_preserved_regs,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,92,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_push_regs_to_preserve,audited,raw_push_regs_to_preserve,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,92,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_reg_to_flags,audited,raw_reg_to_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,211,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
@@ -931,14 +931,14 @@ runtime_boundary,jit_op_abcd,unreachable,jit_op_abcd,60,1,BasiliskII/src/uae_cpu
 runtime_boundary,jit_op_andsr,unreachable,jit_op_andsr,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1417,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_aslw,unreachable,jit_op_aslw,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2315,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_asrw,unreachable,jit_op_asrw,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2302,definition/declaration has no generated or registration caller
-runtime_boundary,jit_op_bfchg,serviced,jit_op_bfchg,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,68,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bfclr,serviced,jit_op_bfclr,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,70,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bfexts,serviced,jit_op_bfexts,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,69,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bfextu,serviced,jit_op_bfextu,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,67,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bfffo,serviced,jit_op_bfffo,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,71,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bfins,serviced,jit_op_bfins,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,73,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bfset,serviced,jit_op_bfset,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,72,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_op_bftst,serviced,jit_op_bftst,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,66,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfchg,serviced,jit_op_bfchg,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,69,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfclr,serviced,jit_op_bfclr,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,71,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfexts,serviced,jit_op_bfexts,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,70,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfextu,serviced,jit_op_bfextu,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,68,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfffo,serviced,jit_op_bfffo,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,72,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfins,serviced,jit_op_bfins,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,74,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bfset,serviced,jit_op_bfset,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,73,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_op_bftst,serviced,jit_op_bftst,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,67,explicit flushed/end-block runtime semantic boundary
 runtime_boundary,jit_op_chk,unreachable,jit_op_chk,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1860,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_chk2,serviced,jit_op_chk2,60,44,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1880,explicit flushed/end-block runtime semantic boundary
 runtime_boundary,jit_op_divl,unreachable,jit_op_divl,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1577,definition/declaration has no generated or registration caller
@@ -969,30 +969,30 @@ runtime_boundary,jit_op_trap,unreachable,jit_op_trap,60,1,BasiliskII/src/uae_cpu
 runtime_boundary,jit_op_trapcc,unreachable,jit_op_trapcc,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2410,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_trapv,unreachable,jit_op_trapv,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1841,definition/declaration has no generated or registration caller
 runtime_boundary,jit_op_unpk,serviced,jit_op_unpk,60,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2001,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_aline_trap,serviced,jit_runtime_aline_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5028,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_andsr_word,serviced,jit_runtime_andsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4252,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_bitfield,serviced,jit_runtime_bitfield,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4715,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_bsr,serviced,jit_runtime_bsr,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4445,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_cache_control,serviced,jit_runtime_cache_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4559,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_cas,serviced,jit_runtime_cas,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4794,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_cas2,serviced,jit_runtime_cas2,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4893,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_emulop,serviced,jit_runtime_emulop,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5155,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_eorsr_word,serviced,jit_runtime_eorsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4264,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fbcc,serviced,jit_runtime_fbcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5052,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fdbcc,serviced,jit_runtime_fdbcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5067,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fpp,serviced,jit_runtime_fpp,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5038,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fpu_semantic,serviced,jit_runtime_fpu_semantic,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5125,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_frestore,serviced,jit_runtime_frestore,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5115,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fsave,serviced,jit_runtime_fsave,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5103,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_fscc,serviced,jit_runtime_fscc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5045,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_ftrapcc,serviced,jit_runtime_ftrapcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5076,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_illegal_advanced,serviced,jit_runtime_illegal_advanced,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4574,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_illegal_trap,serviced,jit_runtime_illegal_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5033,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_moves,serviced,jit_runtime_moves,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4583,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_mv2sr_word_full,serviced,jit_runtime_mv2sr_word_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4337,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_mvsr2_full,serviced,jit_runtime_mvsr2_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4276,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_orsr_word,serviced,jit_runtime_orsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4240,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_rts,serviced,jit_runtime_rts,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4439,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_system_control,serviced,jit_runtime_system_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4497,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_trap,serviced,jit_runtime_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4465,explicit flushed/end-block runtime semantic boundary
-runtime_boundary,jit_runtime_trapcc,serviced,jit_runtime_trapcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4473,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_aline_trap,serviced,jit_runtime_aline_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5029,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_andsr_word,serviced,jit_runtime_andsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4253,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_bitfield,serviced,jit_runtime_bitfield,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4716,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_bsr,serviced,jit_runtime_bsr,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4446,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_cache_control,serviced,jit_runtime_cache_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4560,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_cas,serviced,jit_runtime_cas,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4795,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_cas2,serviced,jit_runtime_cas2,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4894,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_emulop,serviced,jit_runtime_emulop,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5156,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_eorsr_word,serviced,jit_runtime_eorsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4265,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fbcc,serviced,jit_runtime_fbcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5053,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fdbcc,serviced,jit_runtime_fdbcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5068,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fpp,serviced,jit_runtime_fpp,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5039,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fpu_semantic,serviced,jit_runtime_fpu_semantic,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5126,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_frestore,serviced,jit_runtime_frestore,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5116,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fsave,serviced,jit_runtime_fsave,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5104,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_fscc,serviced,jit_runtime_fscc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5046,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_ftrapcc,serviced,jit_runtime_ftrapcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5077,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_illegal_advanced,serviced,jit_runtime_illegal_advanced,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4575,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_illegal_trap,serviced,jit_runtime_illegal_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5034,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_moves,serviced,jit_runtime_moves,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4584,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_mv2sr_word_full,serviced,jit_runtime_mv2sr_word_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4338,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_mvsr2_full,serviced,jit_runtime_mvsr2_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4277,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_orsr_word,serviced,jit_runtime_orsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4241,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_rts,serviced,jit_runtime_rts,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4440,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_system_control,serviced,jit_runtime_system_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4498,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_trap,serviced,jit_runtime_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4466,explicit flushed/end-block runtime semantic boundary
+runtime_boundary,jit_runtime_trapcc,serviced,jit_runtime_trapcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4474,explicit flushed/end-block runtime semantic boundary
