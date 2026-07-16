@@ -630,6 +630,29 @@ declare -a SCC_NATIVE_MATRIX_NAMES=(
     scc_core_a7_predec_f_native
 )
 TEST_ORDER+=("${SCC_NATIVE_MATRIX_NAMES[@]}")
+# Bcc consumes but never changes CCR. Exercise every reachable condition in
+# both directions at an exact native entry, then cover BRA and signed backward
+# branches across byte, word, and long displacement decoding.
+declare -a BCC_NATIVE_MATRIX_NAMES=(
+    bcc_core_hi_taken_b_native bcc_core_hi_not_taken_b_native
+    bcc_core_ls_taken_b_native bcc_core_ls_not_taken_b_native
+    bcc_core_cc_taken_b_native bcc_core_cc_not_taken_b_native
+    bcc_core_cs_taken_b_native bcc_core_cs_not_taken_b_native
+    bcc_core_ne_taken_b_native bcc_core_ne_not_taken_b_native
+    bcc_core_eq_taken_b_native bcc_core_eq_not_taken_b_native
+    bcc_core_vc_taken_b_native bcc_core_vc_not_taken_b_native
+    bcc_core_vs_taken_b_native bcc_core_vs_not_taken_b_native
+    bcc_core_pl_taken_b_native bcc_core_pl_not_taken_b_native
+    bcc_core_mi_taken_b_native bcc_core_mi_not_taken_b_native
+    bcc_core_ge_taken_b_native bcc_core_ge_not_taken_b_native
+    bcc_core_lt_taken_b_native bcc_core_lt_not_taken_b_native
+    bcc_core_gt_taken_b_native bcc_core_gt_not_taken_b_native
+    bcc_core_le_taken_b_native bcc_core_le_not_taken_b_native
+    bcc_core_bra_b_forward_native bcc_core_bra_w_forward_native
+    bcc_core_bra_l_forward_native bcc_core_bne_b_backward_native
+    bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native
+)
+TEST_ORDER+=("${BCC_NATIVE_MATRIX_NAMES[@]}")
 # DBcc is a flags-preserving dynamic block edge. Cover DBT, DBF terminal/branch/
 # wrap states and both members of every conditional pair, with upper-word,
 # displacement, successor, and exact native evidence.
@@ -1638,6 +1661,16 @@ for _scc_name in "${SCC_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_scc_name"]=2
 done
 unset _scc_name
+for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_bcc_name"]=1
+    NATIVE_REPLAY_PC["$_bcc_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_bcc_name"]=2
+done
+unset _bcc_name
+for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native; do
+    NATIVE_REPLAY_PC["$_bcc_name"]=0x1004
+done
+unset _bcc_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_dbcc_name"]=1
     NATIVE_REPLAY_PC["$_dbcc_name"]=0x1000
@@ -2524,6 +2557,68 @@ TEST_MEMORY_BYTES[scc_core_absw_mi_native]="6000 00"
 TEST_MEMORY_BYTES[scc_core_absl_gt_special_native]="A000 00"
 TEST_MEMORY_BYTES[scc_core_a7_postinc_t_native]="A000 00"
 TEST_MEMORY_BYTES[scc_core_a7_predec_f_native]="A000 FF"
+
+# Exact-native Bcc dynamic-edge lifecycle. Byte displacements are relative to
+# the opcode successor; word/long displacements are relative to the extension
+# word at opcode+2. MOVEA markers preserve CCR, so every expected SR proves that
+# the branch consumed, but did not publish over, all XNZVC bits.
+TESTS[bcc_core_hi_taken_b_native]="6206 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_hi_not_taken_b_native]="6206 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_ls_taken_b_native]="6306 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_ls_not_taken_b_native]="6306 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_cc_taken_b_native]="6406 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_cc_not_taken_b_native]="6406 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_cs_taken_b_native]="6506 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_cs_not_taken_b_native]="6506 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_ne_taken_b_native]="6606 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_ne_not_taken_b_native]="6606 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_eq_taken_b_native]="6706 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_eq_not_taken_b_native]="6706 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_vc_taken_b_native]="6806 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_vc_not_taken_b_native]="6806 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_vs_taken_b_native]="6906 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_vs_not_taken_b_native]="6906 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_pl_taken_b_native]="6A06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_pl_not_taken_b_native]="6A06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_mi_taken_b_native]="6B06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_mi_not_taken_b_native]="6B06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_ge_taken_b_native]="6C06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_ge_not_taken_b_native]="6C06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_lt_taken_b_native]="6D06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_lt_not_taken_b_native]="6D06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_gt_taken_b_native]="6E06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_gt_not_taken_b_native]="6E06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_le_taken_b_native]="6F06 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_le_not_taken_b_native]="6F06 227C 1111 1111 247C 2222 2222"
+for _bcc_taken_name in bcc_core_hi_taken_b_native bcc_core_ls_taken_b_native bcc_core_cc_taken_b_native bcc_core_cs_taken_b_native bcc_core_ne_taken_b_native bcc_core_eq_taken_b_native bcc_core_vc_taken_b_native bcc_core_vs_taken_b_native bcc_core_pl_taken_b_native bcc_core_mi_taken_b_native bcc_core_ge_taken_b_native bcc_core_lt_taken_b_native bcc_core_gt_taken_b_native bcc_core_le_taken_b_native; do
+    EXPECTED_REG_FIELDS["$_bcc_taken_name"]="A1=0000A100 A2=22222222"
+done
+for _bcc_not_taken_name in bcc_core_hi_not_taken_b_native bcc_core_ls_not_taken_b_native bcc_core_cc_not_taken_b_native bcc_core_cs_not_taken_b_native bcc_core_ne_not_taken_b_native bcc_core_eq_not_taken_b_native bcc_core_vc_not_taken_b_native bcc_core_vs_not_taken_b_native bcc_core_pl_not_taken_b_native bcc_core_mi_not_taken_b_native bcc_core_ge_not_taken_b_native bcc_core_lt_not_taken_b_native bcc_core_gt_not_taken_b_native bcc_core_le_not_taken_b_native; do
+    EXPECTED_REG_FIELDS["$_bcc_not_taken_name"]="A1=11111111 A2=22222222"
+done
+for _bcc_name in bcc_core_hi_taken_b_native bcc_core_ls_not_taken_b_native bcc_core_cc_taken_b_native bcc_core_cs_not_taken_b_native bcc_core_ne_taken_b_native bcc_core_eq_not_taken_b_native bcc_core_vc_taken_b_native bcc_core_vs_not_taken_b_native bcc_core_pl_taken_b_native bcc_core_mi_not_taken_b_native bcc_core_ge_taken_b_native bcc_core_lt_not_taken_b_native bcc_core_gt_taken_b_native bcc_core_le_not_taken_b_native; do EXPECTED_REG_FIELDS["$_bcc_name"]+=" SR=2710"; done
+for _bcc_name in bcc_core_hi_not_taken_b_native bcc_core_ls_taken_b_native bcc_core_cc_not_taken_b_native bcc_core_cs_taken_b_native; do EXPECTED_REG_FIELDS["$_bcc_name"]+=" SR=2711"; done
+for _bcc_name in bcc_core_ne_not_taken_b_native bcc_core_eq_taken_b_native bcc_core_gt_not_taken_b_native bcc_core_le_taken_b_native; do EXPECTED_REG_FIELDS["$_bcc_name"]+=" SR=2714"; done
+for _bcc_name in bcc_core_vc_not_taken_b_native bcc_core_vs_taken_b_native; do EXPECTED_REG_FIELDS["$_bcc_name"]+=" SR=2712"; done
+for _bcc_name in bcc_core_pl_not_taken_b_native bcc_core_mi_taken_b_native bcc_core_ge_not_taken_b_native bcc_core_lt_taken_b_native; do EXPECTED_REG_FIELDS["$_bcc_name"]+=" SR=2718"; done
+unset _bcc_taken_name _bcc_not_taken_name _bcc_name
+
+# Unconditional forward targets cover all Bcc/BRA displacement widths. Signed
+# backward BNE loops cover negative byte/word/long target arithmetic; replay is
+# anchored at the BNE opcode after the MOVEQ/SUBQ setup prefix.
+TESTS[bcc_core_bra_b_forward_native]="6006 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_bra_w_forward_native]="6000 0008 227C 1111 1111 247C 2222 2222"
+TESTS[bcc_core_bra_l_forward_native]="60FF 0000 000A 227C 1111 1111 247C 2222 2222"
+for _bcc_name in bcc_core_bra_b_forward_native bcc_core_bra_w_forward_native bcc_core_bra_l_forward_native; do
+    EXPECTED_REG_FIELDS["$_bcc_name"]="A1=0000A100 A2=22222222 SR=271F"
+done
+TESTS[bcc_core_bne_b_backward_native]="7002 5380 66FC 227C 1111 1111"
+TESTS[bcc_core_bne_w_backward_native]="7002 5380 6600 FFFC 227C 1111 1111"
+TESTS[bcc_core_bne_l_backward_native]="7002 5380 66FF FFFF FFFC 227C 1111 1111"
+for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native; do
+    EXPECTED_REG_FIELDS["$_bcc_name"]="D0=00000000 A1=11111111 SR=2704"
+done
+unset _bcc_name
 
 # Exact-native DBcc dynamic-edge lifecycle. The +8 displacement is relative to
 # DBcc's extension-word PC and lands on the second MOVEA marker, skipping the
@@ -4871,6 +4966,16 @@ INIT_REGS[scc_core_absl_gt_special_native]="A5A50000 00000000 00000000 00000000 
 INIT_REGS[scc_core_a7_postinc_t_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
 INIT_REGS[scc_core_a7_predec_f_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 0000271F"
 
+_BCC_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A100 0000A200 00000000 00000000 00000000 00000000 007EFF00"
+for _bcc_name in bcc_core_hi_taken_b_native bcc_core_ls_not_taken_b_native bcc_core_cc_taken_b_native bcc_core_cs_not_taken_b_native bcc_core_ne_taken_b_native bcc_core_eq_not_taken_b_native bcc_core_vc_taken_b_native bcc_core_vs_not_taken_b_native bcc_core_pl_taken_b_native bcc_core_mi_not_taken_b_native bcc_core_ge_taken_b_native bcc_core_lt_not_taken_b_native bcc_core_gt_taken_b_native bcc_core_le_not_taken_b_native; do INIT_REGS["$_bcc_name"]="00000000 $_BCC_INIT_TAIL 00002710"; done
+for _bcc_name in bcc_core_hi_not_taken_b_native bcc_core_ls_taken_b_native bcc_core_cc_not_taken_b_native bcc_core_cs_taken_b_native; do INIT_REGS["$_bcc_name"]="00000000 $_BCC_INIT_TAIL 00002711"; done
+for _bcc_name in bcc_core_ne_not_taken_b_native bcc_core_eq_taken_b_native bcc_core_gt_not_taken_b_native bcc_core_le_taken_b_native; do INIT_REGS["$_bcc_name"]="00000000 $_BCC_INIT_TAIL 00002714"; done
+for _bcc_name in bcc_core_vc_not_taken_b_native bcc_core_vs_taken_b_native; do INIT_REGS["$_bcc_name"]="00000000 $_BCC_INIT_TAIL 00002712"; done
+for _bcc_name in bcc_core_pl_not_taken_b_native bcc_core_mi_taken_b_native bcc_core_ge_not_taken_b_native bcc_core_lt_taken_b_native; do INIT_REGS["$_bcc_name"]="00000000 $_BCC_INIT_TAIL 00002718"; done
+for _bcc_name in bcc_core_bra_b_forward_native bcc_core_bra_w_forward_native bcc_core_bra_l_forward_native; do INIT_REGS["$_bcc_name"]="00000000 $_BCC_INIT_TAIL 0000271F"; done
+for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native; do INIT_REGS["$_bcc_name"]="00000002 $_BCC_INIT_TAIL 00002710"; done
+unset _bcc_name _BCC_INIT_TAIL
+
 _DBCC_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A100 0000A200 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[dbcc_core_dbt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271F"
 INIT_REGS[dbcc_core_dbf_terminal_native]="A5A50000 $_DBCC_INIT_TAIL 0000271F"
@@ -5358,6 +5463,12 @@ for _adda_name in "${ADDA_NATIVE_MATRIX_NAMES[@]}"; do
     ((_adda_sentinel_id+=1))
 done
 unset _adda_name _adda_sentinel_id
+_bcc_sentinel_id=1
+for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_bcc_name"] 'a6bc%04x' "$_bcc_sentinel_id"
+    ((_bcc_sentinel_id+=1))
+done
+unset _bcc_name _bcc_sentinel_id
 _neg_sentinel_id=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_neg_name"] 'a60f%04x' "$_neg_sentinel_id"
@@ -6896,6 +7007,10 @@ for _scc_name in "${SCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_scc_name"]=1
 done
 unset _scc_name
+for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_bcc_name"]=1
+done
+unset _bcc_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_dbcc_name"]=1
 done

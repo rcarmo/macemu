@@ -436,6 +436,22 @@ function functionBody(
   return text.slice(start, end);
 }
 
+function matchingFunctionBodies(text: string, signatures: RegExp, context: string): string[] {
+  const matches = [...text.matchAll(signatures)];
+  if (matches.length === 0) fail(`${context}: no matching functions`);
+  return matches.map((match) => {
+    const start = match.index!;
+    const open = text.indexOf("{", start + match[0].length);
+    if (open < 0) fail(`${context}: missing opening brace`);
+    let depth = 0;
+    for (let cursor = open; cursor < text.length; cursor++) {
+      if (text[cursor] === "{") depth++;
+      else if (text[cursor] === "}" && --depth === 0) return text.slice(start, cursor + 1);
+    }
+    fail(`${context}: missing closing brace`);
+  });
+}
+
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
  * pre-write memory EA crosses that call and uses this explicit pin. */
@@ -860,6 +876,140 @@ for (const name of addaMemoryVectors) {
 }
 for (const name of ["adda_core_w_index_source_special_native", "adda_core_w_absl_source_special_native"])
   requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `ADDA special-memory route ${name}`);
+
+/* Bcc is a flags-consuming, flags-preserving dynamic block edge. Every
+ * generated target is compile-time pointer arithmetic: byte/word explicit sign
+ * extension and arm_ADD_l_ri_hostptr's SXTW contract cover all signed widths,
+ * while conditional handlers register both targets without owning guest data. */
+const bccGenerator = functionBody(gencompSource, "     case i_Bcc:", "     case i_LEA:", "Bcc generator");
+for (const contract of [
+  'comprintf("\\tuintptr v,v1,v2;\\n");',
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'case sz_byte: comprintf("\\tsign_extend_8_rr(src,src);\\n"); break;',
+  'case sz_word: comprintf("\\tsign_extend_16_rr(src,src);\\n"); break;',
+  'case sz_long: break;',
+  'comprintf("\\tsub_l_ri(src,m68k_pc_offset-m68k_pc_offset_thisinst-2);\\n");',
+  'comprintf("\\tarm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);\\n");',
+  'comprintf("\\tarm_ADD_ptr_ri(src,m68k_pc_offset);\\n");',
+  'comprintf("\\tarm_ADD_ptr_ri(PC_P,m68k_pc_offset);\\n");',
+  '"\\tregister_branch(v1,v2,%d);\\n",',
+  'comprintf("\\tmake_flags_live();\\n");',
+  'comprintf("\\tmov_l_rr(PC_P,src);\\n");',
+  'comprintf("\\tcomp_pc_p=(uae_u8*)(uintptr)get_const(PC_P);\\n");',
+]) requireText(bccGenerator, contract, "Bcc generator lifecycle");
+requireBefore(bccGenerator, "sign_extend_8_rr", "arm_ADD_l_ri_hostptr", "Bcc displacement before host pointer base");
+requireBefore(bccGenerator, "arm_ADD_l_ri_hostptr", "arm_ADD_ptr_ri(src", "Bcc host base before cursor fold");
+requireBefore(bccGenerator, "register_branch(v1,v2", "make_flags_live", "Bcc targets before flag materialisation");
+for (const forbidden of ["jit_value_lock", "jit_value_unlock", "genastore ("])
+  if (bccGenerator.includes(forbidden)) fail(`Bcc generator unexpectedly owns guest allocator/storage state through ${forbidden}`);
+for (const contract of [
+  "static int cond_codes[]={-1,-1,",
+  "NATIVE_CC_HI,NATIVE_CC_LS,",
+  "NATIVE_CC_CC,NATIVE_CC_CS,",
+  "NATIVE_CC_NE,NATIVE_CC_EQ,",
+  "NATIVE_CC_VC,NATIVE_CC_VS,",
+  "NATIVE_CC_PL,NATIVE_CC_MI,",
+  "NATIVE_CC_GE,NATIVE_CC_LT,",
+  "NATIVE_CC_GT,NATIVE_CC_LE",
+]) requireText(gencompSource, contract, "Bcc condition map");
+const bccHostPointerBody = functionBody(midfuncSource, "MIDFUNC(2,arm_ADD_l_ri_hostptr,", "MENDFUNC(2,arm_ADD_l_ri_hostptr,", "Bcc signed host-pointer addition");
+for (const contract of [
+  "const uae_s64 displacement = (uae_s32)(uae_u32)live.state[d].val;",
+  "live.state[d].val = base + (uintptr)displacement;",
+  "ADD_xxwEX(d, REG_WORK1, d, EX_SXTW);",
+]) requireText(bccHostPointerBody, contract, "Bcc signed host-pointer addition");
+const bccPointerIncrementBody = functionBody(midfuncSource, "MIDFUNC(2,arm_ADD_ptr_ri,", "MENDFUNC(2,arm_ADD_ptr_ri,", "Bcc pointer-width cursor addition");
+for (const contract of [
+  "live.state[d].val += (uintptr)(uae_s64)offset;",
+  "ADD_xxi(d, d, offset);", "SUB_xxi(d, d, -offset);", "ADD_xxx(d, d, REG_WORK1);",
+]) requireText(bccPointerIncrementBody, contract, "Bcc pointer-width cursor addition");
+const generatedBccBodies = matchingFunctionBodies(
+  generatedSource,
+  /^void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^\n]*\/\* Bcc \*\//gm,
+  "generated Bcc handlers",
+);
+const generatedBccFlagLive = generatedBccBodies.filter((body) => body.includes("_comp_ff")).length;
+const generatedBccNoFlags = generatedBccBodies.filter((body) => body.includes("_comp_nf")).length;
+const generatedBccCount = (needle: string) => generatedBccBodies.reduce((total, body) => total + countText(body, needle), 0);
+if (generatedBccBodies.length !== 90 || generatedBccFlagLive !== 45 || generatedBccNoFlags !== 45 ||
+    generatedBccCount("sign_extend_8_rr(src,src);") !== 30 ||
+    generatedBccCount("sign_extend_16_rr(src,src);") !== 30 ||
+    generatedBccCount("arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);") !== 90 ||
+    generatedBccCount("arm_ADD_ptr_ri(src,m68k_pc_offset);") !== 90 ||
+    generatedBccCount("arm_ADD_ptr_ri(PC_P,m68k_pc_offset);") !== 90 ||
+    generatedBccCount("register_branch(v1,v2,") !== 84 ||
+    generatedBccCount("make_flags_live();") !== 84 ||
+    generatedBccCount("mov_l_rr(PC_P,src);") !== 6) {
+  fail(`generated Bcc lifecycle: functions=${generatedBccBodies.length} split=${generatedBccFlagLive}/${generatedBccNoFlags} sign=${generatedBccCount("sign_extend_8_rr(src,src);")}/${generatedBccCount("sign_extend_16_rr(src,src);")} pointers=${generatedBccCount("arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);")}/${generatedBccCount("arm_ADD_ptr_ri(src,m68k_pc_offset);")}/${generatedBccCount("arm_ADD_ptr_ri(PC_P,m68k_pc_offset);")} conditional=${generatedBccCount("register_branch(v1,v2,")}/${generatedBccCount("make_flags_live();")} bra=${generatedBccCount("mov_l_rr(PC_P,src);")}`);
+}
+/* gencomp itself is built against the historical x86 condition numbering;
+ * both the mid-block side-exit and final-edge paths must translate that exact
+ * set before emitting AArch64 conditions. Values 10/11 are x86 aliases not
+ * used by integer Bcc, while 12..15 carry LT/GE/LE/GT. */
+for (const cc of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15]) {
+  if (generatedBccCount(`register_branch(v1,v2,${cc});`) !== 6)
+    fail(`generated Bcc x86 condition ${cc} does not have six width/table routes`);
+}
+for (const cc of [10, 11]) {
+  if (generatedBccCount(`register_branch(v1,v2,${cc});`) !== 0)
+    fail(`generated Bcc unexpectedly uses x86 alias condition ${cc}`);
+}
+for (const contract of [
+  "static const int x86_to_arm[] = {",
+  "NATIVE_CC_VS, NATIVE_CC_VC, NATIVE_CC_CS, NATIVE_CC_CC,",
+  "NATIVE_CC_EQ, NATIVE_CC_NE, NATIVE_CC_LS, NATIVE_CC_HI,",
+  "NATIVE_CC_MI, NATIVE_CC_PL, NATIVE_CC_VS, NATIVE_CC_VC,",
+  "NATIVE_CC_LT, NATIVE_CC_GE, NATIVE_CC_LE, NATIVE_CC_GT,",
+  "arm_branch_cc = x86_to_arm[arm_branch_cc];",
+  "static const int x86_to_arm_cc[] = {",
+  "cc = x86_to_arm_cc[cc];",
+]) requireText(allocatorSource, contract, "Bcc x86-to-AArch64 condition translation");
+for (const body of generatedBccBodies) {
+  for (const contract of ["arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p);", "arm_ADD_ptr_ri(src,m68k_pc_offset);", "arm_ADD_ptr_ri(PC_P,m68k_pc_offset);", "m68k_pc_offset=0;"])
+    requireText(body, contract, "generated Bcc pointer/PC lifecycle");
+  for (const forbidden of ["jit_value_lock", "jit_value_unlock", "ADDS_", "SUBS_", "TST_", "CMP_", "jff_"])
+    if (body.includes(forbidden)) fail(`generated Bcc handler unexpectedly mutates flags or owns dynamic allocator state through ${forbidden}`);
+  if (body.includes("register_branch(v1,v2,"))
+    requireBefore(body, "register_branch(v1,v2,", "make_flags_live();", "generated conditional Bcc flags");
+}
+const bccConditions = [
+  ["hi", "62"], ["ls", "63"], ["cc", "64"], ["cs", "65"],
+  ["ne", "66"], ["eq", "67"], ["vc", "68"], ["vs", "69"],
+  ["pl", "6A"], ["mi", "6B"], ["ge", "6C"], ["lt", "6D"],
+  ["gt", "6E"], ["le", "6F"],
+] as const;
+const bccVectors: string[] = [];
+for (const [condition, opcode] of bccConditions) {
+  for (const outcome of ["taken", "not_taken"] as const) {
+    const name = `bcc_core_${condition}_${outcome}_b_native`;
+    bccVectors.push(name);
+    requireText(harnessSource, `TESTS[${name}]="${opcode}06 227C 1111 1111 247C 2222 2222"`, `Bcc ${condition} ${outcome} byte vector`);
+  }
+}
+for (const [name, encoding] of [
+  ["bcc_core_bra_b_forward_native", "6006 227C 1111 1111 247C 2222 2222"],
+  ["bcc_core_bra_w_forward_native", "6000 0008 227C 1111 1111 247C 2222 2222"],
+  ["bcc_core_bra_l_forward_native", "60FF 0000 000A 227C 1111 1111 247C 2222 2222"],
+  ["bcc_core_bne_b_backward_native", "7002 5380 66FC 227C 1111 1111"],
+  ["bcc_core_bne_w_backward_native", "7002 5380 6600 FFFC 227C 1111 1111"],
+  ["bcc_core_bne_l_backward_native", "7002 5380 66FF FFFF FFFC 227C 1111 1111"],
+] as const) {
+  bccVectors.push(name);
+  requireText(harnessSource, `TESTS[${name}]="${encoding}"`, `Bcc displacement vector ${name}`);
+}
+if (bccVectors.length !== 34) fail(`Bcc vector count changed: ${bccVectors.length}`);
+for (const fragment of [
+  "declare -a BCC_NATIVE_MATRIX_NAMES=(", 'TEST_ORDER+=("${BCC_NATIVE_MATRIX_NAMES[@]}")',
+  'for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_bcc_name"]=1\n    NATIVE_REPLAY_PC["$_bcc_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_bcc_name"]=2',
+  "for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native; do\n    NATIVE_REPLAY_PC[\"$_bcc_name\"]=0x1004",
+  'for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_bcc_name"]=1',
+  'A1=0000A100 A2=22222222', 'A1=11111111 A2=22222222',
+  'A1=0000A100 A2=22222222 SR=271F', 'D0=00000000 A1=11111111 SR=2704',
+]) requireText(harnessSource, fragment, "Bcc matrix/replay/result contract");
+for (const name of bccVectors) {
+  if (countText(harnessSource, name) < 4) fail(`Bcc vector ${name} is not wired through matrix/test/result/init contracts`);
+  requireText(activeRiskySource, name, `Bcc active mismatch-first vector ${name}`);
+}
 
 /* SUB mirrors ADD's source/destination shapes but has independent inverted
  * carry/borrow and X publication. Its writable-memory forms must retain the
@@ -4680,6 +4830,16 @@ console.log(`METRIC structural_adda_generated_noflags=${generatedAddaNoFlags}`);
 console.log(`METRIC structural_adda_generated_source_locks=${generatedAddaSourceLocks}`);
 console.log(`METRIC structural_adda_generated_writeback_locks=${generatedAddaWritebackLocks}`);
 console.log("METRIC structural_adda_allocator_pressure=2");
+console.log(`METRIC structural_bcc_exact_native_vectors=${bccVectors.length}`);
+console.log(`METRIC structural_bcc_generated_functions=${generatedBccBodies.length}`);
+console.log(`METRIC structural_bcc_generated_flag_live=${generatedBccFlagLive}`);
+console.log(`METRIC structural_bcc_generated_noflags=${generatedBccNoFlags}`);
+console.log("METRIC structural_bcc_reachable_conditions=15");
+console.log("METRIC structural_bcc_conditional_outcomes=28");
+console.log("METRIC structural_bcc_displacement_widths=3");
+console.log("METRIC structural_bcc_signed_backward_widths=3");
+console.log("METRIC structural_bcc_dynamic_allocator_values=0");
+console.log("METRIC structural_bcc_condition_translation_boundaries=2");
 console.log("METRIC structural_sub_shared_midfunc_routes=6");
 console.log("METRIC structural_sub_immediate_routes=6");
 console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);

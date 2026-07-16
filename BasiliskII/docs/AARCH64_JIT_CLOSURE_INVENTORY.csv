@@ -303,7 +303,7 @@ generator,i_ASL,audited,ASL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,
 generator,i_ASLW,audited,ASLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3347,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 generator,i_ASR,audited,ASR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2767,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 generator,i_ASRW,audited,ASRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3330,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_Bcc,unreviewed,Bcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2376,native generator case; no accepted family-level closure report
+generator,i_Bcc,audited,Bcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2376,BasiliskII/docs/AARCH64_JIT_AUDIT_BCC_LIFECYCLE.md
 generator,i_BCHG,audited,BCHG,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1875,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
 generator,i_BCLR,audited,BCLR,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1876,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
 generator,i_BFCHG,serviced,BFCHG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3672,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md

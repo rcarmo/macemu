@@ -215,6 +215,20 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Close the complete Bcc generator lifecycle** (2026-07-16): all 90 generated
+  handlers (45 per compiler table) are covered across BRA and all fourteen
+  conditional pairs, byte/word/long signed target arithmetic, extension-word
+  PC semantics, forward/backward edges, both outcomes, and XNZVC preservation.
+  The focused matrix passes 34/34 at exact native entry, the active-risky corpus
+  861/861, and allocator pressure 28/28. Structural evidence locks the explicit
+  byte/word sign extension, signed long guest-offset/host-base conversion,
+  pointer-width cursor folds, historical-x86-to-AArch64 condition translation
+  at both side-exit boundaries, and the absence of dynamic allocator ownership.
+  The deterministic 997-row inventory promotes only `i_Bcc`; raw
+  `compemu_raw_jcc_l_oponly` lowering remains a separate unreviewed boundary.
+  Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_BCC_LIFECYCLE.md`.
+
 - **Repair and close the complete ADDA lifecycle** (2026-07-16): all 52
   generated handlers and four reachable no-flags MIDFUNC routes are covered
   across exact ADDA.W sign extension, ADDA.L full-width arithmetic, 32-bit
