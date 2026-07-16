@@ -529,6 +529,7 @@ extern void jff_BTST_b(RR1 d, RR4 s);
 extern void jff_BTST_l(RR4 d, RR4 s);
 extern void setcc(W1 d, IMM cc);
 extern void setcc_for_cntzero(RR4 cnt, RR4 data, int size);
+extern void fcompare_result_rr(int result, int d, int s);
 extern void cmov_l_rr(RW4 d, RR4 s, IMM cc);
 extern int jit_value_lock(int r);
 extern void jit_value_unlock(int hr);

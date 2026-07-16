@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair the native FPP FCMP/FTST condition-result subfamily**
+  (2026-07-16): native FCMP no longer approximates comparison with floating
+  subtraction, which misclassified equal infinities as NaN and leaked Infinity
+  into FPSR for unequal infinite operands. A direct AArch64 `FCMP` classifier
+  now publishes exact negative/equal/positive/unordered classes, including
+  `N|Z` for equal negative zero and negative infinity but plain `Z` for equal
+  negative finite values. FCMP and FTST preserve integer CCR, and REGDUMP now
+  includes exact FPSR evidence. Strict exact-native matrices pass **176/176
+  FCMP** and **128/128 FTST**; the active-risky corpus remains **904/904** and
+  allocator pressure **31/31**. This is a bounded no-promotion checkpoint:
+  `i_FPP` remains unreviewed pending its remaining subfamilies. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_COMPARE_FTST_SUBTRANCHE.md`.
+
 - **Repair and close the configured native FBcc generator lifecycle**
   (2026-07-16): all sixteen 68881 predicates now lower through an explicit
   AArch64 FP-condition namespace across word/long signed displacements and both

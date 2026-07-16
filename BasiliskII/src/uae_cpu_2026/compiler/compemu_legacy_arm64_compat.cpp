@@ -462,6 +462,19 @@ void setcc(W1 d, uae_s32 cc)
 	unlock2(d);
 }
 
+/* FPP-local classifier: keep this outside the MIDFUNC census because it is
+   not a separately reachable API or closure row. */
+void fcompare_result_rr(int result, int d, int s)
+{
+	d = f_readreg(d);
+	s = f_readreg(s);
+	result = f_writereg(result);
+	fcompare_result_emit(result, d, s);
+	f_unlock(result);
+	f_unlock(s);
+	f_unlock(d);
+}
+
 void cmov_l_rr(RW4 d, RR4 s, uae_s32 cc)
 {
 	if (d == s)

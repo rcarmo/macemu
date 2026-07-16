@@ -1083,6 +1083,67 @@ LOWFUNC(NONE,NONE,2,raw_fsub_rr,(FRW d, FR s))
 }
 LENDFUNC(NONE,NONE,2,raw_fsub_rr,(FRW d, FR s))
 
+/* FCMP sets NZCV to less=1000, equal=0110, greater=0010, unordered=0011.
+   Convert that relation to the lazy FP_RESULT convention consumed by
+   fflags_into_flags(): -1.0, +0.0, +1.0, or quiet NaN.  This deliberately
+   does not subtract, so equal infinities compare equal and unequal infinite
+   operands never publish the FPSR Infinity class. */
+LOWFUNC(NONE,NONE,3,fcompare_result_emit,(FW result, FR d, FR s))
+{
+	assert(result != d && result != s);
+	FCMP_dd(d, s);
+	uae_u32* unordered = (uae_u32*)get_target();
+	BVS_i(0);
+	uae_u32* equal = (uae_u32*)get_target();
+	BEQ_i(0);
+	FMOV_di(result, 0b01110000); /* +1.0 */
+	uae_u32* greater = (uae_u32*)get_target();
+	BGT_i(0);
+	LOAD_U64(REG_WORK1, 0xbff0000000000000ULL); /* -1.0 */
+	FMOV_dx(result, REG_WORK1);
+	uae_u32* end_negative = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(greater, (uintptr)get_target());
+	uae_u32* end_positive = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(equal, (uintptr)get_target());
+	/* The architectural compare result is N|Z for equal -0 and equal -Inf,
+	   but only Z for equal finite negative values. Preserve that distinction
+	   with signed zero in the lazy result carrier. */
+	FMOV_xd(REG_WORK1, d);
+	uae_u32* equal_positive = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 63, 0);
+	FCMP_d0(d);
+	uae_u32* equal_negative_zero = (uae_u32*)get_target();
+	BEQ_i(0);
+	UBFX_xxii(REG_WORK2, REG_WORK1, 52, 11);
+	CMP_xi(REG_WORK2, 2047);
+	uae_u32* equal_negative_inf = (uae_u32*)get_target();
+	BEQ_i(0);
+	write_jmp_target(equal_positive, (uintptr)get_target());
+	MOVI_di(result, 0); /* canonical +0.0 */
+	uae_u32* end_equal = (uae_u32*)get_target();
+	B_i(0);
+	write_jmp_target(equal_negative_zero, (uintptr)get_target());
+	write_jmp_target(equal_negative_inf, (uintptr)get_target());
+	LOAD_U64(REG_WORK1, 0x8000000000000000ULL); /* canonical -0.0 */
+	FMOV_dx(result, REG_WORK1);
+	uae_u32* end_equal_negative = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(unordered, (uintptr)get_target());
+	LOAD_U64(REG_WORK1, 0x7ff8000000000000ULL); /* canonical quiet NaN */
+	FMOV_dx(result, REG_WORK1);
+
+	write_jmp_target(end_negative, (uintptr)get_target());
+	write_jmp_target(end_positive, (uintptr)get_target());
+	write_jmp_target(end_equal, (uintptr)get_target());
+	write_jmp_target(end_equal_negative, (uintptr)get_target());
+}
+LENDFUNC(NONE,NONE,3,fcompare_result_emit,(FW result, FR d, FR s))
+
 LOWFUNC(NONE,NONE,2,raw_frndint_rr,(FW d, FR s))
 {
 	FRINTI_dd(d, s);

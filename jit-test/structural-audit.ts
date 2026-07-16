@@ -417,6 +417,14 @@ const fbccMatrixSource = await Bun.file(new URL(
   "./fbcc-native-matrix.ts",
   import.meta.url,
 )).text();
+const fppCompareMatrixSource = await Bun.file(new URL(
+  "./fpp-compare-native-matrix.ts",
+  import.meta.url,
+)).text();
+const fppFtstMatrixSource = await Bun.file(new URL(
+  "./fpp-ftst-native-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -510,6 +518,39 @@ for (const contract of [
   "cow_clone",
   "cow_release",
 ]) requireText(fbccMatrixSource, contract, "native FBcc fail-closed matrix");
+
+const fppCompilerBody = matchingFunctionBodies(
+  fppCompilerSource,
+  /void comp_fpp_opp\(uae_u32 opcode, uae_u16 extra\)/g,
+  "native FPP compiler",
+)[0];
+for (const contract of [
+  "case 0x38:", "/* FCMP */", "fcompare_result_rr(FP_RESULT, reg, src);",
+  "case 0x3a:", "/* FTST */", "if (src == FP_RESULT)",
+  "preserve_flags_before_nzcv_clobber();",
+]) requireText(fppCompilerBody, contract, "native FPP compare/test lifecycle");
+for (const contract of [
+  "void fcompare_result_rr(int result, int d, int s)",
+  "fcompare_result_emit(result, d, s)",
+]) requireText(compatSource, contract, "native FPP compare ownership");
+for (const contract of [
+  "LOWFUNC(NONE,NONE,3,fcompare_result_emit",
+  "FCMP_dd(d, s)", "0xbff0000000000000ULL", "0x7ff8000000000000ULL",
+  "0x8000000000000000ULL", "CMP_xi(REG_WORK2, 2047)",
+]) requireText(codegenSource, contract, "native FPP compare classifier");
+for (const [matrix, total, context] of [
+  [fppCompareMatrixSource, 176, "native FPP FCMP matrix"],
+  [fppFtstMatrixSource, 128, "native FPP FTST matrix"],
+] as const) {
+  for (const contract of [
+    "B2_JIT_STRICT_FULL: \"1\"", "B2_NATIVE_ASSERT_PC", "FPSR=",
+    "sr === \"271f\"", "cow_clone", "cow_release", `pass === ${total}`,
+  ]) requireText(matrix, contract, context);
+}
+console.log("METRIC structural_fpp_compare_exact_native_vectors=176");
+console.log("METRIC structural_fpp_ftst_exact_native_vectors=128");
+console.log("METRIC structural_fpp_exact_fpsr_classes=8");
+console.log("METRIC structural_fpp_integer_ccr_preservation=1");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
@@ -2786,7 +2827,7 @@ for (const contract of [
 
 const compareEmitterCallers = `${midfunc2Source}\n${compatSource}\n${source}`;
 for (const [name, expected] of [
-  ["CMP_wi", 49], ["CMP_xi", 2], ["CMP_ww", 23], ["CMP_xx", 6], ["CMP_wwLSLi", 6],
+  ["CMP_wi", 49], ["CMP_xi", 3], ["CMP_ww", 23], ["CMP_xx", 6], ["CMP_wwLSLi", 6],
 ] as const) {
   const found = (compareEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
   if (found !== expected) fail(`generic ${name} caller census: expected ${expected}, found ${found}`);
@@ -2803,7 +2844,7 @@ for (const arg of cmpWiArgs) {
 if ((midfunc2Source.match(/COMPCALL\(jff_ASL_[bwl]_imm\)\(d, live\.state\[i\]\.val & 0x3f\)/g) || []).length !== 3)
   fail("CMP_wi dynamic immediate is not bounded by the six-bit ASL contract");
 const cmpXiArgs = [...compareEmitterCallers.matchAll(/\bCMP_xi\([^,]+,\s*([^)]+)\)/g)].map((match) => Number(match[1].trim()));
-if (cmpXiArgs.length !== 2 || cmpXiArgs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xfff))
+if (cmpXiArgs.length !== 3 || cmpXiArgs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xfff))
   fail(`CMP_xi caller exceeds imm12 contract: ${cmpXiArgs.join(",")}`);
 const cmpShiftArgs = [...compareEmitterCallers.matchAll(/\bCMP_wwLSLi\([^,]+,[^,]+,\s*([^)]+)\)/g)].map((match) => Number(match[1].trim()));
 if (cmpShiftArgs.length !== 6 || cmpShiftArgs.some((value) => ![16, 24].includes(value)))

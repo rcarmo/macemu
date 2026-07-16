@@ -2112,14 +2112,23 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				return;
 			}
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* FCMP and operand-address plumbing may overwrite host NZCV, but
+			 * 68k integer CCR is architecturally unchanged by FPP operations. */
+			preserve_flags_before_nzcv_clobber();
+#endif
 			src = get_fp_value(opcode, extra);
 			if (src < 0)
 			{
 				FAIL(1);				/* Illegal instruction */
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			fcompare_result_rr(FP_RESULT, reg, src);
+#else
 			fmov_rr(FP_RESULT, reg);
-			fsub_rr(FP_RESULT, src);	/* Right way? */
+			fsub_rr(FP_RESULT, src);
+#endif
 			break;
 		case 0x3a:						/* FTST */
 			if (jit_disable.ftst)
@@ -2128,6 +2137,11 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				return;
 			}
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Operand conversion can clobber host NZCV; integer CCR is not an
+			 * output of FTST and must survive into successor blocks unchanged. */
+			preserve_flags_before_nzcv_clobber();
+#endif
 			src = get_fp_value(opcode, extra);
 			if (src < 0)
 			{
