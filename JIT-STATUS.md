@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Close the complete CLR generator lifecycle** (2026-07-16): all 48
+  generated handlers (24 per compiler table) are covered across byte/word/long
+  Dn and every writable memory form, upper-lane preservation, A7 byte geometry,
+  special-memory routing, no-flags table execution, and fixed XNZVC semantics.
+  The live generator emits zero and stores it before publishing flags, preventing
+  memory-helper NZCV from escaping into a following branch. Focused replay
+  passes 15/15, the active-risky corpus 876/876, and allocator pressure 29/29;
+  the CLR witness rejects the forced zero/EA alias with `skip=1`. The
+  deterministic 997-row inventory promotes only `i_CLR`; all six namesake
+  MIDFUNCs remain unreachable. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_CLR_LIFECYCLE.md`.
+
 - **Close the complete Bcc generator lifecycle** (2026-07-16): all 90 generated
   handlers (45 per compiler table) are covered across BRA and all fourteen
   conditional pairs, byte/word/long signed target arithmetic, extension-word

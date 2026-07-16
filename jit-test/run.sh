@@ -653,6 +653,18 @@ declare -a BCC_NATIVE_MATRIX_NAMES=(
     bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native
 )
 TEST_ORDER+=("${BCC_NATIVE_MATRIX_NAMES[@]}")
+# CLR writes zero without reading the previous operand, preserves upper Dn lanes
+# at byte/word widths, and publishes X=old, N=V=C=0, Z=1 after memory storage.
+declare -a CLR_NATIVE_MATRIX_NAMES=(
+    clr_core_b_dreg_native clr_core_w_dreg_native clr_core_l_dreg_native
+    clr_core_b_aind_special_native clr_core_w_postinc_native
+    clr_core_l_predec_native clr_core_b_d16_native
+    clr_core_w_index_special_native clr_core_l_absw_native
+    clr_core_b_absl_special_native clr_core_b_a7_postinc_native
+    clr_core_b_a7_predec_native clr_core_b_postinc_successor_bne_native
+    clr_core_w_dreg_noflags_native clr_core_l_postinc_noflags_native
+)
+TEST_ORDER+=("${CLR_NATIVE_MATRIX_NAMES[@]}")
 # DBcc is a flags-preserving dynamic block edge. Cover DBT, DBF terminal/branch/
 # wrap states and both members of every conditional pair, with upper-word,
 # displacement, successor, and exact native evidence.
@@ -1671,6 +1683,26 @@ for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native b
     NATIVE_REPLAY_PC["$_bcc_name"]=0x1004
 done
 unset _bcc_name
+for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_clr_name"]=1
+    NATIVE_REPLAY_PC["$_clr_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_clr_name"]=2
+done
+unset _clr_name
+NATIVE_REPLAY_BYTES[clr_core_b_aind_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[clr_core_w_postinc_native]="A000 FF A001 FF"
+NATIVE_REPLAY_BYTES[clr_core_l_predec_native]="9FFC FF 9FFD FF 9FFE FF 9FFF FF"
+NATIVE_REPLAY_BYTES[clr_core_b_d16_native]="A010 FF"
+NATIVE_REPLAY_BYTES[clr_core_w_index_special_native]="A002 FF A003 FF"
+NATIVE_REPLAY_BYTES[clr_core_l_absw_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+NATIVE_REPLAY_BYTES[clr_core_b_absl_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[clr_core_b_a7_postinc_native]="A000 FF"
+NATIVE_REPLAY_BYTES[clr_core_b_a7_predec_native]="9FFE FF"
+NATIVE_REPLAY_BYTES[clr_core_b_postinc_successor_bne_native]="A000 FF"
+NATIVE_REPLAY_BYTES[clr_core_l_postinc_noflags_native]="A000 FF A001 FF A002 FF A003 FF"
+SPECIAL_MEMORY_TESTS[clr_core_b_aind_special_native]=1
+SPECIAL_MEMORY_TESTS[clr_core_w_index_special_native]=1
+SPECIAL_MEMORY_TESTS[clr_core_b_absl_special_native]=1
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_dbcc_name"]=1
     NATIVE_REPLAY_PC["$_dbcc_name"]=0x1000
@@ -2619,6 +2651,52 @@ for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native b
     EXPECTED_REG_FIELDS["$_bcc_name"]="D0=00000000 A1=11111111 SR=2704"
 done
 unset _bcc_name
+
+# Exact-native CLR generator lifecycle. Register cases assert upper-lane
+# preservation and the fixed logical result (X preserved; N/V/C clear; Z set).
+# Memory cases cover every writable EA class, A7 byte geometry, special-memory
+# routing, post-store flags, and no-flags table execution.
+TESTS[clr_core_b_dreg_native]="4200"
+TESTS[clr_core_w_dreg_native]="4240"
+TESTS[clr_core_l_dreg_native]="4280"
+TESTS[clr_core_b_aind_special_native]="4210"
+TESTS[clr_core_w_postinc_native]="4258"
+TESTS[clr_core_l_predec_native]="42A0"
+TESTS[clr_core_b_d16_native]="4228 0010"
+TESTS[clr_core_w_index_special_native]="4270 1802"
+TESTS[clr_core_l_absw_native]="42B8 6000"
+TESTS[clr_core_b_absl_special_native]="4239 0000 A000"
+TESTS[clr_core_b_a7_postinc_native]="421F"
+TESTS[clr_core_b_a7_predec_native]="4227"
+TESTS[clr_core_b_postinc_successor_bne_native]="4218 6602 7207 7408"
+TESTS[clr_core_w_dreg_noflags_native]="4240 7401"
+TESTS[clr_core_l_postinc_noflags_native]="4298 7401"
+EXPECTED_REG_FIELDS[clr_core_b_dreg_native]="D0=A5A5FF00 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_w_dreg_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_l_dreg_native]="D0=00000000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_b_aind_special_native]="A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_w_postinc_native]="A0=0000A002 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_l_predec_native]="A0=00009FFC SR=2714"
+EXPECTED_REG_FIELDS[clr_core_b_d16_native]="A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_w_index_special_native]="D1=00000002 A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_l_absw_native]="A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_b_absl_special_native]="A0=0000A000 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_b_a7_postinc_native]="A7=0000A002 SR=2714"
+EXPECTED_REG_FIELDS[clr_core_b_a7_predec_native]="A7=00009FFE SR=2714"
+EXPECTED_REG_FIELDS[clr_core_b_postinc_successor_bne_native]="D1=00000007 D2=00000008 A0=0000A001 SR=2710"
+EXPECTED_REG_FIELDS[clr_core_w_dreg_noflags_native]="D0=A5A50000 D2=00000001 SR=2700"
+EXPECTED_REG_FIELDS[clr_core_l_postinc_noflags_native]="D2=00000001 A0=0000A004 SR=2700"
+TEST_MEMORY_BYTES[clr_core_b_aind_special_native]="A000 00"
+TEST_MEMORY_BYTES[clr_core_w_postinc_native]="A000 00 A001 00"
+TEST_MEMORY_BYTES[clr_core_l_predec_native]="9FFC 00 9FFD 00 9FFE 00 9FFF 00"
+TEST_MEMORY_BYTES[clr_core_b_d16_native]="A010 00"
+TEST_MEMORY_BYTES[clr_core_w_index_special_native]="A002 00 A003 00"
+TEST_MEMORY_BYTES[clr_core_l_absw_native]="6000 00 6001 00 6002 00 6003 00"
+TEST_MEMORY_BYTES[clr_core_b_absl_special_native]="A000 00"
+TEST_MEMORY_BYTES[clr_core_b_a7_postinc_native]="A000 00"
+TEST_MEMORY_BYTES[clr_core_b_a7_predec_native]="9FFE 00"
+TEST_MEMORY_BYTES[clr_core_b_postinc_successor_bne_native]="A000 00"
+TEST_MEMORY_BYTES[clr_core_l_postinc_noflags_native]="A000 00 A001 00 A002 00 A003 00"
 
 # Exact-native DBcc dynamic-edge lifecycle. The +8 displacement is relative to
 # DBcc's extension-word PC and lands on the second MOVEA marker, skipping the
@@ -4976,6 +5054,14 @@ for _bcc_name in bcc_core_bra_b_forward_native bcc_core_bra_w_forward_native bcc
 for _bcc_name in bcc_core_bne_b_backward_native bcc_core_bne_w_backward_native bcc_core_bne_l_backward_native; do INIT_REGS["$_bcc_name"]="00000002 $_BCC_INIT_TAIL 00002710"; done
 unset _bcc_name _BCC_INIT_TAIL
 
+_CLR_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000"
+for _clr_name in clr_core_b_dreg_native clr_core_w_dreg_native clr_core_l_dreg_native clr_core_b_aind_special_native clr_core_w_postinc_native clr_core_l_predec_native clr_core_b_d16_native clr_core_l_absw_native clr_core_b_absl_special_native clr_core_b_a7_postinc_native clr_core_b_a7_predec_native; do INIT_REGS["$_clr_name"]="A5A5FFFF $_CLR_INIT_TAIL 0000271F"; done
+INIT_REGS[clr_core_w_index_special_native]="A5A5FFFF 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[clr_core_b_postinc_successor_bne_native]="A5A5FFFF 11111111 22222222 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[clr_core_w_dreg_noflags_native]="A5A5FFFF $_CLR_INIT_TAIL 00002700"
+INIT_REGS[clr_core_l_postinc_noflags_native]="A5A5FFFF $_CLR_INIT_TAIL 00002700"
+unset _clr_name _CLR_INIT_TAIL
+
 _DBCC_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A100 0000A200 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[dbcc_core_dbt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271F"
 INIT_REGS[dbcc_core_dbf_terminal_native]="A5A50000 $_DBCC_INIT_TAIL 0000271F"
@@ -5469,6 +5555,12 @@ for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do
     ((_bcc_sentinel_id+=1))
 done
 unset _bcc_name _bcc_sentinel_id
+_clr_sentinel_id=1
+for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_clr_name"] 'a6c1%04x' "$_clr_sentinel_id"
+    ((_clr_sentinel_id+=1))
+done
+unset _clr_name _clr_sentinel_id
 _neg_sentinel_id=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_neg_name"] 'a60f%04x' "$_neg_sentinel_id"
@@ -7011,6 +7103,10 @@ for _bcc_name in "${BCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_bcc_name"]=1
 done
 unset _bcc_name
+for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_clr_name"]=1
+done
+unset _clr_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_dbcc_name"]=1
 done

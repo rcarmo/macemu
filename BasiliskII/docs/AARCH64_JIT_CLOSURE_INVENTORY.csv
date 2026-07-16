@@ -326,7 +326,7 @@ generator,i_CHK2,serviced,CHK2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp
 generator,i_CINVA,serviced,CINVA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3806,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_CINVL,serviced,CINVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3803,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_CINVP,serviced,CINVP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3805,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CLR,unreviewed,CLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1839,native generator case; no accepted family-level closure report
+generator,i_CLR,audited,CLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1839,BasiliskII/docs/AARCH64_JIT_AUDIT_CLR_LIFECYCLE.md
 generator,i_CMP,audited,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1960,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
 generator,i_CMPA,audited,CMPA,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1975,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
 generator,i_CMPM,audited,CMPM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1958,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md

@@ -1011,6 +1011,110 @@ for (const name of bccVectors) {
   requireText(activeRiskySource, name, `Bcc active mismatch-first vector ${name}`);
 }
 
+/* CLR is emitted directly by its generator; its six namesake MIDFUNCs are
+ * unreachable. The generator writes zero before fixed logical flag publication,
+ * so memory-helper NZCV side effects cannot escape into the architectural CCR. */
+const clrGenerator = functionBody(gencompSource, "     case i_CLR:", "     case i_NOT:", "CLR generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint dst=scratchie++;\\n");',
+  'comprintf("\\tmov_l_ri(dst,0);\\n");',
+  'genastore ("dst", curi->smode, "srcreg", curi->size, "src");',
+  'genflags (flag_logical, curi->size, "dst", "", "");',
+]) requireText(clrGenerator, contract, "CLR generator lifecycle");
+requireBefore(clrGenerator, 'mov_l_ri(dst,0)', 'genastore ("dst"', "CLR zero before storage");
+requireBefore(clrGenerator, 'genastore ("dst"', 'genflags (flag_logical', "CLR storage before fixed flags");
+for (const forbidden of ["jff_CLR_", "jnf_CLR_", "jit_value_lock", "jit_value_unlock"])
+  if (clrGenerator.includes(forbidden)) fail(`CLR generator unexpectedly uses ${forbidden}`);
+const clrLogicalFlags = functionBody(gencompSource, "     case flag_logical:", "     case flag_add:", "CLR logical flag publication");
+for (const contract of [
+  'comprintf("\\tdont_care_flags();\\n");',
+  'test_b_rr(%s,%s);', 'test_w_rr(%s,%s);', 'test_l_rr(%s,%s);',
+  'comprintf("\\tlive_flags();\\n");', 'comprintf("\\tend_needflags();\\n");',
+]) requireText(clrLogicalFlags, contract, "CLR logical flag publication");
+const generatedClrBodies = matchingFunctionBodies(
+  generatedSource,
+  /^void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^\n]*\/\* CLR \*\//gm,
+  "generated CLR handlers",
+);
+const generatedClrFlagLive = generatedClrBodies.filter((body) => body.includes("_comp_ff")).length;
+const generatedClrNoFlags = generatedClrBodies.filter((body) => body.includes("_comp_nf")).length;
+const generatedClrCount = (needle: string) => generatedClrBodies.reduce((total, body) => total + countText(body, needle), 0);
+if (generatedClrBodies.length !== 48 || generatedClrFlagLive !== 24 || generatedClrNoFlags !== 24 ||
+    generatedClrCount("mov_l_ri(dst,0);") !== 48 || generatedClrCount("writebyte(") !== 14 ||
+    generatedClrCount("writeword(") !== 14 || generatedClrCount("writelong(") !== 14 ||
+    generatedClrCount("test_b_rr(dst,dst);") !== 8 || generatedClrCount("test_w_rr(dst,dst);") !== 8 ||
+    generatedClrCount("test_l_rr(dst,dst);") !== 8 || generatedClrCount("live_flags();") !== 24) {
+  fail(`generated CLR lifecycle: functions=${generatedClrBodies.length} split=${generatedClrFlagLive}/${generatedClrNoFlags} zero=${generatedClrCount("mov_l_ri(dst,0);")} stores=${generatedClrCount("writebyte(")}/${generatedClrCount("writeword(")}/${generatedClrCount("writelong(")} tests=${generatedClrCount("test_b_rr(dst,dst);")}/${generatedClrCount("test_w_rr(dst,dst);")}/${generatedClrCount("test_l_rr(dst,dst);")} live=${generatedClrCount("live_flags();")}`);
+}
+for (const body of generatedClrBodies) {
+  requireText(body, "mov_l_ri(dst,0);", "generated CLR zero source");
+  for (const forbidden of ["jff_CLR_", "jnf_CLR_", "jit_value_lock", "jit_value_unlock"])
+    if (body.includes(forbidden)) fail(`generated CLR unexpectedly uses ${forbidden}`);
+  if (body.includes("_comp_ff")) {
+    requireText(body, "dont_care_flags();", "generated CLR flag-live publication");
+    requireBefore(body, "mov_l_ri(dst,0);", "dont_care_flags();", "generated CLR zero before flags");
+    for (const store of ["writebyte(", "writeword(", "writelong("])
+      if (body.includes(store)) requireBefore(body, store, "dont_care_flags();", "generated CLR store before flags");
+  } else if (body.includes("dont_care_flags();") || body.includes("test_b_rr(") || body.includes("test_w_rr(") || body.includes("test_l_rr(")) {
+    fail("generated no-flags CLR handler publishes flags");
+  }
+}
+for (const name of ["jnf_CLR_b", "jnf_CLR_w", "jnf_CLR_l", "jff_CLR_b", "jff_CLR_w", "jff_CLR_l"]) {
+  const row = new RegExp(`^midfunc,${name},unreachable,CLR,68,0,`, "m");
+  if (!row.test(await Bun.file(new URL("../BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv", import.meta.url)).text()))
+    fail(`CLR namesake MIDFUNC ${name} is not retained as unreachable`);
+}
+for (const contract of [
+  "clr_b_postinc_zero_ea_collision", "[clr_b_postinc_zero_ea_collision]=20",
+  "[clr_b_postinc_zero_ea_collision]=21", "[clr_b_postinc_zero_ea_collision]=0",
+  "[clr_b_postinc_zero_ea_collision]=1",
+]) requireText(regallocPressureSource, contract, "CLR EA/zero allocator pressure");
+const clrVectors = [
+  "clr_core_b_dreg_native", "clr_core_w_dreg_native", "clr_core_l_dreg_native",
+  "clr_core_b_aind_special_native", "clr_core_w_postinc_native", "clr_core_l_predec_native",
+  "clr_core_b_d16_native", "clr_core_w_index_special_native", "clr_core_l_absw_native",
+  "clr_core_b_absl_special_native", "clr_core_b_a7_postinc_native", "clr_core_b_a7_predec_native",
+  "clr_core_b_postinc_successor_bne_native", "clr_core_w_dreg_noflags_native", "clr_core_l_postinc_noflags_native",
+];
+for (const fragment of [
+  "declare -a CLR_NATIVE_MATRIX_NAMES=(", 'TEST_ORDER+=("${CLR_NATIVE_MATRIX_NAMES[@]}")',
+  'for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_clr_name"]=1\n    NATIVE_REPLAY_PC["$_clr_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_clr_name"]=2',
+  'for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_clr_name"]=1',
+]) requireText(harnessSource, fragment, "CLR matrix/replay contract");
+for (const name of clrVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`])
+    requireText(harnessSource, fragment, `CLR vector ${name}`);
+  requireText(activeRiskySource, name, `CLR active mismatch-first vector ${name}`);
+}
+for (const contract of [
+  "for _clr_name in clr_core_b_dreg_native clr_core_w_dreg_native clr_core_l_dreg_native clr_core_b_aind_special_native clr_core_w_postinc_native clr_core_l_predec_native clr_core_b_d16_native clr_core_l_absw_native clr_core_b_absl_special_native clr_core_b_a7_postinc_native clr_core_b_a7_predec_native; do INIT_REGS[\"$_clr_name\"]",
+  "INIT_REGS[clr_core_w_index_special_native]=",
+  "INIT_REGS[clr_core_b_postinc_successor_bne_native]=",
+  "INIT_REGS[clr_core_w_dreg_noflags_native]=",
+  "INIT_REGS[clr_core_l_postinc_noflags_native]=",
+]) requireText(harnessSource, contract, "CLR initial-state contract");
+const clrMemoryVectors = [
+  "clr_core_b_aind_special_native", "clr_core_w_postinc_native", "clr_core_l_predec_native",
+  "clr_core_b_d16_native", "clr_core_w_index_special_native", "clr_core_l_absw_native",
+  "clr_core_b_absl_special_native", "clr_core_b_a7_postinc_native", "clr_core_b_a7_predec_native",
+  "clr_core_b_postinc_successor_bne_native", "clr_core_l_postinc_noflags_native",
+];
+for (const name of clrMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `CLR memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `CLR native memory replay ${name}`);
+}
+for (const name of ["clr_core_b_aind_special_native", "clr_core_w_index_special_native", "clr_core_b_absl_special_native"])
+  requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `CLR special-memory route ${name}`);
+for (const contract of [
+  'EXPECTED_REG_FIELDS[clr_core_b_dreg_native]="D0=A5A5FF00 SR=2714"',
+  'EXPECTED_REG_FIELDS[clr_core_w_dreg_native]="D0=A5A50000 SR=2714"',
+  'EXPECTED_REG_FIELDS[clr_core_l_dreg_native]="D0=00000000 SR=2714"',
+  'EXPECTED_REG_FIELDS[clr_core_b_postinc_successor_bne_native]="D1=00000007 D2=00000008 A0=0000A001 SR=2710"',
+  'EXPECTED_REG_FIELDS[clr_core_w_dreg_noflags_native]="D0=A5A50000 D2=00000001 SR=2700"',
+  'EXPECTED_REG_FIELDS[clr_core_l_postinc_noflags_native]="D2=00000001 A0=0000A004 SR=2700"',
+]) requireText(harnessSource, contract, "CLR exact result/flags contract");
+
 /* SUB mirrors ADD's source/destination shapes but has independent inverted
  * carry/borrow and X publication. Its writable-memory forms must retain the
  * private pre-write EA through arithmetic, carry duplication and storage. */
@@ -4840,6 +4944,16 @@ console.log("METRIC structural_bcc_displacement_widths=3");
 console.log("METRIC structural_bcc_signed_backward_widths=3");
 console.log("METRIC structural_bcc_dynamic_allocator_values=0");
 console.log("METRIC structural_bcc_condition_translation_boundaries=2");
+console.log(`METRIC structural_clr_exact_native_vectors=${clrVectors.length}`);
+console.log(`METRIC structural_clr_generated_functions=${generatedClrBodies.length}`);
+console.log(`METRIC structural_clr_generated_flag_live=${generatedClrFlagLive}`);
+console.log(`METRIC structural_clr_generated_noflags=${generatedClrNoFlags}`);
+console.log("METRIC structural_clr_writable_ea_classes=8");
+console.log(`METRIC structural_clr_memory_vectors=${clrMemoryVectors.length}`);
+console.log("METRIC structural_clr_special_memory_routes=3");
+console.log("METRIC structural_clr_noflags_vectors=2");
+console.log("METRIC structural_clr_allocator_pressure=1");
+console.log("METRIC structural_clr_unreachable_namesake_midfuncs=6");
 console.log("METRIC structural_sub_shared_midfunc_routes=6");
 console.log("METRIC structural_sub_immediate_routes=6");
 console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);
