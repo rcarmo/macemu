@@ -157,5 +157,7 @@ Accepted evidence:
 - shell syntax, structural audit, deterministic closure regeneration, source
   hygiene, and diff hygiene are clean.
 
-The inventory next selects reachable generic `SUB_wwi`. Generic `SUB_*` and
-`SUBS_*` emitters remain separate. Whole-engine closure is not claimed.
+The seven reachable generic `SUB_*` / `SUBS_*` emitter APIs are now closed
+independently by `AARCH64_JIT_AUDIT_SUB_EMITTERS.md`; that later evidence does
+not broaden this lifecycle tranche. The inventory next selects `ADDA`.
+Whole-engine closure is not claimed.

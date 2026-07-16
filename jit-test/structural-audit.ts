@@ -357,6 +357,14 @@ const addEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-add-conformance.sh",
   import.meta.url,
 )).text();
+const subEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-sub-conformance.cpp",
+  import.meta.url,
+)).text();
+const subEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-sub-conformance.sh",
+  import.meta.url,
+)).text();
 const andEmitterProbeSource = await Bun.file(new URL(
   "./emitter-and-conformance.cpp",
   import.meta.url,
@@ -2300,6 +2308,77 @@ for (const contract of [
 for (const contract of ["-Wall -Wextra -Werror", "emitter-add-conformance.cpp"])
   requireText(addEmitterHarnessSource, contract, "generic ADD conformance build");
 requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh"', "generic ADD bounded acceptance gate");
+
+/* The generic SUB/SUBS encoders are a separate seven-API cross-caller layer.
+ * Audit every raw source spelling and legal immediate/shift field, then prove
+ * exact W/X encodings, aliases, S=0 preservation, and S=1 native NZCV. */
+for (const contract of [
+  "#define SUB_wwi(Wd,Wn,i12)        _W((0b0101000100 << 22) | (((i12) & 0xfff) << 10) | ((Wn) << 5) | (Wd))",
+  "#define SUB_xxi(Xd,Xn,i12)        _W((0b1101000100 << 22) | (((i12) & 0xfff) << 10) | ((Xn) << 5) | (Xd))",
+  "#define SUB_www(Wd,Wn,Wm)         _W((0b01001011000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define SUB_xxx(Xd,Xn,Xm)         _W((0b11001011000 << 21) | ((Xm) << 16) | (0 << 10) | ((Xn) << 5) | (Xd))",
+  "#define SUBS_wwi(Wd,Wn,i12)       _W((0b0111000100 << 22) | (((i12) & 0xfff) << 10) | ((Wn) << 5) | (Wd))",
+  "#define SUBS_www(Wd,Wn,Wm)        _W((0b01101011000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define SUBS_wwwLSLi(Wd,Wn,Wm,i)  _W((0b01101011000 << 21) | ((Wm) << 16) | (((i) & 0x1f) << 10) | ((Wn) << 5) | (Wd))",
+]) requireText(codegenHeaderSource, contract, "generic SUB emitter encoding");
+
+const subEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for (const [name, expected] of [
+  ["SUB_wwi", 58], ["SUB_xxi", 6], ["SUB_www", 36], ["SUB_xxx", 3],
+  ["SUBS_wwi", 6], ["SUBS_www", 3], ["SUBS_wwwLSLi", 3],
+] as const) {
+  const found = (subEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== expected) fail(`generic ${name} raw caller census: expected ${expected}, found ${found}`);
+}
+expectArgs("SUB_wwi imm12", [...subEmitterCallers.matchAll(/\bSUB_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
+  "-offset", "-offset", "i", "i", "1", "-tmp", "-v", "1", "1", "1", "1", "1", "1",
+  "36", "18", "9", "34", "17", "33", "36", "18", "9", "34", "17", "33", "1", "36", "18",
+  "9", "34", "17", "33", "36", "18", "9", "1", "34", "17", "1", "33", "1", "v & 0xff",
+  "v & 0xff", "v", "v", "v", "6", "0x60", "6", "0x60", "cycles", "cycles", "cycles", "cycles",
+  "16", "17", "24", "25",
+]);
+expectArgs("SUB_xxi imm12", [...subEmitterCallers.matchAll(/\bSUB_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
+  "-offset", "i", "-offset", "i", "-offset", "JIT_OBSERVER_SAVE_SIZE",
+]);
+expectArgs("SUBS_wwi imm12", [...subEmitterCallers.matchAll(/\bSUBS_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
+  "1", "1", "1", "v", "1", "1",
+]);
+expectArgs("SUBS_wwwLSLi shift", [...subEmitterCallers.matchAll(/\bSUBS_wwwLSLi\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
+  "24", "16", "16",
+]);
+for (const contract of [
+  "else if(offset >= -0xfff && offset < 0) {\n\t\t\tSUB_xxi(d, s, -offset);",
+  "else if(offset >= -0xfff && offset < 0) {\n\t\tSUB_wwi(d, s, -offset);",
+  "else if (offset < 0 && offset >= -0xfff) {\n\t\tSUB_xxi(d, d, -offset);",
+  "MIDFUNC(5,lea_l_brr_indexed,(W4 d, RR4 s, RR4 index, IM8 factor, IM8 offset))",
+  "MIDFUNC(2,sub_l_ri,(RW4 d, IM8 i))",
+  "MIDFUNC(2,arm_SUB_l_ri8,(RW4 d, IM8 i))",
+]) requireText(midfuncSource, contract, "generic SUB immediate caller bound");
+for (const contract of [
+  "else if (tmp >= -0xfff && tmp < 0) {\n\t\tSUB_wwi(d, d, -tmp);",
+  "else if (v >= -0xfff && v < 0) {\n\t\tSUB_wwi(d, d, -v);",
+  "if(v >= 0 && v < 4096) {\n\t\tSUBS_wwi(d, d, v);",
+]) requireText(midfunc2Source, contract, "generic SUB immediate caller bound");
+if ((midfunc2Source.match(/if\(v >= 0 && v < 4096\) \{\n\t\tSUB_wwi\(d, d, v\);/g) || []).length !== 3)
+  fail("generic SUB_wwi guarded positive imm12 caller count changed");
+if ((codegenSource.match(/if\(cycles >= 0 && cycles <= 0xfff\) \{\n\t\tSUB_wwi\([^\n]+, cycles\);/g) || []).length !== 4)
+  fail("generic SUB_wwi guarded cycle imm12 caller count changed");
+requireText(codegenSource, "static constexpr int JIT_OBSERVER_SAVE_SIZE = 240;", "generic SUB observer immediate bound");
+requireText(compatSource, "if (offset < 0 && offset >= -4095) {\n\t\tSUB_xxi(tmp, base, -offset);", "generic SUB compatibility immediate bound");
+for (const contract of [
+  "0x51000149u", "0x513fffffu", "0xd100018bu", "0xd13fffffu",
+  "0x4b1f03ffu", "0xcb1f03ffu", "0x71000149u", "0x713fffffu",
+  "0x6b1f03ffu", "0x6b1b0359u", "0x6b1f7fffu",
+  "SUB_www destination-rhs alias", "SUB_xxx destination-rhs alias",
+  "SUBS_www destination-rhs alias", "SUBS_wwwLSLi destination-rhs alias",
+  "SUB_wwi preserves NZCV", "SUB_xxi preserves NZCV", "SUB_www preserves NZCV", "SUB_xxx preserves NZCV",
+  "expected_subs_w_nzcv", "PROT_READ | PROT_WRITE",
+  "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 11 && result_vectors == 42 && preserve_vectors == 4 && flag_vectors == 24",
+]) requireText(subEmitterProbeSource, contract, "generic SUB native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-sub-conformance.cpp"])
+  requireText(subEmitterHarnessSource, contract, "generic SUB conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh"', "generic SUB bounded acceptance gate");
 
 /* The mechanically selected reachable generic AND cluster consists only of the
  * 32-bit #0x3f logical-immediate form and the W/X register forms. Keep its raw

@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 52 | 44 | 0 | 34 |
 | midfunc | 422 | 258 | 0 | 118 | 46 |
-| emitter_api | 294 | 42 | 0 | 91 | 161 |
+| emitter_api | 294 | 49 | 0 | 91 | 154 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `SUB_wwi` | emitter_api:`SUB_wwi` |
-| 80 | `SUB_www` | emitter_api:`SUB_www` |
-| 80 | `SUB_xxi` | emitter_api:`SUB_xxi` |
-| 80 | `SUB_xxx` | emitter_api:`SUB_xxx` |
 | 72 | `ADDA` | generator:`i_ADDA`, midfunc:`jnf_ADDA_l`, midfunc:`jnf_ADDA_w` |
 | 72 | `Bcc` | generator:`i_Bcc` |
 | 72 | `CLR` | generator:`i_CLR` |
@@ -62,19 +58,24 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 72 | `MMUOP` | generator:`i_MMUOP` |
 | 72 | `MMUOP030` | generator:`i_MMUOP030` |
 | 72 | `MULS` | generator:`i_MULS`, midfunc:`jnf_MULS` |
+| 72 | `MULU` | generator:`i_MULU`, midfunc:`jnf_MULU` |
+| 72 | `NOP` | generator:`i_NOP` |
+| 72 | `NOT` | generator:`i_NOT` |
+| 72 | `PEA` | generator:`i_PEA` |
 
 ## Accepted closure targets
 
 - `MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
 - `NEGX` (`i_NEGX`) is closed by `AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md`. Its six `jff_/jnf_NEGX_{b,w,l}` namesakes remain unreachable; the live generator uses the shared repaired `flag_subx` -> `sbb_b/w/l` lifecycle.
 - `ADD` (`i_ADD`) is closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The unused `jnf_ADD_im8` remains unreachable. The seven reachable generic non-flag-setting ADD encoder APIs are independently closed by `AARCH64_JIT_AUDIT_ADD_EMITTERS.md`; `ADD_xxxLSLi` remains unreachable.
+- `SUB` (`i_SUB`) is closed by `AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The seven reachable generic SUB/SUBS encoder APIs are independently closed by `AARCH64_JIT_AUDIT_SUB_EMITTERS.md`; six configured-root-unreachable SUB/SUBS forms remain unreachable, while `SBCS_www` remains separate.
 - `AND` (`i_AND`) is closed by `AARCH64_JIT_AUDIT_AND_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. Its shared writable-memory EA repair is independently exercised by the adjacent EOR and OR lifecycle audits. The three reachable generic non-flag-setting AND encoder APIs are independently closed by `AARCH64_JIT_AUDIT_AND_EMITTERS.md`; `AND_ww1f` and `AND_xx1f` remain unreachable, and `ANDS_*` remains separate.
 - `EOR` (`i_EOR`) is closed by `AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The five reachable generic EOR encoder APIs are independently closed by `AARCH64_JIT_AUDIT_EOR_EMITTERS.md`; `EOR_xxx` and `EOR_xxxLSLi` remain unreachable.
 - `OR` (`i_OR`) is closed by `AARCH64_JIT_AUDIT_OR_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes, nine readable source EA classes, and seven writable destination EA classes. Generic `ORR_*` and `immOP_ORR` encoder APIs remain separate.
 
 ## Next selected family
 
-`SUB_wwi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`SUB_wwi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`ADDA` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_ADDA`, midfunc:`jnf_ADDA_l`, midfunc:`jnf_ADDA_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

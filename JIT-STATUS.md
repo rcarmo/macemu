@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Generic SUB/SUBS emitter width, alias, field, and NZCV closure**
+  (2026-07-16): the seven reachable AArch64 SUB/SUBS APIs now have 11
+  independent exact-word checks and 70 direct native vectors: 42 arithmetic
+  results, four explicit `S=0` NZCV-preservation cases, and 24 `S=1` NZCV
+  cases. Coverage includes W/X width, immediate and shift boundaries, maximum
+  register fields, destination/lhs and destination/rhs aliases, no-borrow C,
+  and signed overflow. A fail-closed census covers all 115 raw source callers
+  and every immediate/shift argument source. No encoder defect was found. The
+  997-row inventory promotes only these seven APIs; unreachable SUB/SUBS forms
+  remain unreachable and reachable `SBCS_www` remains unreviewed. Full evidence
+  is in `BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_EMITTERS.md`.
+
 - **Repair and close the complete SUB lifecycle** (2026-07-16): all 208
   generated handlers and twelve reachable MIDFUNC routes are covered across
   byte/word/long flag-live and no-flags tables, Dn and immediate lowering, all
@@ -227,8 +239,8 @@ inventory is 92/92, and the accepted register-count
   source pins. Focused replay passes 37/37, full active-risky replay 798/798,
   and allocator pressure 26/26; the two SUB cells retain exact native entry
   with `skip=1` and `skip=2`. The deterministic 997-row inventory promotes
-  only `i_SUB` and its twelve lifecycle MIDFUNCs. Generic `SUB_*` / `SUBS_*`
-  emitters remain separate; `SUB_wwi` is selected next. Full evidence is in
+  only `i_SUB` and its twelve lifecycle MIDFUNCs. The seven reachable generic
+  `SUB_*` / `SUBS_*` emitters are audited separately. Full evidence is in
   `BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md`.
 
 - **Complete OR lifecycle, flags, EA classes, and allocator ownership**

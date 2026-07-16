@@ -105,6 +105,9 @@ fi
 if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh"; then
     emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
 fi
+if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh"; then
+    emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0
+fi
 if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-and-conformance.sh"; then
     emit_failure_metrics 1 "ARM64 AND emitter conformance failed" 0
 fi
