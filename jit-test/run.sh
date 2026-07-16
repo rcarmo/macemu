@@ -677,6 +677,19 @@ declare -a EXG_NATIVE_MATRIX_NAMES=(
     exg_core_dn_an_noflags_native
 )
 TEST_ORDER+=("${EXG_NATIVE_MATRIX_NAMES[@]}")
+# EXT.W, EXT.L, and EXTB.L sign-extend within Dn, publish logical flags, and
+# preserve only EXT.W's upper word. Cover negative/zero/positive, max fields,
+# exact native entry, and all three no-flags-table routes.
+declare -a EXT_NATIVE_MATRIX_NAMES=(
+    ext_core_w_negative_native ext_core_w_zero_native ext_core_w_positive_native
+    ext_core_w_max_native ext_core_l_negative_native ext_core_l_zero_native
+    ext_core_l_positive_native ext_core_l_max_native
+    extb_core_l_negative_native extb_core_l_zero_native
+    extb_core_l_positive_native extb_core_l_max_native
+    ext_core_wl_chain_negative_native
+    ext_core_w_noflags_native ext_core_l_noflags_native extb_core_l_noflags_native
+)
+TEST_ORDER+=("${EXT_NATIVE_MATRIX_NAMES[@]}")
 # DBcc is a flags-preserving dynamic block edge. Cover DBT, DBF terminal/branch/
 # wrap states and both members of every conditional pair, with upper-word,
 # displacement, successor, and exact native evidence.
@@ -1721,6 +1734,12 @@ for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_exg_name"]=2
 done
 unset _exg_name
+for _ext_name in "${EXT_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_ext_name"]=1
+    NATIVE_REPLAY_PC["$_ext_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_ext_name"]=2
+done
+unset _ext_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_dbcc_name"]=1
     NATIVE_REPLAY_PC["$_dbcc_name"]=0x1000
@@ -2743,6 +2762,42 @@ EXPECTED_REG_FIELDS[exg_core_dn_dn_roundtrip_native]="D0=11223344 D1=AABBCCDD SR
 EXPECTED_REG_FIELDS[exg_core_an_an_roundtrip_native]="A0=0000A000 A1=0000B000 SR=271F"
 EXPECTED_REG_FIELDS[exg_core_dn_an_roundtrip_native]="D0=11223344 A1=0000B000 SR=271F"
 EXPECTED_REG_FIELDS[exg_core_dn_an_noflags_native]="D0=0000B000 D2=00000001 A1=11223344 SR=2700"
+
+# Exact-native EXT lifecycle. EXT.W preserves Dn[31:16]; EXT.L and EXTB.L
+# replace all 32 bits. X survives while N/Z derive from the widened result and
+# V/C clear. No-flags cases use a later MOVEQ to control the observed SR.
+TESTS[ext_core_w_negative_native]="4880"
+TESTS[ext_core_w_zero_native]="4880"
+TESTS[ext_core_w_positive_native]="4880"
+TESTS[ext_core_w_max_native]="4887"
+TESTS[ext_core_l_negative_native]="48C0"
+TESTS[ext_core_l_zero_native]="48C0"
+TESTS[ext_core_l_positive_native]="48C0"
+TESTS[ext_core_l_max_native]="48C7"
+TESTS[extb_core_l_negative_native]="49C0"
+TESTS[extb_core_l_zero_native]="49C0"
+TESTS[extb_core_l_positive_native]="49C0"
+TESTS[extb_core_l_max_native]="49C7"
+TESTS[ext_core_wl_chain_negative_native]="4880 48C0"
+TESTS[ext_core_w_noflags_native]="4880 7401"
+TESTS[ext_core_l_noflags_native]="48C0 7401"
+TESTS[extb_core_l_noflags_native]="49C0 7401"
+EXPECTED_REG_FIELDS[ext_core_w_negative_native]="D0=A5A5FF80 SR=2718"
+EXPECTED_REG_FIELDS[ext_core_w_zero_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[ext_core_w_positive_native]="D0=A5A5007F SR=2710"
+EXPECTED_REG_FIELDS[ext_core_w_max_native]="D7=7777FF80 SR=2718"
+EXPECTED_REG_FIELDS[ext_core_l_negative_native]="D0=FFFF8000 SR=2718"
+EXPECTED_REG_FIELDS[ext_core_l_zero_native]="D0=00000000 SR=2714"
+EXPECTED_REG_FIELDS[ext_core_l_positive_native]="D0=00007FFF SR=2710"
+EXPECTED_REG_FIELDS[ext_core_l_max_native]="D7=FFFF8000 SR=2718"
+EXPECTED_REG_FIELDS[extb_core_l_negative_native]="D0=FFFFFF80 SR=2718"
+EXPECTED_REG_FIELDS[extb_core_l_zero_native]="D0=00000000 SR=2714"
+EXPECTED_REG_FIELDS[extb_core_l_positive_native]="D0=0000007F SR=2710"
+EXPECTED_REG_FIELDS[extb_core_l_max_native]="D7=FFFFFF80 SR=2718"
+EXPECTED_REG_FIELDS[ext_core_wl_chain_negative_native]="D0=FFFFFF80 SR=2718"
+EXPECTED_REG_FIELDS[ext_core_w_noflags_native]="D0=A5A5FF80 D2=00000001 SR=2700"
+EXPECTED_REG_FIELDS[ext_core_l_noflags_native]="D0=FFFF8000 D2=00000001 SR=2700"
+EXPECTED_REG_FIELDS[extb_core_l_noflags_native]="D0=FFFFFF80 D2=00000001 SR=2700"
 
 # Exact-native DBcc dynamic-edge lifecycle. The +8 displacement is relative to
 # DBcc's extension-word PC and lands on the second MOVEA marker, skipping the
@@ -5113,6 +5168,26 @@ for _exg_name in exg_core_dn_dn_native exg_core_an_an_native exg_core_dn_an_nati
 INIT_REGS[exg_core_dn_an_noflags_native]="$_EXG_INIT_FULL 00002700"
 unset _exg_name _EXG_INIT_FULL
 
+_EXT_AREGS="0000A000 0000B000 0000C000 0000D000 0000E000 0000F000 0000A600 0000F000"
+_EXT_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 $_EXT_AREGS"
+INIT_REGS[ext_core_w_negative_native]="A5A50080 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_w_zero_native]="A5A50000 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_w_positive_native]="A5A5007F $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_w_max_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 77770080 $_EXT_AREGS 0000271F"
+INIT_REGS[ext_core_l_negative_native]="A5A58000 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_l_zero_native]="A5A50000 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_l_positive_native]="A5A57FFF $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_l_max_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 77778000 $_EXT_AREGS 0000271F"
+INIT_REGS[extb_core_l_negative_native]="A5A50080 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[extb_core_l_zero_native]="A5A50000 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[extb_core_l_positive_native]="A5A5007F $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[extb_core_l_max_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 77770080 $_EXT_AREGS 0000271F"
+INIT_REGS[ext_core_wl_chain_negative_native]="A5A50080 $_EXT_ZERO_TAIL 0000271F"
+INIT_REGS[ext_core_w_noflags_native]="A5A50080 $_EXT_ZERO_TAIL 00002700"
+INIT_REGS[ext_core_l_noflags_native]="A5A58000 $_EXT_ZERO_TAIL 00002700"
+INIT_REGS[extb_core_l_noflags_native]="A5A50080 $_EXT_ZERO_TAIL 00002700"
+unset _EXT_AREGS _EXT_ZERO_TAIL
+
 _DBCC_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A100 0000A200 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[dbcc_core_dbt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271F"
 INIT_REGS[dbcc_core_dbf_terminal_native]="A5A50000 $_DBCC_INIT_TAIL 0000271F"
@@ -5618,6 +5693,12 @@ for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do
     ((_exg_sentinel_id+=1))
 done
 unset _exg_name _exg_sentinel_id
+_ext_sentinel_id=1
+for _ext_name in "${EXT_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_ext_name"] 'a6e7%04x' "$_ext_sentinel_id"
+    ((_ext_sentinel_id+=1))
+done
+unset _ext_name _ext_sentinel_id
 _neg_sentinel_id=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_neg_name"] 'a60f%04x' "$_neg_sentinel_id"
@@ -7168,6 +7249,10 @@ for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_exg_name"]=1
 done
 unset _exg_name
+for _ext_name in "${EXT_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_ext_name"]=1
+done
+unset _ext_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_dbcc_name"]=1
 done

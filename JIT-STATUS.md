@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Close the complete EXT generator lifecycle** (2026-07-16): all six
+  generated handlers (three per compiler table) are covered across EXT.W
+  byte-to-word with upper-word preservation, EXT.L word-to-long, EXTB.L
+  byte-to-long, negative/zero/positive values, maximum fields, chained widening,
+  no-flags execution, and exact XNZVC semantics. Focused replay passes 16/16,
+  the active-risky corpus 904/904, and allocator pressure 31/31; the EXT.W
+  witness rejects the forced widened-scratch/source alias with `skip=1`. The
+  deterministic 997-row inventory promotes only `i_EXT`. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md`.
+
 - **Close the complete EXG generator lifecycle** (2026-07-16): all six
   generated handlers (three per compiler table) are covered across Dn/Dn,
   An/An, and Dn/An forms, simultaneous full-width exchange, self aliases,

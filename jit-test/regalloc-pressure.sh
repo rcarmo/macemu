@@ -36,7 +36,7 @@ sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 # tick independently.
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
 MOVEM_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007ef000 2700"
-declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision neg_b_postinc_result_ea_collision negx_b_postinc_result_ea_collision tas_b_ea_value_collision clr_b_postinc_zero_ea_collision exg_l_tmp_source_collision move_b_mem_source_dst_collision scc_b_ea_value_collision dbcc_w_counter_copy_collision bitop_b_ea_value_collision cmpm_b_source_dst_collision cmpa_w_postinc_source_dst_collision adda_w_postinc_source_dst_collision adda_l_postinc_source_dst_collision add_b_postinc_source_dreg_collision add_b_postinc_x_ea_collision and_b_postinc_source_dreg_collision and_b_postinc_ea_source_collision eor_b_postinc_source_dest_collision eor_b_postinc_ea_dest_collision or_b_postinc_source_dreg_collision or_b_postinc_ea_source_collision sub_b_postinc_source_dreg_collision sub_b_postinc_x_ea_collision)
+declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision neg_b_postinc_result_ea_collision negx_b_postinc_result_ea_collision tas_b_ea_value_collision clr_b_postinc_zero_ea_collision exg_l_tmp_source_collision ext_w_scratch_source_collision move_b_mem_source_dst_collision scc_b_ea_value_collision dbcc_w_counter_copy_collision bitop_b_ea_value_collision cmpm_b_source_dst_collision cmpa_w_postinc_source_dst_collision adda_w_postinc_source_dst_collision adda_l_postinc_source_dst_collision add_b_postinc_source_dreg_collision add_b_postinc_x_ea_collision and_b_postinc_source_dreg_collision and_b_postinc_ea_source_collision eor_b_postinc_source_dest_collision eor_b_postinc_ea_dest_collision or_b_postinc_source_dreg_collision or_b_postinc_ea_source_collision sub_b_postinc_source_dreg_collision sub_b_postinc_x_ea_collision)
 if [[ -n "${B2_REGPRESSURE_CELLS:-}" ]]; then
   read -r -a CELLS <<<"${B2_REGPRESSURE_CELLS//,/ }"
 fi
@@ -79,6 +79,10 @@ declare -A CELL_HEX=(
   # S1 toward D0's host mapping: mov_l_rr must keep the copied original live
   # until the second architectural write completes the simultaneous exchange.
   [exg_l_tmp_source_collision]="C141 40C2 2C7C A6AA 55E8"
+  # EXT.W D0 allocates private S1 for the sign-extended low byte before writing
+  # D0.W. Force S1 toward D0's live host mapping; sign_extend_8_rr must retain
+  # the source until the widened word is complete.
+  [ext_w_scratch_source_collision]="4880 40C2 2C7C A6AA 55E9"
   # MOVE.B (A1),D0 keeps its fetched S1 value live while flag generation first
   # performs a low-lane RMW of D0. Force D0 toward that S1 host mapping: a
   # complete MOVE ownership contract must reject the collision before zero/OR
@@ -183,6 +187,7 @@ declare -A CELL_INIT=(
   [tas_b_ea_value_collision]="A5A50000 11111111 00000000 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
   [clr_b_postinc_zero_ea_collision]="A5A500FF 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
   [exg_l_tmp_source_collision]="11223344 AABBCCDD 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
+  [ext_w_scratch_source_collision]="A5A50080 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
   [move_b_mem_source_dst_collision]="A5A50000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 00002000 00001000 00002200 00002300 00002400 00002500 00002600 007ef000 271F"
   [scc_b_ea_value_collision]="A5A50000 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2700"
   [dbcc_w_counter_copy_collision]="A5A50002 11111111 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 00002100 00002200 00002300 00002400 00002500 00002600 007ef000 2700"
@@ -215,6 +220,7 @@ declare -A CELL_PC=(
   [tas_b_ea_value_collision]=0x00001000
   [clr_b_postinc_zero_ea_collision]=0x00001000
   [exg_l_tmp_source_collision]=0x00001000
+  [ext_w_scratch_source_collision]=0x00001000
   [move_b_mem_source_dst_collision]=0x00001000
   [scc_b_ea_value_collision]=0x00001000
   [dbcc_w_counter_copy_collision]=0x00001000
@@ -247,6 +253,7 @@ declare -A CELL_ALIAS_VREG=(
   [tas_b_ea_value_collision]=8
   [clr_b_postinc_zero_ea_collision]=20
   [exg_l_tmp_source_collision]=0
+  [ext_w_scratch_source_collision]=0
   [move_b_mem_source_dst_collision]=20
   [scc_b_ea_value_collision]=20
   [dbcc_w_counter_copy_collision]=0
@@ -279,6 +286,7 @@ declare -A CELL_SCRATCH_VREG=(
   [tas_b_ea_value_collision]=20
   [clr_b_postinc_zero_ea_collision]=21
   [exg_l_tmp_source_collision]=20
+  [ext_w_scratch_source_collision]=20
   [move_b_mem_source_dst_collision]=0
   [scc_b_ea_value_collision]=21
   [dbcc_w_counter_copy_collision]=21
@@ -311,6 +319,7 @@ declare -A CELL_REQUIRE_PIN=(
   [tas_b_ea_value_collision]=0
   [clr_b_postinc_zero_ea_collision]=0
   [exg_l_tmp_source_collision]=0
+  [ext_w_scratch_source_collision]=0
   [move_b_mem_source_dst_collision]=0
   [scc_b_ea_value_collision]=0
   [dbcc_w_counter_copy_collision]=0
@@ -343,6 +352,7 @@ declare -A CELL_REQUIRE_SKIP=(
   [tas_b_ea_value_collision]=1
   [clr_b_postinc_zero_ea_collision]=1
   [exg_l_tmp_source_collision]=1
+  [ext_w_scratch_source_collision]=1
   [move_b_mem_source_dst_collision]=1
   [scc_b_ea_value_collision]=1
   [dbcc_w_counter_copy_collision]=1

@@ -17,7 +17,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 56 | 44 | 0 | 30 |
+| generator | 130 | 57 | 44 | 0 | 29 |
 | midfunc | 422 | 262 | 0 | 118 | 42 |
 | emitter_api | 294 | 49 | 0 | 91 | 154 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 72 | `EXT` | generator:`i_EXT` |
 | 72 | `FBcc` | generator:`i_FBcc` |
 | 72 | `FPP` | generator:`i_FPP` |
 | 72 | `FScc` | generator:`i_FScc` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 72 | `PFLUSHA` | generator:`i_PFLUSHA` |
 | 72 | `PFLUSHAN` | generator:`i_PFLUSHAN` |
 | 72 | `PFLUSHN` | generator:`i_PFLUSHN` |
+| 72 | `PLPAR` | generator:`i_PLPAR` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`EXT` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_EXT`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`FBcc` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_FBcc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

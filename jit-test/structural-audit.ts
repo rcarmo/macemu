@@ -1188,6 +1188,86 @@ for (const contract of [
   'EXPECTED_REG_FIELDS[exg_core_dn_an_noflags_native]="D0=0000B000 D2=00000001 A1=11223344 SR=2700"',
 ]) requireText(harnessSource, contract, "EXG initial/result/flags contract");
 
+/* EXT is emitted directly: EXT.W widens byte->word into a private scratch and
+ * preserves Dn[31:16], while EXT.L and EXTB.L widen in place to full 32 bits. */
+const extGenerator = functionBody(gencompSource, "\t case i_EXT:", "\t case i_MVMEL:", "EXT generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", sz_long, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'case sz_byte:', '"\\tsign_extend_8_rr(src,src);\\n");',
+  'case sz_word:', '"\\tsign_extend_8_rr(dst,src);\\n");',
+  'case sz_long:', '"\\tsign_extend_16_rr(src,src);\\n");',
+  'curi->size == sz_word ? sz_word : sz_long, "dst", "", ""',
+  'genastore ("dst", curi->smode, "srcreg",',
+  'curi->size == sz_word ? sz_word : sz_long, "src");',
+]) requireText(extGenerator, contract, "EXT generator lifecycle");
+for (const forbidden of ["jff_EXT", "jnf_EXT", "jit_value_lock", "jit_value_unlock"])
+  if (extGenerator.includes(forbidden)) fail(`EXT generator unexpectedly uses ${forbidden}`);
+const generatedExtBodies = matchingFunctionBodies(
+  generatedSource,
+  /^void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^\n]*\/\* EXT \*\//gm,
+  "generated EXT handlers",
+);
+const generatedExtFlagLive = generatedExtBodies.filter((body) => body.includes("_comp_ff")).length;
+const generatedExtNoFlags = generatedExtBodies.filter((body) => body.includes("_comp_nf")).length;
+const generatedExtCount = (needle: string) => generatedExtBodies.reduce((total, body) => total + countText(body, needle), 0);
+if (generatedExtBodies.length !== 6 || generatedExtFlagLive !== 3 || generatedExtNoFlags !== 3 ||
+    generatedExtCount("int dst = scratchie++;") !== 2 || generatedExtCount("int dst = src;") !== 4 ||
+    generatedExtCount("sign_extend_8_rr(dst,src);") !== 2 ||
+    generatedExtCount("sign_extend_8_rr(src,src);") !== 2 ||
+    generatedExtCount("sign_extend_16_rr(src,src);") !== 2 ||
+    generatedExtCount("test_w_rr(dst,dst);") !== 1 || generatedExtCount("test_l_rr(dst,dst);") !== 2 ||
+    generatedExtCount("mov_w_rr(srcreg, dst);") !== 2 || generatedExtCount("mov_l_rr(srcreg, dst);") !== 4 ||
+    generatedExtCount("live_flags();") !== 3) {
+  fail(`generated EXT lifecycle: functions=${generatedExtBodies.length} split=${generatedExtFlagLive}/${generatedExtNoFlags} dst=${generatedExtCount("int dst = scratchie++;")}/${generatedExtCount("int dst = src;")} extends=${generatedExtCount("sign_extend_8_rr(dst,src);")}/${generatedExtCount("sign_extend_8_rr(src,src);")}/${generatedExtCount("sign_extend_16_rr(src,src);")} tests=${generatedExtCount("test_w_rr(dst,dst);")}/${generatedExtCount("test_l_rr(dst,dst);")} writes=${generatedExtCount("mov_w_rr(srcreg, dst);")}/${generatedExtCount("mov_l_rr(srcreg, dst);")} live=${generatedExtCount("live_flags();")}`);
+}
+for (const body of generatedExtBodies) {
+  const width = body.includes("op_4880_") ? "word" : "long";
+  const extend = body.includes("op_4880_") ? "sign_extend_8_rr(dst,src);" : body.includes("op_48c0_") ? "sign_extend_16_rr(src,src);" : "sign_extend_8_rr(src,src);";
+  requireText(body, extend, `generated EXT ${width} sign extension`);
+  if (body.includes("op_4880_")) requireText(body, "int dst = scratchie++;", "generated EXT.W private widened-word destination");
+  else requireText(body, "int dst = src;", "generated EXT.L/EXTB.L in-place destination alias");
+  if (body.includes("_comp_ff")) {
+    requireBefore(body, extend, width === "word" ? "test_w_rr(dst,dst);" : "test_l_rr(dst,dst);", `generated EXT ${width} result before flags`);
+    requireBefore(body, "test_", "live_flags();", `generated EXT ${width} flags publication`);
+  } else if (body.includes("test_w_rr(") || body.includes("test_l_rr(") || body.includes("live_flags();")) {
+    fail(`generated no-flags EXT ${width} publishes flags`);
+  }
+  for (const forbidden of ["jff_EXT", "jnf_EXT", "jit_value_lock", "jit_value_unlock"])
+    if (body.includes(forbidden)) fail(`generated EXT unexpectedly uses ${forbidden}`);
+}
+for (const contract of [
+  "ext_w_scratch_source_collision", "[ext_w_scratch_source_collision]=0",
+  "[ext_w_scratch_source_collision]=20", "[ext_w_scratch_source_collision]=1",
+]) requireText(regallocPressureSource, contract, "EXT.W scratch/source allocator pressure");
+const extVectors = [
+  "ext_core_w_negative_native", "ext_core_w_zero_native", "ext_core_w_positive_native", "ext_core_w_max_native",
+  "ext_core_l_negative_native", "ext_core_l_zero_native", "ext_core_l_positive_native", "ext_core_l_max_native",
+  "extb_core_l_negative_native", "extb_core_l_zero_native", "extb_core_l_positive_native", "extb_core_l_max_native",
+  "ext_core_wl_chain_negative_native", "ext_core_w_noflags_native", "ext_core_l_noflags_native", "extb_core_l_noflags_native",
+];
+for (const fragment of [
+  "declare -a EXT_NATIVE_MATRIX_NAMES=(", 'TEST_ORDER+=("${EXT_NATIVE_MATRIX_NAMES[@]}")',
+  'for _ext_name in "${EXT_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_ext_name"]=1\n    NATIVE_REPLAY_PC["$_ext_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_ext_name"]=2',
+  'for _ext_name in "${EXT_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_ext_name"]=1',
+  'if [ -n "${NATIVE_REPLAY_TESTS[$name]+x}" ]; then',
+  'env_vars+=(B2_TEST_TWO_PASS=1 B2_TEST_SECOND_PC="$replay_pc")',
+  'env_vars+=(B2_TEST_FORCE_L2_RAM=1 B2_JIT_STRICT_FULL=1 B2_NATIVE_ASSERT_PC="$replay_pc")',
+]) requireText(harnessSource, fragment, "EXT matrix/replay contract");
+for (const name of extVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`])
+    requireText(harnessSource, fragment, `EXT vector ${name}`);
+  requireText(activeRiskySource, name, `EXT active mismatch-first vector ${name}`);
+}
+for (const contract of [
+  'EXPECTED_REG_FIELDS[ext_core_w_negative_native]="D0=A5A5FF80 SR=2718"',
+  'EXPECTED_REG_FIELDS[ext_core_w_zero_native]="D0=A5A50000 SR=2714"',
+  'EXPECTED_REG_FIELDS[ext_core_l_negative_native]="D0=FFFF8000 SR=2718"',
+  'EXPECTED_REG_FIELDS[extb_core_l_negative_native]="D0=FFFFFF80 SR=2718"',
+  'EXPECTED_REG_FIELDS[ext_core_w_noflags_native]="D0=A5A5FF80 D2=00000001 SR=2700"',
+  'EXPECTED_REG_FIELDS[ext_core_l_noflags_native]="D0=FFFF8000 D2=00000001 SR=2700"',
+  'EXPECTED_REG_FIELDS[extb_core_l_noflags_native]="D0=FFFFFF80 D2=00000001 SR=2700"',
+]) requireText(harnessSource, contract, "EXT exact lane/result/flags contract");
+
 /* SUB mirrors ADD's source/destination shapes but has independent inverted
  * carry/borrow and X publication. Its writable-memory forms must retain the
  * private pre-write EA through arithmetic, carry duplication and storage. */
@@ -5036,6 +5116,14 @@ console.log("METRIC structural_exg_self_alias_classes=2");
 console.log("METRIC structural_exg_roundtrip_classes=3");
 console.log("METRIC structural_exg_noflags_vectors=1");
 console.log("METRIC structural_exg_allocator_pressure=1");
+console.log(`METRIC structural_ext_exact_native_vectors=${extVectors.length}`);
+console.log(`METRIC structural_ext_generated_functions=${generatedExtBodies.length}`);
+console.log(`METRIC structural_ext_generated_flag_live=${generatedExtFlagLive}`);
+console.log(`METRIC structural_ext_generated_noflags=${generatedExtNoFlags}`);
+console.log("METRIC structural_ext_encoding_forms=3");
+console.log("METRIC structural_ext_result_classes=3");
+console.log("METRIC structural_ext_noflags_vectors=3");
+console.log("METRIC structural_ext_allocator_pressure=1");
 console.log("METRIC structural_sub_shared_midfunc_routes=6");
 console.log("METRIC structural_sub_immediate_routes=6");
 console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);
