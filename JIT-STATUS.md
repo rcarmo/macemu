@@ -215,6 +215,19 @@ adjacent OR writable-EA regression remains independently active.
 
 ### Recent bug fixes (2026-07)
 
+- **Generic EOR emitter encoding, alias, bit, and no-flags closure** (2026-07-16):
+  the four reachable callable AArch64 EOR encoders and shared `immOP_EOR` base
+  now have 13 independent exact-word checks, 18 direct native result vectors,
+  and four explicit NZCV-preservation vectors. The probe covers W/X semantics,
+  LSL counts through the masked-32 boundary, single-bit logical immediates
+  through bit 63, C-bit toggling, all alias directions, and maximum register
+  fields. Fail-closed structure covers 53 configured references and 64 raw
+  source compositions. No encoder defect was found. The 997-row closure
+  inventory promotes only `EOR_www`, `EOR_wwwLSLi`, `EOR_xxCflag`, `EOR_xxbit`,
+  and `immOP_EOR`; unreachable `EOR_xxx*` variants remain unpromoted. The full
+  active-risky corpus passes 725/725 and all 22 allocator cells pass. Full
+  evidence is in `BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_EMITTERS.md`.
+
 - **Complete EOR lifecycle, flags, and writable-EA ownership** (2026-07-16):
   all 96 generated handlers and twelve reachable MIDFUNC routes are covered
   across byte/word/long Dn and immediate sources, flag-live and no-flags
@@ -224,9 +237,9 @@ adjacent OR writable-EA regression remains independently active.
   EOR-specific pressure cells reject source-to-destination and pre-write-EA-to-
   destination collisions while retaining exact native entry. No new production
   repair was required beyond the accepted shared logical EA fix. The 997-row
-  inventory promotes only `i_EOR` and its twelve lifecycle MIDFUNCs; generic
-  `EOR_*` emitters remain separate, with `EOR_www` selected next. Full evidence
-  is in `BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md`.
+  inventory promotes only `i_EOR` and its twelve lifecycle MIDFUNCs; this
+  lifecycle evidence does not itself promote generic `EOR_*` emitters. Full
+  evidence is in `BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md`.
 
 - **Generic AND emitter width, field, alias, and no-flags closure** (2026-07-16):
   the three reachable non-flag-setting AArch64 AND APIs now have nine

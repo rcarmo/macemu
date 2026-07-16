@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 50 | 44 | 0 | 36 |
 | midfunc | 422 | 234 | 0 | 118 | 70 |
-| emitter_api | 294 | 37 | 0 | 91 | 166 |
+| emitter_api | 294 | 42 | 0 | 91 | 161 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `EOR_www` | emitter_api:`EOR_www` |
-| 80 | `EOR_wwwLSLi` | emitter_api:`EOR_wwwLSLi` |
-| 80 | `EOR_xxbit` | emitter_api:`EOR_xxbit` |
-| 80 | `EOR_xxCflag` | emitter_api:`EOR_xxCflag` |
 | 80 | `OR` | generator:`i_OR`, midfunc:`jff_OR_b`, midfunc:`jff_OR_l`, midfunc:`jff_OR_w`, midfunc:`jnf_OR_b`, midfunc:`jnf_OR_l`, midfunc:`jnf_OR_w` |
 | 80 | `OR_b_imm` | midfunc:`jff_OR_b_imm`, midfunc:`jnf_OR_b_imm` |
 | 80 | `OR_l_imm` | midfunc:`jff_OR_l_imm`, midfunc:`jnf_OR_l_imm` |
@@ -62,6 +58,10 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 72 | `Bcc` | generator:`i_Bcc` |
 | 72 | `CLR` | generator:`i_CLR` |
 | 72 | `EXG` | generator:`i_EXG` |
+| 72 | `EXT` | generator:`i_EXT` |
+| 72 | `FBcc` | generator:`i_FBcc` |
+| 72 | `FPP` | generator:`i_FPP` |
+| 72 | `FScc` | generator:`i_FScc` |
 
 ## Accepted closure targets
 
@@ -72,7 +72,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`EOR_www` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`EOR_www`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`OR` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_OR`, midfunc:`jff_OR_b`, midfunc:`jff_OR_l`, midfunc:`jff_OR_w`, midfunc:`jnf_OR_b`, midfunc:`jnf_OR_l`, midfunc:`jnf_OR_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

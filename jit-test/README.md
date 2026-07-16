@@ -47,8 +47,8 @@ After a successful build, `run.sh` executes `structural-audit.ts` before opcode 
 - explicit three-operand MULL ownership, staged 64-bit publication, full-product N/Z/V semantics, generator Dl value locking, and a forced S1-to-Dl collision witness;
 - complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, ADD, AND, and EOR lifecycle ownership contracts;
 - 208 generated ADD handlers, six shared MIDFUNC operand routes, and 126 balanced pre-write memory-EA pins, with redundant generator source locking prohibited;
-- 156 generated AND handlers and 96 generated EOR handlers, twelve reachable register/immediate MIDFUNC routes per family, 84 balanced memory-EA pins per logical family, and 252 balanced shared OR/AND/EOR pins, with no implied generic-emitter or OR-lifecycle promotion;
-- exact generic ADD/AND/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension and shift, AND W/X width and aliasing, non-flag-setting NZCV preservation, signed TB displacement, and CB/TB patch discrimination;
+- 156 generated AND handlers and 96 generated EOR handlers, twelve reachable register/immediate MIDFUNC routes per family, 84 balanced memory-EA pins per logical family, and 252 balanced shared OR/AND/EOR pins, with no implied OR-lifecycle promotion;
+- exact generic ADD/AND/EOR/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension and shift, AND W/X width and aliasing, EOR register/shift/single-bit/C-bit compositions, non-flag-setting NZCV preservation, signed TB displacement, and CB/TB patch discrimination;
 - exact-PC replay state, including deterministic restoration of memory bytes mutated by predecrement BCD and RMW vectors.
 
 Each passing invariant emits a `METRIC structural_*=1` line. A structural failure stops the run before equivalence results can mask the engine defect.

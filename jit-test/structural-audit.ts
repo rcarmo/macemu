@@ -365,6 +365,14 @@ const andEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-and-conformance.sh",
   import.meta.url,
 )).text();
+const eorEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-eor-conformance.cpp",
+  import.meta.url,
+)).text();
+const eorEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-eor-conformance.sh",
+  import.meta.url,
+)).text();
 const negEmitterProbeSource = await Bun.file(new URL(
   "./emitter-neg-conformance.cpp",
   import.meta.url,
@@ -2071,6 +2079,66 @@ for (const contract of [
 for (const contract of ["-Wall -Wextra -Werror", "emitter-and-conformance.cpp"])
   requireText(andEmitterHarnessSource, contract, "generic AND conformance build");
 requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-and-conformance.sh"', "generic AND bounded acceptance gate");
+
+/* The reachable generic EOR surface combines two W register encoders with the
+ * 64-bit single-bit/C-bit logical-immediate helpers and their shared immediate
+ * base. Keep both the 53 configured references and the stronger 64 raw source
+ * compositions fail-closed; prove exact words, shift/bit boundaries, aliases,
+ * W/X width, and S=0 NZCV preservation directly on AArch64. */
+for (const contract of [
+  "#define EOR_www(Wd,Wn,Wm)         _W((0b01001010000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define EOR_wwwLSLi(Wd,Wn,Wm,i)   _W((0b01001010000 << 21) | ((Wm) << 16) | (((i) & 0x1f) << 10) | ((Wn) << 5) | (Wd))",
+  "#define immOP_EOR                 (0b110100100 << 23)",
+  "#define EOR_xxCflag(Xd,Xn)        _W(immCflag | immOP_EOR | ((Xn) << 5) | (Xd))",
+  "#define EOR_xxbit(Xd,Xn,bit)      _W(immOP_EOR | immEncode(1, ((-(bit)) & 0x3f), 0b000000) | ((Xn) << 5) | (Xd))",
+]) requireText(codegenHeaderSource, contract, "generic EOR emitter encoding");
+
+const eorEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}\n${allocatorSource}`;
+for (const [name, expected] of [
+  ["EOR_www", 25], ["EOR_wwwLSLi", 1], ["EOR_xxCflag", 31], ["EOR_xxbit", 5],
+] as const) {
+  const found = (eorEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== expected) fail(`generic ${name} raw caller census: expected ${expected}, found ${found}`);
+}
+if ((codegenHeaderSource.match(/\bimmOP_EOR\b/g) ?? []).length !== 3)
+  fail("generic immOP_EOR composition census changed");
+const expectEorCallShape = (name: string, pattern: RegExp, expected: number) => {
+  const found = (eorEmitterCallers.match(pattern) || []).length;
+  if (found !== expected) fail(`generic ${name} caller shape: expected ${expected}, found ${found}`);
+};
+for (const [shape, expected] of [
+  ["REG_WORK1, REG_WORK1, REG_WORK2", 5], ["REG_WORK1, REG_WORK1, imm_reg", 1],
+  ["REG_WORK1, d, s", 2], ["REG_WORK3, REG_WORK2, d", 2],
+  ["d, REG_WORK1, REG_WORK2", 4], ["d, d, REG_WORK1", 4],
+  ["d, d, REG_WORK2", 4], ["d, d, s", 3],
+] as const) expectEorCallShape(`EOR_www ${shape}`, new RegExp(`\\bEOR_www\\(${shape.replaceAll(" ", "\\s*")}\\)`, "g"), expected);
+expectEorCallShape("EOR_wwwLSLi fixed shift", /\bEOR_wwwLSLi\(REG_WORK1, d, d, 1\)/g, 1);
+for (const [shape, expected] of [
+  ["REG_WORK1, REG_WORK1", 10], ["REG_WORK2, REG_WORK2", 5],
+  ["REG_WORK3, REG_WORK3", 10], ["REG_WORK4, REG_WORK4", 5], ["r, r", 1],
+] as const) expectEorCallShape(`EOR_xxCflag ${shape}`, new RegExp(`\\bEOR_xxCflag\\(${shape.replaceAll(" ", "\\s*")}\\)`, "g"), expected);
+expectEorCallShape("EOR_xxbit byte mask", /\bEOR_xxbit\(d, d, s & 0x7\)/g, 2);
+expectEorCallShape("EOR_xxbit long mask", /\bEOR_xxbit\(d, d, s & 0x1f\)/g, 2);
+expectEorCallShape("EOR_xxbit X toggle", /\bEOR_xxbit\(f, f, 0\)/g, 1);
+for (const contract of [
+  "#define N_REGS 18   /* really 32", "#define REG_WORK1 R2_INDEX",
+  "#define REG_WORK2 R3_INDEX", "#define REG_WORK3 R4_INDEX", "#define REG_WORK4 R5_INDEX",
+]) requireText(`${compemuArmHeaderSource}\n${codegenSource}`, contract, "generic EOR register field bound");
+for (const contract of [
+  "0x4a0b0149u", "0x4a1c03beu", "0x4a1f03ffu",
+  "0x4a0b1d49u", "0x4a1c7fbeu", "EOR_wwwLSLi masked shift",
+  "0xd2630149u", "0xd26303beu", "0xd26303ffu",
+  "0xd2400149u", "0xd26301acu", "0xd24103beu", "0xd24103ffu",
+  "immOP_EOR exact base", "EOR_www native d=m alias", "EOR_wwwLSLi native all alias",
+  "EOR_xxCflag native distinct", "EOR_xxbit native bit 63 clear",
+  "EOR_www preserves NZCV", "EOR_wwwLSLi preserves NZCV",
+  "EOR_xxCflag preserves NZCV", "EOR_xxbit preserves NZCV",
+  "PROT_READ | PROT_WRITE", "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 13 && constant_checks == 1 && result_vectors == 18 && flag_vectors == 4",
+]) requireText(eorEmitterProbeSource, contract, "generic EOR native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-eor-conformance.cpp"])
+  requireText(eorEmitterHarnessSource, contract, "generic EOR conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-eor-conformance.sh"', "generic EOR bounded acceptance gate");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
@@ -4281,6 +4349,12 @@ console.log("METRIC structural_add_emitter_apis=7");
 console.log("METRIC structural_add_emitter_raw_callsites=72");
 console.log("METRIC structural_add_emitter_exact_words=12");
 console.log("METRIC structural_add_emitter_native_vectors=46");
+console.log("METRIC structural_eor_emitter_apis=5");
+console.log("METRIC structural_eor_emitter_configured_callsites=53");
+console.log("METRIC structural_eor_emitter_raw_compositions=64");
+console.log("METRIC structural_eor_emitter_exact_words=13");
+console.log("METRIC structural_eor_emitter_base_constants=1");
+console.log("METRIC structural_eor_emitter_native_vectors=22");
 console.log("METRIC structural_branch_emitter_apis=21");
 console.log("METRIC structural_branch_emitter_exact_words=56");
 console.log("METRIC structural_branch_emitter_native_vectors=251");
