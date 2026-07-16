@@ -755,12 +755,14 @@ for (const contract of [
   'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
   'genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
   'comprintf("\\tint __logicdstealock=jit_value_lock(dsta);\\n");',
+  'case i_OR: genflags (flag_or, curi->size, "", "src", "dst"); break;',
   'case i_AND: genflags (flag_and, curi->size, "", "src", "dst"); break;',
   'genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");',
   'comprintf("\\tjit_value_unlock(__logicdstealock);\\n");',
 ]) requireText(logicalGenerator, contract, "logical destination EA lifecycle");
+requireBefore(logicalGenerator, "jit_value_lock(dsta)", "case i_OR: genflags", "OR EA before logic");
 requireBefore(logicalGenerator, "jit_value_lock(dsta)", "case i_AND: genflags", "AND EA before logic");
-requireBefore(logicalGenerator, 'genastore ("dst"', "jit_value_unlock(__logicdstealock)", "AND EA through store");
+requireBefore(logicalGenerator, 'genastore ("dst"', "jit_value_unlock(__logicdstealock)", "logical EA through store");
 if (logicalGenerator.includes("__logicsrclock"))
   fail("logical generator reintroduced a redundant source lock outside MIDFUNC ownership");
 const generatedLogicalBodies = [...generatedSource.matchAll(
@@ -783,12 +785,14 @@ for (const match of generatedLogicalBodies) {
     if (operation < 0 || store < 0 || lock < 0 || lock >= operation || store <= operation || unlock <= store)
       fail(`generated ${family} handler does not retain logical EA through its MIDFUNC operation and ordered store`);
   }
-  if (family === "EOR") {
-    const routes = body.match(/\bxor_[bwl]\(/g) ?? [];
-    const noFlagsNarrow = body.includes("_comp_nf") && (body.includes("xor_b(") || body.includes("xor_w("));
+  if (family === "OR" || family === "EOR") {
+    const operationName = family === "EOR" ? "xor" : "or";
+    const routes = body.match(new RegExp(`\\b${operationName}_[bwl]\\(`, "g")) ?? [];
+    const noFlagsNarrow = body.includes("_comp_nf") &&
+      (body.includes(`${operationName}_b(`) || body.includes(`${operationName}_w(`));
     const expectedRoutes = noFlagsNarrow ? 2 : 1;
-    if (routes.length !== expectedRoutes || (noFlagsNarrow && !body.includes("xor_l(")))
-      fail(`generated EOR handler route split: expected=${expectedRoutes} actual=${routes.length}`);
+    if (routes.length !== expectedRoutes || (noFlagsNarrow && !body.includes(`${operationName}_l(`)))
+      fail(`generated ${family} handler route split: expected=${expectedRoutes} actual=${routes.length}`);
   }
   const item = logicalGeneratedCounts.get(family) ?? { functions: 0, locks: 0, unlocks: 0 };
   item.functions++;
@@ -804,6 +808,10 @@ for (const [family, functions, locks] of [
     fail(`generated ${family} ownership: functions=${found?.functions ?? 0} locks=${found?.locks ?? 0}/${found?.unlocks ?? 0}`);
   }
 }
+const generatedOrFlagLive = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_ff[^\n]*\/\* OR \*\//gm) ?? []).length;
+const generatedOrNoFlags = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_nf[^\n]*\/\* OR \*\//gm) ?? []).length;
+if (generatedOrFlagLive !== 78 || generatedOrNoFlags !== 78)
+  fail(`generated OR flag split: ff=${generatedOrFlagLive} nf=${generatedOrNoFlags}`);
 const generatedEorFlagLive = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_ff[^\n]*\/\* EOR \*\//gm) ?? []).length;
 const generatedEorNoFlags = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_nf[^\n]*\/\* EOR \*\//gm) ?? []).length;
 if (generatedEorFlagLive !== 48 || generatedEorNoFlags !== 48)
@@ -1060,21 +1068,143 @@ for (const contract of [
 ]) requireText(regallocPressureSource, contract, "EOR source/EA allocator pressure");
 requireText(harnessSource, 'TESTS[eor_core_b_postinc_dest_native]="B118 40C2 1028 FFFF"', "EOR.B D0,(A0)+ exact-native regression");
 
-const logicalEaRegressions = ["or_core_b_postinc_dest_native"];
-for (const fragment of [
-  "declare -a LOGICAL_EA_REGRESSION_NAMES=(",
-  'TEST_ORDER+=("${LOGICAL_EA_REGRESSION_NAMES[@]}")',
-  'for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_logical_name"]=1',
-  'for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do\n    RISKY_TESTS["$_logical_name"]=1',
-]) requireText(harnessSource, fragment, "shared logical EA regression contract");
-for (const name of logicalEaRegressions) {
-  for (const fragment of [
-    `TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`,
-    `TEST_MEMORY_BYTES[${name}]=`, `NATIVE_REPLAY_BYTES[${name}]=`,
-  ]) requireText(harnessSource, fragment, `shared logical EA exact-native vector ${name}`);
-  requireText(activeRiskySource, name, `shared logical EA active regression ${name}`);
+/* OR is the complete two-direction logical family: readable-memory, Dn and
+ * immediate sources feed register or writable-memory destinations. Prove its
+ * lifecycle independently of the shared AND/EOR generator repair. */
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_OR_${width},`,
+    `MENDFUNC(2,${variant}_OR_${width},`,
+    `${variant}_OR_${width} operand/flags lifecycle`,
+  );
+  requireText(body, `COMPCALL(${variant}_OR_${width}_imm)`, `${variant}_OR_${width} constant source route`);
+  requireText(body, `INIT_REGS_${width}(d, s);`, `${variant}_OR_${width} operand acquisition`);
+  requireText(body, "EXIT_REGS(d, s);", `${variant}_OR_${width} operand release`);
+  requireBefore(body, `INIT_REGS_${width}(d, s);`, "EXIT_REGS(d, s);", `${variant}_OR_${width} operand lifecycle`);
+  requireText(body, "ORR_www(", `${variant}_OR_${width} result lowering`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    requireText(body, `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_OR_${width} upper-lane preservation`);
+    if (variant === "jff") {
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK1, d);`, `${variant}_OR_${width} signed destination`);
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK2, s);`, `${variant}_OR_${width} signed source`);
+    }
+  } else {
+    requireText(body, "ORR_www(d, d, s);", `${variant}_OR_l full-width result`);
+  }
+  if (variant === "jff") {
+    requireText(body, "TST_ww(", `${variant}_OR_${width} N/Z and V/C publication`);
+    requireText(body, "flags_carry_inverted = false;", `${variant}_OR_${width} carry metadata`);
+  } else if (body.includes("TST_ww(") || body.includes("flags_carry_inverted")) {
+    fail(`${variant}_OR_${width} no-flags path publishes flags or carry metadata`);
+  }
+  if (/\b(?:FLAGX|DUPLICACTE_CARRY)\b/.test(body)) fail(`${variant}_OR_${width} modifies X`);
 }
-requireText(harnessSource, "SPECIAL_MEMORY_TESTS[or_core_b_postinc_dest_native]=1", "OR special-memory EA regression");
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_OR_${width}_imm,`,
+    `MENDFUNC(2,${variant}_OR_${width}_imm,`,
+    `${variant}_OR_${width}_imm immediate/flags lifecycle`,
+  );
+  requireText(body, "ORR_www(", `${variant}_OR_${width}_imm result lowering`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    if (variant === "jff") {
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK1, d);`, `${variant}_OR_${width}_imm signed destination`);
+      requireText(body, `SIGNED${bits}_IMM_2_REG(REG_WORK2, v);`, `${variant}_OR_${width}_imm signed immediate`);
+      requireText(body, `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_OR_${width}_imm upper-lane preservation`);
+    } else {
+      const mask = width === "b"
+        ? "(live.state[d].val & 0xffffff00) | ((live.state[d].val | v) & 0x000000ff)"
+        : "(live.state[d].val & 0xffff0000) | ((live.state[d].val | v) & 0x0000ffff)";
+      requireText(body, mask, `${variant}_OR_${width}_imm constant upper-lane preservation`);
+      requireText(body, width === "b" ? "MOV_xi(REG_WORK2" : "MOV_xi(REG_WORK1", `${variant}_OR_${width}_imm runtime immediate materialisation`);
+    }
+  } else {
+    requireText(body, "LOAD_U32(REG_WORK1, v);", `${variant}_OR_l_imm full immediate materialisation`);
+    if (variant === "jnf")
+      requireText(body, "live.state[d].val = live.state[d].val | v;", `${variant}_OR_l_imm constant fold`);
+  }
+  if (variant === "jff") {
+    requireText(body, "TST_ww(", `${variant}_OR_${width}_imm N/Z and V/C publication`);
+    requireText(body, "flags_carry_inverted = false;", `${variant}_OR_${width}_imm carry metadata`);
+  } else if (body.includes("TST_ww(") || body.includes("flags_carry_inverted")) {
+    fail(`${variant}_OR_${width}_imm no-flags path publishes flags or carry metadata`);
+  }
+  if (/\b(?:FLAGX|DUPLICACTE_CARRY)\b/.test(body)) fail(`${variant}_OR_${width}_imm modifies X`);
+}
+const orExactVectors = [
+  "or_core_b_reg_zero_native", "or_core_w_reg_negative_native", "or_core_l_reg_positive_native",
+  "or_core_b_self_alias_native", "or_core_w_self_alias_native", "or_core_l_self_alias_native",
+  "or_core_b_imm_zero_native", "or_core_w_imm_negative_native",
+  "or_core_l_imm_pattern_native", "or_core_l_imm_negative_native",
+  "or_core_b_reg_noflags_native", "or_core_w_reg_noflags_native", "or_core_l_reg_noflags_native",
+  "or_core_b_imm_noflags_native", "or_core_w_imm_noflags_native", "or_core_l_imm_noflags_native",
+  "or_core_b_aind_source_special_native", "or_core_w_postinc_source_native",
+  "or_core_l_predec_source_native", "or_core_b_d16_source_native",
+  "or_core_w_index_source_special_native", "or_core_l_absw_source_native",
+  "or_core_b_absl_source_special_native", "or_core_w_pc16_source_native",
+  "or_core_l_pcindex_source_native", "or_core_b_aind_dest_special_native",
+  "or_core_w_postinc_dest_native", "or_core_l_predec_dest_native",
+  "or_core_b_d16_dest_native", "or_core_w_index_dest_special_native",
+  "or_core_l_absw_dest_native", "or_core_b_absl_dest_special_native",
+  "or_core_b_a7_postinc_dest_native", "or_core_b_a7_predec_dest_native",
+  "or_core_b_ori_postinc_dest_native", "or_core_b_postinc_dest_native",
+  "or_core_b_postinc_dest_noflags_native",
+];
+for (const fragment of [
+  "declare -a OR_NATIVE_MATRIX_NAMES=(",
+  'TEST_ORDER+=("${OR_NATIVE_MATRIX_NAMES[@]}")',
+  'for _or_name in "${OR_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_or_name"]=1\n    NATIVE_REPLAY_PC["$_or_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_or_name"]=2',
+  'for _or_name in "${OR_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_or_name"]=1',
+]) requireText(harnessSource, fragment, "OR exact-native matrix/replay contract");
+for (const name of orExactVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`])
+    requireText(harnessSource, fragment, `OR exact-native vector ${name}`);
+  requireText(activeRiskySource, name, `OR active mismatch-first vector ${name}`);
+}
+const orMemoryVectors = [
+  "or_core_b_aind_source_special_native", "or_core_w_postinc_source_native",
+  "or_core_l_predec_source_native", "or_core_b_d16_source_native",
+  "or_core_w_index_source_special_native", "or_core_l_absw_source_native",
+  "or_core_b_absl_source_special_native", "or_core_w_pc16_source_native",
+  "or_core_l_pcindex_source_native", "or_core_b_aind_dest_special_native",
+  "or_core_w_postinc_dest_native", "or_core_l_predec_dest_native",
+  "or_core_b_d16_dest_native", "or_core_w_index_dest_special_native",
+  "or_core_l_absw_dest_native", "or_core_b_absl_dest_special_native",
+  "or_core_b_a7_postinc_dest_native", "or_core_b_a7_predec_dest_native",
+  "or_core_b_ori_postinc_dest_native", "or_core_b_postinc_dest_native",
+  "or_core_b_postinc_dest_noflags_native",
+];
+for (const name of orMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `OR memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `OR native memory replay ${name}`);
+}
+for (const name of [
+  "or_core_b_aind_source_special_native", "or_core_w_index_source_special_native",
+  "or_core_b_absl_source_special_native", "or_core_b_aind_dest_special_native",
+  "or_core_w_index_dest_special_native", "or_core_b_absl_dest_special_native",
+]) requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `OR special-memory route ${name}`);
+for (const name of [
+  "or_core_b_reg_noflags_native", "or_core_w_reg_noflags_native", "or_core_l_reg_noflags_native",
+  "or_core_b_imm_noflags_native", "or_core_w_imm_noflags_native", "or_core_l_imm_noflags_native",
+  "or_core_b_postinc_dest_noflags_native",
+]) requireText(harnessSource, `TESTS[${name}]=`, `OR no-flags vector ${name}`);
+for (const contract of [
+  "or_b_postinc_source_dreg_collision", "[or_b_postinc_source_dreg_collision]=21",
+  "[or_b_postinc_source_dreg_collision]=0", "[or_b_postinc_source_dreg_collision]=1",
+  "or_b_postinc_ea_source_collision", "[or_b_postinc_ea_source_collision]=20",
+  "[or_b_postinc_ea_source_collision]=21", "[or_b_postinc_ea_source_collision]=1",
+]) requireText(regallocPressureSource, contract, "OR source/EA allocator pressure");
+requireText(harnessSource, 'TESTS[or_core_b_postinc_dest_native]="8118 40C2 1028 FFFF"', "OR.B D0,(A0)+ exact-native regression");
 
 /* NEG is generated as zero-source through the shared SUB lifecycle.  Memory
  * destinations additionally own the pre-write EA from fetch through result
@@ -4228,7 +4358,19 @@ console.log(`METRIC structural_eor_generated_flag_live=${generatedEorFlagLive}`)
 console.log(`METRIC structural_eor_generated_noflags=${generatedEorNoFlags}`);
 console.log("METRIC structural_eor_generated_ea_locks=84");
 console.log("METRIC structural_eor_allocator_pressure=2");
-console.log(`METRIC structural_logical_adjacent_ea_regressions=${logicalEaRegressions.length}`);
+console.log("METRIC structural_or_shared_midfunc_routes=6");
+console.log("METRIC structural_or_immediate_routes=6");
+console.log(`METRIC structural_or_exact_native_vectors=${orExactVectors.length}`);
+console.log("METRIC structural_or_readable_ea_classes=9");
+console.log("METRIC structural_or_writable_ea_classes=7");
+console.log(`METRIC structural_or_memory_vectors=${orMemoryVectors.length}`);
+console.log("METRIC structural_or_special_memory_routes=6");
+console.log("METRIC structural_or_noflags_vectors=7");
+console.log("METRIC structural_or_generated_functions=156");
+console.log(`METRIC structural_or_generated_flag_live=${generatedOrFlagLive}`);
+console.log(`METRIC structural_or_generated_noflags=${generatedOrNoFlags}`);
+console.log("METRIC structural_or_generated_ea_locks=84");
+console.log("METRIC structural_or_allocator_pressure=2");
 console.log("METRIC structural_neg_shared_sub_lowering=1");
 console.log(`METRIC structural_neg_exact_native_vectors=${negExactVectors.length}`);
 console.log("METRIC structural_neg_memory_ea_classes=9");

@@ -156,6 +156,7 @@ byte-identical; final CSV and Markdown hashes are
 `4fd10774e886e3e868b8bbbe7178475159c1e0633f7c9040268d4c856cb3d972` and
 `7f293f2980d10b08489c2a1a9e8171d3e09ab34823b6b337a92af8384bb2f2bd`.
 
-Only these five directly proved entries are promoted. The next mechanically
-selected family is the complete reachable M68K OR lifecycle. Whole-engine
-closure is not claimed.
+Only these five directly proved entries are promoted. At this tranche's
+acceptance, the next mechanically selected family was the complete reachable
+M68K OR lifecycle; it is now accepted by
+`AARCH64_JIT_AUDIT_OR_LIFECYCLE.md`. Whole-engine closure is not claimed.

@@ -158,6 +158,8 @@ Markdown  158ebbfc9219d3c7dc9861d5ab151c5b22d57bfcb59b1b9edbada437f6b94bfc
 ```
 
 Do not promote any `ANDS_*` API, the adjacent OR/EOR emitter families, or any
-M68K semantic family beyond the separately accepted AND lifecycle report. The
-next mechanically selected unreviewed family is the complete M68K EOR
-lifecycle; whole-engine closure is not claimed.
+M68K semantic family beyond the separately accepted AND lifecycle report. At
+this tranche's acceptance, the next mechanically selected family was the
+complete M68K EOR lifecycle; it and the subsequent generic EOR emitter and M68K
+OR lifecycle tranches are now accepted by their dedicated reports.
+Whole-engine closure is not claimed.

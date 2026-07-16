@@ -105,4 +105,6 @@ Accepted evidence:
   - Markdown: `353db52f5922e270fb26346cd6e4fa1caa977a2dee0fbc9a794b453ce01d0e5f`;
 - shell syntax, structural audit, source hygiene, and diff hygiene are clean.
 
-The inventory next selects reachable generic emitter `AND_ww3f`; `AND_www` and `AND_xxx` follow at the same deterministic risk score.
+At this tranche's acceptance, the inventory next selected reachable generic
+emitter `AND_ww3f`; that three-API encoder tranche is now accepted by
+`AARCH64_JIT_AUDIT_AND_EMITTERS.md`.

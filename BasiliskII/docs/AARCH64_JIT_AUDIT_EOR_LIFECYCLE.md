@@ -8,9 +8,9 @@ register and writable-memory destinations, aliases, special-memory routing, EA
 writeback, exact native execution, and allocator ownership.
 
 `EORSR` was accepted with the immediate-CCR tranche. Generic AArch64 `EOR_*`
-and `immOP_EOR` emitter APIs remain separate encoder families and are not
-promoted by this report. In particular, `EOR_www`, `EOR_wwwLSLi`, `EOR_xxbit`,
-`EOR_xxCflag`, and `immOP_EOR` remain unreviewed, while the source-unreachable
+and `immOP_EOR` emitter APIs are separate encoder families and were not
+promoted by this report. The reachable five-API surface was subsequently
+accepted by `AARCH64_JIT_AUDIT_EOR_EMITTERS.md`; the source-unreachable
 `EOR_xxx` and `EOR_xxxLSLi` remain unreachable. The authoritative opcode
 generator is `src/uae_cpu_2026/compiler/gencomp.c`; `src/Unix/compemu.cpp` is
 deterministic generated output.
@@ -96,9 +96,10 @@ The 28-vector EOR matrix begins every replay at the audited opcode at
 - stored-data reloads plus captured SR snapshots after memory RMW operations.
 
 The focused matrix passes 28/28 with zero semantic or infrastructure failure.
-An adjacent OR postincrement vector remains independently active for the
-shared generator path, but is not part of the EOR closure count and does not
-promote OR.
+At this tranche's acceptance, one adjacent OR postincrement vector remained
+independently active for the shared generator path; it was not part of the EOR
+closure count and did not promote OR. The complete OR lifecycle is now accepted
+by its own report.
 
 ## Acceptance gates
 
@@ -146,5 +147,6 @@ Accepted evidence:
 - shell syntax, structural audit, deterministic closure regeneration, source
   hygiene, and diff hygiene are clean.
 
-The inventory next selects reachable generic emitter `EOR_www`; the adjacent
-EOR emitter APIs remain separate. Whole-engine closure is not claimed.
+At this tranche's acceptance, the inventory next selected reachable generic
+emitter `EOR_www`; that separate encoder tranche is now accepted by
+`AARCH64_JIT_AUDIT_EOR_EMITTERS.md`. Whole-engine closure is not claimed.

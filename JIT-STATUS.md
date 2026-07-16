@@ -173,7 +173,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 **Current structural-audit gate (2026-07-16):** ✅
 **Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `3476e73b1d78da29814d529c8493909bf00f85e7928a0e0afa0cb3e3a8f459b5`
-**JIT harness:** ✅ 725/725 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**JIT harness:** ✅ 761/761 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -205,15 +205,30 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**725 active-risky vectors, score=100**
+**761 active-risky vectors, score=100**
 
 The larger exact-native family inventories remain available as focused gates;
-the current `EOR` inventory is 28/28, the `AND` inventory is 34/34, the `ADD`
-inventory is 34/34, the accepted `ROL`/`ROR` inventory is 92/92, and the
-accepted register-count `ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138. An
-adjacent OR writable-EA regression remains independently active.
+the current `OR` inventory is 37/37, the `EOR` inventory is 28/28, the `AND`
+inventory is 34/34, the `ADD` inventory is 34/34, the accepted `ROL`/`ROR`
+inventory is 92/92, and the accepted register-count
+`ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138.
 
 ### Recent bug fixes (2026-07)
+
+- **Complete OR lifecycle, flags, EA classes, and allocator ownership**
+  (2026-07-16): all 156 generated handlers and twelve reachable MIDFUNC routes
+  are covered across byte/word/long Dn, immediate, and all nine readable-memory
+  source classes; register and all seven writable-memory destination classes;
+  flag-live and no-flags lowering; aliases; A7 byte geometry; and special
+  memory. Focused replay passes 37/37 before and after a clean build; the
+  complete active-risky corpus passes 761/761 and all 24 allocator cells pass.
+  Two OR-specific pressure cells reject read-source-to-D0 and
+  RMW-value-to-pre-write-EA collisions while retaining exact native entry. No
+  production repair was required beyond the accepted shared logical
+  writable-EA fix. The 997-row inventory promotes only `i_OR` and its twelve
+  lifecycle MIDFUNCs; generic
+  `ORR_*` emitters remain separate. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md`.
 
 - **Generic EOR emitter encoding, alias, bit, and no-flags closure** (2026-07-16):
   the four reachable callable AArch64 EOR encoders and shared `immOP_EOR` base
@@ -260,9 +275,10 @@ adjacent OR writable-EA regression remains independently active.
   fetched pre-write EA through MIDFUNC allocation and ordered storage:
   `AND.B D0,(A0)+` reloaded stale `0xff` instead of stored `0x0f`. The shared
   generator now emits 84 balanced destination-EA pins for each of OR, AND, and
-  EOR, with exact OR/EOR postincrement regressions but no adjacent family
-  promotion. Focused replay passes 34/34 AND and 2/2 shared-path vectors; the
-  complete active-risky gate passes 698/698 and all 20 allocator cells pass.
+  EOR. The adjacent OR and EOR lifecycles are now independently audited rather
+  than promoted by this AND evidence. Focused replay passes 34/34 AND and 2/2
+  shared-path vectors; the complete active-risky gate passes 698/698 and all 20
+  allocator cells pass.
   The 997-row closure census promotes `i_AND` and twelve reachable MIDFUNCs;
   generic AND/ANDS emitters are audited separately. Full evidence is in
   `BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md`.

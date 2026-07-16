@@ -29,7 +29,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 | 0x5 | ADDQ/SUBQ/Scc/DBcc | 178 | ✅ Safe | None | No get_n_addr usage |
 | 0x6 | Bcc/BSR/BRA | 42 | ✅ Safe | None | No get_n_addr usage |
 | 0x7 | MOVEQ/EMUL_OP | 1 | ✅ Safe | None | No get_n_addr usage |
-| 0x8 | OR/DIV/SBCD | 54 | ✅ Audited | None | DIVS/DIVL zero/overflow and patched joins; SBCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
+| 0x8 | OR/DIV/SBCD | 54 | ✅ Audited | None | Complete OR flag/no-flags/immediate/readable-and-writable-EA lifecycle; DIVS/DIVL zero/overflow and patched joins; SBCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
 | 0x9 | SUB/SUBA/SUBX | 86 | ✅ Safe | None | No get_n_addr usage |
 | 0xA | A-line traps | — | ✅ Interpreter | None | A-line handled by runtime helper |
 | 0xB | CMP/CMPA/CMPM/EOR | 86 | ✅ Audited | None | CMP/CMPA/CMPM, complete EOR flag/no-flags/immediate/writable-EA lifecycles, and the reachable generic EOR emitter surface are separately audited; no get_n_addr usage |
@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Complete OR lifecycle and source/destination EA ownership | current structural audit | Twelve reachable OR MIDFUNC routes, 156 generated handlers, nine readable and seven writable EA classes, 84 balanced writable-EA pins, 37 exact-native vectors, and two focused allocator collisions; see `AARCH64_JIT_AUDIT_OR_LIFECYCLE.md` |
 | Generic EOR emitter encoding/bit/no-flags contracts | current structural audit | Four reachable callable AArch64 encoders plus `immOP_EOR`, 13 exact words, 22 direct native vectors, and 64 fail-closed raw source compositions; see `AARCH64_JIT_AUDIT_EOR_EMITTERS.md` |
 | Complete EOR lifecycle and writable-EA ownership | current structural audit | Twelve reachable EOR MIDFUNC routes, 96 generated handlers, 84 balanced EOR memory-EA pins, 28 exact-native vectors, and two focused allocator collisions; see `AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md` |
 | Generic AND emitter width/field/no-flags contracts | current structural audit | Three reachable AArch64 encoder APIs, 9 exact words, 27 direct native vectors, and 83 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_AND_EMITTERS.md` |
