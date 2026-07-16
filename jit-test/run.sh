@@ -508,6 +508,28 @@ declare -a SUB_NATIVE_MATRIX_NAMES=(
     sub_core_b_postinc_dest_native sub_core_b_postinc_dest_noflags_native
 )
 TEST_ORDER+=("${SUB_NATIVE_MATRIX_NAMES[@]}")
+# ADDA consumes a word (sign-extended) or long source, updates a full 32-bit
+# address register modulo 2^32, and preserves XNZVC. Audit dynamic and constant
+# source/destination lowering, all source EAs, same-register/update aliases,
+# nominal no-flags selection, maximum register fields, and exact native entry.
+declare -a ADDA_NATIVE_MATRIX_NAMES=(
+    adda_core_w_dreg_positive_native adda_core_w_dreg_negative_native
+    adda_core_l_dreg_wrap_native adda_core_w_areg_alias_native
+    adda_core_l_areg_alias_native adda_core_w_max_fields_native
+    adda_core_w_imm_small_positive_native adda_core_w_imm_small_negative_native
+    adda_core_w_imm_large_positive_native adda_core_w_imm_large_negative_native
+    adda_core_l_imm_small_positive_native adda_core_l_imm_small_negative_native
+    adda_core_l_imm_large_positive_native adda_core_l_imm_large_negative_native
+    adda_core_w_const_dst_wrap adda_core_l_const_dst_wrap
+    adda_core_w_aind_alias_native adda_core_w_postinc_alias_native
+    adda_core_w_predec_alias_native adda_core_l_postinc_alias_native
+    adda_core_l_predec_alias_native adda_core_w_d16_source_native
+    adda_core_w_index_source_special_native adda_core_l_absw_source_native
+    adda_core_w_absl_source_special_native adda_core_w_pc16_source_native
+    adda_core_l_pcindex_source_native adda_core_w_dreg_noflags_native
+    adda_core_l_dreg_noflags_native
+)
+TEST_ORDER+=("${ADDA_NATIVE_MATRIX_NAMES[@]}")
 # NEG is lowered through shared SUB flags plus an explicit zero destination.
 # Audit every width and arithmetic edge, no-flags selection, each writable EA,
 # A7 byte geometry, normal/special memory, and exact native entry.
@@ -1510,6 +1532,34 @@ SPECIAL_MEMORY_TESTS[sub_core_b_absl_source_special_native]=1
 SPECIAL_MEMORY_TESTS[sub_core_b_aind_dest_special_native]=1
 SPECIAL_MEMORY_TESTS[sub_core_w_index_dest_special_native]=1
 SPECIAL_MEMORY_TESTS[sub_core_b_absl_dest_special_native]=1
+for _adda_name in "${ADDA_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_adda_name"]=1
+    NATIVE_REPLAY_PC["$_adda_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_adda_name"]=2
+done
+unset _adda_name
+# A fully constant ADDA emits no host instruction at its own guest PC, so the
+# two constant-fold vectors remain strict equivalence cases rather than forging
+# impossible exact-native-entry evidence.
+unset 'NATIVE_REPLAY_TESTS[adda_core_w_const_dst_wrap]'
+unset 'NATIVE_REPLAY_TESTS[adda_core_l_const_dst_wrap]'
+unset 'NATIVE_REPLAY_PC[adda_core_w_const_dst_wrap]'
+unset 'NATIVE_REPLAY_PC[adda_core_l_const_dst_wrap]'
+unset 'NATIVE_REPLAY_COUNT[adda_core_w_const_dst_wrap]'
+unset 'NATIVE_REPLAY_COUNT[adda_core_l_const_dst_wrap]'
+NATIVE_REPLAY_BYTES[adda_core_w_aind_alias_native]="A000 00 A001 01"
+NATIVE_REPLAY_BYTES[adda_core_w_postinc_alias_native]="A000 00 A001 01"
+NATIVE_REPLAY_BYTES[adda_core_w_predec_alias_native]="A000 00 A001 01"
+NATIVE_REPLAY_BYTES[adda_core_l_postinc_alias_native]="A000 00 A001 00 A002 00 A003 01"
+NATIVE_REPLAY_BYTES[adda_core_l_predec_alias_native]="A000 00 A001 00 A002 00 A003 01"
+NATIVE_REPLAY_BYTES[adda_core_w_d16_source_native]="A010 FF A011 FF"
+NATIVE_REPLAY_BYTES[adda_core_w_index_source_special_native]="A002 80 A003 00"
+NATIVE_REPLAY_BYTES[adda_core_l_absw_source_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+NATIVE_REPLAY_BYTES[adda_core_w_absl_source_special_native]="A000 7F A001 FF"
+NATIVE_REPLAY_BYTES[adda_core_w_pc16_source_native]="0FF0 80 0FF1 00"
+NATIVE_REPLAY_BYTES[adda_core_l_pcindex_source_native]="0FF0 00 0FF1 00 0FF2 00 0FF3 01"
+SPECIAL_MEMORY_TESTS[adda_core_w_index_source_special_native]=1
+SPECIAL_MEMORY_TESTS[adda_core_w_absl_source_special_native]=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_neg_name"]=1
     NATIVE_REPLAY_PC["$_neg_name"]=0x1000
@@ -2192,6 +2242,81 @@ TEST_MEMORY_BYTES[sub_core_b_a7_predec_dest_native]="A000 FF"
 TEST_MEMORY_BYTES[sub_core_b_subi_postinc_dest_native]="A000 FF"
 TEST_MEMORY_BYTES[sub_core_b_postinc_dest_native]="A000 FF"
 TEST_MEMORY_BYTES[sub_core_b_postinc_dest_noflags_native]="A000 FF"
+
+# ADDA matrix. Twenty-seven dynamic cases begin at ADDA and require exact-native
+# entry. Two constant-destination cases begin with LEA and prove folding by
+# equivalence because a fully folded ADDA has no host instruction to enter.
+# MOVE SR,D3 makes complete XNZVC preservation externally visible; the two
+# no-flags cases overwrite SR after ADDA to select the nominal comp_nf table.
+TESTS[adda_core_w_dreg_positive_native]="D0C0 40C3"
+TESTS[adda_core_w_dreg_negative_native]="D0C0 40C3"
+TESTS[adda_core_l_dreg_wrap_native]="D1C0 40C3"
+TESTS[adda_core_w_areg_alias_native]="D0C8 40C3"
+TESTS[adda_core_l_areg_alias_native]="D1C8 40C3"
+TESTS[adda_core_w_max_fields_native]="DEC7 40C3"
+TESTS[adda_core_w_imm_small_positive_native]="D0FC 0FFF 40C3"
+TESTS[adda_core_w_imm_small_negative_native]="D0FC F001 40C3"
+TESTS[adda_core_w_imm_large_positive_native]="D0FC 7FFF 40C3"
+TESTS[adda_core_w_imm_large_negative_native]="D0FC 8000 40C3"
+TESTS[adda_core_l_imm_small_positive_native]="D1FC 0000 0FFF 40C3"
+TESTS[adda_core_l_imm_small_negative_native]="D1FC FFFF F001 40C3"
+TESTS[adda_core_l_imm_large_positive_native]="D1FC 1234 5678 40C3"
+TESTS[adda_core_l_imm_large_negative_native]="D1FC 8000 0000 40C3"
+TESTS[adda_core_w_const_dst_wrap]="41F9 FFFF FFFF D0FC 0001 40C3"
+TESTS[adda_core_l_const_dst_wrap]="41F9 FFFF FFFF D1FC 0000 0001 40C3"
+TESTS[adda_core_w_aind_alias_native]="D0D0 40C3"
+TESTS[adda_core_w_postinc_alias_native]="D0D8 40C3"
+TESTS[adda_core_w_predec_alias_native]="D0E0 40C3"
+TESTS[adda_core_l_postinc_alias_native]="D1D8 40C3"
+TESTS[adda_core_l_predec_alias_native]="D1E0 40C3"
+TESTS[adda_core_w_d16_source_native]="D0E9 0010 40C3"
+TESTS[adda_core_w_index_source_special_native]="D0F1 2000 40C3"
+TESTS[adda_core_l_absw_source_native]="D1F8 6000 40C3"
+TESTS[adda_core_w_absl_source_special_native]="D0F9 0000 A000 40C3"
+TESTS[adda_core_w_pc16_source_native]="D0FA FFEE 40C3"
+TESTS[adda_core_l_pcindex_source_native]="D1FB 1000 40C3"
+TESTS[adda_core_w_dreg_noflags_native]="D0C0 46FC 2700"
+TESTS[adda_core_l_dreg_noflags_native]="D1C0 46FC 2700"
+EXPECTED_REG_FIELDS[adda_core_w_dreg_positive_native]="D0=00007FFF D3=0000271F A0=10007FFF SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_dreg_negative_native]="D0=DEAD8000 D3=0000271F A0=0FFF8000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_dreg_wrap_native]="D0=FFFFFFFF D3=0000271F A0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_areg_alias_native]="D3=0000271F A0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_areg_alias_native]="D3=0000271F A0=00000002 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_max_fields_native]="D3=0000271F D7=00008000 A7=00018000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_imm_small_positive_native]="D3=0000271F A0=00001FFF SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_imm_small_negative_native]="D3=0000271F A0=00000001 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_imm_large_positive_native]="D3=0000271F A0=00017FFF SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_imm_large_negative_native]="D3=0000271F A0=00008000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_imm_small_positive_native]="D3=0000271F A0=00001FFF SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_imm_small_negative_native]="D3=0000271F A0=00000001 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_imm_large_positive_native]="D3=0000271F A0=12345679 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_imm_large_negative_native]="D3=0000271F A0=80000001 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_const_dst_wrap]="D3=0000271F A0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_const_dst_wrap]="D3=0000271F A0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_aind_alias_native]="D3=0000271F A0=0000A001 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_postinc_alias_native]="D3=0000271F A0=0000A003 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_predec_alias_native]="D3=0000271F A0=0000A001 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_postinc_alias_native]="D3=0000271F A0=0000A005 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_predec_alias_native]="D3=0000271F A0=0000A001 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_d16_source_native]="D3=0000271F A0=00000FFF A1=0000A000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_index_source_special_native]="D2=00000002 D3=0000271F A0=00008000 A1=0000A000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_absw_source_native]="D3=0000271F A0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_absl_source_special_native]="D3=0000271F A0=00008000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_pc16_source_native]="D3=0000271F A0=00008000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_l_pcindex_source_native]="D1=FFFFFFEE D3=0000271F A0=00000000 SR=271F"
+EXPECTED_REG_FIELDS[adda_core_w_dreg_noflags_native]="D0=00000001 A0=00001001 SR=2700"
+EXPECTED_REG_FIELDS[adda_core_l_dreg_noflags_native]="D0=00000001 A0=00001001 SR=2700"
+TEST_MEMORY_BYTES[adda_core_w_aind_alias_native]="A000 00 A001 01"
+TEST_MEMORY_BYTES[adda_core_w_postinc_alias_native]="A000 00 A001 01"
+TEST_MEMORY_BYTES[adda_core_w_predec_alias_native]="A000 00 A001 01"
+TEST_MEMORY_BYTES[adda_core_l_postinc_alias_native]="A000 00 A001 00 A002 00 A003 01"
+TEST_MEMORY_BYTES[adda_core_l_predec_alias_native]="A000 00 A001 00 A002 00 A003 01"
+TEST_MEMORY_BYTES[adda_core_w_d16_source_native]="A010 FF A011 FF"
+TEST_MEMORY_BYTES[adda_core_w_index_source_special_native]="A002 80 A003 00"
+TEST_MEMORY_BYTES[adda_core_l_absw_source_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+TEST_MEMORY_BYTES[adda_core_w_absl_source_special_native]="A000 7F A001 FF"
+TEST_MEMORY_BYTES[adda_core_w_pc16_source_native]="0FF0 80 0FF1 00"
+TEST_MEMORY_BYTES[adda_core_l_pcindex_source_native]="0FF0 00 0FF1 00 0FF2 00 0FF3 01"
 
 # Exact-opcode NEG matrix. Register forms begin with the audited opcode so
 # B2_TEST_INIT supplies the operand/CCR state at exact native entry.  The matrix
@@ -4624,6 +4749,38 @@ INIT_REGS[sub_core_b_subi_postinc_dest_native]="A5A50000 00000000 00000000 00000
 INIT_REGS[sub_core_b_postinc_dest_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[sub_core_b_postinc_dest_noflags_native]="A5A50001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 unset _SUB_ZERO_TAIL
+_ADDA_ZERO_D="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000"
+_ADDA_ZERO_A_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[adda_core_w_dreg_positive_native]="00007FFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 10000000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_dreg_negative_native]="DEAD8000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 10000000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_dreg_wrap_native]="FFFFFFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000001 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_areg_alias_native]="$_ADDA_ZERO_D 00008000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_areg_alias_native]="$_ADDA_ZERO_D 80000001 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_max_fields_native]="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00008000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00020000 0000271F"
+INIT_REGS[adda_core_w_imm_small_positive_native]="$_ADDA_ZERO_D 00001000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_imm_small_negative_native]="$_ADDA_ZERO_D 00001000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_imm_large_positive_native]="$_ADDA_ZERO_D 00010000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_imm_large_negative_native]="$_ADDA_ZERO_D 00010000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_imm_small_positive_native]="$_ADDA_ZERO_D 00001000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_imm_small_negative_native]="$_ADDA_ZERO_D 00001000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_imm_large_positive_native]="$_ADDA_ZERO_D 00000001 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_imm_large_negative_native]="$_ADDA_ZERO_D 00000001 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_const_dst_wrap]="$_ADDA_ZERO_D 00000000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_const_dst_wrap]="$_ADDA_ZERO_D 00000000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_aind_alias_native]="$_ADDA_ZERO_D 0000A000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_postinc_alias_native]="$_ADDA_ZERO_D 0000A000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_predec_alias_native]="$_ADDA_ZERO_D 0000A002 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_postinc_alias_native]="$_ADDA_ZERO_D 0000A000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_predec_alias_native]="$_ADDA_ZERO_D 0000A004 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_d16_source_native]="$_ADDA_ZERO_D 00001000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[adda_core_w_index_source_special_native]="00000000 00000000 00000002 00000000 00000000 00000000 00000000 00000000 00010000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[adda_core_l_absw_source_native]="$_ADDA_ZERO_D 00000001 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_absl_source_special_native]="$_ADDA_ZERO_D 00000001 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_pc16_source_native]="$_ADDA_ZERO_D 00010000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_pcindex_source_native]="00000000 FFFFFFEE 00000000 00000000 00000000 00000000 00000000 00000000 FFFFFFFF $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_w_dreg_noflags_native]="00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00001000 $_ADDA_ZERO_A_TAIL 0000271F"
+INIT_REGS[adda_core_l_dreg_noflags_native]="00000001 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00001000 $_ADDA_ZERO_A_TAIL 0000271F"
+unset _ADDA_ZERO_D _ADDA_ZERO_A_TAIL
 _NEG_INIT_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[neg_b_zero_native]="A5A50000 $_NEG_INIT_ZERO_TAIL 0000271F"
 INIT_REGS[neg_w_zero_native]="A5A50000 $_NEG_INIT_ZERO_TAIL 0000271F"
@@ -5195,6 +5352,12 @@ for _sub_name in "${SUB_NATIVE_MATRIX_NAMES[@]}"; do
     ((_sub_sentinel_id+=1))
 done
 unset _sub_name _sub_sentinel_id
+_adda_sentinel_id=1
+for _adda_name in "${ADDA_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_adda_name"] 'a6da%04x' "$_adda_sentinel_id"
+    ((_adda_sentinel_id+=1))
+done
+unset _adda_name _adda_sentinel_id
 _neg_sentinel_id=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_neg_name"] 'a60f%04x' "$_neg_sentinel_id"
@@ -6701,6 +6864,10 @@ for _sub_name in "${SUB_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_sub_name"]=1
 done
 unset _sub_name
+for _adda_name in "${ADDA_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_adda_name"]=1
+done
+unset _adda_name
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_neg_name"]=1
 done

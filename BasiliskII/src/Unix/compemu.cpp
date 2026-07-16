@@ -27525,8 +27525,10 @@ void REGPARAM2 op_5048_0_comp_ff(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, srcreg);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -27838,8 +27840,10 @@ void REGPARAM2 op_5088_0_comp_ff(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, srcreg);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -45999,8 +46003,10 @@ void REGPARAM2 op_d0c0_0_comp_ff(uae_u32 opcode) /* ADDA */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -46025,8 +46031,10 @@ void REGPARAM2 op_d0c8_0_comp_ff(uae_u32 opcode) /* ADDA */
 {	int src = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(src, srcreg + 8);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -46053,8 +46061,10 @@ void REGPARAM2 op_d0d0_0_comp_ff(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46081,9 +46091,13 @@ void REGPARAM2 op_d0d8_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __adda_writebacksrclock = dodgy ? jit_value_lock(src) : -1;
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
+	if (__adda_writebacksrclock >= 0) jit_value_unlock(__adda_writebacksrclock);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46112,8 +46126,10 @@ void REGPARAM2 op_d0e0_0_comp_ff(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46141,8 +46157,10 @@ void REGPARAM2 op_d0e8_0_comp_ff(uae_u32 opcode) /* ADDA */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46169,8 +46187,10 @@ void REGPARAM2 op_d0f0_0_comp_ff(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46192,8 +46212,10 @@ void REGPARAM2 op_d0f8_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46215,8 +46237,10 @@ void REGPARAM2 op_d0f9_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46240,8 +46264,10 @@ void REGPARAM2 op_d0fa_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46266,8 +46292,10 @@ void REGPARAM2 op_d0fb_0_comp_ff(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -46287,8 +46315,10 @@ void REGPARAM2 op_d0fc_0_comp_ff(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47356,8 +47386,10 @@ void REGPARAM2 op_d1c0_0_comp_ff(uae_u32 opcode) /* ADDA */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -47382,8 +47414,10 @@ void REGPARAM2 op_d1c8_0_comp_ff(uae_u32 opcode) /* ADDA */
 {	int src = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(src, srcreg + 8);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -47410,8 +47444,10 @@ void REGPARAM2 op_d1d0_0_comp_ff(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47441,9 +47477,13 @@ void REGPARAM2 op_d1d8_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __adda_writebacksrclock = dodgy ? jit_value_lock(src) : -1;
 	lea_l_brr(srcreg + 8, srcreg + 8, 4);
+	if (__adda_writebacksrclock >= 0) jit_value_unlock(__adda_writebacksrclock);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47472,8 +47512,10 @@ void REGPARAM2 op_d1e0_0_comp_ff(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47501,8 +47543,10 @@ void REGPARAM2 op_d1e8_0_comp_ff(uae_u32 opcode) /* ADDA */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47529,8 +47573,10 @@ void REGPARAM2 op_d1f0_0_comp_ff(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47552,8 +47598,10 @@ void REGPARAM2 op_d1f8_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47575,8 +47623,10 @@ void REGPARAM2 op_d1f9_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47600,8 +47650,10 @@ void REGPARAM2 op_d1fa_0_comp_ff(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47626,8 +47678,10 @@ void REGPARAM2 op_d1fb_0_comp_ff(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -47647,8 +47701,10 @@ void REGPARAM2 op_d1fc_0_comp_ff(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -75306,8 +75362,10 @@ void REGPARAM2 op_5048_0_comp_nf(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, srcreg);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -75579,8 +75637,10 @@ void REGPARAM2 op_5088_0_comp_nf(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, srcreg);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92735,8 +92795,10 @@ void REGPARAM2 op_d0c0_0_comp_nf(uae_u32 opcode) /* ADDA */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -92761,8 +92823,10 @@ void REGPARAM2 op_d0c8_0_comp_nf(uae_u32 opcode) /* ADDA */
 {	int src = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(src, srcreg + 8);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -92789,8 +92853,10 @@ void REGPARAM2 op_d0d0_0_comp_nf(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92817,9 +92883,13 @@ void REGPARAM2 op_d0d8_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __adda_writebacksrclock = dodgy ? jit_value_lock(src) : -1;
 	lea_l_brr(srcreg + 8, srcreg + 8, 2);
+	if (__adda_writebacksrclock >= 0) jit_value_unlock(__adda_writebacksrclock);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92848,8 +92918,10 @@ void REGPARAM2 op_d0e0_0_comp_nf(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92877,8 +92949,10 @@ void REGPARAM2 op_d0e8_0_comp_nf(uae_u32 opcode) /* ADDA */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92905,8 +92979,10 @@ void REGPARAM2 op_d0f0_0_comp_nf(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92928,8 +93004,10 @@ void REGPARAM2 op_d0f8_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92951,8 +93029,10 @@ void REGPARAM2 op_d0f9_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -92976,8 +93056,10 @@ void REGPARAM2 op_d0fa_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -93002,8 +93084,10 @@ void REGPARAM2 op_d0fb_0_comp_nf(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readword(srca,src,scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -93023,8 +93107,10 @@ void REGPARAM2 op_d0fc_0_comp_nf(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_w(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -93879,8 +93965,10 @@ void REGPARAM2 op_d1c0_0_comp_nf(uae_u32 opcode) /* ADDA */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {	int src = srcreg;
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -93905,8 +93993,10 @@ void REGPARAM2 op_d1c8_0_comp_nf(uae_u32 opcode) /* ADDA */
 {	int src = dodgy ? scratchie++ : srcreg + 8;
 	if (dodgy)
 		mov_l_rr(src, srcreg + 8);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
         sync_m68k_pc();
@@ -93933,8 +94023,10 @@ void REGPARAM2 op_d1d0_0_comp_nf(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -93964,9 +94056,13 @@ void REGPARAM2 op_d1d8_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __adda_writebacksrclock = dodgy ? jit_value_lock(src) : -1;
 	lea_l_brr(srcreg + 8, srcreg + 8, 4);
+	if (__adda_writebacksrclock >= 0) jit_value_unlock(__adda_writebacksrclock);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -93995,8 +94091,10 @@ void REGPARAM2 op_d1e0_0_comp_nf(uae_u32 opcode) /* ADDA */
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94024,8 +94122,10 @@ void REGPARAM2 op_d1e8_0_comp_nf(uae_u32 opcode) /* ADDA */
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94052,8 +94152,10 @@ void REGPARAM2 op_d1f0_0_comp_nf(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94075,8 +94177,10 @@ void REGPARAM2 op_d1f8_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94098,8 +94202,10 @@ void REGPARAM2 op_d1f9_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94123,8 +94229,10 @@ void REGPARAM2 op_d1fa_0_comp_nf(uae_u32 opcode) /* ADDA */
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94149,8 +94257,10 @@ void REGPARAM2 op_d1fb_0_comp_nf(uae_u32 opcode) /* ADDA */
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
 	readlong(srca, src, scratchie);
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)
@@ -94170,8 +94280,10 @@ void REGPARAM2 op_d1fc_0_comp_nf(uae_u32 opcode) /* ADDA */
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
 	mov_l_ri(src, comp_get_ilong((m68k_pc_offset+=4)-4));
+	int __addasrclock=is_const(src) ? -1 : jit_value_lock(src);
 {	int dst = dstreg + 8;
 	jnf_ADDA_l(dst,src);
+	if (__addasrclock >= 0) jit_value_unlock(__addasrclock);
 	forget_about(src);
 }}}
     if (m68k_pc_offset > SYNC_PC_OFFSET)

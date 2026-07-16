@@ -748,6 +748,119 @@ requireText(
   "ADD.B D0,(A0)+ active mismatch-first regression",
 );
 
+/* ADDA is a no-flags, full-address-register lifecycle. ADDA.W must sign-extend
+ * its source and both widths must retain a fetched value across aliased
+ * postincrement and destination RMW without publishing or consuming XNZVC. */
+const addaGenerator = functionBody(gencompSource, "     case i_ADDA:", "     case i_ADDX:", "ADDA generator");
+for (const contract of [
+  "global_preserve_postinc_source = 1;",
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  "global_preserve_postinc_source = 0;",
+  'comprintf("\\tint __addasrclock=is_const(src) ? -1 : jit_value_lock(src);\\n");',
+  'case sz_word: comprintf("\\tjnf_ADDA_w(dst,src);\\n"); break;',
+  'case sz_long: comprintf("\\tjnf_ADDA_l(dst,src);\\n"); break;',
+  'comprintf("\\tif (__addasrclock >= 0) jit_value_unlock(__addasrclock);\\n");',
+]) requireText(addaGenerator, contract, "ADDA generator lifecycle");
+requireBefore(addaGenerator, "global_preserve_postinc_source = 1;", "genamode (curi->smode", "ADDA postincrement ownership request");
+requireBefore(addaGenerator, "genamode (curi->smode", "global_preserve_postinc_source = 0;", "ADDA postincrement ownership reset");
+requireBefore(addaGenerator, "jit_value_lock(src)", "jnf_ADDA_w(dst,src)", "ADDA source before word destination RMW");
+requireBefore(addaGenerator, "jnf_ADDA_l(dst,src)", "jit_value_unlock(__addasrclock)", "ADDA source through long destination RMW");
+for (const contract of [
+  "static int global_preserve_postinc_source;",
+  "mode == Aipi && global_preserve_postinc_source",
+  'comprintf("\\tint __adda_writebacksrclock = dodgy ? jit_value_lock(%s) : -1;\\n", name);',
+  'comprintf("\\tif (__adda_writebacksrclock >= 0) jit_value_unlock(__adda_writebacksrclock);\\n");',
+]) requireText(gencompSource, contract, "ADDA aliased postincrement ownership");
+const generatedAddaFunctions = (generatedSource.match(/void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^{]*\/\* ADDA \*\//g) || []).length;
+const generatedAddaFlagLive = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_ff[^\n]*\/\* ADDA \*\//gm) || []).length;
+const generatedAddaNoFlags = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_nf[^\n]*\/\* ADDA \*\//gm) || []).length;
+const generatedAddaWordCalls = (generatedSource.match(/jnf_ADDA_w\(dst,src\);/g) || []).length;
+const generatedAddaLongCalls = (generatedSource.match(/jnf_ADDA_l\(dst,src\);/g) || []).length;
+const generatedAddaSourceLocks = (generatedSource.match(/int __addasrclock=is_const\(src\) \? -1 : jit_value_lock\(src\);/g) || []).length;
+const generatedAddaSourceUnlocks = (generatedSource.match(/if \(__addasrclock >= 0\) jit_value_unlock\(__addasrclock\);/g) || []).length;
+const generatedAddaWritebackLocks = (generatedSource.match(/int __adda_writebacksrclock = dodgy \? jit_value_lock\(src\) : -1;/g) || []).length;
+const generatedAddaWritebackUnlocks = (generatedSource.match(/if \(__adda_writebacksrclock >= 0\) jit_value_unlock\(__adda_writebacksrclock\);/g) || []).length;
+if (generatedAddaFunctions !== 52 || generatedAddaFlagLive !== 26 || generatedAddaNoFlags !== 26 ||
+    generatedAddaWordCalls !== 26 || generatedAddaLongCalls !== 26 ||
+    generatedAddaSourceLocks !== 52 || generatedAddaSourceUnlocks !== 52 ||
+    generatedAddaWritebackLocks !== 4 || generatedAddaWritebackUnlocks !== 4) {
+  fail(`generated ADDA ownership: functions=${generatedAddaFunctions} split=${generatedAddaFlagLive}/${generatedAddaNoFlags} calls=${generatedAddaWordCalls}/${generatedAddaLongCalls} source=${generatedAddaSourceLocks}/${generatedAddaSourceUnlocks} writeback=${generatedAddaWritebackLocks}/${generatedAddaWritebackUnlocks}`);
+}
+const addaWordImmBody = functionBody(midfunc2Source, "MIDFUNC(2,jnf_ADDA_w_imm,", "MENDFUNC(2,jnf_ADDA_w_imm,", "ADDA.W immediate");
+for (const contract of [
+  "if (isconst(d))", "set_const(d, (uae_u32)(live.state[d].val + (uae_s32)(uae_s16)v));",
+  "uae_s16 tmp = (uae_s16)v;", "ADD_wwi(d, d, tmp);", "SUB_wwi(d, d, -tmp);",
+  "SIGNED16_IMM_2_REG(REG_WORK1, tmp);", "ADD_www(d, d, REG_WORK1);",
+]) requireText(addaWordImmBody, contract, "ADDA.W immediate/sign-extension lifecycle");
+const addaLongImmBody = functionBody(midfunc2Source, "MIDFUNC(2,jnf_ADDA_l_imm,", "MENDFUNC(2,jnf_ADDA_l_imm,", "ADDA.L immediate");
+for (const contract of [
+  "if (isconst(d))", "set_const(d, live.state[d].val + v);", "ADD_wwi(d, d, v);",
+  "SUB_wwi(d, d, -v);", "LOAD_U32(REG_WORK1, v);", "ADD_www(d, d, REG_WORK1);",
+]) requireText(addaLongImmBody, contract, "ADDA.L immediate/full-width lifecycle");
+const addaWordBody = functionBody(midfunc2Source, "MIDFUNC(2,jnf_ADDA_w,", "MENDFUNC(2,jnf_ADDA_w,", "ADDA.W dynamic");
+for (const contract of [
+  "COMPCALL(jnf_ADDA_w_imm)(d, live.state[s].val & 0xffff);",
+  "INIT_REGS_w(d, s);", "ADD_wwwEX(d, d, s, EX_SXTH);", "EXIT_REGS(d, s);",
+]) requireText(addaWordBody, contract, "ADDA.W dynamic/sign-extension lifecycle");
+const addaLongBody = functionBody(midfunc2Source, "MIDFUNC(2,jnf_ADDA_l,", "MENDFUNC(2,jnf_ADDA_l,", "ADDA.L dynamic");
+for (const contract of [
+  "COMPCALL(jnf_ADDA_l_imm)(d, live.state[s].val);",
+  "INIT_REGS_l(d, s);", "ADD_www(d, d, s);", "EXIT_REGS(d, s);",
+]) requireText(addaLongBody, contract, "ADDA.L dynamic/full-width lifecycle");
+for (const [name, body] of [
+  ["ADDA.W immediate", addaWordImmBody], ["ADDA.L immediate", addaLongImmBody],
+  ["ADDA.W dynamic", addaWordBody], ["ADDA.L dynamic", addaLongBody],
+] as const) {
+  for (const forbidden of ["ADDS_", "SUBS_", "DUPLICACTE_CARRY", "make_flags_live", "flags_carry_inverted"])
+    if (body.includes(forbidden)) fail(`${name} unexpectedly mutates or materialises XNZVC through ${forbidden}`);
+}
+for (const contract of [
+  "adda_w_postinc_source_dst_collision", "adda_l_postinc_source_dst_collision",
+  "[adda_w_postinc_source_dst_collision]=21", "[adda_l_postinc_source_dst_collision]=21",
+  "[adda_w_postinc_source_dst_collision]=8", "[adda_l_postinc_source_dst_collision]=8",
+  "[adda_w_postinc_source_dst_collision]=0", "[adda_l_postinc_source_dst_collision]=0",
+  "[adda_w_postinc_source_dst_collision]=1", "[adda_l_postinc_source_dst_collision]=1",
+]) requireText(regallocPressureSource, contract, "ADDA source/writeback/destination allocator pressure");
+const addaVectors = [
+  "adda_core_w_dreg_positive_native", "adda_core_w_dreg_negative_native", "adda_core_l_dreg_wrap_native",
+  "adda_core_w_areg_alias_native", "adda_core_l_areg_alias_native", "adda_core_w_max_fields_native",
+  "adda_core_w_imm_small_positive_native", "adda_core_w_imm_small_negative_native",
+  "adda_core_w_imm_large_positive_native", "adda_core_w_imm_large_negative_native",
+  "adda_core_l_imm_small_positive_native", "adda_core_l_imm_small_negative_native",
+  "adda_core_l_imm_large_positive_native", "adda_core_l_imm_large_negative_native",
+  "adda_core_w_const_dst_wrap", "adda_core_l_const_dst_wrap", "adda_core_w_aind_alias_native",
+  "adda_core_w_postinc_alias_native", "adda_core_w_predec_alias_native",
+  "adda_core_l_postinc_alias_native", "adda_core_l_predec_alias_native", "adda_core_w_d16_source_native",
+  "adda_core_w_index_source_special_native", "adda_core_l_absw_source_native",
+  "adda_core_w_absl_source_special_native", "adda_core_w_pc16_source_native",
+  "adda_core_l_pcindex_source_native", "adda_core_w_dreg_noflags_native", "adda_core_l_dreg_noflags_native",
+];
+const addaExactVectors = addaVectors.filter((name) => !name.includes("_const_dst_wrap"));
+for (const fragment of [
+  "declare -a ADDA_NATIVE_MATRIX_NAMES=(", 'TEST_ORDER+=("${ADDA_NATIVE_MATRIX_NAMES[@]}")',
+  'for _adda_name in "${ADDA_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_adda_name"]=1\n    NATIVE_REPLAY_PC["$_adda_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_adda_name"]=2',
+  "unset 'NATIVE_REPLAY_TESTS[adda_core_w_const_dst_wrap]'",
+  "unset 'NATIVE_REPLAY_TESTS[adda_core_l_const_dst_wrap]'",
+  'for _adda_name in "${ADDA_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_adda_name"]=1',
+]) requireText(harnessSource, fragment, "ADDA matrix/replay contract");
+for (const name of addaVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`])
+    requireText(harnessSource, fragment, `ADDA vector ${name}`);
+  requireText(activeRiskySource, name, `ADDA active mismatch-first vector ${name}`);
+}
+const addaMemoryVectors = [
+  "adda_core_w_aind_alias_native", "adda_core_w_postinc_alias_native", "adda_core_w_predec_alias_native",
+  "adda_core_l_postinc_alias_native", "adda_core_l_predec_alias_native", "adda_core_w_d16_source_native",
+  "adda_core_w_index_source_special_native", "adda_core_l_absw_source_native",
+  "adda_core_w_absl_source_special_native", "adda_core_w_pc16_source_native", "adda_core_l_pcindex_source_native",
+];
+for (const name of addaMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `ADDA memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `ADDA native memory replay ${name}`);
+}
+for (const name of ["adda_core_w_index_source_special_native", "adda_core_w_absl_source_special_native"])
+  requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `ADDA special-memory route ${name}`);
+
 /* SUB mirrors ADD's source/destination shapes but has independent inverted
  * carry/borrow and X publication. Its writable-memory forms must retain the
  * private pre-write EA through arithmetic, carry duplication and storage. */
@@ -4554,6 +4667,19 @@ console.log(`METRIC structural_add_redundant_generator_source_locks=${generatedA
 console.log(`METRIC structural_add_generated_ea_locks=${generatedAddEaLocks}`);
 console.log("METRIC structural_add_noflags_vectors=4");
 console.log("METRIC structural_add_allocator_pressure=2");
+console.log("METRIC structural_adda_midfunc_routes=4");
+console.log(`METRIC structural_adda_exact_native_vectors=${addaExactVectors.length}`);
+console.log(`METRIC structural_adda_equivalence_vectors=${addaVectors.length - addaExactVectors.length}`);
+console.log("METRIC structural_adda_readable_ea_classes=9");
+console.log(`METRIC structural_adda_memory_vectors=${addaMemoryVectors.length}`);
+console.log("METRIC structural_adda_special_memory_routes=2");
+console.log("METRIC structural_adda_noflags_vectors=2");
+console.log(`METRIC structural_adda_generated_functions=${generatedAddaFunctions}`);
+console.log(`METRIC structural_adda_generated_flag_live=${generatedAddaFlagLive}`);
+console.log(`METRIC structural_adda_generated_noflags=${generatedAddaNoFlags}`);
+console.log(`METRIC structural_adda_generated_source_locks=${generatedAddaSourceLocks}`);
+console.log(`METRIC structural_adda_generated_writeback_locks=${generatedAddaWritebackLocks}`);
+console.log("METRIC structural_adda_allocator_pressure=2");
 console.log("METRIC structural_sub_shared_midfunc_routes=6");
 console.log("METRIC structural_sub_immediate_routes=6");
 console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);

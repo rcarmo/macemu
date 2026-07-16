@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 52 | 44 | 0 | 34 |
-| midfunc | 422 | 258 | 0 | 118 | 46 |
+| generator | 130 | 53 | 44 | 0 | 33 |
+| midfunc | 422 | 262 | 0 | 118 | 42 |
 | emitter_api | 294 | 49 | 0 | 91 | 154 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 72 | `ADDA` | generator:`i_ADDA`, midfunc:`jnf_ADDA_l`, midfunc:`jnf_ADDA_w` |
 | 72 | `Bcc` | generator:`i_Bcc` |
 | 72 | `CLR` | generator:`i_CLR` |
 | 72 | `EXG` | generator:`i_EXG` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 72 | `NOP` | generator:`i_NOP` |
 | 72 | `NOT` | generator:`i_NOT` |
 | 72 | `PEA` | generator:`i_PEA` |
+| 72 | `PFLUSH` | generator:`i_PFLUSH` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`ADDA` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_ADDA`, midfunc:`jnf_ADDA_l`, midfunc:`jnf_ADDA_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`Bcc` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_Bcc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

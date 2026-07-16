@@ -356,7 +356,9 @@ MENDFUNC(2,jff_ADD_l,(RW4 d, RR4 s))
 MIDFUNC(2,jnf_ADDA_w_imm,(RW4 d, IM16 v))
 {
 	if (isconst(d)) {
-		live.state[d].val = live.state[d].val + (uae_s32)(uae_s16)v;
+		/* Address registers are 32-bit even though AArch64 constant state is
+		 * pointer-width. Keep folded ADDA.W results inside the guest lane. */
+		set_const(d, (uae_u32)(live.state[d].val + (uae_s32)(uae_s16)v));
 		return;
 	}
 

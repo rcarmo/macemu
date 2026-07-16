@@ -215,6 +215,25 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair and close the complete ADDA lifecycle** (2026-07-16): all 52
+  generated handlers and four reachable no-flags MIDFUNC routes are covered
+  across exact ADDA.W sign extension, ADDA.L full-width arithmetic, 32-bit
+  address-register wrap, dynamic/immediate/constant operands, every readable
+  EA, aliases, postincrement/predecrement, special memory, and complete XNZVC
+  preservation. Forced allocator pressure reproduced the same-register
+  `ADDA.W/L (A0)+,A0` lifetime defect at two boundaries: A0 writeback could
+  steal the fetched source before arithmetic, yielding `0x00000006`/`0x0000000a`
+  instead of `0x0000a003`/`0x0000a005`. Sequential generated pins now own the
+  source across writeback and destination RMW while public `is_const()` keeps
+  immediate and fully folded routes intact. `jnf_ADDA_w_imm` also publishes
+  folded results through `set_const()` to enforce 32-bit guest width. Focused
+  replay passes 29/29 (27 exact-native plus two fold-equivalence vectors), the
+  full active-risky corpus 827/827, and allocator pressure 28/28; both ADDA
+  witnesses reject both unsafe aliases with `skip=2`. The deterministic
+  997-row inventory promotes only `i_ADDA` and its four reachable MIDFUNCs.
+  Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_ADDA_LIFECYCLE.md`.
+
 - **Generic SUB/SUBS emitter width, alias, field, and NZCV closure**
   (2026-07-16): the seven reachable AArch64 SUB/SUBS APIs now have 11
   independent exact-word checks and 70 direct native vectors: 42 arithmetic

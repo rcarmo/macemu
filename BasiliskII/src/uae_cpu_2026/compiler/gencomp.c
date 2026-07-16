@@ -134,6 +134,8 @@ static int global_cmov;
 static int long_opcode;
 static int global_mayfail;
 static int global_fpu;
+/* Generation-time ownership request used only by ADDA's source genamode. */
+static int global_preserve_postinc_source;
 
 static char endstr[1000];
 static char lines[100000];
@@ -611,6 +613,12 @@ static void genamode(amodes mode, const char *reg, wordsizes size, const char *n
 		}
 	}
 
+	/* ADDA (An)+,An must retain the fetched source while the aliased address
+	 * register receives its postincrement. Without this short lock, pressured
+	 * destination RMW can reuse the source host lane before arithmetic. */
+	if (movem == GENA_MOVEM_DO_INC && mode == Aipi && global_preserve_postinc_source)
+		comprintf("\tint __adda_writebacksrclock = dodgy ? jit_value_lock(%s) : -1;\n", name);
+
 	/* We now might have to fix up the register for pre-dec or post-inc
 	 * addressing modes. */
 	if (movem == GENA_MOVEM_DO_INC)
@@ -633,6 +641,8 @@ static void genamode(amodes mode, const char *reg, wordsizes size, const char *n
 				assert(0);
 				break;
 			}
+			if (global_preserve_postinc_source)
+				comprintf("\tif (__adda_writebacksrclock >= 0) jit_value_unlock(__adda_writebacksrclock);\n");
 			break;
 		case Apdi:
 			break;
@@ -1698,7 +1708,14 @@ gen_opcode (unsigned int opcode)
 #ifdef DISABLE_I_ADDA
 	failure;
 #endif
+	/* genamode owns postincrement ordering; ask this one source fetch to pin its
+	 * value across aliased address-register writeback. Retain the source once
+	 * more across the subsequent destination RMW in the shared ADDA MIDFUNC. */
+	global_preserve_postinc_source = 1;
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	global_preserve_postinc_source = 0;
+	/* Preserve constant/immediate routing: only dynamic sources own a host lane. */
+	comprintf("\tint __addasrclock=is_const(src) ? -1 : jit_value_lock(src);\n");
 	start_brace();
 	comprintf("\tint dst = dstreg + 8;\n");
 	switch(curi->size) {
@@ -1706,6 +1723,7 @@ gen_opcode (unsigned int opcode)
 	 case sz_long: comprintf("\tjnf_ADDA_l(dst,src);\n"); break;
 	 default: assert(0);
 	}
+	comprintf("\tif (__addasrclock >= 0) jit_value_unlock(__addasrclock);\n");
 	if (curi->smode != Dreg && curi->smode != Areg)
 		comprintf("\tforget_about(src);\n");
 	break;

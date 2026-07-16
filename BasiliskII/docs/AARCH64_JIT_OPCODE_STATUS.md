@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Complete ADDA lifecycle and repaired source/writeback ownership | current structural audit | Four reachable no-flags MIDFUNC routes, 52 generated handlers, exact word sign-extension and long-width semantics, 27 exact-native plus two constant-fold vectors, and two allocator witnesses that reproduced both postincrement/source and destination/source collisions; see `AARCH64_JIT_AUDIT_ADDA_LIFECYCLE.md` |
 | Generic SUB/SUBS emitter width/field/alias/NZCV contracts | current structural audit | Seven reachable AArch64 encoder APIs, 11 exact words, 70 direct native vectors, and 115 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_SUB_EMITTERS.md` |
 | Complete SUB lifecycle and repaired destination-EA ownership | current structural audit | Twelve reachable SUB MIDFUNC routes, 208 generated handlers, nine readable and seven writable EA classes, 126 balanced writable-EA pins, 37 exact-native vectors, and the exact-native FLAGX/pre-write-EA collision which reproduced and verifies the repair; see `AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md` |
 | Complete OR lifecycle and source/destination EA ownership | current structural audit | Twelve reachable OR MIDFUNC routes, 156 generated handlers, nine readable and seven writable EA classes, 84 balanced writable-EA pins, 37 exact-native vectors, and two focused allocator collisions; see `AARCH64_JIT_AUDIT_OR_LIFECYCLE.md` |
