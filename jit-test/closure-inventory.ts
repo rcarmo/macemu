@@ -120,6 +120,7 @@ const activeCodegen = configuredExpandedSource(paths.codegen, true);
 const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:i_|jff_|jnf_)?ADD(?:_|$)/, "AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md"],
   [/^(?:i_|jff_|jnf_)?AND(?:_[bwl](?:_imm)?|$)/, "AARCH64_JIT_AUDIT_AND_LIFECYCLE.md"],
+  [/^(?:i_|jff_|jnf_)?EOR(?:_[bwl](?:_imm)?|$)/, "AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md"],
   [/^(?:i_(?:CMP|CMPM|CMPA)|jff_CMP_[bwl](?:_imm)?)$/, "AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md"],
   [/^(?:i_|jff_|jnf_)?(?:BTST|BCHG|BCLR|BSET)(?:_|$)/, "AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md"],
   [/^(?:(?:i_|jff_|jnf_)?(?:DBCC|DBcc|SCC|Scc)(?:_|$)|dbcc_cond_move_ne_w$|dbf_dec_test_ne_w$)/, "AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md"],

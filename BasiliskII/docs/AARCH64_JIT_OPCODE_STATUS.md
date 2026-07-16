@@ -32,7 +32,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 | 0x8 | OR/DIV/SBCD | 54 | ✅ Audited | None | DIVS/DIVL zero/overflow and patched joins; SBCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
 | 0x9 | SUB/SUBA/SUBX | 86 | ✅ Safe | None | No get_n_addr usage |
 | 0xA | A-line traps | — | ✅ Interpreter | None | A-line handled by runtime helper |
-| 0xB | CMP/CMPA/CMPM/EOR | 86 | ✅ Safe | None | No get_n_addr usage |
+| 0xB | CMP/CMPA/CMPM/EOR | 86 | ✅ Audited | None | CMP/CMPA/CMPM and complete EOR flag/no-flags/immediate/writable-EA lifecycles are separately audited; no get_n_addr usage |
 | 0xC | AND/MUL/ABCD/EXG | 79 | ✅ Audited | None | AND complete flags/no-flags/immediate/EA lifecycle plus shared logical pre-write EA ownership; MULL explicit result ownership, full-product flags, aliases, and allocator lifetime; ABCD exact correction, X/C/sticky-Z, A7 predecrement; no get_n_addr usage |
 | 0xD | ADD/ADDA/ADDX | 86 | ✅ Pointer-safe | None | No get_n_addr usage; `ADD` lifecycle is separately audited, while `ADDA`/`ADDX` remain governed by the closure inventory |
 | 0xE | ASL/ASR/LSL/LSR/ROL/ROR/ROXL/ROXR | 36 | ✅ Audited | None | Register-count and fixed-memory flag/count/alias/X ownership complete; no get_n_addr usage |
@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Complete EOR lifecycle and writable-EA ownership | current structural audit | Twelve reachable EOR MIDFUNC routes, 96 generated handlers, 84 balanced EOR memory-EA pins, 28 exact-native vectors, and two focused allocator collisions; see `AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md` |
 | Generic AND emitter width/field/no-flags contracts | current structural audit | Three reachable AArch64 encoder APIs, 9 exact words, 27 direct native vectors, and 83 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_AND_EMITTERS.md` |
 | AND and shared logical pre-write EA lifecycle | current structural audit | Twelve reachable AND MIDFUNC routes, 84 AND and 252 shared OR/AND/EOR generated memory-EA pins, 34 complete AND vectors, two adjacent OR/EOR regressions, and two focused allocator collisions; see `AARCH64_JIT_AUDIT_AND_LIFECYCLE.md` |
 | Generic ADD emitter width/field/no-flags contracts | current structural audit | Seven reachable AArch64 encoder APIs, 12 exact words, 46 direct native vectors, and 72 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_ADD_EMITTERS.md` |

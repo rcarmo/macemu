@@ -45,9 +45,9 @@ After a successful build, `run.sh` executes `structural-audit.ts` before opcode 
 - one flag-live `ABCD`/`SBCD`/`NBCD` lifecycle, patched correction joins, and `areg_byteinc[]` source/destination predecrement geometry;
 - 28 structurally patched DIVL zero/fit/overflow joins, widened signed 32/32 fit checks, conditional-destination preservation, and saved-Z overflow materialisation;
 - explicit three-operand MULL ownership, staged 64-bit publication, full-product N/Z/V semantics, generator Dl value locking, and a forced S1-to-Dl collision witness;
-- complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, ADD, and AND lifecycle ownership contracts;
+- complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, ADD, AND, and EOR lifecycle ownership contracts;
 - 208 generated ADD handlers, six shared MIDFUNC operand routes, and 126 balanced pre-write memory-EA pins, with redundant generator source locking prohibited;
-- 156 generated AND handlers, twelve reachable register/immediate MIDFUNC routes, 84 balanced AND memory-EA pins, and 252 balanced shared OR/AND/EOR pins, with exact adjacent-family regressions but no implied OR/EOR promotion;
+- 156 generated AND handlers and 96 generated EOR handlers, twelve reachable register/immediate MIDFUNC routes per family, 84 balanced memory-EA pins per logical family, and 252 balanced shared OR/AND/EOR pins, with no implied generic-emitter or OR-lifecycle promotion;
 - exact generic ADD/AND/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension and shift, AND W/X width and aliasing, non-flag-setting NZCV preservation, signed TB displacement, and CB/TB patch discrimination;
 - exact-PC replay state, including deterministic restoration of memory bytes mutated by predecrement BCD and RMW vectors.
 
@@ -55,12 +55,13 @@ Each passing invariant emits a `METRIC structural_*=1` line. A structural failur
 
 ## Current deterministic vectors
 
-The accepted active-risky corpus currently covers 698 vectors across:
+The accepted active-risky corpus currently covers 725 vectors across:
 - Decode/dispatch sanity (`nop`, `nop_triplet`)
 - Bit manipulation boundary behavior (`bitops`, `bitops_chg`, high-bit immediate `bitops_highbit`, high-bit toggle `bitops_chg_highbit`)
 - Core arithmetic/data movement (`move` + `moveq_signext` + moveq edge sign-extension checks, `alu` + negative roundtrip check, `addi/subi` incl. byte/word/long plus byte/word/long-boundary-wrap checks, `quick_ops` incl. long-negative roundtrip + word+word-wrap+long-wrap+byte+byte-wrap+address-register variants, `compare` + `cmpi` size coverage for both non-zero and zero immediates plus negative byte/word/long boundary forms, `muldiv`, `movem`, `misc` + `swap_roundtrip`, `not` size forms (`not_sizes`) plus explicit NOT.W/NOT.B upper-bit preservation checks, `clr` size forms (`clr_sizes`) plus byte/word partial-clear upper-bit preservation checks, `neg` size forms (`neg_sizes`) plus explicit zero-input NEG size path, `flags` incl. OR/AND/EOR-CCR path, `exg`, `imm_logic` incl. byte+word+long variants plus explicit byte/word/long high-bit edge logic checks, `tst` size forms on negative, zero, and positive inputs)
 - Complete ADD exact-native matrix: byte/word/long flag edges, self aliases, immediate and no-flags paths, all readable source and writable destination EAs, normal/special memory, A7 byte stepping, ordered RMW storage, and pre-write EA ownership
-- Complete AND exact-native matrix: byte/word/long N/Z, mandatory V/C clear, X preservation, immediate and no-flags paths, aliases, all readable source and writable destination EAs, normal/special memory, A7 byte stepping, and pre-write EA ownership; adjacent OR/EOR postincrement vectors guard the shared generator repair
+- Complete AND exact-native matrix: byte/word/long N/Z, mandatory V/C clear, X preservation, immediate and no-flags paths, aliases, all readable source and writable destination EAs, normal/special memory, A7 byte stepping, and pre-write EA ownership
+- Complete EOR exact-native matrix: all twelve byte/word/long Dn/immediate flag-live and no-flags routes, aliases, every writable destination EA, normal/special memory, A7 byte stepping, and source/pre-write-EA allocator ownership; an adjacent OR postincrement vector guards the shared generator repair
 - Complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, BTST/BCHG/BCLR/BSET, CMP/CMPM/CMPA, and NEG/NEGX family matrices, with exact native entry, EA/writeback, flags, aliases, and allocator-pressure witnesses
 - Shift/rotate contracts, including register-count ROXL/ROXR in both directions and all widths, low-six-bit modulo 9/17/33 effective-zero paths, C=X with unchanged X/data, size-correct N/Z, cleared V, partial-register preservation, populated guest-register mappings, fixed-count memory `ASL/ASR/LSL/LSR` flag-live/no-flags selection, and memory ROX X ownership under forced allocator pressure
 - BCD-family contracts across `ABCD`, `SBCD`, and `NBCD`: exact 68040 decimal and invalid-nibble correction, X/C chains, sticky-Z histories, aliasing, source/destination/same-register A7 predecrement, and opcode-only exact-native entry

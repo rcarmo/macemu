@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 49 | 44 | 0 | 37 |
-| midfunc | 422 | 222 | 0 | 118 | 82 |
+| generator | 130 | 50 | 44 | 0 | 36 |
+| midfunc | 422 | 234 | 0 | 118 | 70 |
 | emitter_api | 294 | 37 | 0 | 91 | 166 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `EOR` | generator:`i_EOR`, midfunc:`jff_EOR_b`, midfunc:`jff_EOR_l`, midfunc:`jff_EOR_w`, midfunc:`jnf_EOR_b`, midfunc:`jnf_EOR_l`, midfunc:`jnf_EOR_w` |
-| 80 | `EOR_b_imm` | midfunc:`jff_EOR_b_imm`, midfunc:`jnf_EOR_b_imm` |
-| 80 | `EOR_l_imm` | midfunc:`jff_EOR_l_imm`, midfunc:`jnf_EOR_l_imm` |
-| 80 | `EOR_w_imm` | midfunc:`jff_EOR_w_imm`, midfunc:`jnf_EOR_w_imm` |
 | 80 | `EOR_www` | emitter_api:`EOR_www` |
 | 80 | `EOR_wwwLSLi` | emitter_api:`EOR_wwwLSLi` |
 | 80 | `EOR_xxbit` | emitter_api:`EOR_xxbit` |
@@ -62,6 +58,10 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `SUB_www` | emitter_api:`SUB_www` |
 | 80 | `SUB_xxi` | emitter_api:`SUB_xxi` |
 | 80 | `SUB_xxx` | emitter_api:`SUB_xxx` |
+| 72 | `ADDA` | generator:`i_ADDA`, midfunc:`jnf_ADDA_l`, midfunc:`jnf_ADDA_w` |
+| 72 | `Bcc` | generator:`i_Bcc` |
+| 72 | `CLR` | generator:`i_CLR` |
+| 72 | `EXG` | generator:`i_EXG` |
 
 ## Accepted closure targets
 
@@ -72,7 +72,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`EOR` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_EOR`, midfunc:`jff_EOR_b`, midfunc:`jff_EOR_l`, midfunc:`jff_EOR_w`, midfunc:`jnf_EOR_b`, midfunc:`jnf_EOR_l`, midfunc:`jnf_EOR_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`EOR_www` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`EOR_www`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

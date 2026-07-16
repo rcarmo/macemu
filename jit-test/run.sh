@@ -435,11 +435,27 @@ declare -a AND_NATIVE_MATRIX_NAMES=(
     and_core_b_postinc_dest_native and_core_b_postinc_dest_noflags_native
 )
 TEST_ORDER+=("${AND_NATIVE_MATRIX_NAMES[@]}")
-# The repaired writable-EA generator is shared by OR/AND/EOR. Keep one exact
-# postincrement destination witness for each adjacent family in this tranche.
-declare -a LOGICAL_EA_REGRESSION_NAMES=(
-    or_core_b_postinc_dest_native eor_core_b_postinc_dest_native
+# EOR is a width-sensitive logical/RMW family with Dn or immediate sources.
+# Audit N/Z, mandatory V/C clear, X preservation, all twelve flag-live/no-flags
+# MIDFUNC routes, source/destination aliases, every writable destination EA,
+# special memory, A7 byte geometry, and pre-write EA ownership.
+declare -a EOR_NATIVE_MATRIX_NAMES=(
+    eor_core_b_reg_zero_native eor_core_w_reg_negative_native eor_core_l_reg_positive_native
+    eor_core_b_self_alias_native eor_core_w_self_alias_native eor_core_l_self_alias_native
+    eor_core_b_imm_zero_native eor_core_w_imm_negative_native
+    eor_core_l_imm_pattern_native eor_core_l_imm_negative_native
+    eor_core_b_reg_noflags_native eor_core_w_reg_noflags_native eor_core_l_reg_noflags_native
+    eor_core_b_imm_noflags_native eor_core_w_imm_noflags_native eor_core_l_imm_noflags_native
+    eor_core_b_aind_dest_special_native eor_core_w_postinc_dest_native
+    eor_core_l_predec_dest_native eor_core_b_d16_dest_native
+    eor_core_w_index_dest_special_native eor_core_l_absw_dest_native
+    eor_core_b_absl_dest_special_native eor_core_b_a7_postinc_dest_native
+    eor_core_b_a7_predec_dest_native eor_core_b_eori_postinc_dest_native
+    eor_core_b_postinc_dest_native eor_core_b_postinc_dest_noflags_native
 )
+TEST_ORDER+=("${EOR_NATIVE_MATRIX_NAMES[@]}")
+# OR remains an adjacent exact-native witness for the shared writable-EA repair.
+declare -a LOGICAL_EA_REGRESSION_NAMES=(or_core_b_postinc_dest_native)
 TEST_ORDER+=("${LOGICAL_EA_REGRESSION_NAMES[@]}")
 # NEG is lowered through shared SUB flags plus an explicit zero destination.
 # Audit every width and arithmetic edge, no-flags selection, each writable EA,
@@ -1356,6 +1372,27 @@ SPECIAL_MEMORY_TESTS[and_core_b_absl_source_special_native]=1
 SPECIAL_MEMORY_TESTS[and_core_b_aind_dest_special_native]=1
 SPECIAL_MEMORY_TESTS[and_core_w_index_dest_special_native]=1
 SPECIAL_MEMORY_TESTS[and_core_b_absl_dest_special_native]=1
+for _eor_name in "${EOR_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_eor_name"]=1
+    NATIVE_REPLAY_PC["$_eor_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_eor_name"]=2
+done
+unset _eor_name
+NATIVE_REPLAY_BYTES[eor_core_b_aind_dest_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[eor_core_w_postinc_dest_native]="A000 FF A001 FF"
+NATIVE_REPLAY_BYTES[eor_core_l_predec_dest_native]="A000 FF A001 FF A002 FF A003 FF"
+NATIVE_REPLAY_BYTES[eor_core_b_d16_dest_native]="A010 FF"
+NATIVE_REPLAY_BYTES[eor_core_w_index_dest_special_native]="A002 FF A003 FF"
+NATIVE_REPLAY_BYTES[eor_core_l_absw_dest_native]="6000 FF 6001 FF 6002 FF 6003 FF"
+NATIVE_REPLAY_BYTES[eor_core_b_absl_dest_special_native]="A000 FF"
+NATIVE_REPLAY_BYTES[eor_core_b_a7_postinc_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[eor_core_b_a7_predec_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[eor_core_b_eori_postinc_dest_native]="A000 FF"
+NATIVE_REPLAY_BYTES[eor_core_b_postinc_dest_native]="A000 F0"
+NATIVE_REPLAY_BYTES[eor_core_b_postinc_dest_noflags_native]="A000 FF"
+SPECIAL_MEMORY_TESTS[eor_core_b_aind_dest_special_native]=1
+SPECIAL_MEMORY_TESTS[eor_core_w_index_dest_special_native]=1
+SPECIAL_MEMORY_TESTS[eor_core_b_absl_dest_special_native]=1
 for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_logical_name"]=1
     NATIVE_REPLAY_PC["$_logical_name"]=0x1000
@@ -1363,7 +1400,6 @@ for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do
 done
 unset _logical_name
 NATIVE_REPLAY_BYTES[or_core_b_postinc_dest_native]="A000 F0"
-NATIVE_REPLAY_BYTES[eor_core_b_postinc_dest_native]="A000 F0"
 SPECIAL_MEMORY_TESTS[or_core_b_postinc_dest_native]=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_neg_name"]=1
@@ -1774,14 +1810,84 @@ TEST_MEMORY_BYTES[and_core_b_andi_postinc_dest_native]="A000 FF"
 TEST_MEMORY_BYTES[and_core_b_postinc_dest_native]="A000 FF"
 TEST_MEMORY_BYTES[and_core_b_postinc_dest_noflags_native]="A000 FF"
 
-# Adjacent exact-native regressions for the OR/EOR users of the shared logical
-# writable-EA lifecycle. Both must store through the pre-write A0 address.
-TESTS[or_core_b_postinc_dest_native]="8118 40C2 1028 FFFF"
+# Exact-opcode EOR matrix. Dn/immediate sources cover all twelve flag-live and
+# no-flags MIDFUNC routes, aliases, W upper-lane preservation, N/Z, mandatory
+# V/C clear, X preservation, and every writable destination EA. Memory routes
+# snapshot SR before exact readback; no-flags routes overwrite SR immediately.
+TESTS[eor_core_b_reg_zero_native]="B300"
+TESTS[eor_core_w_reg_negative_native]="B340"
+TESTS[eor_core_l_reg_positive_native]="B380"
+TESTS[eor_core_b_self_alias_native]="B100"
+TESTS[eor_core_w_self_alias_native]="B140"
+TESTS[eor_core_l_self_alias_native]="B180"
+TESTS[eor_core_b_imm_zero_native]="0A00 00FF"
+TESTS[eor_core_w_imm_negative_native]="0A40 FFFF"
+TESTS[eor_core_l_imm_pattern_native]="0A80 1234 5678"
+TESTS[eor_core_l_imm_negative_native]="0A80 8000 0000"
+TESTS[eor_core_b_reg_noflags_native]="B300 46FC 2700"
+TESTS[eor_core_w_reg_noflags_native]="B340 46FC 2700"
+TESTS[eor_core_l_reg_noflags_native]="B380 46FC 2700"
+TESTS[eor_core_b_imm_noflags_native]="0A00 000F 46FC 2700"
+TESTS[eor_core_w_imm_noflags_native]="0A40 0F0F 46FC 2700"
+TESTS[eor_core_l_imm_noflags_native]="0A80 0F0F 0F0F 46FC 2700"
+TESTS[eor_core_b_aind_dest_special_native]="B110 40C2 1010"
+TESTS[eor_core_w_postinc_dest_native]="B158 40C2 3028 FFFE"
+TESTS[eor_core_l_predec_dest_native]="B1A0 40C2 2010"
+TESTS[eor_core_b_d16_dest_native]="B128 0010 40C2 1028 0010"
+TESTS[eor_core_w_index_dest_special_native]="B170 1000 40C2 3030 1000"
+TESTS[eor_core_l_absw_dest_native]="B1B8 6000 40C2 2038 6000"
+TESTS[eor_core_b_absl_dest_special_native]="B139 0000 A000 40C2 1039 0000 A000"
+TESTS[eor_core_b_a7_postinc_dest_native]="B11F 40C2 102F FFFE"
+TESTS[eor_core_b_a7_predec_dest_native]="B127 40C2 1017"
+TESTS[eor_core_b_eori_postinc_dest_native]="0A18 000F 40C2 1028 FFFF"
 TESTS[eor_core_b_postinc_dest_native]="B118 40C2 1028 FFFF"
-EXPECTED_REG_FIELDS[or_core_b_postinc_dest_native]="D0=A5A500FF D2=00002718 A0=0000A001 SR=2718"
+TESTS[eor_core_b_postinc_dest_noflags_native]="B118 46FC 2700 1028 FFFF"
+EXPECTED_REG_FIELDS[eor_core_b_reg_zero_native]="D0=A5A50000 D1=000000FF SR=2714"
+EXPECTED_REG_FIELDS[eor_core_w_reg_negative_native]="D0=A5A58000 D1=0000FFFF SR=2718"
+EXPECTED_REG_FIELDS[eor_core_l_reg_positive_native]="D0=7FFFFFFF D1=80000000 SR=2710"
+EXPECTED_REG_FIELDS[eor_core_b_self_alias_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[eor_core_w_self_alias_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[eor_core_l_self_alias_native]="D0=00000000 SR=2714"
+EXPECTED_REG_FIELDS[eor_core_b_imm_zero_native]="D0=A5A50000 SR=2714"
+EXPECTED_REG_FIELDS[eor_core_w_imm_negative_native]="D0=A5A58000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_l_imm_pattern_native]="D0=12345678 SR=2710"
+EXPECTED_REG_FIELDS[eor_core_l_imm_negative_native]="D0=80000000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_b_reg_noflags_native]="D0=A5A500FF D1=0000000F SR=2700"
+EXPECTED_REG_FIELDS[eor_core_w_reg_noflags_native]="D0=A5A5FFFF D1=00000F0F SR=2700"
+EXPECTED_REG_FIELDS[eor_core_l_reg_noflags_native]="D0=FFFFFFFF D1=0F0F0F0F SR=2700"
+EXPECTED_REG_FIELDS[eor_core_b_imm_noflags_native]="D0=A5A500FF SR=2700"
+EXPECTED_REG_FIELDS[eor_core_w_imm_noflags_native]="D0=A5A5FFFF SR=2700"
+EXPECTED_REG_FIELDS[eor_core_l_imm_noflags_native]="D0=FFFFFFFF SR=2700"
+EXPECTED_REG_FIELDS[eor_core_b_aind_dest_special_native]="D0=A5A500F0 D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_w_postinc_dest_native]="D0=A5A5F0F0 D2=00002718 A0=0000A002 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_l_predec_dest_native]="D0=F0F0F0F0 D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_b_d16_dest_native]="D0=A5A500F0 D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_w_index_dest_special_native]="D0=A5A5F0F0 D1=00000002 D2=00002718 A0=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_l_absw_dest_native]="D0=F0F0F0F0 D2=00002718 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_b_absl_dest_special_native]="D0=A5A500F0 D2=00002718 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_b_a7_postinc_dest_native]="D0=A5A500F0 D2=00002718 A7=0000A002 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_b_a7_predec_dest_native]="D0=A5A500F0 D2=00002718 A7=0000A000 SR=2718"
+EXPECTED_REG_FIELDS[eor_core_b_eori_postinc_dest_native]="D0=A5A500F0 D2=00002718 A0=0000A001 SR=2718"
 EXPECTED_REG_FIELDS[eor_core_b_postinc_dest_native]="D0=A5A500FF D2=00002718 A0=0000A001 SR=2718"
-TEST_MEMORY_BYTES[or_core_b_postinc_dest_native]="A000 FF"
+EXPECTED_REG_FIELDS[eor_core_b_postinc_dest_noflags_native]="D0=A5A500F0 A0=0000A001 SR=2708"
+TEST_MEMORY_BYTES[eor_core_b_aind_dest_special_native]="A000 F0"
+TEST_MEMORY_BYTES[eor_core_w_postinc_dest_native]="A000 F0 A001 F0"
+TEST_MEMORY_BYTES[eor_core_l_predec_dest_native]="A000 F0 A001 F0 A002 F0 A003 F0"
+TEST_MEMORY_BYTES[eor_core_b_d16_dest_native]="A010 F0"
+TEST_MEMORY_BYTES[eor_core_w_index_dest_special_native]="A002 F0 A003 F0"
+TEST_MEMORY_BYTES[eor_core_l_absw_dest_native]="6000 F0 6001 F0 6002 F0 6003 F0"
+TEST_MEMORY_BYTES[eor_core_b_absl_dest_special_native]="A000 F0"
+TEST_MEMORY_BYTES[eor_core_b_a7_postinc_dest_native]="A000 F0"
+TEST_MEMORY_BYTES[eor_core_b_a7_predec_dest_native]="A000 F0"
+TEST_MEMORY_BYTES[eor_core_b_eori_postinc_dest_native]="A000 F0"
 TEST_MEMORY_BYTES[eor_core_b_postinc_dest_native]="A000 FF"
+TEST_MEMORY_BYTES[eor_core_b_postinc_dest_noflags_native]="A000 F0"
+
+# OR remains an adjacent exact-native regression for the shared logical
+# writable-EA lifecycle and must store through the pre-write A0 address.
+TESTS[or_core_b_postinc_dest_native]="8118 40C2 1028 FFFF"
+EXPECTED_REG_FIELDS[or_core_b_postinc_dest_native]="D0=A5A500FF D2=00002718 A0=0000A001 SR=2718"
+TEST_MEMORY_BYTES[or_core_b_postinc_dest_native]="A000 FF"
 
 # Exact-opcode NEG matrix. Register forms begin with the audited opcode so
 # B2_TEST_INIT supplies the operand/CCR state at exact native entry.  The matrix
@@ -4105,9 +4211,38 @@ INIT_REGS[and_core_b_a7_predec_dest_native]="A5A5000F 00000000 00000000 00000000
 INIT_REGS[and_core_b_andi_postinc_dest_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[and_core_b_postinc_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 INIT_REGS[and_core_b_postinc_dest_noflags_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
-INIT_REGS[or_core_b_postinc_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
-INIT_REGS[eor_core_b_postinc_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 unset _AND_ZERO_TAIL
+_EOR_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
+INIT_REGS[eor_core_b_reg_zero_native]="A5A500FF 000000FF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_w_reg_negative_native]="A5A57FFF 0000FFFF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_l_reg_positive_native]="FFFFFFFF 80000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_b_self_alias_native]="A5A50080 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_w_self_alias_native]="A5A58000 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_l_self_alias_native]="80000000 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_b_imm_zero_native]="A5A500FF $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_w_imm_negative_native]="A5A57FFF $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_l_imm_pattern_native]="00000000 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_l_imm_negative_native]="00000000 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_b_reg_noflags_native]="A5A500F0 0000000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_w_reg_noflags_native]="A5A5F0F0 00000F0F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_l_reg_noflags_native]="F0F0F0F0 0F0F0F0F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_b_imm_noflags_native]="A5A500F0 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_w_imm_noflags_native]="A5A5F0F0 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_l_imm_noflags_native]="F0F0F0F0 $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_b_aind_dest_special_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_w_postinc_dest_native]="A5A50F0F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_l_predec_dest_native]="0F0F0F0F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A004 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_b_d16_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_w_index_dest_special_native]="A5A50F0F 00000002 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_l_absw_dest_native]="0F0F0F0F $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_b_absl_dest_special_native]="A5A5000F $_EOR_ZERO_TAIL 0000271F"
+INIT_REGS[eor_core_b_a7_postinc_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 0000271F"
+INIT_REGS[eor_core_b_a7_predec_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A002 0000271F"
+INIT_REGS[eor_core_b_eori_postinc_dest_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_b_postinc_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+INIT_REGS[eor_core_b_postinc_dest_noflags_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
+unset _EOR_ZERO_TAIL
+INIT_REGS[or_core_b_postinc_dest_native]="A5A5000F 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00 0000271F"
 _NEG_INIT_ZERO_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[neg_b_zero_native]="A5A50000 $_NEG_INIT_ZERO_TAIL 0000271F"
 INIT_REGS[neg_w_zero_native]="A5A50000 $_NEG_INIT_ZERO_TAIL 0000271F"
@@ -4661,6 +4796,12 @@ for _and_name in "${AND_NATIVE_MATRIX_NAMES[@]}"; do
     ((_and_sentinel_id+=1))
 done
 unset _and_name _and_sentinel_id
+_eor_sentinel_id=1
+for _eor_name in "${EOR_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_eor_name"] 'a6e4%04x' "$_eor_sentinel_id"
+    ((_eor_sentinel_id+=1))
+done
+unset _eor_name _eor_sentinel_id
 _logical_sentinel_id=1
 for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_logical_name"] 'a6e0%04x' "$_logical_sentinel_id"
@@ -6161,6 +6302,10 @@ for _and_name in "${AND_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_and_name"]=1
 done
 unset _and_name
+for _eor_name in "${EOR_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_eor_name"]=1
+done
+unset _eor_name
 for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do
     RISKY_TESTS["$_logical_name"]=1
 done

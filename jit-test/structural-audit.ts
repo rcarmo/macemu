@@ -775,6 +775,13 @@ for (const match of generatedLogicalBodies) {
     if (operation < 0 || store < 0 || lock < 0 || lock >= operation || store <= operation || unlock <= store)
       fail(`generated ${family} handler does not retain logical EA through its MIDFUNC operation and ordered store`);
   }
+  if (family === "EOR") {
+    const routes = body.match(/\bxor_[bwl]\(/g) ?? [];
+    const noFlagsNarrow = body.includes("_comp_nf") && (body.includes("xor_b(") || body.includes("xor_w("));
+    const expectedRoutes = noFlagsNarrow ? 2 : 1;
+    if (routes.length !== expectedRoutes || (noFlagsNarrow && !body.includes("xor_l(")))
+      fail(`generated EOR handler route split: expected=${expectedRoutes} actual=${routes.length}`);
+  }
   const item = logicalGeneratedCounts.get(family) ?? { functions: 0, locks: 0, unlocks: 0 };
   item.functions++;
   item.locks += locks;
@@ -789,6 +796,11 @@ for (const [family, functions, locks] of [
     fail(`generated ${family} ownership: functions=${found?.functions ?? 0} locks=${found?.locks ?? 0}/${found?.unlocks ?? 0}`);
   }
 }
+const generatedEorFlagLive = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_ff[^\n]*\/\* EOR \*\//gm) ?? []).length;
+const generatedEorNoFlags = (generatedSource.match(/^void REGPARAM2 op_[0-9a-f]+_0_comp_nf[^\n]*\/\* EOR \*\//gm) ?? []).length;
+if (generatedEorFlagLive !== 48 || generatedEorNoFlags !== 48)
+  fail(`generated EOR flag split: ff=${generatedEorFlagLive} nf=${generatedEorNoFlags}`);
+
 for (const [variant, width] of [
   ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
   ["jff", "b"], ["jff", "w"], ["jff", "l"],
@@ -916,7 +928,131 @@ for (const contract of [
 ]) requireText(regallocPressureSource, contract, "AND source/EA allocator pressure");
 requireText(harnessSource, 'TESTS[and_core_b_postinc_dest_native]="C118 40C2 1028 FFFF"', "AND.B D0,(A0)+ exact-native regression");
 requireText(activeRiskySource, "and_core_b_postinc_dest_native", "AND.B D0,(A0)+ active mismatch-first regression");
-const logicalEaRegressions = ["or_core_b_postinc_dest_native", "eor_core_b_postinc_dest_native"];
+/* EOR shares the generator's writable-EA repair but has an independently
+ * closed semantic lifecycle. The source is Dn/immediate only; all seven legal
+ * writable memory EAs and all twelve flag-live/no-flags MIDFUNC routes remain
+ * explicit so adjacent AND/OR evidence cannot silently promote this family. */
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_EOR_${width},`,
+    `MENDFUNC(2,${variant}_EOR_${width},`,
+    `${variant}_EOR_${width} operand/flags lifecycle`,
+  );
+  requireText(body, `COMPCALL(${variant}_EOR_${width}_imm)`, `${variant}_EOR_${width} constant source route`);
+  requireText(body, `INIT_REGS_${width}(d, s);`, `${variant}_EOR_${width} operand acquisition`);
+  requireText(body, "EXIT_REGS(d, s);", `${variant}_EOR_${width} operand release`);
+  requireBefore(body, `INIT_REGS_${width}(d, s);`, "EXIT_REGS(d, s);", `${variant}_EOR_${width} operand lifecycle`);
+  requireText(body, "EOR_www(", `${variant}_EOR_${width} result lowering`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    requireText(body, `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_EOR_${width} upper-lane preservation`);
+    if (variant === "jff") {
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK1, d);`, `${variant}_EOR_${width} signed destination`);
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK2, s);`, `${variant}_EOR_${width} signed source`);
+    }
+  } else {
+    requireText(body, "EOR_www(d, d, s);", `${variant}_EOR_l full-width result`);
+  }
+  if (variant === "jff") {
+    requireText(body, "TST_ww(", `${variant}_EOR_${width} N/Z and V/C publication`);
+    requireText(body, "flags_carry_inverted = false;", `${variant}_EOR_${width} carry metadata`);
+  } else if (body.includes("TST_ww(") || body.includes("flags_carry_inverted")) {
+    fail(`${variant}_EOR_${width} no-flags path publishes flags or carry metadata`);
+  }
+  if (/\b(?:FLAGX|DUPLICACTE_CARRY)\b/.test(body)) fail(`${variant}_EOR_${width} modifies X`);
+}
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_EOR_${width}_imm,`,
+    `MENDFUNC(2,${variant}_EOR_${width}_imm,`,
+    `${variant}_EOR_${width}_imm immediate/flags lifecycle`,
+  );
+  requireText(body, "EOR_www(", `${variant}_EOR_${width}_imm result lowering`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    if (variant === "jff") {
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK1, d);`, `${variant}_EOR_${width}_imm signed destination`);
+      requireText(body, `SIGNED${bits}_IMM_2_REG(REG_WORK2, v);`, `${variant}_EOR_${width}_imm signed immediate`);
+      requireText(body, `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_EOR_${width}_imm upper-lane preservation`);
+    } else {
+      requireText(body, "MOV_xi(REG_WORK1", `${variant}_EOR_${width}_imm bounded immediate materialisation`);
+    }
+  } else {
+    requireText(body, "LOAD_U32(REG_WORK1, v);", `${variant}_EOR_l_imm full immediate materialisation`);
+    if (variant === "jnf")
+      requireText(body, "live.state[d].val = live.state[d].val ^ v;", `${variant}_EOR_l_imm constant fold`);
+  }
+  if (variant === "jff") {
+    requireText(body, "TST_ww(", `${variant}_EOR_${width}_imm N/Z and V/C publication`);
+    requireText(body, "flags_carry_inverted = false;", `${variant}_EOR_${width}_imm carry metadata`);
+  } else if (body.includes("TST_ww(") || body.includes("flags_carry_inverted")) {
+    fail(`${variant}_EOR_${width}_imm no-flags path publishes flags or carry metadata`);
+  }
+  if (/\b(?:FLAGX|DUPLICACTE_CARRY)\b/.test(body)) fail(`${variant}_EOR_${width}_imm modifies X`);
+}
+const eorExactVectors = [
+  "eor_core_b_reg_zero_native", "eor_core_w_reg_negative_native", "eor_core_l_reg_positive_native",
+  "eor_core_b_self_alias_native", "eor_core_w_self_alias_native", "eor_core_l_self_alias_native",
+  "eor_core_b_imm_zero_native", "eor_core_w_imm_negative_native",
+  "eor_core_l_imm_pattern_native", "eor_core_l_imm_negative_native",
+  "eor_core_b_reg_noflags_native", "eor_core_w_reg_noflags_native", "eor_core_l_reg_noflags_native",
+  "eor_core_b_imm_noflags_native", "eor_core_w_imm_noflags_native", "eor_core_l_imm_noflags_native",
+  "eor_core_b_aind_dest_special_native", "eor_core_w_postinc_dest_native",
+  "eor_core_l_predec_dest_native", "eor_core_b_d16_dest_native",
+  "eor_core_w_index_dest_special_native", "eor_core_l_absw_dest_native",
+  "eor_core_b_absl_dest_special_native", "eor_core_b_a7_postinc_dest_native",
+  "eor_core_b_a7_predec_dest_native", "eor_core_b_eori_postinc_dest_native",
+  "eor_core_b_postinc_dest_native", "eor_core_b_postinc_dest_noflags_native",
+];
+for (const fragment of [
+  "declare -a EOR_NATIVE_MATRIX_NAMES=(",
+  'TEST_ORDER+=("${EOR_NATIVE_MATRIX_NAMES[@]}")',
+  'for _eor_name in "${EOR_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_eor_name"]=1\n    NATIVE_REPLAY_PC["$_eor_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_eor_name"]=2',
+  'for _eor_name in "${EOR_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_eor_name"]=1',
+]) requireText(harnessSource, fragment, "EOR exact-native matrix/replay contract");
+for (const name of eorExactVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`])
+    requireText(harnessSource, fragment, `EOR exact-native vector ${name}`);
+  requireText(activeRiskySource, name, `EOR active mismatch-first vector ${name}`);
+}
+const eorMemoryVectors = [
+  "eor_core_b_aind_dest_special_native", "eor_core_w_postinc_dest_native",
+  "eor_core_l_predec_dest_native", "eor_core_b_d16_dest_native",
+  "eor_core_w_index_dest_special_native", "eor_core_l_absw_dest_native",
+  "eor_core_b_absl_dest_special_native", "eor_core_b_a7_postinc_dest_native",
+  "eor_core_b_a7_predec_dest_native", "eor_core_b_eori_postinc_dest_native",
+  "eor_core_b_postinc_dest_native", "eor_core_b_postinc_dest_noflags_native",
+];
+for (const name of eorMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `EOR memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `EOR native memory replay ${name}`);
+}
+for (const name of [
+  "eor_core_b_aind_dest_special_native", "eor_core_w_index_dest_special_native",
+  "eor_core_b_absl_dest_special_native",
+]) requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `EOR special-memory route ${name}`);
+for (const name of [
+  "eor_core_b_reg_noflags_native", "eor_core_w_reg_noflags_native", "eor_core_l_reg_noflags_native",
+  "eor_core_b_imm_noflags_native", "eor_core_w_imm_noflags_native", "eor_core_l_imm_noflags_native",
+  "eor_core_b_postinc_dest_noflags_native",
+]) requireText(harnessSource, `TESTS[${name}]=`, `EOR no-flags vector ${name}`);
+for (const contract of [
+  "eor_b_postinc_source_dest_collision", "[eor_b_postinc_source_dest_collision]=6",
+  "[eor_b_postinc_source_dest_collision]=21", "[eor_b_postinc_source_dest_collision]=1",
+  "eor_b_postinc_ea_dest_collision", "[eor_b_postinc_ea_dest_collision]=20",
+  "[eor_b_postinc_ea_dest_collision]=21", "[eor_b_postinc_ea_dest_collision]=1",
+]) requireText(regallocPressureSource, contract, "EOR source/EA allocator pressure");
+requireText(harnessSource, 'TESTS[eor_core_b_postinc_dest_native]="B118 40C2 1028 FFFF"', "EOR.B D0,(A0)+ exact-native regression");
+
+const logicalEaRegressions = ["or_core_b_postinc_dest_native"];
 for (const fragment of [
   "declare -a LOGICAL_EA_REGRESSION_NAMES=(",
   'TEST_ORDER+=("${LOGICAL_EA_REGRESSION_NAMES[@]}")',
@@ -4012,6 +4148,18 @@ console.log("METRIC structural_and_generated_functions=156");
 console.log("METRIC structural_and_generated_ea_locks=84");
 console.log("METRIC structural_logical_generated_ea_locks=252");
 console.log("METRIC structural_and_allocator_pressure=2");
+console.log("METRIC structural_eor_shared_midfunc_routes=6");
+console.log("METRIC structural_eor_immediate_routes=6");
+console.log(`METRIC structural_eor_exact_native_vectors=${eorExactVectors.length}`);
+console.log("METRIC structural_eor_writable_ea_classes=7");
+console.log(`METRIC structural_eor_memory_vectors=${eorMemoryVectors.length}`);
+console.log("METRIC structural_eor_special_memory_routes=3");
+console.log("METRIC structural_eor_noflags_vectors=7");
+console.log("METRIC structural_eor_generated_functions=96");
+console.log(`METRIC structural_eor_generated_flag_live=${generatedEorFlagLive}`);
+console.log(`METRIC structural_eor_generated_noflags=${generatedEorNoFlags}`);
+console.log("METRIC structural_eor_generated_ea_locks=84");
+console.log("METRIC structural_eor_allocator_pressure=2");
 console.log(`METRIC structural_logical_adjacent_ea_regressions=${logicalEaRegressions.length}`);
 console.log("METRIC structural_neg_shared_sub_lowering=1");
 console.log(`METRIC structural_neg_exact_native_vectors=${negExactVectors.length}`);

@@ -339,7 +339,7 @@ generator,i_DIVS,audited,DIVS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.
 generator,i_DIVU,audited,DIVU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2640,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 generator,i_EMULOP,serviced,EMULOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3826,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_EMULOP_RETURN,serviced,EMULOP_RETURN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3822,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_EOR,unreviewed,EOR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1519,native generator case; no accepted family-level closure report
+generator,i_EOR,audited,EOR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1519,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
 generator,i_EORSR,audited,EORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1563,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 generator,i_EXG,unreviewed,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2088,native generator case; no accepted family-level closure report
 generator,i_EXT,unreviewed,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2101,native generator case; no accepted family-level closure report
@@ -558,12 +558,12 @@ midfunc,jff_DIVLU32,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/com
 midfunc,jff_DIVLU64,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3612,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jff_DIVS,audited,DIVS,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3306,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jff_DIVU,audited,DIVU,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3155,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-midfunc,jff_EOR_b,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3889,reachable; no accepted family-level closure report
-midfunc,jff_EOR_b_imm,unreviewed,EOR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3869,reachable; no accepted family-level closure report
-midfunc,jff_EOR_l,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3972,reachable; no accepted family-level closure report
-midfunc,jff_EOR_l_imm,unreviewed,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3959,reachable; no accepted family-level closure report
-midfunc,jff_EOR_w,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3934,reachable; no accepted family-level closure report
-midfunc,jff_EOR_w_imm,unreviewed,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3914,reachable; no accepted family-level closure report
+midfunc,jff_EOR_b,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3889,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jff_EOR_b_imm,audited,EOR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3869,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jff_EOR_l,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3972,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jff_EOR_l_imm,audited,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3959,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jff_EOR_w,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3934,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jff_EOR_w_imm,audited,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3914,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
 midfunc,jff_EORSR,audited,EORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4002,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 midfunc,jff_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4080,no path from configured generated/support/FPU compiler roots
 midfunc,jff_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4117,no path from configured generated/support/FPU compiler roots
@@ -712,12 +712,12 @@ midfunc,jnf_DIVLU32,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/com
 midfunc,jnf_DIVLU64,audited,DIVLU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3570,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,jnf_DIVS,unreachable,DIVS,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3241,i_DIVS unconditionally selects jff_DIVS for divide exception and overflow flag semantics
 midfunc,jnf_DIVU,unreachable,DIVU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3107,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_EOR_b,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3791,reachable; no accepted family-level closure report
-midfunc,jnf_EOR_b_imm,unreviewed,EOR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3780,reachable; no accepted family-level closure report
-midfunc,jnf_EOR_l,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3854,reachable; no accepted family-level closure report
-midfunc,jnf_EOR_l_imm,unreviewed,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3838,reachable; no accepted family-level closure report
-midfunc,jnf_EOR_w,unreviewed,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3822,reachable; no accepted family-level closure report
-midfunc,jnf_EOR_w_imm,unreviewed,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3811,reachable; no accepted family-level closure report
+midfunc,jnf_EOR_b,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3791,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jnf_EOR_b_imm,audited,EOR_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3780,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jnf_EOR_l,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3854,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jnf_EOR_l_imm,audited,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3838,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jnf_EOR_w,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3822,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
+midfunc,jnf_EOR_w_imm,audited,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3811,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
 midfunc,jnf_EORSR_w,audited,EORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9130,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 midfunc,jnf_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4034,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4065,no path from configured generated/support/FPU compiler roots

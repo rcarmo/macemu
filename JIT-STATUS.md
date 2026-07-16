@@ -173,7 +173,7 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 **Current structural-audit gate (2026-07-16):** ✅
 **Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `3476e73b1d78da29814d529c8493909bf00f85e7928a0e0afa0cb3e3a8f459b5`
-**JIT harness:** ✅ 698/698 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**JIT harness:** ✅ 725/725 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -205,15 +205,28 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**698 active-risky vectors, score=100**
+**725 active-risky vectors, score=100**
 
 The larger exact-native family inventories remain available as focused gates;
-the current `AND` inventory is 34/34 plus 2/2 adjacent OR/EOR writable-EA
-regressions, the `ADD` inventory is 34/34, the accepted `ROL`/`ROR` inventory is
-92/92, and the accepted register-count `ASL`/`ASR`/`LSL`/`LSR` inventory is
-138/138.
+the current `EOR` inventory is 28/28, the `AND` inventory is 34/34, the `ADD`
+inventory is 34/34, the accepted `ROL`/`ROR` inventory is 92/92, and the
+accepted register-count `ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138. An
+adjacent OR writable-EA regression remains independently active.
 
 ### Recent bug fixes (2026-07)
+
+- **Complete EOR lifecycle, flags, and writable-EA ownership** (2026-07-16):
+  all 96 generated handlers and twelve reachable MIDFUNC routes are covered
+  across byte/word/long Dn and immediate sources, flag-live and no-flags
+  lowering, self aliases, all seven writable EAs, A7 byte geometry, and special
+  memory. The matrix passes 28/28 before and after a clean build; the complete
+  active-risky corpus passes 725/725 and all 22 allocator cells pass. Two
+  EOR-specific pressure cells reject source-to-destination and pre-write-EA-to-
+  destination collisions while retaining exact native entry. No new production
+  repair was required beyond the accepted shared logical EA fix. The 997-row
+  inventory promotes only `i_EOR` and its twelve lifecycle MIDFUNCs; generic
+  `EOR_*` emitters remain separate, with `EOR_www` selected next. Full evidence
+  is in `BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md`.
 
 - **Generic AND emitter width, field, alias, and no-flags closure** (2026-07-16):
   the three reachable non-flag-setting AArch64 AND APIs now have nine
