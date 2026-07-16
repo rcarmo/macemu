@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 49 | 44 | 0 | 37 |
 | midfunc | 422 | 222 | 0 | 118 | 82 |
-| emitter_api | 294 | 34 | 0 | 91 | 169 |
+| emitter_api | 294 | 37 | 0 | 91 | 166 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,9 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `AND_ww3f` | emitter_api:`AND_ww3f` |
-| 80 | `AND_www` | emitter_api:`AND_www` |
-| 80 | `AND_xxx` | emitter_api:`AND_xxx` |
 | 80 | `EOR` | generator:`i_EOR`, midfunc:`jff_EOR_b`, midfunc:`jff_EOR_l`, midfunc:`jff_EOR_w`, midfunc:`jnf_EOR_b`, midfunc:`jnf_EOR_l`, midfunc:`jnf_EOR_w` |
 | 80 | `EOR_b_imm` | midfunc:`jff_EOR_b_imm`, midfunc:`jnf_EOR_b_imm` |
 | 80 | `EOR_l_imm` | midfunc:`jff_EOR_l_imm`, midfunc:`jnf_EOR_l_imm` |
@@ -62,17 +59,20 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `SUB_l_imm` | midfunc:`jff_SUB_l_imm`, midfunc:`jnf_SUB_l_imm` |
 | 80 | `SUB_w_imm` | midfunc:`jff_SUB_w_imm`, midfunc:`jnf_SUB_w_imm` |
 | 80 | `SUB_wwi` | emitter_api:`SUB_wwi` |
+| 80 | `SUB_www` | emitter_api:`SUB_www` |
+| 80 | `SUB_xxi` | emitter_api:`SUB_xxi` |
+| 80 | `SUB_xxx` | emitter_api:`SUB_xxx` |
 
 ## Accepted closure targets
 
 - `MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
 - `NEGX` (`i_NEGX`) is closed by `AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md`. Its six `jff_/jnf_NEGX_{b,w,l}` namesakes remain unreachable; the live generator uses the shared repaired `flag_subx` -> `sbb_b/w/l` lifecycle.
 - `ADD` (`i_ADD`) is closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The unused `jnf_ADD_im8` remains unreachable. The seven reachable generic non-flag-setting ADD encoder APIs are independently closed by `AARCH64_JIT_AUDIT_ADD_EMITTERS.md`; `ADD_xxxLSLi` remains unreachable.
-- `AND` (`i_AND`) is closed by `AARCH64_JIT_AUDIT_AND_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. Its shared writable-memory EA repair is regression-tested in OR/EOR without promoting either adjacent semantic family; generic `AND_*` / `ANDS_*` emitter APIs remain separately unreviewed or unreachable.
+- `AND` (`i_AND`) is closed by `AARCH64_JIT_AUDIT_AND_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. Its shared writable-memory EA repair is regression-tested in OR/EOR without promoting either adjacent semantic family. The three reachable generic non-flag-setting AND encoder APIs are independently closed by `AARCH64_JIT_AUDIT_AND_EMITTERS.md`; `AND_ww1f` and `AND_xx1f` remain unreachable, and `ANDS_*` remains separate.
 
 ## Next selected family
 
-`AND_ww3f` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`AND_ww3f`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`EOR` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_EOR`, midfunc:`jff_EOR_b`, midfunc:`jff_EOR_l`, midfunc:`jff_EOR_w`, midfunc:`jnf_EOR_b`, midfunc:`jnf_EOR_l`, midfunc:`jnf_EOR_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

@@ -48,7 +48,7 @@ After a successful build, `run.sh` executes `structural-audit.ts` before opcode 
 - complete MOVE/MOVEA/MOVE16, TAS, DBcc/Scc, classic bit-operation, CMP/CMPM/CMPA, NEG/NEGX, ADD, and AND lifecycle ownership contracts;
 - 208 generated ADD handlers, six shared MIDFUNC operand routes, and 126 balanced pre-write memory-EA pins, with redundant generator source locking prohibited;
 - 156 generated AND handlers, twelve reachable register/immediate MIDFUNC routes, 84 balanced AND memory-EA pins, and 252 balanced shared OR/AND/EOR pins, with exact adjacent-family regressions but no implied OR/EOR promotion;
-- exact generic ADD/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension, shift, and NZCV-preservation contracts plus signed TB displacement and CB/TB patch discrimination;
+- exact generic ADD/AND/compare/NEG/branch-emitter encodings and native semantics, including ADD W/X width, extension and shift, AND W/X width and aliasing, non-flag-setting NZCV preservation, signed TB displacement, and CB/TB patch discrimination;
 - exact-PC replay state, including deterministic restoration of memory bytes mutated by predecrement BCD and RMW vectors.
 
 Each passing invariant emits a `METRIC structural_*=1` line. A structural failure stops the run before equivalence results can mask the engine defect.

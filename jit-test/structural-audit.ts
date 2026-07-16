@@ -357,6 +357,14 @@ const addEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-add-conformance.sh",
   import.meta.url,
 )).text();
+const andEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-and-conformance.cpp",
+  import.meta.url,
+)).text();
+const andEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-and-conformance.sh",
+  import.meta.url,
+)).text();
 const negEmitterProbeSource = await Bun.file(new URL(
   "./emitter-neg-conformance.cpp",
   import.meta.url,
@@ -1877,6 +1885,56 @@ for (const contract of [
 for (const contract of ["-Wall -Wextra -Werror", "emitter-add-conformance.cpp"])
   requireText(addEmitterHarnessSource, contract, "generic ADD conformance build");
 requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh"', "generic ADD bounded acceptance gate");
+
+/* The mechanically selected reachable generic AND cluster consists only of the
+ * 32-bit #0x3f logical-immediate form and the W/X register forms. Keep its raw
+ * caller census and call shapes fail-closed, then prove exact words, W/X width,
+ * source/destination aliases, and S=0 NZCV preservation directly on AArch64. */
+for (const contract of [
+  "#define AND_ww3f(Wd,Wn)           _W((0b000100100 << 23) | immEncode(0,0b000000,0b000101) | ((Wn) << 5) | (Wd))",
+  "#define AND_www(Wd,Wn,Wm)         _W((0b00001010000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define AND_xxx(Xd,Xn,Xm)         _W((0b10001010000 << 21) | ((Xm) << 16) | (0 << 10) | ((Xn) << 5) | (Xd))",
+]) requireText(codegenHeaderSource, contract, "generic AND emitter encoding");
+
+const andEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for (const [name, expected] of [
+  ["AND_ww3f", 31], ["AND_www", 20], ["AND_xxx", 32],
+] as const) {
+  const found = (andEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== expected) fail(`generic ${name} raw caller census: expected ${expected}, found ${found}`);
+}
+const expectAndCallShape = (name: string, pattern: RegExp, expected: number) => {
+  const found = (andEmitterCallers.match(pattern) || []).length;
+  if (found !== expected) fail(`generic ${name} caller shape: expected ${expected}, found ${found}`);
+};
+expectAndCallShape("AND_ww3f REG_WORK1,i", /\bAND_ww3f\(REG_WORK1, i\)/g, 23);
+expectAndCallShape("AND_ww3f REG_WORK2,i", /\bAND_ww3f\(REG_WORK2, i\)/g, 8);
+for (const [shape, expected] of [
+  ["d, d, REG_WORK1", 3], ["d, d, s", 3], ["REG_WORK1, adr, REG_WORK1", 4],
+  ["REG_WORK1, d, s", 2], ["REG_WORK1, REG_WORK1, imm_reg", 1],
+  ["REG_WORK1, REG_WORK1, REG_WORK2", 2], ["REG_WORK3, adr, REG_WORK3", 1],
+  ["REG_WORK3, REG_WORK1, REG_WORK3", 1], ["REG_WORK4, REG_WORK4, REG_WORK2", 3],
+] as const) expectAndCallShape(`AND_www ${shape}`, new RegExp(`\\bAND_www\\(${shape.replaceAll(" ", "\\s*")}\\)`, "g"), expected);
+for (const [shape, expected] of [
+  ["d2, d2, REG_WORK2", 6], ["d, d, REG_WORK1", 1], ["d, d, REG_WORK2", 6],
+  ["REG_WORK1, REG_WORK1, REG_WORK2", 19],
+] as const) expectAndCallShape(`AND_xxx ${shape}`, new RegExp(`\\bAND_xxx\\(${shape.replaceAll(" ", "\\s*")}\\)`, "g"), expected);
+for (const contract of [
+  "#define N_REGS 18   /* really 32", "#define REG_WORK1 R2_INDEX",
+  "#define REG_WORK2 R3_INDEX", "#define REG_WORK3 R4_INDEX", "#define REG_WORK4 R5_INDEX",
+]) requireText(`${compemuArmHeaderSource}\n${codegenSource}`, contract, "generic AND register field bound");
+for (const contract of [
+  "0x12001549u", "0x120017beu", "0x120017ffu",
+  "0x0a0b0149u", "0x0a1c03beu", "0x0a1f03ffu",
+  "0x8a0e01acu", "0x8a1a037cu", "0x8a1f03ffu", "AND_ww3f preserves NZCV",
+  "AND_www preserves NZCV", "AND_xxx preserves NZCV", "AND_www native d=m alias",
+  "AND_xxx native all alias", "PROT_READ | PROT_WRITE",
+  "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 9 && result_vectors == 24 && flag_vectors == 3",
+]) requireText(andEmitterProbeSource, contract, "generic AND native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-and-conformance.cpp"])
+  requireText(andEmitterHarnessSource, contract, "generic AND conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-and-conformance.sh"', "generic AND bounded acceptance gate");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

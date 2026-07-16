@@ -215,6 +215,17 @@ regressions, the `ADD` inventory is 34/34, the accepted `ROL`/`ROR` inventory is
 
 ### Recent bug fixes (2026-07)
 
+- **Generic AND emitter width, field, alias, and no-flags closure** (2026-07-16):
+  the three reachable non-flag-setting AArch64 AND APIs now have nine
+  independent exact-word checks, 24 direct native result vectors, and three
+  explicit NZCV-preservation vectors. The probe covers W/X width, the fixed
+  `#0x3f` logical immediate, all source/destination alias shapes, and the
+  architectural register-field maximum. A fail-closed census covers all 83 raw
+  production callers. No encoder defect was found. The 997-row closure
+  inventory promotes only `AND_ww3f`, `AND_www`, and `AND_xxx`; `AND_ww1f` and
+  `AND_xx1f` remain unreachable, while all `ANDS_*` APIs remain separate. Full
+  evidence is in `BasiliskII/docs/AARCH64_JIT_AUDIT_AND_EMITTERS.md`.
+
 - **AND lifecycle and shared OR/AND/EOR pre-write EA ownership** (2026-07-16):
   the complete reachable byte/word/long AND family now has exact-native coverage
   across flags, no-flags, immediates, aliases, every readable source and writable
@@ -227,7 +238,7 @@ regressions, the `ADD` inventory is 34/34, the accepted `ROL`/`ROR` inventory is
   promotion. Focused replay passes 34/34 AND and 2/2 shared-path vectors; the
   complete active-risky gate passes 698/698 and all 20 allocator cells pass.
   The 997-row closure census promotes `i_AND` and twelve reachable MIDFUNCs;
-  generic AND/ANDS emitters remain separate. Full evidence is in
+  generic AND/ANDS emitters are audited separately. Full evidence is in
   `BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md`.
 
 - **Generic ADD emitter width, field, and no-flags closure** (2026-07-16):

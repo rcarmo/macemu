@@ -19,10 +19,10 @@ emitter_api,ADDS_xxi,unreachable,ADDS_xxi,60,0,BasiliskII/src/uae_cpu_2026/compi
 emitter_api,ADDS_xxx,unreachable,ADDS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,201,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADDS_xxxLSLi,unreachable,ADDS_xxxLSLi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,203,no path from reachable AArch64 compiler/emitter roots
 emitter_api,AND_ww1f,unreachable,AND_ww1f,80,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,293,no path from reachable AArch64 compiler/emitter roots
-emitter_api,AND_ww3f,unreviewed,AND_ww3f,80,25,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,292,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,AND_www,unreviewed,AND_www,80,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,289,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,AND_ww3f,audited,AND_ww3f,80,25,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,292,AARCH64_JIT_AUDIT_AND_EMITTERS.md
+emitter_api,AND_www,audited,AND_www,80,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,289,AARCH64_JIT_AUDIT_AND_EMITTERS.md
 emitter_api,AND_xx1f,unreachable,AND_xx1f,80,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,291,no path from reachable AArch64 compiler/emitter roots
-emitter_api,AND_xxx,unreviewed,AND_xxx,80,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,290,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,AND_xxx,audited,AND_xxx,80,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,290,AARCH64_JIT_AUDIT_AND_EMITTERS.md
 emitter_api,ANDS_ww1f,unreachable,ANDS_ww1f,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,300,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ANDS_ww3f,unreviewed,ANDS_ww3f,60,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,299,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,ANDS_ww7f,unreachable,ANDS_ww7f,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,298,no path from reachable AArch64 compiler/emitter roots

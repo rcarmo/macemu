@@ -66,6 +66,7 @@ with `readlong`/`writelong`/`readword`/`writeword` (reconstructs pointer each ti
 
 | Fix | Commit | Description |
 |-----|--------|-------------|
+| Generic AND emitter width/field/no-flags contracts | current structural audit | Three reachable AArch64 encoder APIs, 9 exact words, 27 direct native vectors, and 83 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_AND_EMITTERS.md` |
 | AND and shared logical pre-write EA lifecycle | current structural audit | Twelve reachable AND MIDFUNC routes, 84 AND and 252 shared OR/AND/EOR generated memory-EA pins, 34 complete AND vectors, two adjacent OR/EOR regressions, and two focused allocator collisions; see `AARCH64_JIT_AUDIT_AND_LIFECYCLE.md` |
 | Generic ADD emitter width/field/no-flags contracts | current structural audit | Seven reachable AArch64 encoder APIs, 12 exact words, 46 direct native vectors, and 72 fail-closed raw caller checks; see `AARCH64_JIT_AUDIT_ADD_EMITTERS.md` |
 | ADD pre-write EA and arithmetic lifecycle | current structural audit | Six shared MIDFUNC operand routes plus 126 generated memory-EA pins through ordered storage; 34 exact-native vectors and two focused allocator collisions; see `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` |
