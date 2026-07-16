@@ -1115,6 +1115,79 @@ for (const contract of [
   'EXPECTED_REG_FIELDS[clr_core_l_postinc_noflags_native]="D2=00000001 A0=0000A004 SR=2700"',
 ]) requireText(harnessSource, contract, "CLR exact result/flags contract");
 
+/* EXG is emitted directly and must preserve both originals until the second
+ * architectural write, including same-class self aliases. It never owns CCR. */
+const exgGenerator = functionBody(gencompSource, "     case i_EXG:", "\t case i_EXT:", "EXG generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint tmp=scratchie++;\\n"',
+  '"\\tmov_l_rr(tmp,src);\\n");',
+  'genastore ("dst", curi->smode, "srcreg", curi->size, "src");',
+  'genastore ("tmp", curi->dmode, "dstreg", curi->size, "dst");',
+]) requireText(exgGenerator, contract, "EXG generator lifecycle");
+requireBefore(exgGenerator, "mov_l_rr(tmp,src)", 'genastore ("dst"', "EXG original source before first write");
+requireBefore(exgGenerator, 'genastore ("dst"', 'genastore ("tmp"', "EXG first write before saved source write");
+for (const forbidden of ["genflags", "make_flags_live", "live_flags", "dont_care_flags", "jit_value_lock", "jit_value_unlock"])
+  if (exgGenerator.includes(forbidden)) fail(`EXG generator unexpectedly uses ${forbidden}`);
+const generatedExgBodies = matchingFunctionBodies(
+  generatedSource,
+  /^void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^\n]*\/\* EXG \*\//gm,
+  "generated EXG handlers",
+);
+const generatedExgFlagLive = generatedExgBodies.filter((body) => body.includes("_comp_ff")).length;
+const generatedExgNoFlags = generatedExgBodies.filter((body) => body.includes("_comp_nf")).length;
+const generatedExgCount = (needle: string) => generatedExgBodies.reduce((total, body) => total + countText(body, needle), 0);
+if (generatedExgBodies.length !== 6 || generatedExgFlagLive !== 3 || generatedExgNoFlags !== 3 ||
+    generatedExgCount("int tmp=scratchie++;") !== 6 || generatedExgCount("mov_l_rr(tmp,src);") !== 6 ||
+    generatedExgCount("mov_l_rr(srcreg, dst);") !== 4 || generatedExgCount("mov_l_rr(srcreg + 8, dst);") !== 2 ||
+    generatedExgCount("mov_l_rr(dstreg, tmp);") !== 2 || generatedExgCount("mov_l_rr(dstreg + 8, tmp);") !== 4 ||
+    generatedExgCount("dodgy=(srcreg==(uae_s32)dstreg)") !== 2) {
+  fail(`generated EXG lifecycle: functions=${generatedExgBodies.length} split=${generatedExgFlagLive}/${generatedExgNoFlags} tmp=${generatedExgCount("int tmp=scratchie++;")}/${generatedExgCount("mov_l_rr(tmp,src);")} first=${generatedExgCount("mov_l_rr(srcreg, dst);")}/${generatedExgCount("mov_l_rr(srcreg + 8, dst);")} second=${generatedExgCount("mov_l_rr(dstreg, tmp);")}/${generatedExgCount("mov_l_rr(dstreg + 8, tmp);")} alias=${generatedExgCount("dodgy=(srcreg==(uae_s32)dstreg)")}`);
+}
+for (const body of generatedExgBodies) {
+  requireBefore(body, "mov_l_rr(tmp,src);", "mov_l_rr(srcreg", "generated EXG save before first write");
+  requireBefore(body, "mov_l_rr(srcreg", "mov_l_rr(dstreg", "generated EXG first before second write");
+  if (body.includes("/* EXG */") && body.includes("op_c188_")) {
+    if (body.includes("dodgy=(srcreg==(uae_s32)dstreg)"))
+      fail("generated Dn/An EXG incorrectly treats equal register indices as an alias");
+  }
+  if (body.includes("op_c148_") && !body.includes("dodgy=(srcreg==(uae_s32)dstreg)"))
+    fail("generated An/An EXG lost same-register alias handling");
+  for (const forbidden of ["genflags", "make_flags_live", "live_flags", "dont_care_flags", "jit_value_lock", "jit_value_unlock", "TST_", "CMP_"])
+    if (body.includes(forbidden)) fail(`generated EXG unexpectedly uses ${forbidden}`);
+}
+for (const contract of [
+  "exg_l_tmp_source_collision", "[exg_l_tmp_source_collision]=0",
+  "[exg_l_tmp_source_collision]=20", "[exg_l_tmp_source_collision]=1",
+]) requireText(regallocPressureSource, contract, "EXG temporary/source allocator pressure");
+const exgVectors = [
+  "exg_core_dn_dn_native", "exg_core_an_an_native", "exg_core_dn_an_native",
+  "exg_core_dn_dn_self_native", "exg_core_an_an_self_native",
+  "exg_core_dn_dn_max_native", "exg_core_an_an_max_native", "exg_core_dn_an_max_native",
+  "exg_core_dn_dn_roundtrip_native", "exg_core_an_an_roundtrip_native",
+  "exg_core_dn_an_roundtrip_native", "exg_core_dn_an_noflags_native",
+];
+for (const fragment of [
+  "declare -a EXG_NATIVE_MATRIX_NAMES=(", 'TEST_ORDER+=("${EXG_NATIVE_MATRIX_NAMES[@]}")',
+  'for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_exg_name"]=1\n    NATIVE_REPLAY_PC["$_exg_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_exg_name"]=2',
+  'for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_exg_name"]=1',
+]) requireText(harnessSource, fragment, "EXG matrix/replay contract");
+for (const name of exgVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`])
+    requireText(harnessSource, fragment, `EXG vector ${name}`);
+  requireText(activeRiskySource, name, `EXG active mismatch-first vector ${name}`);
+}
+for (const contract of [
+  "for _exg_name in exg_core_dn_dn_native exg_core_an_an_native exg_core_dn_an_native exg_core_dn_dn_self_native exg_core_an_an_self_native exg_core_dn_dn_max_native exg_core_an_an_max_native exg_core_dn_an_max_native exg_core_dn_dn_roundtrip_native exg_core_an_an_roundtrip_native exg_core_dn_an_roundtrip_native; do INIT_REGS[\"$_exg_name\"]",
+  "INIT_REGS[exg_core_dn_an_noflags_native]=",
+  'EXPECTED_REG_FIELDS[exg_core_dn_dn_native]="D0=AABBCCDD D1=11223344 SR=271F"',
+  'EXPECTED_REG_FIELDS[exg_core_an_an_native]="A0=0000B000 A1=0000A000 SR=271F"',
+  'EXPECTED_REG_FIELDS[exg_core_dn_an_native]="D0=0000B000 A1=11223344 SR=271F"',
+  'EXPECTED_REG_FIELDS[exg_core_an_an_max_native]="A5=0000F700 A7=0000F500 SR=271F"',
+  'EXPECTED_REG_FIELDS[exg_core_dn_an_noflags_native]="D0=0000B000 D2=00000001 A1=11223344 SR=2700"',
+]) requireText(harnessSource, contract, "EXG initial/result/flags contract");
+
 /* SUB mirrors ADD's source/destination shapes but has independent inverted
  * carry/borrow and X publication. Its writable-memory forms must retain the
  * private pre-write EA through arithmetic, carry duplication and storage. */
@@ -4954,6 +5027,15 @@ console.log("METRIC structural_clr_special_memory_routes=3");
 console.log("METRIC structural_clr_noflags_vectors=2");
 console.log("METRIC structural_clr_allocator_pressure=1");
 console.log("METRIC structural_clr_unreachable_namesake_midfuncs=6");
+console.log(`METRIC structural_exg_exact_native_vectors=${exgVectors.length}`);
+console.log(`METRIC structural_exg_generated_functions=${generatedExgBodies.length}`);
+console.log(`METRIC structural_exg_generated_flag_live=${generatedExgFlagLive}`);
+console.log(`METRIC structural_exg_generated_noflags=${generatedExgNoFlags}`);
+console.log("METRIC structural_exg_encoding_classes=3");
+console.log("METRIC structural_exg_self_alias_classes=2");
+console.log("METRIC structural_exg_roundtrip_classes=3");
+console.log("METRIC structural_exg_noflags_vectors=1");
+console.log("METRIC structural_exg_allocator_pressure=1");
 console.log("METRIC structural_sub_shared_midfunc_routes=6");
 console.log("METRIC structural_sub_immediate_routes=6");
 console.log(`METRIC structural_sub_exact_native_vectors=${subExactVectors.length}`);

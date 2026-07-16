@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Close the complete EXG generator lifecycle** (2026-07-16): all six
+  generated handlers (three per compiler table) are covered across Dn/Dn,
+  An/An, and Dn/An forms, simultaneous full-width exchange, self aliases,
+  maximum register fields, roundtrips, no-flags table execution, and complete
+  XNZVC preservation. Focused replay passes 12/12, the active-risky corpus
+  888/888, and allocator pressure 30/30; the EXG witness rejects the forced
+  temporary/source alias with `skip=1`. The deterministic 997-row inventory
+  promotes only `i_EXG`. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md`.
+
 - **Close the complete CLR generator lifecycle** (2026-07-16): all 48
   generated handlers (24 per compiler table) are covered across byte/word/long
   Dn and every writable memory form, upper-lane preservation, A7 byte geometry,

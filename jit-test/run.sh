@@ -665,6 +665,18 @@ declare -a CLR_NATIVE_MATRIX_NAMES=(
     clr_core_w_dreg_noflags_native clr_core_l_postinc_noflags_native
 )
 TEST_ORDER+=("${CLR_NATIVE_MATRIX_NAMES[@]}")
+# EXG performs a simultaneous full-width register exchange without touching CCR.
+# Cover every encoding class, same-register aliases, maximum fields, roundtrips,
+# exact native entry, and a no-flags-table successor.
+declare -a EXG_NATIVE_MATRIX_NAMES=(
+    exg_core_dn_dn_native exg_core_an_an_native exg_core_dn_an_native
+    exg_core_dn_dn_self_native exg_core_an_an_self_native
+    exg_core_dn_dn_max_native exg_core_an_an_max_native
+    exg_core_dn_an_max_native exg_core_dn_dn_roundtrip_native
+    exg_core_an_an_roundtrip_native exg_core_dn_an_roundtrip_native
+    exg_core_dn_an_noflags_native
+)
+TEST_ORDER+=("${EXG_NATIVE_MATRIX_NAMES[@]}")
 # DBcc is a flags-preserving dynamic block edge. Cover DBT, DBF terminal/branch/
 # wrap states and both members of every conditional pair, with upper-word,
 # displacement, successor, and exact native evidence.
@@ -1703,6 +1715,12 @@ NATIVE_REPLAY_BYTES[clr_core_l_postinc_noflags_native]="A000 FF A001 FF A002 FF 
 SPECIAL_MEMORY_TESTS[clr_core_b_aind_special_native]=1
 SPECIAL_MEMORY_TESTS[clr_core_w_index_special_native]=1
 SPECIAL_MEMORY_TESTS[clr_core_b_absl_special_native]=1
+for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do
+    NATIVE_REPLAY_TESTS["$_exg_name"]=1
+    NATIVE_REPLAY_PC["$_exg_name"]=0x1000
+    NATIVE_REPLAY_COUNT["$_exg_name"]=2
+done
+unset _exg_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_dbcc_name"]=1
     NATIVE_REPLAY_PC["$_dbcc_name"]=0x1000
@@ -2697,6 +2715,34 @@ TEST_MEMORY_BYTES[clr_core_b_a7_postinc_native]="A000 00"
 TEST_MEMORY_BYTES[clr_core_b_a7_predec_native]="9FFE 00"
 TEST_MEMORY_BYTES[clr_core_b_postinc_successor_bne_native]="A000 00"
 TEST_MEMORY_BYTES[clr_core_l_postinc_noflags_native]="A000 00 A001 00 A002 00 A003 00"
+
+# Exact-native EXG lifecycle. Every vector starts directly at EXG; distinct
+# values prove simultaneous exchange, self forms prove aliases, and exact SR
+# checks prove that EXG never changes XNZVC in either compiler table.
+TESTS[exg_core_dn_dn_native]="C141"
+TESTS[exg_core_an_an_native]="C149"
+TESTS[exg_core_dn_an_native]="C189"
+TESTS[exg_core_dn_dn_self_native]="C140"
+TESTS[exg_core_an_an_self_native]="C148"
+TESTS[exg_core_dn_dn_max_native]="CD47"
+TESTS[exg_core_an_an_max_native]="CB4F"
+TESTS[exg_core_dn_an_max_native]="CF8F"
+TESTS[exg_core_dn_dn_roundtrip_native]="C141 C141"
+TESTS[exg_core_an_an_roundtrip_native]="C149 C149"
+TESTS[exg_core_dn_an_roundtrip_native]="C189 C189"
+TESTS[exg_core_dn_an_noflags_native]="C189 7401"
+EXPECTED_REG_FIELDS[exg_core_dn_dn_native]="D0=AABBCCDD D1=11223344 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_an_an_native]="A0=0000B000 A1=0000A000 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_an_native]="D0=0000B000 A1=11223344 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_dn_self_native]="D0=11223344 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_an_an_self_native]="A0=0000A000 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_dn_max_native]="D6=77777777 D7=66666666 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_an_an_max_native]="A5=0000F700 A7=0000F500 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_an_max_native]="D7=0000F700 A7=77777777 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_dn_roundtrip_native]="D0=11223344 D1=AABBCCDD SR=271F"
+EXPECTED_REG_FIELDS[exg_core_an_an_roundtrip_native]="A0=0000A000 A1=0000B000 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_an_roundtrip_native]="D0=11223344 A1=0000B000 SR=271F"
+EXPECTED_REG_FIELDS[exg_core_dn_an_noflags_native]="D0=0000B000 D2=00000001 A1=11223344 SR=2700"
 
 # Exact-native DBcc dynamic-edge lifecycle. The +8 displacement is relative to
 # DBcc's extension-word PC and lands on the second MOVEA marker, skipping the
@@ -5062,6 +5108,11 @@ INIT_REGS[clr_core_w_dreg_noflags_native]="A5A5FFFF $_CLR_INIT_TAIL 00002700"
 INIT_REGS[clr_core_l_postinc_noflags_native]="A5A5FFFF $_CLR_INIT_TAIL 00002700"
 unset _clr_name _CLR_INIT_TAIL
 
+_EXG_INIT_FULL="11223344 AABBCCDD 22222222 33333333 44444444 55555555 66666666 77777777 0000A000 0000B000 0000C000 0000D000 0000E000 0000F500 0000A600 0000F700"
+for _exg_name in exg_core_dn_dn_native exg_core_an_an_native exg_core_dn_an_native exg_core_dn_dn_self_native exg_core_an_an_self_native exg_core_dn_dn_max_native exg_core_an_an_max_native exg_core_dn_an_max_native exg_core_dn_dn_roundtrip_native exg_core_an_an_roundtrip_native exg_core_dn_an_roundtrip_native; do INIT_REGS["$_exg_name"]="$_EXG_INIT_FULL 0000271F"; done
+INIT_REGS[exg_core_dn_an_noflags_native]="$_EXG_INIT_FULL 00002700"
+unset _exg_name _EXG_INIT_FULL
+
 _DBCC_INIT_TAIL="00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 0000A100 0000A200 00000000 00000000 00000000 00000000 007EFF00"
 INIT_REGS[dbcc_core_dbt_true_native]="A5A50001 $_DBCC_INIT_TAIL 0000271F"
 INIT_REGS[dbcc_core_dbf_terminal_native]="A5A50000 $_DBCC_INIT_TAIL 0000271F"
@@ -5561,6 +5612,12 @@ for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do
     ((_clr_sentinel_id+=1))
 done
 unset _clr_name _clr_sentinel_id
+_exg_sentinel_id=1
+for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do
+    printf -v SENTINEL_A6["$_exg_name"] 'a6e8%04x' "$_exg_sentinel_id"
+    ((_exg_sentinel_id+=1))
+done
+unset _exg_name _exg_sentinel_id
 _neg_sentinel_id=1
 for _neg_name in "${NEG_NATIVE_MATRIX_NAMES[@]}"; do
     printf -v SENTINEL_A6["$_neg_name"] 'a60f%04x' "$_neg_sentinel_id"
@@ -7107,6 +7164,10 @@ for _clr_name in "${CLR_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_clr_name"]=1
 done
 unset _clr_name
+for _exg_name in "${EXG_NATIVE_MATRIX_NAMES[@]}"; do
+    RISKY_TESTS["$_exg_name"]=1
+done
+unset _exg_name
 for _dbcc_name in "${DBCC_NATIVE_MATRIX_NAMES[@]}"; do
     RISKY_TESTS["$_dbcc_name"]=1
 done
