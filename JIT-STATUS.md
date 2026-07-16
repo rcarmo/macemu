@@ -172,8 +172,8 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 ## BasiliskII 68K JIT
 
 **Current structural-audit gate (2026-07-16):** ✅
-**Build and generator:** ✅ clean AArch64 build; generated `compemu.cpp` is byte-reproducible at SHA-256 `07a4be8b0d94300d8290c9b63110815856e7f03d54a97053f5a8691a8b5e1f82`
-**JIT harness:** ✅ 695/695 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `3476e73b1d78da29814d529c8493909bf00f85e7928a0e0afa0cb3e3a8f459b5`
+**JIT harness:** ✅ 698/698 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -205,14 +205,30 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**695 active-risky vectors, score=100**
+**698 active-risky vectors, score=100**
 
 The larger exact-native family inventories remain available as focused gates;
-the current `ADD` inventory is 34/34, the accepted `ROL`/`ROR` inventory is
+the current `AND` inventory is 34/34 plus 2/2 adjacent OR/EOR writable-EA
+regressions, the `ADD` inventory is 34/34, the accepted `ROL`/`ROR` inventory is
 92/92, and the accepted register-count `ASL`/`ASR`/`LSL`/`LSR` inventory is
 138/138.
 
 ### Recent bug fixes (2026-07)
+
+- **AND lifecycle and shared OR/AND/EOR pre-write EA ownership** (2026-07-16):
+  the complete reachable byte/word/long AND family now has exact-native coverage
+  across flags, no-flags, immediates, aliases, every readable source and writable
+  destination EA, A7 byte geometry, and special memory. A forced allocator
+  collision proved that writable logical destinations did not retain their
+  fetched pre-write EA through MIDFUNC allocation and ordered storage:
+  `AND.B D0,(A0)+` reloaded stale `0xff` instead of stored `0x0f`. The shared
+  generator now emits 84 balanced destination-EA pins for each of OR, AND, and
+  EOR, with exact OR/EOR postincrement regressions but no adjacent family
+  promotion. Focused replay passes 34/34 AND and 2/2 shared-path vectors; the
+  complete active-risky gate passes 698/698 and all 20 allocator cells pass.
+  The 997-row closure census promotes `i_AND` and twelve reachable MIDFUNCs;
+  generic AND/ANDS emitters remain separate. Full evidence is in
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md`.
 
 - **Generic ADD emitter width, field, and no-flags closure** (2026-07-16):
   the seven reachable non-flag-setting AArch64 ADD APIs now have 12 independent

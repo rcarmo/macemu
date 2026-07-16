@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 48 | 44 | 0 | 38 |
-| midfunc | 422 | 210 | 0 | 118 | 94 |
+| generator | 130 | 49 | 44 | 0 | 37 |
+| midfunc | 422 | 222 | 0 | 118 | 82 |
 | emitter_api | 294 | 34 | 0 | 91 | 169 |
 | raw_boundary | 82 | 24 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 80 | `AND` | generator:`i_AND`, midfunc:`jff_AND_b`, midfunc:`jff_AND_l`, midfunc:`jff_AND_w`, midfunc:`jnf_AND_b`, midfunc:`jnf_AND_l`, midfunc:`jnf_AND_w` |
-| 80 | `AND_b_imm` | midfunc:`jff_AND_b_imm`, midfunc:`jnf_AND_b_imm` |
-| 80 | `AND_l_imm` | midfunc:`jff_AND_l_imm`, midfunc:`jnf_AND_l_imm` |
-| 80 | `AND_w_imm` | midfunc:`jff_AND_w_imm`, midfunc:`jnf_AND_w_imm` |
 | 80 | `AND_ww3f` | emitter_api:`AND_ww3f` |
 | 80 | `AND_www` | emitter_api:`AND_www` |
 | 80 | `AND_xxx` | emitter_api:`AND_xxx` |
@@ -62,16 +58,21 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 80 | `OR_l_imm` | midfunc:`jff_OR_l_imm`, midfunc:`jnf_OR_l_imm` |
 | 80 | `OR_w_imm` | midfunc:`jff_OR_w_imm`, midfunc:`jnf_OR_w_imm` |
 | 80 | `SUB` | generator:`i_SUB`, midfunc:`jff_SUB_b`, midfunc:`jff_SUB_l`, midfunc:`jff_SUB_w`, midfunc:`jnf_SUB_b`, midfunc:`jnf_SUB_l`, midfunc:`jnf_SUB_w` |
+| 80 | `SUB_b_imm` | midfunc:`jff_SUB_b_imm`, midfunc:`jnf_SUB_b_imm` |
+| 80 | `SUB_l_imm` | midfunc:`jff_SUB_l_imm`, midfunc:`jnf_SUB_l_imm` |
+| 80 | `SUB_w_imm` | midfunc:`jff_SUB_w_imm`, midfunc:`jnf_SUB_w_imm` |
+| 80 | `SUB_wwi` | emitter_api:`SUB_wwi` |
 
 ## Accepted closure targets
 
 - `MOVEM` (`i_MVMEL` / `i_MVMLE`) is closed by `AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md`. Its four legacy `jnf_MVMEL/MVMLE` MIDFUNC definitions remain unreachable; the repaired live contract is emitted directly by `genmovemel()` / `genmovemle()` and generic memory primitives.
 - `NEGX` (`i_NEGX`) is closed by `AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md`. Its six `jff_/jnf_NEGX_{b,w,l}` namesakes remain unreachable; the live generator uses the shared repaired `flag_subx` -> `sbb_b/w/l` lifecycle.
 - `ADD` (`i_ADD`) is closed by `AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. The unused `jnf_ADD_im8` remains unreachable. The seven reachable generic non-flag-setting ADD encoder APIs are independently closed by `AARCH64_JIT_AUDIT_ADD_EMITTERS.md`; `ADD_xxxLSLi` remains unreachable.
+- `AND` (`i_AND`) is closed by `AARCH64_JIT_AUDIT_AND_LIFECYCLE.md` through its 12 reachable flag-live/no-flags and immediate MIDFUNC routes. Its shared writable-memory EA repair is regression-tested in OR/EOR without promoting either adjacent semantic family; generic `AND_*` / `ANDS_*` emitter APIs remain separately unreviewed or unreachable.
 
 ## Next selected family
 
-`AND` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_AND`, midfunc:`jff_AND_b`, midfunc:`jff_AND_l`, midfunc:`jff_AND_w`, midfunc:`jnf_AND_b`, midfunc:`jnf_AND_l`, midfunc:`jnf_AND_w`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`AND_ww3f` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`AND_ww3f`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

@@ -1522,12 +1522,20 @@ gen_opcode (unsigned int opcode)
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Writable logical destinations retain the original EA while the fetched
+	 * value becomes an RMW target and source/flags allocation runs.  The
+	 * architectural base may already hold its postincrement/predecrement value,
+	 * so the final store cannot reconstruct this address after eviction. */
+	if (curi->dmode != Dreg)
+	    comprintf("\tint __logicdstealock=jit_value_lock(dsta);\n");
 	switch(curi->mnemo) {
 	 case i_OR: genflags (flag_or, curi->size, "", "src", "dst"); break;
 	 case i_AND: genflags (flag_and, curi->size, "", "src", "dst"); break;
 	 case i_EOR: genflags (flag_eor, curi->size, "", "src", "dst"); break;
 	}
 	genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");
+	if (curi->dmode != Dreg)
+	    comprintf("\tjit_value_unlock(__logicdstealock);\n");
 	break;
 
      case i_ORSR:

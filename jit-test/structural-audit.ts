@@ -724,6 +724,206 @@ requireText(
   "ADD.B D0,(A0)+ active mismatch-first regression",
 );
 
+/* AND shares generator routing with OR/EOR but has an independently accepted
+ * semantic lifecycle. Writable logical destinations own the original EA from
+ * fetch through the ordered store; register MIDFUNCs acquire source before RMW
+ * destination, preserve narrow upper lanes and X, and split flag-live from
+ * no-flags lowering without inference from adjacent logical families. */
+const logicalGenerator = functionBody(
+  gencompSource,
+  "     case i_OR:",
+  "     case i_ORSR:",
+  "OR/AND/EOR shared generator",
+);
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (curi->dmode, "dstreg", curi->size, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint __logicdstealock=jit_value_lock(dsta);\\n");',
+  'case i_AND: genflags (flag_and, curi->size, "", "src", "dst"); break;',
+  'genastore ("dst", curi->dmode, "dstreg", curi->size, "dst");',
+  'comprintf("\\tjit_value_unlock(__logicdstealock);\\n");',
+]) requireText(logicalGenerator, contract, "logical destination EA lifecycle");
+requireBefore(logicalGenerator, "jit_value_lock(dsta)", "case i_AND: genflags", "AND EA before logic");
+requireBefore(logicalGenerator, 'genastore ("dst"', "jit_value_unlock(__logicdstealock)", "AND EA through store");
+if (logicalGenerator.includes("__logicsrclock"))
+  fail("logical generator reintroduced a redundant source lock outside MIDFUNC ownership");
+const generatedLogicalBodies = [...generatedSource.matchAll(
+  /void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^{]*\/\* (AND|OR|EOR) \*\/[\s\S]*?\n}\n/g,
+)];
+const logicalGeneratedCounts = new Map<string, { functions: number; locks: number; unlocks: number }>();
+for (const match of generatedLogicalBodies) {
+  const family = match[1];
+  const body = match[0];
+  const locks = (body.match(/int __logicdstealock=jit_value_lock\(dsta\);/g) || []).length;
+  const unlocks = (body.match(/jit_value_unlock\(__logicdstealock\);/g) || []).length;
+  if (locks !== unlocks || locks > 1)
+    fail(`generated ${family} handler has unbalanced/duplicate logical EA ownership: ${locks}/${unlocks}`);
+  if (locks === 1) {
+    const operationName = family === "EOR" ? "xor" : family.toLowerCase();
+    const operation = body.search(new RegExp(`\\b${operationName}_[bwl]\\(`));
+    const store = body.search(/\bwrite(?:byte|word|long)\(dsta,/);
+    const lock = body.indexOf("int __logicdstealock=jit_value_lock(dsta);");
+    const unlock = body.indexOf("jit_value_unlock(__logicdstealock);");
+    if (operation < 0 || store < 0 || lock < 0 || lock >= operation || store <= operation || unlock <= store)
+      fail(`generated ${family} handler does not retain logical EA through its MIDFUNC operation and ordered store`);
+  }
+  const item = logicalGeneratedCounts.get(family) ?? { functions: 0, locks: 0, unlocks: 0 };
+  item.functions++;
+  item.locks += locks;
+  item.unlocks += unlocks;
+  logicalGeneratedCounts.set(family, item);
+}
+for (const [family, functions, locks] of [
+  ["OR", 156, 84], ["AND", 156, 84], ["EOR", 96, 84],
+] as const) {
+  const found = logicalGeneratedCounts.get(family);
+  if (!found || found.functions !== functions || found.locks !== locks || found.unlocks !== locks) {
+    fail(`generated ${family} ownership: functions=${found?.functions ?? 0} locks=${found?.locks ?? 0}/${found?.unlocks ?? 0}`);
+  }
+}
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_AND_${width},`,
+    `MENDFUNC(2,${variant}_AND_${width},`,
+    `${variant}_AND_${width} operand/flags lifecycle`,
+  );
+  requireText(body, `COMPCALL(${variant}_AND_${width}_imm)`, `${variant}_AND_${width} constant source route`);
+  requireText(body, `INIT_REGS_${width}(d, s);`, `${variant}_AND_${width} operand acquisition`);
+  requireText(body, "EXIT_REGS(d, s);", `${variant}_AND_${width} operand release`);
+  requireBefore(body, `INIT_REGS_${width}(d, s);`, "EXIT_REGS(d, s);", `${variant}_AND_${width} operand lifecycle`);
+  requireText(body, variant === "jff" ? "ANDS_www(" : "AND_www(", `${variant}_AND_${width} flag selection`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    if (variant === "jff") {
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK1, d);`, `${variant}_AND_${width} signed destination`);
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK2, s);`, `${variant}_AND_${width} signed source`);
+    } else {
+      requireText(body, "AND_www(REG_WORK1, d, s);", `${variant}_AND_${width} narrow result staging`);
+    }
+    requireText(body, `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_AND_${width} upper-lane preservation`);
+  } else {
+    requireText(body, `${variant === "jff" ? "ANDS" : "AND"}_www(d, d, s);`, `${variant}_AND_l full-width result`);
+  }
+  if (/\b(?:FLAGX|DUPLICACTE_CARRY)\b/.test(body)) fail(`${variant}_AND_${width} modifies X`);
+  if (variant === "jff") requireText(body, "flags_carry_inverted = false;", `${variant}_AND_${width} carry state`);
+  else if (body.includes("flags_carry_inverted")) fail(`${variant}_AND_${width} no-flags path changes carry metadata`);
+}
+for (const [variant, width] of [
+  ["jnf", "b"], ["jnf", "w"], ["jnf", "l"],
+  ["jff", "b"], ["jff", "w"], ["jff", "l"],
+] as const) {
+  const body = functionBody(
+    midfunc2Source,
+    `MIDFUNC(2,${variant}_AND_${width}_imm,`,
+    `MENDFUNC(2,${variant}_AND_${width}_imm,`,
+    `${variant}_AND_${width}_imm immediate/flags lifecycle`,
+  );
+  requireText(body, variant === "jff" ? "ANDS_www(" : "AND_www(", `${variant}_AND_${width}_imm flag selection`);
+  if (width === "b" || width === "w") {
+    const bits = width === "b" ? 8 : 16;
+    if (variant === "jff") {
+      requireText(body, `SIGNED${bits}_REG_2_REG(REG_WORK1, d);`, `${variant}_AND_${width}_imm signed destination`);
+      requireText(body, `SIGNED${bits}_IMM_2_REG(REG_WORK2, v);`, `${variant}_AND_${width}_imm signed immediate`);
+      requireText(body, `BFI_wwii(d, REG_WORK1, 0, ${bits});`, `${variant}_AND_${width}_imm upper-lane preservation`);
+    } else {
+      const mask = width === "b"
+        ? "(live.state[d].val & 0xffffff00) | ((live.state[d].val & v) & 0x000000ff)"
+        : "(live.state[d].val & 0xffff0000) | ((live.state[d].val & v) & 0x0000ffff)";
+      requireText(body, mask, `${variant}_AND_${width}_imm constant upper-lane preservation`);
+      requireText(body, "MOVN_xi(REG_WORK1", `${variant}_AND_${width}_imm runtime immediate materialisation`);
+    }
+  } else {
+    requireText(body, "LOAD_U32(REG_WORK1, v);", `${variant}_AND_l_imm full immediate materialisation`);
+    if (variant === "jnf")
+      requireText(body, "live.state[d].val = live.state[d].val & v;", `${variant}_AND_l_imm constant fold`);
+  }
+  if (/\b(?:FLAGX|DUPLICACTE_CARRY)\b/.test(body)) fail(`${variant}_AND_${width}_imm modifies X`);
+  if (variant === "jff") requireText(body, "flags_carry_inverted = false;", `${variant}_AND_${width}_imm carry state`);
+  else if (body.includes("flags_carry_inverted")) fail(`${variant}_AND_${width}_imm no-flags path changes carry metadata`);
+}
+
+const andExactVectors = [
+  "and_core_b_reg_zero_native", "and_core_w_reg_negative_native", "and_core_l_reg_positive_native",
+  "and_core_b_self_alias_native", "and_core_w_self_alias_native", "and_core_l_self_alias_native",
+  "and_core_b_imm_zero_native", "and_core_w_imm_negative_native",
+  "and_core_l_imm_pattern_native", "and_core_l_imm_negative_native",
+  "and_core_b_reg_noflags_native", "and_core_w_reg_noflags_native", "and_core_l_reg_noflags_native",
+  "and_core_b_aind_source_special_native", "and_core_w_postinc_source_native",
+  "and_core_l_predec_source_native", "and_core_b_d16_source_native",
+  "and_core_w_index_source_special_native", "and_core_l_absw_source_native",
+  "and_core_b_absl_source_special_native", "and_core_w_pc16_source_native",
+  "and_core_l_pcindex_source_native", "and_core_b_aind_dest_special_native",
+  "and_core_w_postinc_dest_native", "and_core_l_predec_dest_native",
+  "and_core_b_d16_dest_native", "and_core_w_index_dest_special_native",
+  "and_core_l_absw_dest_native", "and_core_b_absl_dest_special_native",
+  "and_core_b_a7_postinc_dest_native", "and_core_b_a7_predec_dest_native",
+  "and_core_b_andi_postinc_dest_native", "and_core_b_postinc_dest_native",
+  "and_core_b_postinc_dest_noflags_native",
+];
+for (const fragment of [
+  "declare -a AND_NATIVE_MATRIX_NAMES=(",
+  'TEST_ORDER+=("${AND_NATIVE_MATRIX_NAMES[@]}")',
+  'for _and_name in "${AND_NATIVE_MATRIX_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_and_name"]=1\n    NATIVE_REPLAY_PC["$_and_name"]=0x1000\n    NATIVE_REPLAY_COUNT["$_and_name"]=2',
+  'for _and_name in "${AND_NATIVE_MATRIX_NAMES[@]}"; do\n    RISKY_TESTS["$_and_name"]=1',
+]) requireText(harnessSource, fragment, "AND exact-native matrix/replay contract");
+for (const name of andExactVectors) {
+  for (const fragment of [`TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`])
+    requireText(harnessSource, fragment, `AND exact-native vector ${name}`);
+}
+const andMemoryVectors = [
+  "and_core_b_aind_source_special_native", "and_core_w_postinc_source_native",
+  "and_core_l_predec_source_native", "and_core_b_d16_source_native",
+  "and_core_w_index_source_special_native", "and_core_l_absw_source_native",
+  "and_core_b_absl_source_special_native", "and_core_w_pc16_source_native",
+  "and_core_l_pcindex_source_native", "and_core_b_aind_dest_special_native",
+  "and_core_w_postinc_dest_native", "and_core_l_predec_dest_native",
+  "and_core_b_d16_dest_native", "and_core_w_index_dest_special_native",
+  "and_core_l_absw_dest_native", "and_core_b_absl_dest_special_native",
+  "and_core_b_a7_postinc_dest_native", "and_core_b_a7_predec_dest_native",
+  "and_core_b_andi_postinc_dest_native", "and_core_b_postinc_dest_native",
+  "and_core_b_postinc_dest_noflags_native",
+];
+for (const name of andMemoryVectors) {
+  requireText(harnessSource, `TEST_MEMORY_BYTES[${name}]=`, `AND memory bytes ${name}`);
+  requireText(harnessSource, `NATIVE_REPLAY_BYTES[${name}]=`, `AND native memory replay ${name}`);
+}
+for (const name of [
+  "and_core_b_aind_source_special_native", "and_core_w_index_source_special_native",
+  "and_core_b_absl_source_special_native", "and_core_b_aind_dest_special_native",
+  "and_core_w_index_dest_special_native", "and_core_b_absl_dest_special_native",
+]) requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `AND special-memory route ${name}`);
+for (const name of [
+  "and_core_b_reg_noflags_native", "and_core_w_reg_noflags_native",
+  "and_core_l_reg_noflags_native", "and_core_b_postinc_dest_noflags_native",
+]) requireText(harnessSource, `TESTS[${name}]=`, `AND no-flags vector ${name}`);
+for (const contract of [
+  "and_b_postinc_source_dreg_collision", "[and_b_postinc_source_dreg_collision]=21",
+  "[and_b_postinc_source_dreg_collision]=0", "[and_b_postinc_source_dreg_collision]=1",
+  "and_b_postinc_ea_source_collision", "[and_b_postinc_ea_source_collision]=20",
+  "[and_b_postinc_ea_source_collision]=21", "[and_b_postinc_ea_source_collision]=1",
+]) requireText(regallocPressureSource, contract, "AND source/EA allocator pressure");
+requireText(harnessSource, 'TESTS[and_core_b_postinc_dest_native]="C118 40C2 1028 FFFF"', "AND.B D0,(A0)+ exact-native regression");
+requireText(activeRiskySource, "and_core_b_postinc_dest_native", "AND.B D0,(A0)+ active mismatch-first regression");
+const logicalEaRegressions = ["or_core_b_postinc_dest_native", "eor_core_b_postinc_dest_native"];
+for (const fragment of [
+  "declare -a LOGICAL_EA_REGRESSION_NAMES=(",
+  'TEST_ORDER+=("${LOGICAL_EA_REGRESSION_NAMES[@]}")',
+  'for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do\n    NATIVE_REPLAY_TESTS["$_logical_name"]=1',
+  'for _logical_name in "${LOGICAL_EA_REGRESSION_NAMES[@]}"; do\n    RISKY_TESTS["$_logical_name"]=1',
+]) requireText(harnessSource, fragment, "shared logical EA regression contract");
+for (const name of logicalEaRegressions) {
+  for (const fragment of [
+    `TESTS[${name}]=`, `EXPECTED_REG_FIELDS[${name}]=`, `INIT_REGS[${name}]=`,
+    `TEST_MEMORY_BYTES[${name}]=`, `NATIVE_REPLAY_BYTES[${name}]=`,
+  ]) requireText(harnessSource, fragment, `shared logical EA exact-native vector ${name}`);
+  requireText(activeRiskySource, name, `shared logical EA active regression ${name}`);
+}
+requireText(harnessSource, "SPECIAL_MEMORY_TESTS[or_core_b_postinc_dest_native]=1", "OR special-memory EA regression");
+
 /* NEG is generated as zero-source through the shared SUB lifecycle.  Memory
  * destinations additionally own the pre-write EA from fetch through result
  * allocation, flags and ordered storage.  Directly prove the separately live
@@ -3742,6 +3942,19 @@ console.log(`METRIC structural_add_redundant_generator_source_locks=${generatedA
 console.log(`METRIC structural_add_generated_ea_locks=${generatedAddEaLocks}`);
 console.log("METRIC structural_add_noflags_vectors=4");
 console.log("METRIC structural_add_allocator_pressure=2");
+console.log("METRIC structural_and_shared_midfunc_routes=6");
+console.log("METRIC structural_and_immediate_routes=6");
+console.log(`METRIC structural_and_exact_native_vectors=${andExactVectors.length}`);
+console.log("METRIC structural_and_readable_ea_classes=9");
+console.log("METRIC structural_and_writable_ea_classes=7");
+console.log(`METRIC structural_and_memory_vectors=${andMemoryVectors.length}`);
+console.log("METRIC structural_and_special_memory_routes=6");
+console.log("METRIC structural_and_noflags_vectors=4");
+console.log("METRIC structural_and_generated_functions=156");
+console.log("METRIC structural_and_generated_ea_locks=84");
+console.log("METRIC structural_logical_generated_ea_locks=252");
+console.log("METRIC structural_and_allocator_pressure=2");
+console.log(`METRIC structural_logical_adjacent_ea_regressions=${logicalEaRegressions.length}`);
 console.log("METRIC structural_neg_shared_sub_lowering=1");
 console.log(`METRIC structural_neg_exact_native_vectors=${negExactVectors.length}`);
 console.log("METRIC structural_neg_memory_ea_classes=9");
