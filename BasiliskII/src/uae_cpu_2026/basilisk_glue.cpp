@@ -442,6 +442,31 @@ static bool run_opcode_test_mode_glue()
 				regs.usp = regs.isp = regs.msp = m68k_areg(regs, 7);
 			}
 			MakeFromSR();
+			/* Exact-native FPU vectors may preserve an FP operand prepared by the
+			   trace pass while requiring a known architectural FPSR baseline. This
+			   prevents trace-pass exceptions from masquerading as native evidence. */
+			const char *replay_fpsr_env = getenv("B2_TEST_REPLAY_FPSR");
+			if (replay_fpsr_env && *replay_fpsr_env) {
+				char *end = NULL;
+				unsigned long replay_fpsr = strtoul(replay_fpsr_env, &end, 16);
+				if (end == replay_fpsr_env || *end != '\0' || replay_fpsr > 0xffffffffUL) {
+					fprintf(stderr, "B2_TEST_REPLAY_FPSR parse failed\n");
+					quit_program = 1;
+					return true;
+				}
+				fpu_set_fpsr((uae_u32)replay_fpsr);
+			}
+			const char *replay_fpcr_env = getenv("B2_TEST_REPLAY_FPCR");
+			if (replay_fpcr_env && *replay_fpcr_env) {
+				char *end = NULL;
+				unsigned long replay_fpcr = strtoul(replay_fpcr_env, &end, 16);
+				if (end == replay_fpcr_env || *end != '\0' || replay_fpcr > 0xffffffffUL) {
+					fprintf(stderr, "B2_TEST_REPLAY_FPCR parse failed\n");
+					quit_program = 1;
+					return true;
+				}
+				fpu_set_fpcr((uae_u32)replay_fpcr);
+			}
 			regs.stopped = 0;
 			SPCFLAGS_CLEAR(SPCFLAG_STOP | SPCFLAG_BRK | SPCFLAG_DOTRACE | SPCFLAG_TRACE);
 			uaecptr second_addr = test_addr;

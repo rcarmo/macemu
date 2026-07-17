@@ -124,6 +124,9 @@ extern struct regstruct
     double jit_fpregs[8];
     double jit_fp_result;
     double jit_scratchfregs[2];
+    /* Host FPCR saved while native JIT FPU code owns the thread's rounding
+     * mode.  Restored at every dispatcher exit before returning to C. */
+    uae_u64 jit_host_fpcr;
     uae_u32 *raw_cputbl_count;
     uintptr_t mem_banks;
     uintptr_t cache_tags;

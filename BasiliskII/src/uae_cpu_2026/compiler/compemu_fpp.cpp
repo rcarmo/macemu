@@ -390,6 +390,17 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 }
 
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+STATIC_INLINE void clear_fp_exception_status(void)
+{
+	/* Every ordinary FMOVE destination replaces the current exception-status
+	 * byte, including exact single/double stores.  Integer conversion emitters
+	 * add INEX2 or OPERR after this common reset. */
+	mov_l_ri(S5, 0);
+	mov_l_mr((uintptr)&fpu.fpsr.exception_status, S5);
+}
+#endif
+
 /* return of -1 means failure, >=0 means OK */
 STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 {
@@ -420,24 +431,44 @@ STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 		switch (size)
 		{
 		case 6: /* byte */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			clear_fp_exception_status();
+			fmov_to_b_rr(reg, val);
+#else
 			fmovi_mr((uintptr) temp_fp, val);
 			delay;
 			mov_b_rm(reg, (uintptr) temp_fp);
+#endif
 			return 0;
 		case 4: /* word */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			clear_fp_exception_status();
+			fmov_to_w_rr(reg, val);
+#else
 			fmovi_mr((uintptr) temp_fp, val);
 			delay;
 			mov_w_rm(reg, (uintptr) temp_fp);
+#endif
 			return 0;
 		case 0: /* long */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			clear_fp_exception_status();
+			fmov_to_l_rr(reg, val);
+#else
 			fmovi_mr((uintptr) temp_fp, val);
 			delay;
 			mov_l_rm(reg, (uintptr) temp_fp);
+#endif
 			return 0;
 		case 1: /* single precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			clear_fp_exception_status();
+			fmov_to_s_rr(reg, val);
+#else
 			fmovs_mr((uintptr) temp_fp, val);
 			delay;
 			mov_l_rm(reg, (uintptr) temp_fp);
+#endif
 			return 0;
 		default:
 			return -1;
@@ -541,18 +572,30 @@ STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 		}
 	}
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	clear_fp_exception_status();
+#endif
+
 	switch (size)
 	{
 	case 0: /* long */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_to_l_rr(S2, val);
+#else
 		fmovi_mr((uintptr) temp_fp, val);
 		delay;
 		mov_l_rm(S2, (uintptr) temp_fp);
+#endif
 		writelong_clobber(ad, S2, S3);
 		break;
 	case 1: /* single precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_to_s_rr(S2, val);
+#else
 		fmovs_mr((uintptr) temp_fp, val);
 		delay;
 		mov_l_rm(S2, (uintptr) temp_fp);
+#endif
 		writelong_clobber(ad, S2, S3);
 		break;
 	case 2: /* extended precision */
@@ -570,12 +613,25 @@ STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 	case 3: /* packed decimal static */
 		return -1;						/* Packed */
 	case 4: /* word */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_to_w_rr(S2, val);
+#else
 		fmovi_mr((uintptr) temp_fp, val);
 		delay;
 		mov_l_rm(S2, (uintptr) temp_fp);
+#endif
 		writeword_clobber(ad, S2, S3);
 		break;
 	case 5: /* double precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* Split the native double into low/high integer words, then route both
+		 * guest stores through the normal memory boundary. This retains special
+		 * memory and code-invalidation semantics unlike a raw host store. */
+		fmov_to_d_rrr(S2, S3, val);
+		writelong_clobber(ad, S3, S4);
+		add_l_ri(ad, 4);
+		writelong_clobber(ad, S2, S3);
+#else
 		fmov_mr((uintptr) temp_fp, val);
 		delay;
 		mov_l_rm(S2, (uintptr) temp_fp + 4);
@@ -583,11 +639,16 @@ STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 		add_l_ri(ad, 4);
 		mov_l_rm(S2, (uintptr) temp_fp);
 		writelong_clobber(ad, S2, S3);
+#endif
 		break;
 	case 6: /* byte */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		fmov_to_b_rr(S2, val);
+#else
 		fmovi_mr((uintptr) temp_fp, val);
 		delay;
 		mov_l_rm(S2, (uintptr) temp_fp);
+#endif
 		writebyte(ad, S2, S3);
 		break;
 	default:

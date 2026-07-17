@@ -437,6 +437,10 @@ const fppFmoveExtendedEaMatrix = await Bun.file(new URL(
   "./fpp-fmove-memory-extended-ea-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveDestinationBasicMatrix = await Bun.file(new URL(
+  "./fpp-fmove-destination-basic-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -641,6 +645,62 @@ console.log("METRIC structural_fpp_fmove_extended_ea_exact_native_vectors=39");
 console.log("METRIC structural_fpp_fmove_extended_ea_modes=6");
 console.log("METRIC structural_fpp_fmove_indexed_formats=2");
 console.log("METRIC structural_fpp_fmove_pc_indexed=1");
+
+const putFpValueBody = functionBody(
+  fppCompilerSource,
+  "STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)",
+  "STATIC_INLINE int get_fp_ad",
+  "native FPP destination conversion",
+);
+for (const contract of [
+  "STATIC_INLINE void clear_fp_exception_status(void)", "mov_l_mr((uintptr)&fpu.fpsr.exception_status, S5);",
+]) requireText(fppCompilerSource, contract, "native FPP destination exception reset");
+for (const contract of [
+  "case 0: /* Dn */", "case 2: /* (An) */", "case 3: /* (An)+ */", "case 4: /* -(An) */",
+  "fmov_to_b_rr(reg, val);", "fmov_to_w_rr(reg, val);", "fmov_to_l_rr(reg, val);",
+  "fmov_to_s_rr(reg, val);", "fmov_to_b_rr(S2, val);", "fmov_to_w_rr(S2, val);",
+  "fmov_to_l_rr(S2, val);", "fmov_to_s_rr(S2, val);", "fmov_to_d_rrr(S2, S3, val);",
+  "writelong_clobber(ad, S2, S3);", "writeword_clobber(ad, S2, S3);", "writebyte(ad, S2, S3);",
+]) requireText(putFpValueBody, contract, "native FPP basic destination conversion");
+const fmoveIntegerEmitter = functionBody(
+  codegenSource,
+  "STATIC_INLINE void fmov_to_int_emit(W4 d, FR s, int width)",
+  "LOWFUNC(NONE,NONE,2,raw_fmov_to_l_rr",
+  "native FPP integer destination classifier",
+);
+for (const contract of [
+  "FRINTI_dd(SCRATCH_F64_1, s);", "FCVTAS_wd(REG_WORK1, SCRATCH_F64_1);",
+  "SCVTF_dw(SCRATCH_F64_2, REG_WORK1);", "FMOV_xd(REG_WORK3, s);",
+  "FPSR_EXCEPTION_OPERR", "FPSR_ACCR_IOP", "FPSR_EXCEPTION_INEX2", "FPSR_ACCR_INEX",
+  "MRS_NZCV_x(REG_WORK4);", "MSR_NZCV_x(REG_WORK4);",
+]) requireText(fmoveIntegerEmitter, contract, "native FPP integer destination classifier");
+for (const contract of [
+  "regs.jit_host_fpcr = host_fpcr", "static const unsigned arm_round[4] = { 0, 3, 2, 1 }",
+  "fpu.registers[i].nan_sign ? -1.0 : 1.0", "std::isnan(shadow) && std::signbit(shadow)",
+  'B2_TEST_REPLAY_FPCR', 'B2_TEST_REPLAY_FPSR',
+]) requireText(`${compatSource}\n${basiliskGlueSource}`, contract, "native FPP destination architectural boundary");
+for (const contract of [
+  'name: "byte_fraction_round_nearest_even"', 'name: "byte_fraction_round_zero"',
+  'name: "byte_fraction_round_minus_inf"', 'name: "byte_fraction_round_plus_inf"',
+  'name: "byte_exact_min_no_operr"', 'name: "byte_one_below_saturates"',
+  'name: "byte_fractional_overflow_operr_inex"',
+  'name: "word_exact_min_no_operr"', 'name: "word_one_above_saturates"',
+  'name: "long_positive_infinity_saturates"', 'name: "long_negative_infinity_saturates"',
+  'name: "long_positive_nan_saturates"', 'name: "long_negative_nan_saturates"',
+  'name: "fp7_to_d7_max_fields"', 'name: "single_exact_clears_prior_status"',
+  'name: "double_aind_exact_clears_prior_status"', 'name: `byte_${mode.name}_a7_geometry`',
+  'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_REPLAY_FPCR: item.replayFpcr ?? "0"',
+  'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC:', 'sr === "271f"',
+  'cow_clone', 'cow_release', 'const expected = process.env.CASE ? 1 : 45',
+]) requireText(fppFmoveDestinationBasicMatrix, contract, "native ordinary FMOVE basic-destination matrix");
+if (/\b(?:FSMOVE|FDMOVE)\b/.test(fppFmoveDestinationBasicMatrix))
+  fail("ordinary FMOVE destination matrix: explicit precision subfamily leaked into bounded scope");
+console.log("METRIC structural_fpp_fmove_destination_basic_exact_native_vectors=45");
+console.log("METRIC structural_fpp_fmove_destination_integer_formats=3");
+console.log("METRIC structural_fpp_fmove_destination_fpcr_modes=4");
+console.log("METRIC structural_fpp_fmove_destination_basic_ea_modes=3");
+console.log("METRIC structural_fpp_fmove_destination_exception_contracts=2");
+console.log("METRIC structural_fpp_fmove_destination_nan_sign_boundary=1");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
@@ -2917,7 +2977,7 @@ for (const contract of [
 
 const compareEmitterCallers = `${midfunc2Source}\n${compatSource}\n${source}`;
 for (const [name, expected] of [
-  ["CMP_wi", 49], ["CMP_xi", 3], ["CMP_ww", 23], ["CMP_xx", 6], ["CMP_wwLSLi", 6],
+  ["CMP_wi", 49], ["CMP_xi", 3], ["CMP_ww", 25], ["CMP_xx", 6], ["CMP_wwLSLi", 6],
 ] as const) {
   const found = (compareEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
   if (found !== expected) fail(`generic ${name} caller census: expected ${expected}, found ${found}`);
@@ -3034,7 +3094,7 @@ for (const contract of [
 
 const subEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (const [name, expected] of [
-  ["SUB_wwi", 58], ["SUB_xxi", 6], ["SUB_www", 36], ["SUB_xxx", 3],
+  ["SUB_wwi", 54], ["SUB_xxi", 6], ["SUB_www", 36], ["SUB_xxx", 3],
   ["SUBS_wwi", 6], ["SUBS_www", 3], ["SUBS_wwwLSLi", 3],
 ] as const) {
   const found = (subEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
@@ -3045,7 +3105,6 @@ expectArgs("SUB_wwi imm12", [...subEmitterCallers.matchAll(/\bSUB_wwi\([^,\n]+,[
   "36", "18", "9", "34", "17", "33", "36", "18", "9", "34", "17", "33", "1", "36", "18",
   "9", "34", "17", "33", "36", "18", "9", "1", "34", "17", "1", "33", "1", "v & 0xff",
   "v & 0xff", "v", "v", "v", "6", "0x60", "6", "0x60", "cycles", "cycles", "cycles", "cycles",
-  "16", "17", "24", "25",
 ]);
 expectArgs("SUB_xxi imm12", [...subEmitterCallers.matchAll(/\bSUB_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
   "-offset", "i", "-offset", "i", "-offset", "JIT_OBSERVER_SAVE_SIZE",

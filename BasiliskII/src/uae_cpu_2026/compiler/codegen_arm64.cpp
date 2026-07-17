@@ -932,10 +932,134 @@ LOWFUNC(NONE,NONE,2,raw_fmov_d_rrr,(FW d, RR4 s1, RR4 s2))
 }
 LENDFUNC(NONE,NONE,2,raw_fmov_d_rrr,(FW d, RR4 s1, RR4 s2))
 
+/* Match fpu_mpfr.cpp:extract_to_integer() for the ordinary integer FMOVE
+ * destinations.  AArch64 FCVTAS returns zero for NaN and does not publish the
+ * 68k OPERR/accrued-IOP contract.  Round under FPCR first, saturate by the
+ * source sign, then compare the final signed integer back with that rounded
+ * value.  The comparison also catches narrower byte/word saturation.
+ *
+ * Integer NZCV is guest state in this JIT, so preserve it around all private
+ * classification branches.  Native FP registers and FP_RESULT remain owned by
+ * the allocator; only MPFR's architectural exception fields are updated. */
+STATIC_INLINE void fmov_to_int_emit(W4 d, FR s, int width)
+{
+	const uae_u32 min_value = width == 8 ? 0xffffff80U :
+		width == 16 ? 0xffff8000U : 0x80000000U;
+	const uae_u32 max_value = width == 8 ? 0x0000007fU :
+		width == 16 ? 0x00007fffU : 0x7fffffffU;
+
+	MRS_NZCV_x(REG_WORK4);
+
+	FRINTI_dd(SCRATCH_F64_1, s);
+	FCVTAS_wd(REG_WORK1, SCRATCH_F64_1);
+
+	/* Repair FCVTAS' NaN/out-of-range result using the architectural sign. */
+	SCVTF_dw(SCRATCH_F64_2, REG_WORK1);
+	FCMP_dd(SCRATCH_F64_1, SCRATCH_F64_2);
+	uae_u32* converted_in_range = (uae_u32*)get_target();
+	BEQ_i(0);
+	FMOV_xd(REG_WORK3, s);
+	uae_u32* invalid_positive = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK3, 63, 0);
+	LOAD_U32(REG_WORK1, min_value);
+	uae_u32* final_candidate_from_negative = (uae_u32*)get_target();
+	B_i(0);
+	write_jmp_target(invalid_positive, (uintptr)get_target());
+	LOAD_U32(REG_WORK1, max_value);
+	uae_u32* final_candidate_from_positive = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(converted_in_range, (uintptr)get_target());
+	if (width < 32) {
+		LOAD_U32(REG_WORK2, max_value);
+		CMP_ww(REG_WORK1, REG_WORK2);
+		uae_u32* not_above_max = (uae_u32*)get_target();
+		BLE_i(0);
+		MOV_ww(REG_WORK1, REG_WORK2);
+		uae_u32* final_candidate_from_max = (uae_u32*)get_target();
+		B_i(0);
+		write_jmp_target(not_above_max, (uintptr)get_target());
+		LOAD_U32(REG_WORK2, min_value);
+		CMP_ww(REG_WORK1, REG_WORK2);
+		uae_u32* not_below_min = (uae_u32*)get_target();
+		BGE_i(0);
+		MOV_ww(REG_WORK1, REG_WORK2);
+		write_jmp_target(not_below_min, (uintptr)get_target());
+		write_jmp_target(final_candidate_from_max, (uintptr)get_target());
+	}
+
+	write_jmp_target(final_candidate_from_negative, (uintptr)get_target());
+	write_jmp_target(final_candidate_from_positive, (uintptr)get_target());
+	if (width == 32)
+		MOV_ww(d, REG_WORK1);
+	else
+		BFI_wwii(d, REG_WORK1, 0, width);
+
+	/* Equality means the rounded value was representable at the destination
+	 * width.  Unordered (NaN), infinity, and either overflow direction reach
+	 * the architectural OPERR path. */
+	SCVTF_dw(SCRATCH_F64_2, REG_WORK1);
+	FCMP_dd(SCRATCH_F64_1, SCRATCH_F64_2);
+	uae_u32* no_operr = (uae_u32*)get_target();
+	BEQ_i(0);
+	LOAD_U64(REG_WORK2, (uintptr)&fpu.fpsr.exception_status);
+	LOAD_U32(REG_WORK3, FPSR_EXCEPTION_OPERR);
+	STR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U64(REG_WORK2, (uintptr)&fpu.fpsr.accrued_exception);
+	LDR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U32(REG_WORK1, FPSR_ACCR_IOP);
+	ORR_www(REG_WORK3, REG_WORK3, REG_WORK1);
+	STR_wXi(REG_WORK3, REG_WORK2, 0);
+
+	/* A finite fractional value can be both invalid for the destination range
+	 * and inexact under the selected rounding mode.  Infinity is exact here;
+	 * NaN is unordered and must not acquire INEX2. */
+	FCMP_dd(s, SCRATCH_F64_1);
+	uae_u32* exception_done_operr_unordered = (uae_u32*)get_target();
+	BVS_i(0);
+	uae_u32* exception_done_operr_exact = (uae_u32*)get_target();
+	BEQ_i(0);
+	LOAD_U64(REG_WORK2, (uintptr)&fpu.fpsr.exception_status);
+	LDR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U32(REG_WORK1, FPSR_EXCEPTION_INEX2);
+	ORR_www(REG_WORK3, REG_WORK3, REG_WORK1);
+	STR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U64(REG_WORK2, (uintptr)&fpu.fpsr.accrued_exception);
+	LDR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U32(REG_WORK1, FPSR_ACCR_INEX);
+	ORR_www(REG_WORK3, REG_WORK3, REG_WORK1);
+	STR_wXi(REG_WORK3, REG_WORK2, 0);
+	uae_u32* exception_done_from_operr = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(exception_done_operr_unordered, (uintptr)get_target());
+	write_jmp_target(exception_done_operr_exact, (uintptr)get_target());
+	uae_u32* exception_done_from_plain_operr = (uae_u32*)get_target();
+	B_i(0);
+
+	write_jmp_target(no_operr, (uintptr)get_target());
+	/* A representable fractional source raises INEX2 and accrued INEX. */
+	FCMP_dd(s, SCRATCH_F64_1);
+	uae_u32* exception_done_exact = (uae_u32*)get_target();
+	BEQ_i(0);
+	LOAD_U64(REG_WORK2, (uintptr)&fpu.fpsr.exception_status);
+	LOAD_U32(REG_WORK3, FPSR_EXCEPTION_INEX2);
+	STR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U64(REG_WORK2, (uintptr)&fpu.fpsr.accrued_exception);
+	LDR_wXi(REG_WORK3, REG_WORK2, 0);
+	LOAD_U32(REG_WORK1, FPSR_ACCR_INEX);
+	ORR_www(REG_WORK3, REG_WORK3, REG_WORK1);
+	STR_wXi(REG_WORK3, REG_WORK2, 0);
+
+	write_jmp_target(exception_done_from_operr, (uintptr)get_target());
+	write_jmp_target(exception_done_from_plain_operr, (uintptr)get_target());
+	write_jmp_target(exception_done_exact, (uintptr)get_target());
+	MSR_NZCV_x(REG_WORK4);
+}
+
 LOWFUNC(NONE,NONE,2,raw_fmov_to_l_rr,(W4 d, FR s))
 {
-	FRINTI_dd(SCRATCH_F64_1, s);
-	FCVTAS_wd(d, SCRATCH_F64_1);
+	fmov_to_int_emit(d, s, 32);
 }
 LENDFUNC(NONE,NONE,2,raw_fmov_to_l_rr,(W4 d, FR s))
 
@@ -948,49 +1072,13 @@ LENDFUNC(NONE,NONE,2,raw_fmov_to_s_rr,(W4 d, FR s))
 
 LOWFUNC(NONE,NONE,2,raw_fmov_to_w_rr,(W4 d, FR s, int targetIsReg))
 {
-	FRINTI_dd(SCRATCH_F64_1, s);
-	FCVTAS_wd(REG_WORK1, SCRATCH_F64_1);
-
-	// maybe saturate...
-	TBZ_xii(REG_WORK1, 31, 6); // positive
-	CLS_ww(REG_WORK2, REG_WORK1); // negative: if 17 bits are 1 -> no saturate
-	SUB_wwi(REG_WORK2, REG_WORK2, 16);
-	TBZ_xii(REG_WORK2, 31, 7); // done
-	MOVK_wi(d, 0x8000); // max. negative value in 16 bit
-	B_i(6);
-
-	// positive
-	CLZ_ww(REG_WORK2, REG_WORK1); // positive: if 17 bits are 0 -> no saturate
-	SUB_wwi(REG_WORK2, REG_WORK2, 17);
-	TBZ_xii(REG_WORK2, 31, 2);
-	MOV_wi(REG_WORK1, 0x7fff); // max. positive value in 16 bit
-
-	// done
-	BFI_wwii(d, REG_WORK1, 0, 16);
+	fmov_to_int_emit(d, s, 16);
 }
 LENDFUNC(NONE,NONE,2,raw_fmov_to_w_rr,(W4 d, FR s, int targetIsReg))
 
 LOWFUNC(NONE,NONE,3,raw_fmov_to_b_rr,(W4 d, FR s, int targetIsReg))
 {
-	FRINTI_dd(SCRATCH_F64_1, s);
-	FCVTAS_wd(REG_WORK1, SCRATCH_F64_1);
-
-	// maybe saturate...
-	TBZ_xii(REG_WORK1, 31, 6); // positive
-	CLS_ww(REG_WORK2, REG_WORK1); // negative: if 25 bits are 1 -> no saturate
-	SUB_wwi(REG_WORK2, REG_WORK2, 24);
-	TBZ_xii(REG_WORK2, 31, 7); // done
-	MOV_wi(REG_WORK1, 0x80); // max. negative value in 8 bit
-	B_i(5);
-
-	// positive
-	CLZ_ww(REG_WORK2, REG_WORK1); // positive: if 25 bits are 0 -> no saturate
-	SUB_wwi(REG_WORK2, REG_WORK2, 25);
-	TBZ_xii(REG_WORK2, 31, 2);
-	MOV_wi(REG_WORK1, 0x7f); // max. positive value in 8 bit
-
-	// done
-	BFI_wwii(d, REG_WORK1, 0, 8);
+	fmov_to_int_emit(d, s, 8);
 }
 LENDFUNC(NONE,NONE,3,raw_fmov_to_b_rr,(W4 d, FR s, int targetIsReg))
 

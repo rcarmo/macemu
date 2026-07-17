@@ -2446,9 +2446,28 @@ extern "C" void jit_op_trapcc(void)
    FP class rather than depending on a preceding native FPP instruction. */
 extern "C" void jit_fpu_sync_to_shadow(void)
 {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+    /* AArch64 FPCR RMode uses 00 nearest, 01 +Inf, 10 -Inf, 11 zero;
+       the 68k field uses nearest, zero, -Inf, +Inf.  Import only RMode and
+       preserve every unrelated host control bit for the return to C. */
+    uae_u64 host_fpcr = 0;
+    __asm__ __volatile__("mrs %0, fpcr" : "=r"(host_fpcr));
+    regs.jit_host_fpcr = host_fpcr;
+    const unsigned guest_round = (fpu_get_fpcr() & FPCR_ROUNDING_MODE) >> 4;
+    static const unsigned arm_round[4] = { 0, 3, 2, 1 };
+    host_fpcr = (host_fpcr & ~(3ULL << 22)) | ((uae_u64)arm_round[guest_round] << 22);
+    __asm__ __volatile__("msr fpcr, %0" : : "r"(host_fpcr) : "memory");
+#endif
 #ifdef FPU_MPFR
     for (int i = 0; i < 8; i++) {
         regs.jit_fpregs[i] = mpfr_get_d(fpu.registers[i].f, MPFR_RNDN);
+        /* MPFR keeps NaN sign outside mpfr_t.  Preserve that architectural
+           metadata at the native-double boundary so sign-directed integer
+           FMOVE saturation survives dispatcher entry. */
+        if (mpfr_nan_p(fpu.registers[i].f))
+            regs.jit_fpregs[i] = std::copysign(
+                std::numeric_limits<double>::quiet_NaN(),
+                fpu.registers[i].nan_sign ? -1.0 : 1.0);
     }
 #else
     for (int i = 0; i < 8; i++) {
@@ -2474,11 +2493,15 @@ extern "C" void jit_fpu_sync_to_shadow(void)
    Preserve FPSR quotient/exception fields; native FP_RESULT owns only CCB. */
 extern "C" void jit_fpu_sync_from_shadow(void)
 {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+    __asm__ __volatile__("msr fpcr, %0" : : "r"(regs.jit_host_fpcr) : "memory");
+#endif
 #ifdef FPU_MPFR
     for (int i = 0; i < 8; i++) {
-        mpfr_set_d(fpu.registers[i].f, regs.jit_fpregs[i], MPFR_RNDN);
+        const double shadow = regs.jit_fpregs[i];
+        mpfr_set_d(fpu.registers[i].f, shadow, MPFR_RNDN);
         fpu.registers[i].nan_bits = 0xffffffffffffffffULL;
-        fpu.registers[i].nan_sign = 0;
+        fpu.registers[i].nan_sign = std::isnan(shadow) && std::signbit(shadow);
     }
 #else
     for (int i = 0; i < 8; i++) {

@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair and audit ordinary FMOVE basic destinations** (2026-07-17):
+  byte/word/long integer destinations now match MPFR rounding, signed
+  saturation, OPERR/INEX status replacement, and accrued IOP/INEX; single and
+  double happy-path stores remain on typed conversion and guest-memory
+  boundaries, with exact single/double destinations also replacing stale
+  exception status. JIT entry maps all four 68k FPCR rounding modes and
+  preserves MPFR NaN sign across the native shadow boundary. The bounded
+  exact-native matrix passes **45/45**, the active-risky corpus **904/904**, and allocator
+  pressure **31/31**. This is a no-promotion checkpoint: `i_FPP` remains
+  unreviewed, and single special-value/range fidelity plus extended destination
+  EAs remain separate. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_DESTINATION_BASIC_SUBTRANCHE.md`.
+
 - **Repair and audit ordinary FMOVE extended source EAs** (2026-07-17):
   d16/indexed An, absolute short/long, d16 PC, and indexed PC pass **39/39**
   strict exact-native vectors across byte/word/long/single/double values,
