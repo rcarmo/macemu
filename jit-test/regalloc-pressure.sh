@@ -4,16 +4,56 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/BasiliskII/src/Unix/BasiliskII"
 ROM="${B2_TEST_ROM:-/workspace/projects/rpi-basilisk2-sdl2-nox/Quadra800.ROM}"
 DISK="${B2_TEST_DISK:-/workspace/fixtures/basilisk/images/HD200MB}"
+CELL_PATTERNS="${B2_REGPRESSURE_PATTERN:-}"
+CELLS_SET=0
+PATTERN_SET=0
+valid_csv(){
+  local label="$1" compact="${2//[[:space:]]/}" component
+  local -A seen=()
+  [[ -n "$compact" && "$compact" != ,* && "$compact" != *, && "$compact" != *,,* ]] || { echo "$label contains an empty comma-separated component" >&2; return 1; }
+  IFS=',' read -r -a _csv_components <<<"$compact"
+  for component in "${_csv_components[@]}"; do
+    [[ -z "${seen[$component]+x}" ]] || { echo "$label contains duplicate component: $component" >&2; return 1; }
+    seen["$component"]=1
+  done
+}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cells) [[ $# -ge 2 ]] || exit 2; B2_REGPRESSURE_CELLS="$2"; CELLS_SET=1; shift 2 ;;
+    --pattern) [[ $# -ge 2 ]] || exit 2; CELL_PATTERNS="$2"; PATTERN_SET=1; shift 2 ;;
+    -h|--help) echo "usage: regalloc-pressure.sh [--cells name,... | --pattern glob,...]"; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+[[ $CELLS_SET -eq 0 ]] || valid_csv "--cells" "${B2_REGPRESSURE_CELLS:-}" || exit 2
+[[ $PATTERN_SET -eq 0 ]] || valid_csv "--pattern" "$CELL_PATTERNS" || exit 2
+[[ -z "${B2_REGPRESSURE_CELLS:-}" ]] || valid_csv "B2_REGPRESSURE_CELLS" "$B2_REGPRESSURE_CELLS" || exit 2
+[[ -z "$CELL_PATTERNS" ]] || valid_csv "B2_REGPRESSURE_PATTERN" "$CELL_PATTERNS" || exit 2
+if [[ -n "${B2_REGPRESSURE_CELLS:-}" && -n "$CELL_PATTERNS" ]]; then
+  echo "--cells and --pattern are mutually exclusive" >&2; exit 2
+fi
 RUN_DIR="${B2_REGPRESSURE_RUN_DIR:-$(mktemp -d /tmp/b2-regpressure-XXXXXX)}"
 KEEP="${B2_REGPRESSURE_KEEP:-}"
-cleanup(){ [[ -n "$KEEP" ]] && echo "KEEP $RUN_DIR" || rm -rf "$RUN_DIR"; }
+XV=""
+cleanup(){
+  if [[ -n "$XV" ]]; then kill "$XV" 2>/dev/null || true; wait "$XV" 2>/dev/null || true; fi
+  [[ -n "$KEEP" ]] && echo "KEEP $RUN_DIR" || rm -rf "$RUN_DIR"
+}
 trap cleanup EXIT
 mkdir -p "$RUN_DIR/home"
 cp --reflink=auto "$DISK" "$RUN_DIR/disk.img"
-DNUM=":8${RANDOM:0:1}"
-rm -f /tmp/.X8*-lock /tmp/.X11-unix/X8* 2>/dev/null || true
+DNUM=""
+for _display in $(seq 80 199); do
+  if [[ ! -e "/tmp/.X${_display}-lock" && ! -S "/tmp/.X11-unix/X${_display}" ]] && \
+     ! DISPLAY=":${_display}" xdpyinfo >/dev/null 2>&1; then
+    DNUM=":${_display}"
+    break
+  fi
+done
+[[ -n "$DNUM" ]] || { echo "REGPRESSURE no free X display" >&2; exit 1; }
 Xvfb "$DNUM" -screen 0 640x480x24 >/dev/null 2>&1 & XV=$!
-sleep 1
+for _ in $(seq 1 20); do DISPLAY="$DNUM" xdpyinfo >/dev/null 2>&1 && break; sleep 0.1; done
+DISPLAY="$DNUM" xdpyinfo >/dev/null 2>&1 || { echo "REGPRESSURE Xvfb failed on $DNUM" >&2; exit 1; }
 cat >"$RUN_DIR/prefs-jit" <<EOF
 rom $ROM
 disk $RUN_DIR/disk.img
@@ -37,9 +77,37 @@ sed 's/jit true/jit false/' "$RUN_DIR/prefs-jit" >"$RUN_DIR/prefs-int"
 INIT="11110003 22220005 00002000 44440009 00002040 00000003 7777000f 0000003f 00002000 00002040 bbbb4000 cccc5000 dddd6000 eeee7000 a6a60000 007ef000 2700"
 MOVEM_INIT="01010101 02020202 03030303 04040404 05050505 06060606 07070707 08080808 11111111 12121212 13131313 14141414 15151515 00003400 17171717 007ef000 2700"
 declare -a CELLS=(mulu_w_d16_a0_live_a0 roxrw_mem_x_live_all mullu64_mem_source_locked_dl movem_predec_cursor_base_locked negx_b_source_dst_collision negx_w_source_dst_collision negx_l_source_dst_collision neg_b_postinc_result_ea_collision negx_b_postinc_result_ea_collision tas_b_ea_value_collision clr_b_postinc_zero_ea_collision exg_l_tmp_source_collision ext_w_scratch_source_collision move_b_mem_source_dst_collision scc_b_ea_value_collision dbcc_w_counter_copy_collision bitop_b_ea_value_collision cmpm_b_source_dst_collision cmpa_w_postinc_source_dst_collision adda_w_postinc_source_dst_collision adda_l_postinc_source_dst_collision add_b_postinc_source_dreg_collision add_b_postinc_x_ea_collision and_b_postinc_source_dreg_collision and_b_postinc_ea_source_collision eor_b_postinc_source_dest_collision eor_b_postinc_ea_dest_collision or_b_postinc_source_dreg_collision or_b_postinc_ea_source_collision sub_b_postinc_source_dreg_collision sub_b_postinc_x_ea_collision)
+ALL_CELLS=("${CELLS[@]}")
 if [[ -n "${B2_REGPRESSURE_CELLS:-}" ]]; then
   read -r -a CELLS <<<"${B2_REGPRESSURE_CELLS//,/ }"
+elif [[ -n "$CELL_PATTERNS" ]]; then
+  read -r -a _patterns <<<"${CELL_PATTERNS//,/ }"
+  declare -A _pattern_matches=()
+  CELLS=()
+  for _cell in "${ALL_CELLS[@]}"; do
+    _selected=0
+    for _pattern in "${_patterns[@]}"; do
+      if [[ "$_cell" == $_pattern ]]; then
+        _pattern_matches["$_pattern"]=$(( ${_pattern_matches[$_pattern]:-0} + 1 ))
+        _selected=1
+      fi
+    done
+    [[ "$_selected" -eq 0 ]] || CELLS+=("$_cell")
+  done
+  _pattern_index=0
+  for _pattern in "${_patterns[@]}"; do
+    [[ "${_pattern_matches[$_pattern]:-0}" -gt 0 ]] || { echo "REGPRESSURE pattern matched no cells: $_pattern" >&2; exit 1; }
+    printf 'METRIC regpressure_pattern_%s_matches=%s\n' "$_pattern_index" "${_pattern_matches[$_pattern]}"
+    _pattern_index=$((_pattern_index + 1))
+  done
+  printf 'METRIC regpressure_pattern_count=%s\n' "${#_patterns[@]}"
 fi
+[[ "${#CELLS[@]}" -gt 0 ]] || { echo "REGPRESSURE selection matched no cells" >&2; exit 1; }
+declare -A _known_cells=()
+for _cell in "${ALL_CELLS[@]}"; do _known_cells["$_cell"]=1; done
+for _cell in "${CELLS[@]}"; do
+  [[ -n "${_known_cells[$_cell]+x}" ]] || { echo "REGPRESSURE unknown cell=$_cell" >&2; exit 1; }
+done
 declare -A CELL_HEX=(
   [mulu_w_d16_a0_live_a0]="2042 20BC 1122 3344 43F9 0000 2040 337C 0005 0012 3E3C 003F 2042 2244 3005 C0E9 0012 2658 51CF FFF2 2C7C A6AA 55CC"
   # Establish X=1 and 0x8000 at (A0), then keep every non-SP source register
@@ -384,12 +452,19 @@ run_one(){
     extra+=(B2_FORCE_SCRATCH_ALIAS_VREG="${B2_FORCE_SCRATCH_ALIAS_VREG:-${CELL_ALIAS_VREG[$cell]}}")
     extra+=(B2_FORCE_SCRATCH_VREG="${B2_FORCE_SCRATCH_VREG:-${CELL_SCRATCH_VREG[$cell]}}")
   fi
+  local rc
+  set +e
   env SDL_VIDEODRIVER=x11 DISPLAY="$DNUM" HOME="$RUN_DIR/home" \
     B2_TEST_HEX="${CELL_HEX[$cell]}" B2_TEST_DUMP=1 B2_TEST_INIT="${CELL_INIT[$cell]}" \
     B2_TEST_MEMORY_BYTES="${CELL_MEMORY_BYTES[$cell]:-}" "${extra[@]}" \
-    timeout -k 5s 80s "$BIN" --config "$pref" >"$log" 2>&1 || true
+    timeout -k 5s 80s "$BIN" --config "$pref" >"$log" 2>&1
+  rc=$?
+  set -e
+  printf '%s\n' "$rc" >"$log.rc"
 }
 RESULT=0
+PASS_COUNT=0
+FAIL_COUNT=0
 for cell in "${CELLS[@]}"; do
   run_one "$cell" int
   run_one "$cell" jit
@@ -398,18 +473,29 @@ for cell in "${CELLS[@]}"; do
   SKIP=$(grep -ac 'REGPRESSURE_PIN_SKIP' "$RUN_DIR/$cell-jit.log" || true)
   NAT=$(grep -aci "NATEXEC pc=0000${pc_hex}" "$RUN_DIR/$cell-jit.log" || true)
   INTERP=$(grep -aci "INTERPOP pc=0000${pc_hex}" "$RUN_DIR/$cell-jit.log" || true)
+  INT_COUNT=$(grep -ac '^REGDUMP:' "$RUN_DIR/$cell-int.log" || true)
+  JIT_COUNT=$(grep -ac '^REGDUMP:' "$RUN_DIR/$cell-jit.log" || true)
   INT_DUMP=$(grep -a '^REGDUMP:' "$RUN_DIR/$cell-int.log" | tail -1 || true)
   JIT_DUMP=$(grep -a '^REGDUMP:' "$RUN_DIR/$cell-jit.log" | tail -1 || true)
+  INT_RC=$(cat "$RUN_DIR/$cell-int.log.rc")
+  JIT_RC=$(cat "$RUN_DIR/$cell-jit.log.rc")
+  read -r -a _hex_words <<<"${CELL_HEX[$cell]}"
+  _word_count=${#_hex_words[@]}
+  EXPECTED_A6="${_hex_words[$((_word_count - 2))]}${_hex_words[$((_word_count - 1))]}"
   STATUS=PASS
+  [[ "$INT_RC" -eq 0 && "$JIT_RC" -eq 0 && "$INT_COUNT" -eq 1 && "$JIT_COUNT" -eq 1 ]] || STATUS=FAIL
   [[ -n "$INT_DUMP" && "$INT_DUMP" == "$JIT_DUMP" ]] || STATUS=FAIL
+  [[ "$INT_DUMP" == *"A6=${EXPECTED_A6,,}"* || "$INT_DUMP" == *"A6=${EXPECTED_A6^^}"* ]] || STATUS=FAIL
   printf 'REGPRESSURE cell=%s status=%s pin=%s skip=%s natexec=%s interpop=%s\n' "$cell" "$STATUS" "$PIN" "$SKIP" "$NAT" "$INTERP"
   printf 'INTERP %s\n' "$INT_DUMP"
   printf 'JIT    %s\n' "$JIT_DUMP"
   [[ "$NAT" -gt 0 ]] || RESULT=2
   [[ "${CELL_REQUIRE_PIN[$cell]}" == 0 || "$PIN" -gt 0 ]] || RESULT=3
   [[ "${CELL_REQUIRE_SKIP[$cell]}" == 0 || "$SKIP" -gt 0 ]] || RESULT=4
-  [[ "$STATUS" == PASS ]] || RESULT=1
+  if [[ "$STATUS" == PASS ]]; then PASS_COUNT=$((PASS_COUNT + 1)); else FAIL_COUNT=$((FAIL_COUNT + 1)); RESULT=1; fi
 done
-kill -9 "$XV" 2>/dev/null || true
-wait "$XV" 2>/dev/null || true
+printf 'REGPRESSURE_SUMMARY selected=%s pass=%s fail=%s\n' "${#CELLS[@]}" "$PASS_COUNT" "$FAIL_COUNT"
+printf 'METRIC regpressure_selected=%s\n' "${#CELLS[@]}"
+printf 'METRIC regpressure_pass=%s\n' "$PASS_COUNT"
+printf 'METRIC regpressure_fail=%s\n' "$FAIL_COUNT"
 exit "$RESULT"

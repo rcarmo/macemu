@@ -86,7 +86,15 @@ echo "METRIC headless_verify=$VERIFY"
 echo "METRIC headless_badpc=$BADPC"
 echo "METRIC headless_op8c4c=$OP8C4C"
 echo "METRIC headless_fatal=$FATAL"
+echo "METRIC headless_rc=$RC"
 
+# timeout(1) status 124 is the expected end of a bounded smoke run. Any other
+# non-zero status is an emulator/runtime failure, and a timeout without even one
+# progress record is not a valid smoke result.
+if { [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ]; } || [ -z "$PC" ] || [ -z "$DC_NUM" ]; then
+  echo "FAIL: ROM harness process/progress contract failed rc=$RC pc=${PC:-?} dc=${DC_NUM:-?}; inspect $W" >&2
+  exit 1
+fi
 if [ "$FALLBACK" -ne 0 ] || [ "$SEGV" -ne 0 ] || [ "$VERIFY" -ne 0 ] || [ "$BADPC" -ne 0 ] || [ "$OP8C4C" -ne 0 ] || [ "$FATAL" -ne 0 ]; then
   echo "FAIL: full-JIT strict marker check failed; inspect raw logs in $W" >&2
   exit 1

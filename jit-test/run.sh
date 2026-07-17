@@ -6,7 +6,75 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 UNIX_DIR="$(cd "$SCRIPT_DIR/../BasiliskII/src/Unix" && pwd)"
 ROM="${B2_TEST_ROM:-/workspace/projects/rpi-basilisk2-sdl2-nox/Quadra800.ROM}"
-DISK="${B2_TEST_DISK:-/workspace/fixtures/basilisk/images/HD200MB}"
+DEFAULT_DISK="/workspace/fixtures/basilisk/images/HD200MB"
+DISK="${B2_TEST_DISK:-$DEFAULT_DISK}"
+VALIDATION_PHASES="${B2_VALIDATION_PHASES:-build,structural,emitters,strict,vectors}"
+BUILD_MODE="${B2_BUILD_MODE:-full}"
+TEST_PATTERNS="${B2_TEST_PATTERN:-}"
+TEST_PATTERNS_SET=0
+TEST_NAMES_SET=0
+
+valid_csv() {
+    local label="$1" raw="$2" compact="${2//[[:space:]]/}" component
+    local -A seen=()
+    if [ -z "$compact" ] || [[ "$compact" == ,* || "$compact" == *, || "$compact" == *,,* ]]; then
+        echo "$label contains an empty comma-separated component" >&2
+        return 1
+    fi
+    IFS=',' read -r -a _csv_components <<<"$compact"
+    for component in "${_csv_components[@]}"; do
+        if [ -n "${seen[$component]+x}" ]; then
+            echo "$label contains duplicate component: $component" >&2
+            return 1
+        fi
+        seen["$component"]=1
+    done
+}
+
+usage() {
+    cat <<'EOF'
+usage: jit-test/run.sh [options]
+  --phases LIST       comma list: build,structural,emitters,strict,vectors
+  --build-mode MODE   full (default), incremental, or skip
+  --tests GLOBS       comma-separated shell globs over risky vector names
+  --test-names NAMES  comma-separated exact risky vector names
+
+Examples:
+  ./jit-test/run.sh --phases build,vectors --build-mode incremental --tests 'opcode_fpp_*'
+  ./jit-test/run.sh --phases vectors --build-mode skip --test-names opcode_add,opcode_sub
+EOF
+}
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --phases) [ "$#" -ge 2 ] || { usage >&2; exit 2; }; VALIDATION_PHASES="$2"; shift 2 ;;
+        --build-mode) [ "$#" -ge 2 ] || { usage >&2; exit 2; }; BUILD_MODE="$2"; shift 2 ;;
+        --tests) [ "$#" -ge 2 ] || { usage >&2; exit 2; }; TEST_PATTERNS="$2"; TEST_PATTERNS_SET=1; shift 2 ;;
+        --test-names) [ "$#" -ge 2 ] || { usage >&2; exit 2; }; B2_TEST_NAMES="$2"; TEST_NAMES_SET=1; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+valid_csv "validation phase list" "$VALIDATION_PHASES" || exit 2
+if [ "$TEST_PATTERNS_SET" -eq 1 ]; then valid_csv "--tests" "$TEST_PATTERNS" || exit 2; fi
+if [ "$TEST_NAMES_SET" -eq 1 ]; then valid_csv "--test-names" "${B2_TEST_NAMES:-}" || exit 2; fi
+if [ -n "$TEST_PATTERNS" ]; then valid_csv "B2_TEST_PATTERN" "$TEST_PATTERNS" || exit 2; fi
+if [ -n "${B2_TEST_NAMES:-}" ]; then valid_csv "B2_TEST_NAMES" "$B2_TEST_NAMES" || exit 2; fi
+
+phase_enabled() {
+    local wanted="$1" normalized=",${VALIDATION_PHASES//[[:space:]]/},"
+    [[ "$normalized" == *",$wanted,"* ]]
+}
+_phase_count=0
+for _phase in ${VALIDATION_PHASES//,/ }; do
+    case "$_phase" in build|structural|emitters|strict|vectors) ;; *) echo "unknown validation phase: $_phase" >&2; exit 2 ;; esac
+    _phase_count=$((_phase_count + 1))
+done
+[ "$_phase_count" -gt 0 ] || { echo "validation phase list is empty" >&2; exit 2; }
+case "$BUILD_MODE" in full|incremental|skip) ;; *) echo "invalid build mode: $BUILD_MODE" >&2; exit 2 ;; esac
+if [ -n "${B2_TEST_NAMES:-}" ] && [ -n "$TEST_PATTERNS" ]; then
+    echo "--tests/B2_TEST_PATTERN and --test-names/B2_TEST_NAMES are mutually exclusive" >&2
+    exit 2
+fi
 RUN_DIR="$(mktemp -d /tmp/ar-jit-opcodes-XXXXXX)"
 
 # Copy-on-write disk clone (real CoW via btrfs scratch; avoids full-image copies
@@ -25,11 +93,35 @@ cleanup() {
 }
 trap cleanup EXIT
 
+emit_zero_vector_metrics() {
+    echo "METRIC vectors_skipped=1"
+    echo "METRIC pass=0"
+    echo "METRIC fail=0"
+    echo "METRIC total=0"
+    echo "METRIC infra_fail=0"
+    echo "METRIC fail_equiv=0"
+    echo "METRIC infra_timeout=0"
+    echo "METRIC infra_emu_exit=0"
+    echo "METRIC infra_no_regdump=0"
+    echo "METRIC infra_multi_regdump=0"
+    echo "METRIC infra_sentinel=0"
+    echo "METRIC infra_other=0"
+    echo "METRIC risky_total=0"
+    echo "METRIC risky_pass=0"
+    echo "METRIC risky_fail=0"
+    echo "METRIC risky_fail_equiv=0"
+    echo "METRIC risky_infra_fail=0"
+    echo "METRIC score=0"
+    echo "METRIC selected_vectors=0"
+    echo "METRIC validation_complete=1"
+}
+
 emit_failure_metrics() {
     local build_ok="$1"
     local reason="$2"
     local infra_fail="${3:-$(( build_ok == 1 ? 0 : 1 ))}"
     echo "METRIC build_ok=$build_ok"
+    echo "METRIC build_skipped=$([ "$build_ok" -eq 1 ] && echo 1 || echo 0)"
     echo "METRIC pass=0"
     echo "METRIC fail=0"
     echo "METRIC total=0"
@@ -47,84 +139,98 @@ emit_failure_metrics() {
     echo "METRIC risky_fail_equiv=0"
     echo "METRIC risky_infra_fail=0"
     echo "METRIC score=0"
+    echo "METRIC selected_vectors=0"
+    echo "METRIC validation_complete=0"
     echo "$reason" >&2
     exit 1
 }
 
-# ---- Build -------------------------------------------------------------------
+# ---- Selective build and engine gates ----------------------------------------
 if ! cd "$UNIX_DIR"; then
     emit_failure_metrics 0 "missing Unix build directory: $UNIX_DIR"
 fi
-if [ ! -r "$ROM" ]; then
-    emit_failure_metrics 0 "missing ROM: $ROM"
-fi
-if [ ! -r "$DISK" ]; then
-    emit_failure_metrics 0 "missing disk image: $DISK"
+if phase_enabled vectors || phase_enabled strict; then
+    [ -r "$ROM" ] || emit_failure_metrics 0 "missing ROM: $ROM"
+    [ -r "$DISK" ] || emit_failure_metrics 0 "missing disk image: $DISK"
 fi
 
-# Fresh git worktrees may contain a stale Makefile without config.h, or may be
-# missing ./configure entirely until autogen.sh is run. Normalize that first.
-if [ ! -x ./configure ] && [ -x ./autogen.sh ]; then
-    NO_CONFIGURE=1 ./autogen.sh >"$RUN_DIR/autogen.log" 2>&1 || true
-fi
-
-if [ ! -f config.h ] || [ ! -f Makefile ]; then
-    if [ ! -x ./configure ]; then
-        tail -20 "$RUN_DIR/autogen.log" >&2 || true
-        emit_failure_metrics 0 "missing ./configure after autogen"
+if phase_enabled build; then
+    # Fresh worktrees may be missing generated configure/config.h state.
+    if [ ! -x ./configure ] && [ -x ./autogen.sh ]; then
+        NO_CONFIGURE=1 ./autogen.sh >"$RUN_DIR/autogen.log" 2>&1 || true
     fi
-    if ! ac_cv_have_asm_extended_signals=yes \
-      ./configure --with-uae-core=2021 --enable-aarch64-jit-experimental --disable-vosf \
-      >"$RUN_DIR/configure.log" 2>&1; then
-        tail -20 "$RUN_DIR/configure.log" >&2 || true
-        emit_failure_metrics 0 "configure failed"
+    if [ ! -f config.h ] || [ ! -f Makefile ]; then
+        if [ ! -x ./configure ]; then
+            tail -20 "$RUN_DIR/autogen.log" >&2 || true
+            emit_failure_metrics 0 "missing ./configure after autogen"
+        fi
+        if ! ac_cv_have_asm_extended_signals=yes \
+          ./configure --with-uae-core=2021 --enable-aarch64-jit-experimental --disable-vosf \
+          >"$RUN_DIR/configure.log" 2>&1; then
+            tail -20 "$RUN_DIR/configure.log" >&2 || true
+            emit_failure_metrics 0 "configure failed"
+        fi
     fi
+    if [ "$BUILD_MODE" = "full" ]; then
+        # Full acceptance forbids a mixed generated-object ABI epoch.
+        rm -f obj/compemu*.o
+    fi
+    if [ "$BUILD_MODE" != "skip" ] && ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
+        tail -20 "$RUN_DIR/build.log" >&2 || true
+        emit_failure_metrics 0 "build failed"
+    fi
+    echo "METRIC build_ok=1"
+    echo "METRIC build_skipped=$([ "$BUILD_MODE" = skip ] && echo 1 || echo 0)"
+else
+    if { phase_enabled vectors || phase_enabled strict; } && [ ! -x ./BasiliskII ]; then
+        emit_failure_metrics 0 "runtime phase requested without a prebuilt BasiliskII"
+    fi
+    echo "METRIC build_ok=1"
+    echo "METRIC build_skipped=1"
 fi
 
-# Generated opcode objects inline regstruct offsets and MIDFUNC/JIT code.  They
-# must be rebuilt in the same layout epoch as compemu_support.o; rebuilding only
-# the support object after a registers.h change silently corrupts helper fields.
-# Force the complete JIT object family so the equivalence gate cannot test a
-# mixed ABI even when an older generated Makefile lacks header dependencies.
-rm -f obj/compemu*.o
-if ! make -j12 >"$RUN_DIR/build.log" 2>&1; then
-    tail -20 "$RUN_DIR/build.log" >&2 || true
-    emit_failure_metrics 0 "build failed"
-fi
-echo "METRIC build_ok=1"
-
-# Engine-level emitter invariants which ordinary opcode equivalence cannot
-# exercise deterministically (for example an asynchronous spcflags exit at the
-# exact end of a compiled block).
-if ! bun "$SCRIPT_DIR/structural-audit.ts"; then
+if phase_enabled structural && ! bun "$SCRIPT_DIR/structural-audit.ts"; then
     emit_failure_metrics 1 "ARM64 JIT structural audit failed" 0
 fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
-fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
-fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0
-fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-and-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 AND emitter conformance failed" 0
-fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-eor-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 EOR emitter conformance failed" 0
-fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-neg-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 NEG emitter conformance failed" 0
-fi
-if ! timeout -k 5s 60s "$SCRIPT_DIR/emitter-branch-conformance.sh"; then
-    emit_failure_metrics 1 "ARM64 branch emitter conformance failed" 0
+if phase_enabled emitters; then
+    # Keep explicit bounded calls: structural-audit.ts pins each accepted gate
+    # by literal path so a dynamic loop cannot silently omit a suite.
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh" || emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh" || emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-and-conformance.sh" || emit_failure_metrics 1 "ARM64 AND emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-eor-conformance.sh" || emit_failure_metrics 1 "ARM64 EOR emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-neg-conformance.sh" || emit_failure_metrics 1 "ARM64 NEG emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-branch-conformance.sh" || emit_failure_metrics 1 "ARM64 branch emitter conformance failed" 0
 fi
 
-# Use a fresh copy-on-write clone of the base disk for this harness run so the
-# shared fixture is never mutated (clone shares extents; only deltas stored).
-if command -v cow_clone >/dev/null 2>&1; then
-    DISK_CLONE="$(cow_clone "$DISK" "$RUN_DIR/disk.img" "jit-opc")" && DISK="$DISK_CLONE"
+# Runtime phases must never fall through to the shared fixture. Callers may
+# reuse only an explicitly supplied non-default isolated disk; otherwise make a
+# private CoW clone or a local reflink/copy fallback.
+if phase_enabled vectors || phase_enabled strict; then
+    if [ "${B2_REUSE_TEST_DISK:-0}" = "1" ]; then
+        _disk_real="$(readlink -f -- "$DISK" 2>/dev/null || true)"
+        _default_disk_real="$(readlink -f -- "$DEFAULT_DISK" 2>/dev/null || true)"
+        if [ -z "${B2_TEST_DISK:-}" ] || [ -z "$_disk_real" ] || [ "$_disk_real" = "$_default_disk_real" ] || [ "$DISK" -ef "$DEFAULT_DISK" ]; then
+            emit_failure_metrics 0 "B2_REUSE_TEST_DISK requires an explicit non-default isolated B2_TEST_DISK"
+        fi
+    elif command -v cow_clone >/dev/null 2>&1; then
+        if ! DISK_CLONE="$(cow_clone "$DISK" "$RUN_DIR/disk.img" "jit-opc")"; then
+            emit_failure_metrics 0 "unable to create private CoW test disk"
+        fi
+        DISK="$DISK_CLONE"
+    else
+        if ! cp --reflink=auto "$DISK" "$RUN_DIR/disk.img"; then
+            emit_failure_metrics 0 "unable to create private test disk copy"
+        fi
+        DISK="$RUN_DIR/disk.img"
+    fi
+fi
+
+# Source-only phase batches stop before Xvfb startup or the 900+ vector maps.
+if ! phase_enabled vectors && ! phase_enabled strict; then
+    emit_zero_vector_metrics
+    exit 0
 fi
 
 # ---- Test harness ------------------------------------------------------------
@@ -310,11 +416,19 @@ if ! DISPLAY=:99 xdpyinfo >/dev/null 2>&1; then
     emit_failure_metrics 0 "failed to start Xvfb on :99"
 fi
 
-# Strict mode is fail-closed. Exercise its negative contracts separately from
-# equivalence tests so an expected abort can never be misreported as an opcode
-# mismatch or a successful REGDUMP.
-if ! "$SCRIPT_DIR/strict-full-jit.sh" "$UNIX_DIR" "$ROM" "$DISK"; then
-    emit_failure_metrics 1 "strict full-JIT negative contract gate failed" 0
+# Strict mode is a separately selectable phase. Full/default validation retains
+# it; focused vector loops avoid four unrelated expected-abort emulator starts.
+if phase_enabled strict; then
+    if ! "$SCRIPT_DIR/strict-full-jit.sh" "$UNIX_DIR" "$ROM" "$DISK"; then
+        emit_failure_metrics 1 "strict full-JIT negative contract gate failed" 0
+    fi
+fi
+
+# A strict-only invocation succeeds here, before parsing the 900+ vector
+# declarations and preflight maps.
+if ! phase_enabled vectors; then
+    emit_zero_vector_metrics
+    exit 0
 fi
 
 # ---- Define test cases -------------------------------------------------------
@@ -7330,15 +7444,19 @@ if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
     emit_failure_metrics 1 "no active risky vectors listed in $ACTIVE_RISKY_FILE" 1
 fi
 
-# Optional exact-name subset for focused debug loops while still using the
-# normal harness machinery and metrics contract.  Explicit selection may run a
-# staged risky vector before it is promoted into active-risky-tests.txt; default
-# runs remain limited to the one-vector-at-a-time active campaign inventory.
+# Optional exact-name or shell-glob subsets for focused debug loops. Explicit
+# selection may run staged risky vectors before active-list promotion. Default
+# runs remain the complete active campaign inventory.
 if [ -n "${B2_TEST_NAMES:-}" ]; then
     declare -A _wanted_tests=()
     while IFS= read -r _name; do
         [ -n "$_name" ] && _wanted_tests["$_name"]=1
     done < <(printf '%s\n' "$B2_TEST_NAMES" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sed '/^$/d')
+    for _name in "${!_wanted_tests[@]}"; do
+        if [ -z "${_seen_test_names[$_name]+x}" ] || [ -z "${RISKY_TESTS[$_name]+x}" ]; then
+            emit_failure_metrics 1 "B2_TEST_NAMES contains unknown or non-risky vector: $_name" 1
+        fi
+    done
 
     declare -a _filtered_active=()
     for name in "${TEST_ORDER[@]}"; do
@@ -7349,6 +7467,38 @@ if [ -n "${B2_TEST_NAMES:-}" ]; then
     ACTIVE_TEST_ORDER=("${_filtered_active[@]}")
     if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
         emit_failure_metrics 1 "B2_TEST_NAMES selected no known risky vectors" 1
+    fi
+elif [ -n "$TEST_PATTERNS" ]; then
+    declare -a _patterns=()
+    while IFS= read -r _pattern; do
+        [ -n "$_pattern" ] && _patterns+=("$_pattern")
+    done < <(printf '%s\n' "$TEST_PATTERNS" | tr ',' '\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sed '/^$/d')
+    [ "${#_patterns[@]}" -gt 0 ] || emit_failure_metrics 1 "B2_TEST_PATTERN contains no patterns" 1
+    declare -A _pattern_matches=()
+    declare -a _filtered_active=()
+    for name in "${TEST_ORDER[@]}"; do
+        [ -n "${RISKY_TESTS[$name]+x}" ] || continue
+        _selected=0
+        for _pattern in "${_patterns[@]}"; do
+            if [[ "$name" == $_pattern ]]; then
+                _pattern_matches["$_pattern"]=$(( ${_pattern_matches[$_pattern]:-0} + 1 ))
+                _selected=1
+            fi
+        done
+        [ "$_selected" -eq 0 ] || _filtered_active+=("$name")
+    done
+    _pattern_index=0
+    for _pattern in "${_patterns[@]}"; do
+        if [ "${_pattern_matches[$_pattern]:-0}" -eq 0 ]; then
+            emit_failure_metrics 1 "B2_TEST_PATTERN component matched no risky vectors: $_pattern" 1
+        fi
+        echo "METRIC selected_pattern_${_pattern_index}_matches=${_pattern_matches[$_pattern]}"
+        _pattern_index=$((_pattern_index + 1))
+    done
+    echo "METRIC selected_pattern_count=${#_patterns[@]}"
+    ACTIVE_TEST_ORDER=("${_filtered_active[@]}")
+    if [ "${#ACTIVE_TEST_ORDER[@]}" -eq 0 ]; then
+        emit_failure_metrics 1 "B2_TEST_PATTERN selected no known risky vectors" 1
     fi
 fi
 
@@ -7473,6 +7623,8 @@ echo "METRIC risky_fail=$RISKY_FAIL"
 echo "METRIC risky_fail_equiv=$RISKY_FAIL_EQUIV"
 echo "METRIC risky_infra_fail=$RISKY_INFRA_FAIL"
 echo "METRIC score=$SCORE"
+echo "METRIC selected_vectors=$TOTAL"
+echo "METRIC validation_complete=1"
 
 # Fail closed on every semantic or infrastructure failure. Metrics are evidence,
 # not a substitute for process status: callers must never accept a partial run

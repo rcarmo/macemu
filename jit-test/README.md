@@ -21,6 +21,44 @@ Harness-first scope: prioritize benchmark correctness/completeness over emulator
 - `METRIC build_ok=<0|1>` — whether build/setup succeeded before test execution
 - Infra/equivalence breakdown counters for triage (`fail_equiv`, `infra_timeout`, `infra_emu_exit`, `infra_no_regdump`, `infra_multi_regdump`, `infra_sentinel`, `infra_other`)
 
+## Efficient partial and batched validation
+
+Default `./jit-test/run.sh` remains the complete fail-closed acceptance path.
+Development loops should use selectable phases instead of repeatedly rebuilding
+and running every unrelated gate:
+
+```bash
+# One risky corpus vector against the existing binary; no build/structural/
+# emitter/strict work.
+./jit-test/run.sh --phases vectors --build-mode skip \
+  --test-names fpp_semantic_successor
+
+# Shell-glob subset of risky vectors after one incremental build.
+./jit-test/run.sh --phases build,vectors --build-mode incremental \
+  --tests 'adda_*'
+
+# One or more allocator collision families.
+./jit-test/regalloc-pressure.sh --pattern 'adda_*,add_*'
+
+# Compose one build with source gates, focused matrices, vector subset, and
+# selected allocator cells. Focused entries accept optional `:CASE` suffixes.
+./jit-test/validate.sh --structural \
+  --focused fpp-integral-rounding-fallback-matrix:fint_half_plus_ulp_fpcr_single \
+  --test-names fpp_semantic_successor --pressure 'adda_w_*'
+```
+
+`run.sh --phases` accepts `build,structural,emitters,strict,vectors`.
+`--build-mode` accepts `full`, `incremental`, or `skip`. Source-only phase runs
+exit before Xvfb, disk cloning, and 900+ vector-map parsing. Vector-only runs do
+not execute strict negative probes unless `strict` is explicitly selected.
+Every partial run reports selected counts and remains fail-closed for the work
+it actually selected; `METRIC validation_complete=1` does not claim whole-suite
+acceptance.
+
+`validate.sh --full` is the batched full acceptance convenience path. For FPP
+work, combine 2–4 adjacent focused matrices and run the full corpus/pressure,
+clean-build/hash, strict, and independent-review gates once per batch.
+
 ## Harness model
 
 For each test vector:
