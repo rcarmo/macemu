@@ -457,6 +457,10 @@ const fppFmovePackedFallbackMatrix = await Bun.file(new URL(
   "./fpp-fmove-packed-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppExplicitMoveFallbackMatrix = await Bun.file(new URL(
+  "./fpp-explicit-move-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -808,6 +812,39 @@ for (const contract of [
 console.log("METRIC structural_fpp_fmove_packed_service_vectors=9");
 console.log("METRIC structural_fpp_fmove_packed_strict_rejections=4");
 console.log("METRIC structural_fpp_fmove_packed_native_retired=1");
+
+const fppCompilerOperation = functionBody(
+  fppCompilerSource,
+  "void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)",
+  "\n\tFAIL(1);\n}\n\n#endif",
+  "native FPP operation dispatcher",
+);
+const explicitMoveStart = fppCompilerOperation.indexOf("case 0x40:");
+const ordinaryMoveStart = fppCompilerOperation.indexOf("case 0x00:", explicitMoveStart);
+const explicitMoveBlock = fppCompilerOperation.slice(explicitMoveStart, ordinaryMoveStart);
+for (const contract of [
+  "case 0x40:", "case 0x44:", "The binary64 shadow", "FAIL(1);", "return;",
+]) requireText(explicitMoveBlock, contract, "FPP explicit-precision move service boundary");
+if (explicitMoveStart < 0 || ordinaryMoveStart < 0 || explicitMoveStart >= ordinaryMoveStart)
+  fail("FPP explicit-precision move service boundary does not precede ordinary FMOVE");
+if (explicitMoveBlock.includes("get_fp_value") || explicitMoveBlock.includes("fmov_rr"))
+  fail("FPP explicit-precision move service boundary emits native operand/copy work");
+for (const contract of [
+  'name: "fsmove_positive_half_nearest"', 'name: "fsmove_positive_half_plus"',
+  'name: "fsmove_negative_half_minus"', 'name: "fdmove_positive_half_nearest"',
+  'name: "fdmove_positive_half_plus"', 'name: "fdmove_maximum_extended_overflow"',
+  'name: "fsmove_positive_infinity_exact"', 'name: "fdmove_negative_zero_exact"',
+  'name: "fsmove_fp7_self_alias_max_fields"', 'name: "fdmove_fp7_self_alias_max_fields"',
+  'B2_TEST_MEMDUMP: "0x9ffe:16"', 'B2_TEST_SECOND_PC: "0x1000"',
+  'B2_TEST_REPLAY_FPCR: item.fpcr', 'fpsr === item.fpsr',
+  'output.match(/JIT_FALLBACK/g)', 'output.includes("strict full-JIT: opcode fallback")',
+  '!output.includes("Caught SIGSEGV")', 'cow_clone', 'cow_release',
+  'expectedService = process.env.CASE ? selectedService.length : 13',
+  'expectedStrict = process.env.CASE ? selectedStrict.length : 2',
+]) requireText(fppExplicitMoveFallbackMatrix, contract, "FPP explicit-precision move serviced fallback matrix");
+console.log("METRIC structural_fpp_explicit_move_service_vectors=13");
+console.log("METRIC structural_fpp_explicit_move_strict_rejections=2");
+console.log("METRIC structural_fpp_explicit_move_native_retired=1");
 
 const fmoveSingleEmitter = functionBody(
   codegenSource,

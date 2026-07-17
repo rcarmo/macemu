@@ -1666,10 +1666,17 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 
 		switch (extra & 0x7f)
 		{
+		case 0x40:						/* FSMOVE: explicit 24-bit precision */
+		case 0x44:						/* FDMOVE: explicit 53-bit precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* The binary64 shadow cannot represent every MPFR source presented to
+			 * these forced-precision operations, and the legacy copy omits their
+			 * rounding/status contract. Retain exact MPFR service. */
+			FAIL(1);
+			return;
+#endif
+			/* fall through on native backends that implement explicit precision */
 		case 0x00:						/* FMOVE */
-		case 0x40:						/* FSMOVE: Explicit rounding. This is just a quick fix. Same
-										 * for all other cases that have three choices */
-		case 0x44:						/* FDMOVE */
 			if (jit_disable.fmove)
 			{
 				FAIL(1);

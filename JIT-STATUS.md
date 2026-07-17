@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire unrounded FSMOVE/FDMOVE copies to exact MPFR service** (2026-07-17):
+  the AArch64 path previously grouped ordinary FMOVE and explicit 24-/53-bit
+  moves into one binary64 copy, omitting forced precision and exceptions.
+  Thirteen service vectors now prove all four single rounding directions,
+  double halfway/overflow, exact signed zero/infinity, guarded 80-bit outputs,
+  and FPSR; two strict FP7 self-alias cases reject native entry. Ordinary FMOVE
+  remains on its audited native route. Integrated evidence is **904/904** with
+  **31/31** pressure; no closure row is promoted and `i_FPP` remains
+  unreviewed. See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_EXPLICIT_MOVE_SUBTRANCHE.md`.
+
 - **Audit ordinary packed-decimal FMOVE as exact MPFR service** (2026-07-17):
   the AArch64 compiler already rejects static/dynamic packed sources and
   destinations before EA calculation or writeback. Nine service cases prove
