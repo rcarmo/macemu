@@ -285,7 +285,17 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 			}
 			break;
 		case 3: /* d8(pc,Xn) */
-			return -1;
+			{
+				uae_u32 address = start_pc + ((char *) comp_pc_p - (char *) start_pc_p) + m68k_pc_offset;
+				uae_u32 dp = comp_get_iword((m68k_pc_offset += 2) - 2);
+
+				/* Keep the extension-word PC base distinct from the EA target:
+				 * calc_disp_ea_020 may overwrite its target before using base. */
+				mov_l_ri(S2, address);
+				ad = S1;
+				calc_disp_ea_020(S2, dp, ad, S3);
+			}
+			break;
 		case 4: /* #imm */
 			{
 				uae_u32 address = start_pc + ((char *) comp_pc_p - (char *) start_pc_p) + m68k_pc_offset;

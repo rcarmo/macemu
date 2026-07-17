@@ -836,7 +836,7 @@ midfunc,make_flags_live,audited,make_flags_live,68,621,BasiliskII/src/uae_cpu_20
 midfunc,mov_b_ri,unreviewed,mov_b_ri,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,517,reachable; no accepted family-level closure report
 midfunc,mov_l_mi,audited,mov_l_mi,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,222,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
 midfunc,mov_l_mr,audited,mov_l_mr,68,220,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,464,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
-midfunc,mov_l_ri,unreviewed,mov_l_ri,68,2398,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,511,reachable; no accepted family-level closure report
+midfunc,mov_l_ri,unreviewed,mov_l_ri,68,2399,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,511,reachable; no accepted family-level closure report
 midfunc,mov_l_rm,audited,mov_l_rm,68,17,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,490,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
 midfunc,mov_l_rr,unreviewed,mov_l_rr,68,2345,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,441,reachable; no accepted family-level closure report
 midfunc,preserve_flags_before_nzcv_clobber,audited,preserve_flags_before_nzcv_clobber,68,107,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,166,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md

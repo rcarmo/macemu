@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair and audit ordinary FMOVE extended source EAs** (2026-07-17):
+  d16/indexed An, absolute short/long, d16 PC, and indexed PC pass **39/39**
+  strict exact-native vectors across byte/word/long/single/double values,
+  brief/full indexed forms, indirection, signed displacements, maximum fields,
+  FPSR, and integer CCR. PC-indexed sources no longer fail compilation; they
+  materialise the extension-word PC as a distinct base and use the shared
+  68020 indexed-EA decoder. Integrated evidence remains **904/904** with
+  **31/31** allocator pressure. `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_EXTENDED_EA_SUBTRANCHE.md`.
+
 - **Audit ordinary FMOVE basic memory sources** (2026-07-17): `(An)`,
   `(An)+`, and `-(An)` pass **18/18** strict exact-native vectors across
   byte/word/long/single/double values, exact writeback, A7 byte geometry,

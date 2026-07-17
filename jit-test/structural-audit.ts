@@ -433,6 +433,10 @@ const fppFmoveMemoryBasicMatrix = await Bun.file(new URL(
   "./fpp-fmove-memory-basic-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveExtendedEaMatrix = await Bun.file(new URL(
+  "./fpp-fmove-memory-extended-ea-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -604,6 +608,39 @@ console.log("METRIC structural_fpp_fmove_memory_basic_exact_native_vectors=18");
 console.log("METRIC structural_fpp_fmove_memory_basic_formats=5");
 console.log("METRIC structural_fpp_fmove_memory_basic_ea_modes=3");
 console.log("METRIC structural_fpp_fmove_memory_a7_geometry=1");
+for (const contract of [
+  'name: `${format.name}_d16_a0_positive`',
+  'name: `${format.name}_indexed_a0_d1_long_scale2_negative_disp`',
+  'name: `${format.name}_absolute_short`', 'name: `${format.name}_absolute_long`',
+  'name: `${format.name}_pc_d16_forward`',
+  'name: "long_indexed_full_direct_word_bd"',
+  'name: "long_indexed_full_preindexed_word_outer"',
+  'name: "long_indexed_full_postindexed_word_outer"',
+  'name: `${format.name}_pc_indexed_brief_d1_long`',
+  'name: "long_pc_indexed_full_direct_word_bd"',
+  'name: "long_pc_indexed_full_preindexed_indirect"',
+  'name: "long_d16_a7_negative_to_fp7_max_fields"',
+  'B2_TEST_MEMORY_BYTES:', 'B2_TEST_DUMP_FP: "1"',
+  'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC: "0x1000"',
+  'regsPreserved && addressRegsPreserved && native && strict',
+  'cow_clone', 'cow_release', 'expected = process.env.CASE ? 1 : 39',
+]) requireText(fppFmoveExtendedEaMatrix, contract, "native ordinary FMOVE extended-EA matrix");
+const getFpValueExtendedEa = functionBody(
+  fppCompilerSource,
+  "STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)",
+  "STATIC_INLINE int put_fp_value",
+  "native FPP extended source EA",
+);
+for (const contract of [
+  "case 5: /* d16(An) */", "case 6: /* d8(An,Xn) */",
+  "case 0: /* abs.w */", "case 1: /* abs.l */", "case 2: /* d16(pc) */",
+  "case 3: /* d8(pc,Xn) */", "mov_l_ri(S2, address);",
+  "calc_disp_ea_020(S2, dp, ad, S3);",
+]) requireText(getFpValueExtendedEa, contract, "native FPP extended source EA");
+console.log("METRIC structural_fpp_fmove_extended_ea_exact_native_vectors=39");
+console.log("METRIC structural_fpp_fmove_extended_ea_modes=6");
+console.log("METRIC structural_fpp_fmove_indexed_formats=2");
+console.log("METRIC structural_fpp_fmove_pc_indexed=1");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
