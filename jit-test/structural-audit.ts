@@ -485,6 +485,10 @@ const fppDecompositionFallbackMatrix = await Bun.file(new URL(
   "./fpp-decomposition-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppHyperbolicLog1pFallbackMatrix = await Bun.file(new URL(
+  "./fpp-hyperbolic-log1p-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1168,6 +1172,60 @@ console.log("METRIC structural_fpp_decomposition_service_vectors=38");
 console.log("METRIC structural_fpp_decomposition_strict_rejections=2");
 console.log("METRIC structural_fpp_decomposition_extended_denormal=1");
 console.log("METRIC structural_fpp_decomposition_operation_fpsr=1");
+
+const servicedMonadicCases = [
+  ["case 0x02:", "jit_disable.fsinh", "FSINH"],
+  ["case 0x06:", "jit_disable.flognp1", "FLOGNP1"],
+  ["case 0x08:", "jit_disable.fetoxm1", "FETOXM1"],
+  ["case 0x09:", "jit_disable.ftanh", "FTANH"],
+] as const;
+for (const [label, disable, name] of servicedMonadicCases) {
+  const start = fppCompilerOperation.indexOf(label);
+  const next = fppCompilerOperation.indexOf("case 0x", start + label.length);
+  if (start < 0 || next < 0) fail(`FPP ${name} service boundary is incomplete`);
+  const block = fppCompilerOperation.slice(start, next);
+  for (const contract of [label, disable, "FAIL(1);", "return;"])
+    requireText(block, contract, `FPP ${name} configured service boundary`);
+}
+for (const contract of [
+  "bool direct_result = operation == 2 || operation == 6",
+  "|| operation == 8 || operation == 9;",
+  "|| direct_result || operation == 30 || operation == 31;",
+  "MPFR_DECL_INIT (direct, prec);",
+  "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
+  "case 6: // FLOGNP1", "mpfr_log1p (direct, value.f, rnd)",
+  "case 8: // FETOXM1", "mpfr_expm1 (direct, value.f, rnd)",
+  "case 9: // FTANH", "mpfr_tanh (direct, value.f, rnd)",
+  "if (source_nan && mpfr_nan_p (direct))",
+  "mpfr_setsign (direct, direct, value.nan_sign, MPFR_RNDN);",
+  "mpfr_check_range (direct, t, rnd)",
+  "set_fp_register (reg, direct, value.nan_bits, value.nan_sign",
+]) requireText(ordinaryFppBlock, contract, "MPFR serviced monadic extended-source/direct-result contract");
+for (const contract of [
+  'name: `${item.name}_extended_source_single_${suffix}`',
+  'name: `${item.name}_extended_source_double_nearest`',
+  'name: `${name}_positive_zero`', 'name: `${name}_negative_zero`',
+  'name: "fsinh_positive_infinity"', 'name: "fsinh_negative_infinity"',
+  'name: "flognp1_negative_one_dz"', 'name: "flognp1_less_than_negative_one_operr"',
+  'name: "fetoxm1_negative_infinity"', 'name: "ftanh_positive_infinity"',
+  'name: "fsinh_negative_qnan_payload"', 'name: "flognp1_signalling_nan_quiet"',
+  'name: "fetoxm1_quiet_nan_payload"', 'name: "ftanh_signalling_nan_quiet"',
+  'name: "fsinh_extended_min_single_underflow"',
+  'name: "flognp1_extended_min_single_underflow"',
+  'name: "fetoxm1_extended_min_single_underflow"',
+  'name: "ftanh_extended_min_single_underflow"',
+  'name: "fsinh_fp7_self_alias"', 'name: "ftanh_fp7_self_alias"',
+  'name: "fetoxm1_accrued_preserve"',
+  'd0 === operationFpsr', 'fallbackCount === (item.registerAlias ? 4 : 3)',
+  'output.includes("strict full-JIT: opcode fallback pc=00001000 op=f239")',
+  '!output.includes("NATEXEC pc=00001000")', '!output.includes("Caught SIGSEGV")',
+  "expectedService = process.env.CASE ? selectedService.length : 48",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 4",
+]) requireText(fppHyperbolicLog1pFallbackMatrix, contract, "FPP serviced monadic fallback matrix");
+console.log("METRIC structural_fpp_hyperbolic_log1p_service_vectors=48");
+console.log("METRIC structural_fpp_hyperbolic_log1p_strict_rejections=4");
+console.log("METRIC structural_fpp_hyperbolic_log1p_extended_source=1");
+console.log("METRIC structural_fpp_hyperbolic_log1p_direct_result=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

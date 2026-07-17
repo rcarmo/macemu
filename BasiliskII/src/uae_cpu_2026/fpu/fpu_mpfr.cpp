@@ -1699,12 +1699,17 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  ret = false;
 	  goto out;
 	}
-      /* FINT/FINTRZ and FGETEXP/FGETMAN first convert their architectural
-       * source to extended precision.  FPCR precision applies only to the
-       * completed result, so do not narrow the source before the operation. */
+      /* These monadic operations first convert their architectural source to
+       * extended precision.  FPCR precision applies to the completed result,
+       * so do not narrow the source before the operation.  Exact algebraic
+       * decompositions may compute at extended precision and round afterward;
+       * transcendental operations must evaluate directly into the target-width
+       * temporary to avoid double rounding. */
       int operation = extra & 0x3f;
+      bool direct_result = operation == 2 || operation == 6
+	|| operation == 8 || operation == 9;
       bool extended_source = operation == 1 || operation == 3
-	|| operation == 30 || operation == 31;
+	|| direct_result || operation == 30 || operation == 31;
       if (extended_source)
 	{
 	  mpfr_set_prec (value.f, EXTENDED_PREC);
@@ -1717,6 +1722,10 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  ret = false;
 	  goto out;
 	}
+      bool source_nan = mpfr_nan_p (value.f);
+      if (direct_result)
+	set_format (prec);
+      MPFR_DECL_INIT (direct, prec);
 
       switch (extra & 0x3f)
 	{
@@ -1726,7 +1735,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_rint (value.f, value.f, rnd);
 	  break;
 	case 2: // FSINH
-	  t = mpfr_sinh (value.f, value.f, rnd);
+	  t = mpfr_sinh (direct, value.f, rnd);
 	  break;
 	case 3: // FINTRZ
 	  t = mpfr_rint (value.f, value.f, MPFR_RNDZ);
@@ -1745,13 +1754,13 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	      else if (cmp < 0)
 		cur_exceptions |= FPSR_EXCEPTION_OPERR;
 	    }
-	  t = mpfr_log1p (value.f, value.f, rnd);
+	  t = mpfr_log1p (direct, value.f, rnd);
 	  break;
 	case 8: // FETOXM1
-	  t = mpfr_expm1 (value.f, value.f, rnd);
+	  t = mpfr_expm1 (direct, value.f, rnd);
 	  break;
 	case 9: // FTANH
-	  t = mpfr_tanh (value.f, value.f, rnd);
+	  t = mpfr_tanh (direct, value.f, rnd);
 	  break;
 	case 10: // FATAN
 	  t = mpfr_atan (value.f, value.f, rnd);
@@ -1903,7 +1912,18 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_sub (value.f, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	}
-      if (extended_source)
+      if (direct_result)
+	{
+	  /* MPFR does not retain architectural NaN payload/sign metadata.  A NaN
+	   * source is propagated by these monadic operations, so keep both the
+	   * separate metadata and the MPFR sign coherent for later consumers. */
+	  if (source_nan && mpfr_nan_p (direct))
+	    mpfr_setsign (direct, direct, value.nan_sign, MPFR_RNDN);
+	  t = mpfr_check_range (direct, t, rnd);
+	  set_fp_register (reg, direct, value.nan_bits, value.nan_sign,
+			   t, rnd, true);
+	}
+      else if (extended_source)
 	{
 	  /* Post-process the exact extended operation result at the selected
 	   * FPCR precision and exponent range before storing it in FPn. */

@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FSINH/FLOGNP1/FETOXM1/FTANH service precision**
+  (2026-07-17): these four configured MPFR selectors acquired architectural
+  operands in a temporary already narrowed to FPCR single/double precision.
+  They now load at extended precision/range and evaluate directly into a
+  separate FPCR-width result, avoiding both source loss and transcendental
+  double rounding. A fixed **48 service + 4 strict** matrix covers
+  source-sensitive single/double witnesses for every selector, directed
+  rounding, signed zero, infinity/domain rules, NaN payload/quieting,
+  extended-to-single underflow, FP7 aliasing, operation-local/accrued FPSR and
+  strict rejection. No closure row is promoted and `i_FPP` remains
+  unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_HYPERBOLIC_LOG1P_BATCH.md`.
+
 - **Repair FPP FINT/FINTRZ/FGETEXP/FGETMAN unary decomposition service**
   (2026-07-17): the four configured AArch64 MPFR selectors allocated their
   shared source/result temporary at FPCR single/double precision before source
