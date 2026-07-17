@@ -1565,11 +1565,19 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  ret = false;
 	  goto out;
 	}
+      /* Forced single/double precision applies to the result, not to the
+       * architectural source operand. Preserve the full extended significand
+       * and exponent range while loading the source, then restore the forced
+       * result format before performing the operation. */
+      mpfr_set_prec (value.f, EXTENDED_PREC);
+      set_format (EXTENDED_PREC);
       if (!get_fp_value (opcode, extra, value))
 	{
+	  set_format (prec);
 	  ret = false;
 	  goto out;
 	}
+      set_format (prec);
 
       switch (extra & 0x3f)
 	{

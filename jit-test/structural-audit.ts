@@ -409,6 +409,10 @@ const fppCompilerSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_fpp.cpp",
   import.meta.url,
 )).text();
+const fpuMpfrSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/fpu/fpu_mpfr.cpp",
+  import.meta.url,
+)).text();
 const nativeFlagsSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/flags_arm.h",
   import.meta.url,
@@ -467,6 +471,10 @@ const fppFmovecrFallbackMatrix = await Bun.file(new URL(
 )).text();
 const fppSignFallbackMatrix = await Bun.file(new URL(
   "./fpp-sign-fallback-matrix.ts",
+  import.meta.url,
+)).text();
+const fppSqrtFallbackMatrix = await Bun.file(new URL(
+  "./fpp-sqrt-fallback-matrix.ts",
   import.meta.url,
 )).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
@@ -966,6 +974,77 @@ for (const contract of [
 console.log("METRIC structural_fpp_sign_service_vectors=31");
 console.log("METRIC structural_fpp_sign_strict_rejections=6");
 console.log("METRIC structural_fpp_sign_native_retired=1");
+
+const fsqrtStart = fppCompilerOperation.indexOf("case 0x04:");
+const fsqrtEnd = fppCompilerOperation.indexOf("case 0x06:", fsqrtStart);
+if (fsqrtStart < 0 || fsqrtEnd < 0)
+  fail("FPP square-root family service boundary is incomplete");
+const fsqrtBlock = fppCompilerOperation.slice(fsqrtStart, fsqrtEnd);
+for (const contract of [
+  "case 0x04:", "case 0x41:", "case 0x45:", "binary64 shadow",
+  "forced single/double rounding", "FAIL(1);", "return;",
+]) requireText(fsqrtBlock, contract, "FPP square-root family exact service boundary");
+const fsqrtGate = fsqrtBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const fsqrtOperand = fsqrtBlock.indexOf("get_fp_value");
+if (fsqrtGate < 0 || fsqrtOperand < 0 || fsqrtGate >= fsqrtOperand)
+  fail("FPP square-root family service gate must precede native operand acquisition");
+for (const contract of [
+  'name: "fsqrt_positive_zero"', 'name: "fsqrt_negative_zero"',
+  'name: "fsqrt_negative_invalid"', 'name: "fsqrt_signalling_nan_quiet"',
+  'name: "fsqrt_maximum_extended"', 'name: "fsqrt_minimum_normal_extended"',
+  'name: "fsqrt_wide_low_bit"', 'name: `fsqrt_extended_${suffix}`',
+  'name: `fsqrt_single_${suffix}`', 'name: `fsqrt_double_${suffix}`',
+  'name: `fssqrt_${suffix}`', 'name: `fdsqrt_${suffix}`',
+  '["0", "nearest", x.sqrtTwo]', '["30", "plus", x.sqrtTwoUp]',
+  '["40", "nearest", x.positiveOne]', '["70", "plus", x.positiveSingleNext]',
+  '["80", "nearest", x.positiveOne]', '["b0", "plus", x.positiveDoubleNext]',
+  'name: "fsqrt_fp7_self_max_fields"', 'name: "fsqrt_accrued_preserve"',
+  'name: "fssqrt_extended_source_range"', 'name: "fdsqrt_extended_source_range"',
+  'fssqrtExtendedRangeSource: "40 fd 00 00 80 00 00 00 00 00 00 00"',
+  'fssqrtExtendedRangeResult: "40 7e 00 00 80 00 00 00 00 00 00 00"',
+  'fdsqrtExtendedRangeSource: "47 fd 00 00 80 00 00 00 00 00 00 00"',
+  'fdsqrtExtendedRangeResult: "43 fe 00 00 80 00 00 00 00 00 00 00"',
+  'name: `${prefix}_negative_zero`', 'name: `${prefix}_negative_invalid`',
+  'name: `${prefix}_infinity`', 'name: `${prefix}_quiet_nan`',
+  'name: `${prefix}_signalling_nan`', 'name: `${prefix}_maximum_overflow`',
+  'name: `${prefix}_minimum_underflow`', 'name: `${prefix}_opposite_precision_override`',
+  'name: `${prefix}_accrued_preserve`',
+  '["fssqrt", "0441", "80", x.sqrtTwoSingle]',
+  '["fdsqrt", "0445", "40", x.sqrtTwoDouble]',
+  'input: x.singleHalfSquare, output: prefix === "fssqrt" ? x.positiveOne : x.sqrtSingleHalfForcedDouble',
+  'fpsr === item.fpsr', "fallbackCount === 3", 'sr === "271f"',
+  'output.includes("strict full-JIT: opcode fallback pc=00001008 op=f200")',
+  '!output.includes("NATEXEC pc=00001008")', '!output.includes("JIT_STRICT_SUMMARY ")',
+  '!output.includes("Caught SIGSEGV")',
+  'name: "fsqrt_fp7_self_strict"', 'name: "fssqrt_fp7_self_strict"',
+  'name: "fdsqrt_fp7_self_strict"',
+  "expectedService = process.env.CASE ? selectedService.length : 54",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 3",
+]) requireText(fppSqrtFallbackMatrix, contract, "FPP square-root serviced fallback matrix");
+console.log("METRIC structural_fpp_sqrt_service_vectors=54");
+console.log("METRIC structural_fpp_sqrt_strict_rejections=3");
+console.log("METRIC structural_fpp_sqrt_native_retired=1");
+const forcedFppStart = fpuMpfrSource.indexOf("else if (extra & 0x40)");
+const forcedFppEnd = fpuMpfrSource.indexOf("else if ((extra & 0x30) == 0x30)", forcedFppStart);
+if (forcedFppStart < 0 || forcedFppEnd < 0)
+  fail("MPFR forced-precision operation branch is incomplete");
+const forcedFppBlock = fpuMpfrSource.slice(forcedFppStart, forcedFppEnd);
+const forcedResult = forcedFppBlock.indexOf("MPFR_DECL_INIT (value2, prec);");
+const forcedSource = forcedFppBlock.indexOf("mpfr_set_prec (value.f, EXTENDED_PREC);");
+const forcedSourceFormat = forcedFppBlock.indexOf("set_format (EXTENDED_PREC);", forcedSource);
+const forcedAcquire = forcedFppBlock.indexOf("get_fp_value (opcode, extra, value)");
+const forcedFailure = forcedFppBlock.indexOf("if (!get_fp_value (opcode, extra, value))", forcedSourceFormat);
+const forcedFailureEnd = forcedFppBlock.indexOf("set_format (prec);", forcedFailure);
+const forcedResultFormat = forcedFppBlock.indexOf("set_format (prec);", forcedFailureEnd + 1);
+const forcedOperation = forcedFppBlock.indexOf("switch (extra & 0x3f)", forcedResultFormat);
+if (forcedResult < 0 || forcedSource < 0 || forcedSourceFormat < 0 ||
+    forcedAcquire < 0 || forcedFailure < 0 || forcedFailureEnd < 0 ||
+    forcedResultFormat < 0 || forcedOperation < 0 ||
+    forcedResult >= forcedSource || forcedSource >= forcedSourceFormat ||
+    forcedSourceFormat >= forcedAcquire || forcedAcquire >= forcedFailureEnd ||
+    forcedFailureEnd >= forcedResultFormat || forcedResultFormat >= forcedOperation)
+  fail("MPFR forced operations do not load under extended format before 24/53-bit result work");
+console.log("METRIC structural_fpp_forced_source_extended=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

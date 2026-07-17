@@ -215,6 +215,22 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire lossy FPP FSQRT/FSSQRT/FDSQRT to exact MPFR service**
+  (2026-07-17): the AArch64 path acquired every source through its binary64
+  shadow and emitted host `FSQRT D`, losing extended range/significand state,
+  forced 24-/53-bit precision, directed rounding, and complete FPSR semantics.
+  All three selectors now exit before operand acquisition. Fifty-four fixed
+  80-bit/FPSR service vectors cover signed zero, invalid negative input,
+  NaN payload/quieting, extended-range and low-bit inputs, all FPCR precision
+  and rounding modes, FP7 aliasing, accrued exceptions, and mixed-mode replay;
+  three strict cases reject native entry. A distinguishing FDSQRT/FPCR-single
+  vector also repaired shared MPFR source narrowing: forced operations now
+  acquire their architectural operand under extended precision and exponent
+  range, then round only the
+  result to 24/53 bits. No closure row is promoted and
+  `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SQRT_SUBTRANCHE.md`.
+
 - **Retire lossy FPP sign operations and repair mixed-mode FP ownership**
   (2026-07-17): ordinary FABS/FNEG could narrow an architectural 80-bit source
   merely by acquiring it through the binary64 shadow; FS/FD variants also

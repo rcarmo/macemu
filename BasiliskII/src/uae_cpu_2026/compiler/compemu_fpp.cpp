@@ -1756,6 +1756,13 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x04:						/* FSQRT */
 		case 0x41:						/* FSSQRT */
 		case 0x45:						/* FDSQRT */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* The binary64 shadow cannot represent the architectural extended
+			 * operand/result range or the forced single/double rounding and FPSR
+			 * contract. Retain exact MPFR service before operand acquisition. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fsqrt)
 			{
 				FAIL(1);
