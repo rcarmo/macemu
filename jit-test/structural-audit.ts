@@ -453,6 +453,10 @@ const fppFmoveExtendedFallbackMatrix = await Bun.file(new URL(
   "./fpp-fmove-extended-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmovePackedFallbackMatrix = await Bun.file(new URL(
+  "./fpp-fmove-packed-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -779,6 +783,31 @@ for (const contract of [
 console.log("METRIC structural_fpp_fmove_extended_service_vectors=8");
 console.log("METRIC structural_fpp_fmove_extended_strict_rejections=4");
 console.log("METRIC structural_fpp_fmove_extended_native_retired=1");
+
+for (const body of [getFpValueBody, putFpValueBody]) {
+  const packedReject = body.indexOf("case 3: /* packed decimal static */");
+  const memoryEa = body.indexOf("case 2: /* (An) */", packedReject);
+  if (packedReject < 0 || memoryEa < 0 || packedReject >= memoryEa)
+    fail("native FPP packed-format rejection does not precede memory EA calculation");
+  requireText(body.slice(packedReject, memoryEa), "return -1;", "native FPP packed-format service boundary");
+}
+for (const contract of [
+  'name: "static_17_positive"', 'name: "dynamic_17_positive"',
+  'name: "static_5_rounding"', 'name: "dynamic_5_rounding"',
+  'name: "negative_mantissa_negative_exponent"', 'name: "positive_zero"',
+  'name: "negative_zero"', 'name: "positive_infinity"', 'name: "negative_infinity"',
+  'fpsr: "00000208"', 'fpsr: "08000208"', 'fpsr: "0c000000"', 'fpsr: "02000000"',
+  'fpsr === item.fpsr', 'name: "immediate_source"', 'name: "postinc_source"',
+  'name: "postinc_static_destination"', 'name: "predec_dynamic_destination"',
+  'B2_TEST_MEMDUMP: "0x9ffe:16"', 'B2_TEST_SECOND_PC: "0x1000"',
+  'output.match(/JIT_FALLBACK/g)', 'output.includes("strict full-JIT: opcode fallback")',
+  '!output.includes("Caught SIGSEGV")', 'cow_clone', 'cow_release',
+  'expectedService = process.env.CASE ? selectedService.length : 9',
+  'expectedStrict = process.env.CASE ? selectedStrict.length : 4',
+]) requireText(fppFmovePackedFallbackMatrix, contract, "FPP packed-format serviced fallback matrix");
+console.log("METRIC structural_fpp_fmove_packed_service_vectors=9");
+console.log("METRIC structural_fpp_fmove_packed_strict_rejections=4");
+console.log("METRIC structural_fpp_fmove_packed_native_retired=1");
 
 const fmoveSingleEmitter = functionBody(
   codegenSource,

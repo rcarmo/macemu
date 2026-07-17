@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit ordinary packed-decimal FMOVE as exact MPFR service** (2026-07-17):
+  the AArch64 compiler already rejects static/dynamic packed sources and
+  destinations before EA calculation or writeback. Nine service cases prove
+  static/dynamic K=17, K=5 decimal rounding, signed mantissa/exponent, signed
+  zero, and infinity with guarded exact bytes; four strict cases reject native
+  source/destination entry without SIGSEGV. No implementation or closure status
+  changes are needed and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_PACKED_FORMAT_SUBTRANCHE.md`.
+
 - **Retire lossy ordinary FMOVE.X native conversion to exact MPFR service**
   (2026-07-17): the binary64 AArch64 shadow cannot preserve the 80-bit format's
   64-bit significand and 15-bit exponent, while the old immediate-source route
