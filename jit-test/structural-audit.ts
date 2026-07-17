@@ -441,6 +441,14 @@ const fppFmoveDestinationBasicMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-basic-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveDestinationExtendedEaMatrix = await Bun.file(new URL(
+  "./fpp-fmove-destination-extended-ea-matrix.ts",
+  import.meta.url,
+)).text();
+const fppFmoveDestinationInvalidMatrix = await Bun.file(new URL(
+  "./fpp-fmove-destination-invalid-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -705,6 +713,44 @@ console.log("METRIC structural_fpp_fmove_destination_fpcr_modes=4");
 console.log("METRIC structural_fpp_fmove_destination_basic_ea_modes=3");
 console.log("METRIC structural_fpp_fmove_destination_exception_contracts=2");
 console.log("METRIC structural_fpp_fmove_destination_nan_sign_boundary=1");
+
+for (const contract of [
+  "case 5: /* d16(An) */", "case 6: /* d8(An,Xn) */",
+  "case 0: /* abs.w */", "case 1: /* abs.l */",
+  "calc_disp_ea_020(reg + 8, dp, ad, S2);",
+]) requireText(putFpValueBody, contract, "native FPP extended destination EA");
+for (const contract of [
+  'name: `${format.name}_d16_a0_positive`',
+  'name: `${format.name}_indexed_a0_d1_long_scale2_negative_disp`',
+  'name: `${format.name}_absolute_short`', 'name: `${format.name}_absolute_long`',
+  'name: "long_d16_a7_negative_from_fp7_max_fields"',
+  'name: "word_indexed_a0_d7_word_scale8_max_index_field"',
+  'name: "long_indexed_full_direct_word_bd"',
+  'name: "long_indexed_full_preindexed_word_outer"',
+  'name: "long_indexed_full_postindexed_word_outer"',
+  'name: "long_indexed_brief_all_integer_registers_live"',
+  'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_REPLAY_FPCR: "0"',
+  'B2_TEST_MEMDUMP:', 'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC:',
+  'sr === "271f"', 'regsPreserved', 'addressRegsPreserved',
+  'cow_clone', 'cow_release', 'const expected = process.env.CASE ? 1 : 26',
+]) requireText(fppFmoveDestinationExtendedEaMatrix, contract, "native ordinary FMOVE extended-destination matrix");
+if (/stream:\s*[`"]F23[ABC]\b/.test(fppFmoveDestinationExtendedEaMatrix))
+  fail("ordinary FMOVE extended destination matrix: non-writable PC-relative/immediate destination leaked into scope");
+for (const contract of [
+  "case 2: /* d16(pc) */", "case 3: /* d8(pc,Xn) */", "case 4: /* #imm */",
+  "PC-relative and immediate effective addresses are source-only", "return -1;",
+]) requireText(putFpValueBody, contract, "native FPP invalid destination rejection");
+for (const contract of [
+  'name: "d16_pc_is_not_writable"', 'name: "indexed_pc_is_not_writable"',
+  'name: "immediate_is_not_writable"', 'B2_JIT_STRICT_FULL: "1"',
+  'output.includes("strict full-JIT: opcode fallback")', '!output.includes("NATEXEC pc=00001008")',
+  'cow_clone', 'cow_release', 'const expected = process.env.CASE ? 1 : 3',
+]) requireText(fppFmoveDestinationInvalidMatrix, contract, "native ordinary FMOVE invalid-destination matrix");
+console.log("METRIC structural_fpp_fmove_destination_extended_ea_exact_native_vectors=26");
+console.log("METRIC structural_fpp_fmove_destination_extended_ea_modes=4");
+console.log("METRIC structural_fpp_fmove_destination_indexed_formats=2");
+console.log("METRIC structural_fpp_fmove_destination_guarded_writes=1");
+console.log("METRIC structural_fpp_fmove_destination_invalid_rejections=3");
 
 const fmoveSingleEmitter = functionBody(
   codegenSource,

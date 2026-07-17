@@ -548,25 +548,11 @@ STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 			}
 			break;
 		case 2: /* d16(pc) */
-			{
-				uae_u32 address = start_pc + ((char *) comp_pc_p - (char *) start_pc_p) + m68k_pc_offset;
-				uae_s32 PC16off = (uae_s32) (uae_s16) comp_get_iword((m68k_pc_offset += 2) - 2);
-
-				ad = S1;
-				mov_l_ri(ad, address + PC16off);
-			}
-			break;
 		case 3: /* d8(pc,Xn) */
-			return -1;
 		case 4: /* #imm */
-			{
-				uae_u32 address = start_pc + ((char *) comp_pc_p - (char *) start_pc_p) + m68k_pc_offset;
-
-				ad = S1;
-				mov_l_ri(ad, address);
-				m68k_pc_offset += sz2[size];
-			}
-			break;
+			/* PC-relative and immediate effective addresses are source-only.
+			 * Reject them before consuming extensions or emitting a write. */
+			return -1;
 		default:
 			return -1;
 		}

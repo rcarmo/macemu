@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair and audit ordinary FMOVE extended destination EAs** (2026-07-17):
+  `d16(An)`, brief/full indexed An, and absolute short/long stores pass
+  **26/26** strict exact-native cases across byte/word/long/single/double,
+  guarded writes, direct/preindexed/postindexed forms, maximum fields, and an
+  all-integer-registers-live case. A strict **3/3** negative matrix now rejects
+  source-only d16 PC, indexed PC, and immediate destination encodings; d16 PC
+  and immediate previously compiled and wrote natively. The active-risky corpus
+  remains **904/904** and isolated allocator pressure **31/31**. No closure row
+  is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_DESTINATION_EXTENDED_EA_SUBTRANCHE.md`.
+
 - **Repair and audit ordinary FMOVE IEEE-single destinations** (2026-07-17):
   AArch64 `FCVT S,D` now publishes MPFR-compatible SNAN/OVFL/UNFL/INEX2 and
   accrued IOP/OVFL/UNFL/INEX while preserving guest NZCV and host FPSR. The
