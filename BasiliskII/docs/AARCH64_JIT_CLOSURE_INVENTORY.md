@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | generator | 130 | 58 | 44 | 0 | 28 |
 | midfunc | 422 | 262 | 0 | 112 | 48 |
 | emitter_api | 294 | 49 | 0 | 91 | 154 |
-| raw_boundary | 82 | 24 | 0 | 0 | 58 |
+| raw_boundary | 83 | 25 | 0 | 0 | 58 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -82,7 +82,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 - unique `gencomp.c` mnemonic cases: **130**;
 - unique AArch64 MIDFUNC definitions: **422**;
 - codegen emitter API definitions: **294**;
-- raw boundary functions: **82**;
+- raw boundary functions: **83**;
 - runtime helper boundaries: **69**;
 - FPU roots come from the macro-expanded source selected by the current Makefile defines, not inactive preprocessor branches or unused compatibility macros;
 - the script fails closed if any known layer census or accepted report changes.

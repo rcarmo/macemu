@@ -465,6 +465,10 @@ const fppFmovecrFallbackMatrix = await Bun.file(new URL(
   "./fpp-fmovecr-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppSignFallbackMatrix = await Bun.file(new URL(
+  "./fpp-sign-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -878,6 +882,92 @@ console.log("METRIC structural_fpp_fmovecr_defined_selectors=22");
 console.log("METRIC structural_fpp_fmovecr_service_vectors=36");
 console.log("METRIC structural_fpp_fmovecr_strict_rejections=3");
 console.log("METRIC structural_fpp_fmovecr_native_retired=1");
+
+const fabsStart = fppCompilerOperation.indexOf("case 0x18:");
+const fabsEnd = fppCompilerOperation.indexOf("case 0x19:", fabsStart);
+const fnegStart = fppCompilerOperation.indexOf("case 0x1a:", fabsEnd);
+const fnegEnd = fppCompilerOperation.indexOf("case 0x1c:", fnegStart);
+if (fabsStart < 0 || fabsEnd < 0 || fnegStart < 0 || fnegEnd < 0)
+  fail("FPP sign-family service boundaries are incomplete");
+const fabsBlock = fppCompilerOperation.slice(fabsStart, fabsEnd);
+const fnegBlock = fppCompilerOperation.slice(fnegStart, fnegEnd);
+for (const contract of [
+  "case 0x18:", "case 0x58:", "case 0x5c:", "binary64 shadow",
+  "forced precision", "FAIL(1);", "return;",
+]) requireText(fabsBlock, contract, "FPP FABS family exact service boundary");
+for (const contract of [
+  "case 0x1a:", "case 0x5a:", "case 0x5e:", "binary64 shadow",
+  "forced precision", "FAIL(1);", "return;",
+]) requireText(fnegBlock, contract, "FPP FNEG family exact service boundary");
+for (const block of [fabsBlock, fnegBlock]) {
+  const gate = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+  const operand = block.indexOf("get_fp_value");
+  if (gate < 0 || operand < 0 || gate >= operand)
+    fail("FPP sign-family service gate must precede native operand acquisition");
+}
+const fpuSyncToShadow = functionBody(
+  compatSource,
+  'extern "C" void jit_fpu_sync_to_shadow(void)',
+  'extern "C" void jit_fpu_sync_from_shadow(void)',
+  "FPP MPFR-to-shadow ownership import",
+);
+const fpuSyncFromShadow = functionBody(
+  compatSource,
+  'extern "C" void jit_fpu_sync_from_shadow(void)',
+  '#endif /* USE_JIT_FPU */',
+  "FPP dirty-shadow publication",
+);
+for (const contract of [
+  "regs.jit_fp_dirty_mask = 0", "mpfr_get_d", "fpu_get_fpsr() & FPSR_CCB",
+]) requireText(fpuSyncToShadow, contract, "FPP MPFR-to-shadow ownership import");
+for (const contract of [
+  "const uae_u32 dirty = regs.jit_fp_dirty_mask", "if ((dirty & (1u << i)) == 0)",
+  "if (dirty & (1u << FP_RESULT))", "regs.jit_fp_dirty_mask = 0",
+]) requireText(fpuSyncFromShadow, contract, "FPP dirty-shadow publication");
+const fMarkDirty = functionBody(
+  allocatorSource,
+  "static inline void f_mark_runtime_dirty(int r)",
+  "static inline int f_writereg(int r)",
+  "FPP runtime dirty ownership",
+);
+for (const contract of [
+  "r >= 0 && r <= FP_RESULT", "1u << r", "ORR_www", "regs.jit_fp_dirty_mask",
+]) requireText(fMarkDirty, contract, "FPP runtime dirty ownership");
+const mixedFallbackStart = allocatorSource.indexOf("/* Every raw C call below follows AAPCS64");
+const mixedFallbackEnd = allocatorSource.indexOf("make_flags_live_internal();", mixedFallbackStart);
+if (mixedFallbackStart < 0 || mixedFallbackEnd < 0)
+  fail("FPP mixed native/interpreter ownership barrier is missing");
+const mixedFallback = allocatorSource.slice(mixedFallbackStart, mixedFallbackEnd);
+for (const contract of [
+  "prepare_for_call_1();", "prepare_for_call_2();",
+  "compemu_raw_call_preserve_nzcv((uintptr)jit_fpu_sync_from_shadow)",
+  "compemu_raw_call((uintptr)cputbl[cft_map(opcode)])",
+  "compemu_raw_call_preserve_nzcv((uintptr)jit_fpu_sync_to_shadow)",
+  "live.flags_in_flags = TRASH", "live.flags_on_stack = VALID",
+]) requireText(mixedFallback, contract, "FPP mixed native/interpreter ownership barrier");
+requireBefore(mixedFallback, "prepare_for_call_2();", "jit_fpu_sync_from_shadow", "fallback allocator barrier before C");
+requireBefore(mixedFallback, "jit_fpu_sync_from_shadow", "compemu_raw_mov_l_ri(REG_PAR1", "fallback arguments after FP publication");
+requireBefore(mixedFallback, "cputbl[cft_map(opcode)]", "jit_fpu_sync_to_shadow", "fallback interpreter before MPFR import");
+for (const contract of [
+  'name: "fabs_wide_negative"', 'name: "fneg_negative_zero"',
+  'name: "fabs_negative_infinity"', 'name: "fneg_positive_qnan"',
+  'name: `fabs_single_${suffix}`', 'name: `fneg_double_${suffix}`',
+  'name: `fsabs_${suffix}`', 'name: `fsneg_${suffix}`',
+  'name: "fdabs_negative_half_plus"', 'name: "fdneg_positive_half_minus"',
+  'name: "fsabs_maximum_extended_overflow"', 'name: "fdneg_maximum_extended_overflow"',
+  'name: "fneg_fp7_self_wide_max_fields"', 'name: "fsabs_fp7_self_max_fields"',
+  'name: "fneg_accrued_preserve"', 'B2_TEST_REPLAY_FPSR: item.replayFpsr ?? "0"',
+  'fallbackCount === 3', 'sr === "271f"', 'fpsr === item.fpsr',
+  'output.includes("strict full-JIT: opcode fallback pc=00001008 op=f200")',
+  '!output.includes("Caught SIGSEGV")', 'cow_clone', 'cow_release',
+  'expectedService = process.env.CASE ? selectedService.length : 31',
+  'expectedStrict = process.env.CASE ? selectedStrict.length : 6',
+]) requireText(fppSignFallbackMatrix, contract, "FPP sign-family serviced fallback matrix");
+console.log("METRIC structural_fpp_sign_service_vectors=31");
+console.log("METRIC structural_fpp_sign_strict_rejections=6");
+console.log("METRIC structural_fpp_sign_native_retired=1");
+console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
+console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 
 const fmoveSingleEmitter = functionBody(
   codegenSource,

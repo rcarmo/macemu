@@ -4131,6 +4131,20 @@ static inline int f_readreg(int r)
     return answer;
 }
 
+static inline void f_mark_runtime_dirty(int r)
+{
+#if defined(CPU_AARCH64) && defined(USE_JIT_FPU)
+    if (r >= 0 && r <= FP_RESULT) {
+        compemu_raw_mov_l_rm(REG_WORK1, (uintptr)&regs.jit_fp_dirty_mask);
+        LOAD_U32(REG_WORK2, 1u << r);
+        ORR_www(REG_WORK1, REG_WORK1, REG_WORK2);
+        compemu_raw_mov_l_mr((uintptr)&regs.jit_fp_dirty_mask, REG_WORK1);
+    }
+#else
+    (void)r;
+#endif
+}
+
 static inline int f_writereg(int r)
 {
     int answer;
@@ -4140,6 +4154,7 @@ static inline int f_writereg(int r)
     }  else {
         answer = f_alloc_reg(r, 1);
     }
+    f_mark_runtime_dirty(r);
     live.fate[r].status = DIRTY;
     return answer;
 }
@@ -4153,6 +4168,7 @@ STATIC_INLINE int f_rmw(int r)
     } else {
         n = f_alloc_reg(r, 0);
     }
+    f_mark_runtime_dirty(r);
     live.fate[r].status = DIRTY;
     return n;
 }
@@ -8296,8 +8312,6 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         init_comp();
                         was_comp = 0;
                     }
-                    compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)cft_map(opcode));
-                    compemu_raw_mov_l_rr(REG_PAR2, R_REGSTRUCT);
                     /* Static-audit fix: interpreter fallback from a direct-chained
                        compiled block must not inherit stale PC base metadata.
                        Many ARM64 L2 helper blocks are mixed native+fallback
@@ -8312,7 +8326,36 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                         compemu_raw_call_observer_ii((uintptr)jit_trace_pc_hit,
                             op_m68k_pc, (2u << 16) | (opcode & 0xffff));
                     }
+                    /* Every raw C call below follows AAPCS64 and may overwrite all
+                       caller-saved integer and FP registers. Consecutive fallback
+                       opcodes can otherwise retain a CLEAN FLAGTMP association from
+                       the preceding CCR reload and re-use its clobbered host value.
+                       Materialise anything still owned by the allocator, then drop
+                       every association before crossing the first C boundary. */
+                    prepare_for_call_1();
+                    prepare_for_call_2();
+#ifdef USE_JIT_FPU
+                    /* The interpreter now owns architectural MPFR state. First
+                       publish only native-dirty shadows, then re-import the
+                       serviced result and clear ownership before any following
+                       native instruction or dispatcher exit. */
+                    compemu_raw_call_preserve_nzcv((uintptr)jit_fpu_sync_from_shadow);
+#endif
+                    /* Synchronisation calls are also free to clobber x0/x1, so form
+                       the interpreter table arguments only at the final call seam. */
+                    compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)cft_map(opcode));
+                    compemu_raw_mov_l_rr(REG_PAR2, R_REGSTRUCT);
                     compemu_raw_call((uintptr)cputbl[cft_map(opcode)]);
+#ifdef USE_JIT_FPU
+                    compemu_raw_call_preserve_nzcv((uintptr)jit_fpu_sync_to_shadow);
+#endif
+                    /* The C opcode owns architectural CCR in regflags, while
+                       AAPCS64 permits it to clobber host NZCV. Re-materialise
+                       the guest flags before any native continuation. */
+                    live.flags_in_flags = TRASH;
+                    live.flags_on_stack = VALID;
+                    flags_carry_inverted = false;
+                    make_flags_live_internal();
                     {
                         /* cont86 FIX: the interpreter-FALLBACK path must re-dispatch at
                            the LIVE regs.pc_p after ANY control-transfer op (end_block:

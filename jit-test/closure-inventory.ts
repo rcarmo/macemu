@@ -389,8 +389,8 @@ for (const name of [...runtimeNames].sort()) {
 const rawFiles = [paths.codegen, paths.support, paths.mid1, paths.mid2, paths.compat] as const;
 const rawNames = new Set<string>();
 for (const path of rawFiles) for (const match of load(path).matchAll(/\b((?:compemu_raw_|raw_)[A-Za-z0-9_]+)\s*\(/g)) rawNames.add(match[1]);
-if (rawNames.size !== 82)
-  throw new Error(`raw-boundary census changed: ${rawNames.size}, expected 82`);
+if (rawNames.size !== 83)
+  throw new Error(`raw-boundary census changed: ${rawNames.size}, expected 83`);
 const auditedRaw = /^(?:compemu_raw_(?:branch|call|call_observer_|cmp_pc|endblock_|jmp|maybe_cachemiss|maybe_recompile|observer_|set_pc_)|raw_(?:flags_to_reg|reg_to_flags|jcc|push_regs_to_preserve|pop_preserved_regs))/;
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
@@ -403,7 +403,9 @@ for (const name of [...rawNames].sort()) {
   const references = countToken(configuredRawText, name);
   const status: Status = auditedRaw.test(name) ? "audited" : references <= 1 ? "unreachable" : "unreviewed";
   const evidence = status === "audited"
-    ? "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
+    ? name === "compemu_raw_call_preserve_nzcv"
+      ? "BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md"
+      : "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
     : status === "unreachable" ? "no production caller"
     : /^raw_f/.test(name) && name !== "raw_flags_to_reg"
       ? "reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification"

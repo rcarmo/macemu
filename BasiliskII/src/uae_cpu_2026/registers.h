@@ -124,6 +124,10 @@ extern struct regstruct
     double jit_fpregs[8];
     double jit_fp_result;
     double jit_scratchfregs[2];
+    /* Runtime ownership of the binary64 shadows: bits 0-7 are FP0-FP7 and
+     * bit 8 is the lazy FP condition-result carrier. Only dirty native values
+     * may be published back into the wider architectural MPFR state. */
+    uae_u32 jit_fp_dirty_mask;
     /* Host FPCR saved while native JIT FPU code owns the thread's rounding
      * mode.  Restored at every dispatcher exit before returning to C. */
     uae_u64 jit_host_fpcr;

@@ -1953,6 +1953,14 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x18:						/* FABS */
 		case 0x58:						/* FSABS */
 		case 0x5c:						/* FDABS */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* The AArch64 register file is a binary64 shadow. Even an ordinary
+			 * sign operation would first round a wider architectural MPFR source,
+			 * while FSABS/FDABS additionally require forced precision and exact
+			 * exception state. Retain one MPFR service boundary for the family. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fabs)
 			{
 				FAIL(1);
@@ -1983,6 +1991,13 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x1a:						/* FNEG */
 		case 0x5a:						/* FSNEG */
 		case 0x5e:						/* FDNEG */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* The binary64 shadow cannot preserve the architectural MPFR value,
+			 * including extended range, NaN metadata, signed zero, forced precision,
+			 * and FPSR semantics. Retain the exact interpreter service boundary. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fneg)
 			{
 				FAIL(1);

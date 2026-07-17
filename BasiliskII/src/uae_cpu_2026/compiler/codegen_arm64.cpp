@@ -508,6 +508,19 @@ STATIC_INLINE void compemu_raw_call_r(RR4 r)
 	LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);
 }
 
+/* Runtime state synchronisers are architectural bookkeeping, not guest
+ * arithmetic. Preserve NZCV explicitly across their AAPCS64 C calls so a
+ * serviced FPU opcode cannot alter the integer CCR carried by host flags. */
+STATIC_INLINE void compemu_raw_call_preserve_nzcv(uintptr t)
+{
+	LOAD_U64(R18_INDEX, t);
+	MRS_NZCV_x(REG_WORK4);
+	STP_xxXpre(RLR_INDEX, REG_WORK4, RSP_INDEX, -16);
+	BLR_x(R18_INDEX);
+	LDP_xxXpost(RLR_INDEX, REG_WORK4, RSP_INDEX, 16);
+	MSR_NZCV_x(REG_WORK4);
+}
+
 STATIC_INLINE void compemu_raw_jcc_l_oponly(int cc)
 {
 	FIX_INVERTED_CARRY

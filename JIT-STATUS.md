@@ -215,6 +215,20 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire lossy FPP sign operations and repair mixed-mode FP ownership**
+  (2026-07-17): ordinary FABS/FNEG could narrow an architectural 80-bit source
+  merely by acquiring it through the binary64 shadow; FS/FD variants also
+  omitted forced precision and exception semantics. All six selectors now use
+  exact MPFR service before operand acquisition. A runtime dirty mask prevents
+  untouched shadows and stale lazy FP results from overwriting wider MPFR/FPSR
+  state, while the universal fallback seam now disassociates caller-clobbered
+  allocator registers and rematerialises integer CCR after C. The bounded gate
+  passes **31/31** exact service vectors and **6/6** strict rejections; adjacent
+  FCMP/FTST and four service families remain clean. The new private call boundary
+  expands the inventory to 998 rows and is audited here; no pre-existing row is
+  promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md`.
+
 - **Retire mixed-precision FMOVECR dispatch to exact MPFR service**
   (2026-07-17): the AArch64 path mixed binary32/binary64 constants and fallback
   helpers within one architectural constant-ROM family; π reproduced with only

@@ -2492,17 +2492,25 @@ extern "C" void jit_fpu_sync_to_shadow(void)
         regs.jit_fp_result = negative ? -0.0 : 0.0;
     else
         regs.jit_fp_result = negative ? -1.0 : 1.0;
+    /* Imported shadows are clean. Native emitters set ownership bits at the
+       exact runtime point where an architectural FP value is written. */
+    regs.jit_fp_dirty_mask = 0;
 }
 
-/* Publish native FP register and lazy condition state before returning to C.
-   Preserve FPSR quotient/exception fields; native FP_RESULT owns only CCB. */
+/* Publish only native-dirty FP values before returning to C or entering an
+   interpreter fallback. Untouched binary64 shadows must never narrow wider
+   architectural MPFR registers, and a clean lazy result must not overwrite an
+   FPSR condition code produced by serviced execution. */
 extern "C" void jit_fpu_sync_from_shadow(void)
 {
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
     __asm__ __volatile__("msr fpcr, %0" : : "r"(regs.jit_host_fpcr) : "memory");
 #endif
+    const uae_u32 dirty = regs.jit_fp_dirty_mask;
 #ifdef FPU_MPFR
     for (int i = 0; i < 8; i++) {
+        if ((dirty & (1u << i)) == 0)
+            continue;
         const double shadow = regs.jit_fpregs[i];
         mpfr_set_d(fpu.registers[i].f, shadow, MPFR_RNDN);
         if (std::isnan(shadow)) {
@@ -2517,24 +2525,28 @@ extern "C" void jit_fpu_sync_from_shadow(void)
     }
 #else
     for (int i = 0; i < 8; i++) {
-        fpu.registers[i] = (fpu_register)regs.jit_fpregs[i];
+        if (dirty & (1u << i))
+            fpu.registers[i] = (fpu_register)regs.jit_fpregs[i];
     }
 #endif
-    const double result = regs.jit_fp_result;
-    uae_u32 fpcc = 0;
-    if (std::isnan(result)) {
-        fpcc |= FPSR_CCB_NAN;
-        if (std::signbit(result))
-            fpcc |= FPSR_CCB_NEGATIVE;
-    } else {
-        if (std::signbit(result))
-            fpcc |= FPSR_CCB_NEGATIVE;
-        if (result == 0.0)
-            fpcc |= FPSR_CCB_ZERO;
-        else if (std::isinf(result))
-            fpcc |= FPSR_CCB_INFINITY;
+    if (dirty & (1u << FP_RESULT)) {
+        const double result = regs.jit_fp_result;
+        uae_u32 fpcc = 0;
+        if (std::isnan(result)) {
+            fpcc |= FPSR_CCB_NAN;
+            if (std::signbit(result))
+                fpcc |= FPSR_CCB_NEGATIVE;
+        } else {
+            if (std::signbit(result))
+                fpcc |= FPSR_CCB_NEGATIVE;
+            if (result == 0.0)
+                fpcc |= FPSR_CCB_ZERO;
+            else if (std::isinf(result))
+                fpcc |= FPSR_CCB_INFINITY;
+        }
+        fpu_set_fpsr((fpu_get_fpsr() & ~FPSR_CCB) | fpcc);
     }
-    fpu_set_fpsr((fpu_get_fpsr() & ~FPSR_CCB) | fpcc);
+    regs.jit_fp_dirty_mask = 0;
 }
 
 #endif /* USE_JIT_FPU */
