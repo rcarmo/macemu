@@ -213,11 +213,20 @@ STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)
 	{
 	case 0: /* long */
 	case 1: /* single precision */
-	case 2: /* extended precision */
 	case 4: /* word */
 	case 5: /* double precision */
 	case 6: /* byte */
 		break;
+	case 2: /* extended precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* The native FP shadow is binary64. Converting a 64-bit-significand,
+		 * 15-bit-exponent operand here would silently lose architectural state;
+		 * the legacy temp_fp route also passes a host pointer as a guest vreg.
+		 * Fail before EA calculation/writeback and retain exact MPFR fallback. */
+		return -1;
+#else
+		break;
+#endif
 	case 3: /* packed decimal static */
 	default:
 		return -1;
@@ -485,11 +494,19 @@ STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)
 	{
 	case 0: /* long */
 	case 1: /* single precision */
-	case 2: /* extended precision */
 	case 4: /* word */
 	case 5: /* double precision */
 	case 6: /* byte */
 		break;
+	case 2: /* extended precision */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+		/* The native FP shadow cannot represent an ordinary 80-bit destination.
+		 * Reject it before postincrement/predecrement or any emitted store so the
+		 * MPFR interpreter remains the exact architectural service boundary. */
+		return -1;
+#else
+		break;
+#endif
 	case 3: /* packed decimal static */
 	default:
 		return -1;

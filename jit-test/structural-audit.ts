@@ -449,6 +449,10 @@ const fppFmoveDestinationInvalidMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-invalid-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveExtendedFallbackMatrix = await Bun.file(new URL(
+  "./fpp-fmove-extended-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -751,6 +755,30 @@ console.log("METRIC structural_fpp_fmove_destination_extended_ea_modes=4");
 console.log("METRIC structural_fpp_fmove_destination_indexed_formats=2");
 console.log("METRIC structural_fpp_fmove_destination_guarded_writes=1");
 console.log("METRIC structural_fpp_fmove_destination_invalid_rejections=3");
+
+for (const body of [getFpValueBody, putFpValueBody]) {
+  for (const contract of [
+    "case 2: /* extended precision */", "The native FP shadow", "return -1;",
+  ]) requireText(body, contract, "native FPP extended-format retirement");
+  const rejection = body.indexOf("The native FP shadow");
+  const memoryEa = body.indexOf("case 2: /* (An) */", rejection);
+  if (rejection < 0 || memoryEa < 0 || rejection >= memoryEa)
+    fail("native FPP extended-format retirement does not precede memory EA calculation");
+}
+for (const contract of [
+  'name: "fraction_low_bit_beyond_binary64"', 'name: "maximum_finite"',
+  'name: "minimum_normal"', 'name: "negative_zero"',
+  'name: "immediate_source"', 'name: "postinc_source"',
+  'name: "postinc_destination"', 'name: "predec_destination"',
+  'B2_TEST_MEMDUMP: "0x9ffe:16"', 'B2_TEST_SECOND_PC: "0x1000"',
+  'output.includes("JIT_FALLBACK")', 'output.includes("strict full-JIT: opcode fallback")',
+  '!output.includes("Caught SIGSEGV")', 'cow_clone', 'cow_release',
+  'expectedService = process.env.CASE ? selectedService.length : 8',
+  'expectedStrict = process.env.CASE ? selectedStrict.length : 4',
+]) requireText(fppFmoveExtendedFallbackMatrix, contract, "FPP extended-format serviced fallback matrix");
+console.log("METRIC structural_fpp_fmove_extended_service_vectors=8");
+console.log("METRIC structural_fpp_fmove_extended_strict_rejections=4");
+console.log("METRIC structural_fpp_fmove_extended_native_retired=1");
 
 const fmoveSingleEmitter = functionBody(
   codegenSource,

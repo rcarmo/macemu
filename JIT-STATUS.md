@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire lossy ordinary FMOVE.X native conversion to exact MPFR service**
+  (2026-07-17): the binary64 AArch64 shadow cannot preserve the 80-bit format's
+  64-bit significand and 15-bit exponent, while the old immediate-source route
+  also passed a host pointer as a guest vreg and reproduced a null SIGSEGV.
+  Ordinary extended sources/destinations now fail before EA side effects and
+  execute through MPFR. Eight service cases round-trip full 80-bit bytes and
+  four strict cases reject native source/destination execution without SIGSEGV;
+  integrated evidence remains **904/904** with **31/31** allocator pressure.
+  No closure row is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_EXTENDED_FORMAT_SUBTRANCHE.md`.
+
 - **Repair and audit ordinary FMOVE extended destination EAs** (2026-07-17):
   `d16(An)`, brief/full indexed An, and absolute short/long stores pass
   **26/26** strict exact-native cases across byte/word/long/single/double,
