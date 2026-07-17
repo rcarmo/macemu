@@ -363,6 +363,10 @@ set_from_extended (fpu_register &value, uae_u32 words[3], bool check_snan)
     }
   else
     {
+      /* Extended denormals use an encoded exponent of zero but the same
+       * effective exponent as a biased exponent of one. */
+      if (e == 0)
+	e++;
       // Remove bias
       e -= EXTENDED_BIAS;
       mpfr_set_uj_2exp (value.f, ((uintmax_t) words[1] << 32) | words[2],
@@ -1282,30 +1286,40 @@ fpuop_fmovem_register (uae_u32 opcode, uae_u32 extra)
 }
 
 static int
-do_getexp (mpfr_t value, mpfr_rnd_t rnd)
+do_getexp (fpu_register &value, mpfr_rnd_t rnd)
 {
   int t = 0;
 
-  if (mpfr_inf_p (value))
+  if (mpfr_inf_p (value.f))
     {
-      mpfr_set_nan (value);
+      int sign = mpfr_signbit (value.f);
+      mpfr_set_nan (value.f);
+      /* MPFR marks set_nan as invalid; 68k reports OPERR only here. */
+      mpfr_clear_nanflag ();
+      mpfr_setsign (value.f, value.f, sign, MPFR_RNDN);
+      value.nan_sign = sign;
       cur_exceptions |= FPSR_EXCEPTION_OPERR;
     }
-  else if (!mpfr_nan_p (value) && !mpfr_zero_p (value))
-    t = mpfr_set_si (value, mpfr_get_exp (value) - 1, rnd);
+  else if (!mpfr_nan_p (value.f) && !mpfr_zero_p (value.f))
+    t = mpfr_set_si (value.f, mpfr_get_exp (value.f) - 1, rnd);
   return t;
 }
 
 static int
-do_getman (mpfr_t value)
+do_getman (fpu_register &value)
 {
-  if (mpfr_inf_p (value))
+  if (mpfr_inf_p (value.f))
     {
-      mpfr_set_nan (value);
+      int sign = mpfr_signbit (value.f);
+      mpfr_set_nan (value.f);
+      /* MPFR marks set_nan as invalid; 68k reports OPERR only here. */
+      mpfr_clear_nanflag ();
+      mpfr_setsign (value.f, value.f, sign, MPFR_RNDN);
+      value.nan_sign = sign;
       cur_exceptions |= FPSR_EXCEPTION_OPERR;
     }
-  else if (!mpfr_nan_p (value) && !mpfr_zero_p (value))
-    mpfr_set_exp (value, 1);
+  else if (!mpfr_nan_p (value.f) && !mpfr_zero_p (value.f))
+    mpfr_set_exp (value.f, 1);
   return 0;
 }
 
@@ -1685,8 +1699,21 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  ret = false;
 	  goto out;
 	}
+      /* FINT/FINTRZ and FGETEXP/FGETMAN first convert their architectural
+       * source to extended precision.  FPCR precision applies only to the
+       * completed result, so do not narrow the source before the operation. */
+      int operation = extra & 0x3f;
+      bool extended_source = operation == 1 || operation == 3
+	|| operation == 30 || operation == 31;
+      if (extended_source)
+	{
+	  mpfr_set_prec (value.f, EXTENDED_PREC);
+	  set_format (EXTENDED_PREC);
+	}
       if (!get_fp_value (opcode, extra, value))
 	{
+	  if (extended_source)
+	    set_format (prec);
 	  ret = false;
 	  goto out;
 	}
@@ -1801,10 +1828,10 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_cos (value.f, value.f, rnd);
 	  break;
 	case 30: // FGETEXP
-	  t = do_getexp (value.f, rnd);
+	  t = do_getexp (value, rnd);
 	  break;
 	case 31: // FGETMAN
-	  t = do_getman (value.f);
+	  t = do_getman (value);
 	  break;
 	case 32: // FDIV
 	  if (mpfr_zero_p (value.f))
@@ -1876,7 +1903,19 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_sub (value.f, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	}
-      set_fp_register (reg, value, t, rnd, true);
+      if (extended_source)
+	{
+	  /* Post-process the exact extended operation result at the selected
+	   * FPCR precision and exponent range before storing it in FPn. */
+	  set_format (prec);
+	  MPFR_DECL_INIT (rounded, prec);
+	  int rounded_t = mpfr_set (rounded, value.f, rnd);
+	  rounded_t = mpfr_check_range (rounded, rounded_t, rnd);
+	  set_fp_register (reg, rounded, value.nan_bits, value.nan_sign,
+			   rounded_t, rnd, true);
+	}
+      else
+	set_fp_register (reg, value, t, rnd, true);
     }
   update_exceptions ();
   ret = true;

@@ -477,6 +477,14 @@ const fppSqrtFallbackMatrix = await Bun.file(new URL(
   "./fpp-sqrt-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppIntegralRoundingFallbackMatrix = await Bun.file(new URL(
+  "./fpp-integral-rounding-fallback-matrix.ts",
+  import.meta.url,
+)).text();
+const fppDecompositionFallbackMatrix = await Bun.file(new URL(
+  "./fpp-decomposition-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1045,6 +1053,121 @@ if (forcedResult < 0 || forcedSource < 0 || forcedSourceFormat < 0 ||
     forcedFailureEnd >= forcedResultFormat || forcedResultFormat >= forcedOperation)
   fail("MPFR forced operations do not load under extended format before 24/53-bit result work");
 console.log("METRIC structural_fpp_forced_source_extended=1");
+
+const fintStart = fppCompilerOperation.indexOf("case 0x01:");
+const fintEnd = fppCompilerOperation.indexOf("case 0x02:", fintStart);
+const fintrzStart = fppCompilerOperation.indexOf("case 0x03:", fintEnd);
+const fintrzEnd = fppCompilerOperation.indexOf("case 0x04:", fintrzStart);
+if (fintStart < 0 || fintEnd < 0 || fintrzStart < 0 || fintrzEnd < 0)
+  fail("FPP integral-rounding service boundaries are incomplete");
+const fintBlock = fppCompilerOperation.slice(fintStart, fintEnd);
+const fintrzBlock = fppCompilerOperation.slice(fintrzStart, fintrzEnd);
+for (const contract of ["case 0x01:", "FAIL(1);", "return;"])
+  requireText(fintBlock, contract, "FPP FINT exact service boundary");
+for (const contract of ["case 0x03:", "#ifdef USE_X86_FPUCW", "FAIL(1);", "return;"])
+  requireText(fintrzBlock, contract, "FPP FINTRZ configured service boundary");
+const fgetexpStart = fppCompilerOperation.indexOf("case 0x1e:", fintrzEnd);
+const fgetexpEnd = fppCompilerOperation.indexOf("case 0x1f:", fgetexpStart);
+const fgetmanEnd = fppCompilerOperation.indexOf("case 0x20:", fgetexpEnd);
+if (fgetexpStart < 0 || fgetexpEnd < 0 || fgetmanEnd < 0)
+  fail("FPP decomposition service boundaries are incomplete");
+const fgetexpBlock = fppCompilerOperation.slice(fgetexpStart, fgetexpEnd);
+const fgetmanBlock = fppCompilerOperation.slice(fgetexpEnd, fgetmanEnd);
+for (const contract of ["case 0x1e:", "jit_disable.fgetexp", "FAIL(1);", "return;"])
+  requireText(fgetexpBlock, contract, "FPP FGETEXP configured service boundary");
+for (const contract of ["case 0x1f:", "jit_disable.fgetman", "FAIL(1);", "return;"])
+  requireText(fgetmanBlock, contract, "FPP FGETMAN configured service boundary");
+const ordinaryFppStart = fpuMpfrSource.indexOf("else\n    {", forcedFppEnd);
+const ordinaryFppEnd = fpuMpfrSource.indexOf("update_exceptions ();", ordinaryFppStart);
+if (ordinaryFppStart < 0 || ordinaryFppEnd < 0)
+  fail("MPFR ordinary FPP operation branch is incomplete");
+const ordinaryFppBlock = fpuMpfrSource.slice(ordinaryFppStart, ordinaryFppEnd);
+for (const contract of [
+  "int operation = extra & 0x3f;",
+  "bool extended_source = operation == 1 || operation == 3",
+  "|| operation == 30 || operation == 31;",
+  "mpfr_set_prec (value.f, EXTENDED_PREC);", "set_format (EXTENDED_PREC);",
+  "if (!get_fp_value (opcode, extra, value))", "set_format (prec);",
+  "case 1: // FINT", "mpfr_rint (value.f, value.f, rnd)",
+  "case 3: // FINTRZ", "mpfr_rint (value.f, value.f, MPFR_RNDZ)",
+  "case 30: // FGETEXP", "do_getexp (value, rnd)",
+  "case 31: // FGETMAN", "do_getman (value)",
+  "MPFR_DECL_INIT (rounded, prec);", "mpfr_set (rounded, value.f, rnd)",
+  "mpfr_check_range (rounded, rounded_t, rnd)",
+]) requireText(ordinaryFppBlock, contract, "MPFR unary decomposition extended-source/result contract");
+const integralSource = ordinaryFppBlock.indexOf("mpfr_set_prec (value.f, EXTENDED_PREC);");
+const integralFormat = ordinaryFppBlock.indexOf("set_format (EXTENDED_PREC);", integralSource);
+const integralAcquire = ordinaryFppBlock.indexOf("get_fp_value (opcode, extra, value)", integralFormat);
+const integralFailureRestore = ordinaryFppBlock.indexOf("set_format (prec);", integralAcquire);
+const integralSwitch = ordinaryFppBlock.indexOf("switch (extra & 0x3f)", integralFailureRestore);
+const integralSuccessRestore = ordinaryFppBlock.indexOf("set_format (prec);", integralSwitch);
+const integralResult = ordinaryFppBlock.indexOf("MPFR_DECL_INIT (rounded, prec);", integralSuccessRestore);
+if (integralSource < 0 || integralFormat < 0 || integralAcquire < 0 ||
+    integralFailureRestore < 0 || integralSwitch < 0 || integralSuccessRestore < 0 ||
+    integralResult < 0 || integralSource >= integralFormat || integralFormat >= integralAcquire ||
+    integralAcquire >= integralFailureRestore || integralFailureRestore >= integralSwitch ||
+    integralSwitch >= integralSuccessRestore || integralSuccessRestore >= integralResult)
+  fail("MPFR unary decomposition does not load extended then restore FPCR result format");
+const setFromExtended = functionBody(
+  fpuMpfrSource, "set_from_extended (fpu_register &value", "#define from_bcd",
+  "MPFR extended input conversion",
+);
+for (const contract of [
+  "if (e == 0)", "e++;", "e -= EXTENDED_BIAS;",
+  "e - (EXTENDED_PREC - 1)",
+]) requireText(setFromExtended, contract, "MPFR extended-denormal exponent conversion");
+const getExpBody = functionBody(fpuMpfrSource, "do_getexp (fpu_register &value", "static int\ndo_getman", "MPFR FGETEXP");
+const getManBody = functionBody(fpuMpfrSource, "do_getman (fpu_register &value)", "static int\ndo_scale", "MPFR FGETMAN");
+for (const contract of ["int sign = mpfr_signbit (value.f);", "mpfr_set_nan (value.f);", "mpfr_clear_nanflag ();", "mpfr_setsign (value.f, value.f, sign", "value.nan_sign = sign;", "FPSR_EXCEPTION_OPERR"])
+  requireText(getExpBody, contract, "MPFR FGETEXP infinity status/sign metadata");
+for (const contract of ["int sign = mpfr_signbit (value.f);", "mpfr_set_nan (value.f);", "mpfr_clear_nanflag ();", "mpfr_setsign (value.f, value.f, sign", "value.nan_sign = sign;", "FPSR_EXCEPTION_OPERR"])
+  requireText(getManBody, contract, "MPFR FGETMAN infinity status/sign metadata");
+for (const contract of [
+  'name: `fint_${name}_${suffix}`', 'name: `fintrz_${name}_${suffix}`',
+  'name: "fint_positive_zero"', 'name: "fintrz_negative_zero"',
+  'name: "fint_positive_infinity"', 'name: "fintrz_negative_infinity"',
+  'name: "fint_quiet_nan_payload"', 'name: "fintrz_signalling_nan_quiet"',
+  'name: "fint_half_plus_ulp_fpcr_single"', 'name: "fint_half_plus_ulp_fpcr_double"',
+  'name: "fintrz_below_one_fpcr_single_plus"', 'name: "fintrz_below_one_fpcr_double_plus"',
+  'name: "fint_huge_integral_fpcr_single_rounds"', 'name: "fintrz_huge_integral_fpcr_single_rounds"',
+  'name: "fint_fp7_self_alias"', 'name: "fintrz_fp7_self_alias"',
+  'name: "fint_accrued_preserve"', 'name: "fintrz_accrued_preserve"',
+  'fallbackCount === (item.registerAlias ? 3 : 2)', 'fpsr === item.fpsr', 'sr === "271f"',
+  'output.includes("strict full-JIT: opcode fallback pc=00001000 op=f239")',
+  '!output.includes("NATEXEC pc=00001000")', '!output.includes("Caught SIGSEGV")',
+  "expectedService = process.env.CASE ? selectedService.length : 55",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 2",
+]) requireText(fppIntegralRoundingFallbackMatrix, contract, "FPP integral-rounding serviced fallback matrix");
+console.log("METRIC structural_fpp_integral_rounding_service_vectors=55");
+console.log("METRIC structural_fpp_integral_rounding_strict_rejections=2");
+console.log("METRIC structural_fpp_integral_rounding_extended_source=1");
+for (const contract of [
+  'name: "fgetexp_positive_zero"', 'name: "fgetexp_negative_zero"',
+  'name: "fgetexp_minimum_normal"', 'name: "fgetexp_maximum_finite"',
+  'name: "fgetexp_minimum_subnormal"', 'name: "fgetexp_positive_infinity_operr"',
+  'name: "fgetexp_negative_infinity_operr"', 'name: "fgetexp_negative_infinity_fneg_metadata"',
+  'name: "fgetexp_quiet_nan_payload"',
+  'name: "fgetexp_signalling_nan_quiet"', 'name: "fgetexp_fp7_self_alias"',
+  'name: "fgetexp_fpcr_single_plus_independent"', 'name: "fgetexp_accrued_preserve"',
+  'name: "fgetman_positive_zero"', 'name: "fgetman_negative_zero"',
+  'name: "fgetman_minimum_normal"', 'name: "fgetman_maximum_finite"',
+  'name: "fgetman_minimum_subnormal"', 'name: "fgetman_positive_infinity_operr"',
+  'name: "fgetman_negative_infinity_operr"', 'name: "fgetman_negative_infinity_fneg_metadata"',
+  'name: "fgetman_quiet_nan_payload"',
+  'name: "fgetman_signalling_nan_quiet"', 'name: "fgetman_fp7_self_alias"',
+  'name: "fgetman_fpcr_single_rounds"', 'name: "fgetman_fpcr_double_rounds"',
+  'name: "fgetman_accrued_preserve"', 'name: "fgetexp_fp7_strict"',
+  'name: "fgetman_fp7_strict"', 'F200 A800', 'F200 1F9A',
+  'd0 === operationFpsr', 'item.negateSuccessor ? 1 : 0',
+  'output.includes("strict full-JIT: opcode fallback pc=00001000 op=f239")',
+  '!output.includes("NATEXEC pc=00001000")', '!output.includes("Caught SIGSEGV")',
+  "expectedService = process.env.CASE ? selectedService.length : 38",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 2",
+]) requireText(fppDecompositionFallbackMatrix, contract, "FPP decomposition serviced fallback matrix");
+console.log("METRIC structural_fpp_decomposition_service_vectors=38");
+console.log("METRIC structural_fpp_decomposition_strict_rejections=2");
+console.log("METRIC structural_fpp_decomposition_extended_denormal=1");
+console.log("METRIC structural_fpp_decomposition_operation_fpsr=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

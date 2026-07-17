@@ -215,6 +215,21 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FINT/FINTRZ/FGETEXP/FGETMAN unary decomposition service**
+  (2026-07-17): the four configured AArch64 MPFR selectors allocated their
+  shared source/result temporary at FPCR single/double precision before source
+  acquisition. They now acquire architectural sources at full extended
+  precision/range, perform exact decomposition, then round and range-check a
+  distinct result at FPCR precision. FINT honours FPCR rounding direction;
+  FINTRZ forces toward zero. The batch also repairs the one-power extended-
+  denormal import error and FGETEXP/FGETMAN infinity OPERR/NaN-sign handling.
+  Fixed matrices pass **55/55 + 2 strict** integral cases and **38/38 + 2
+  strict** exponent/mantissa cases, including immediate operation-FPSR
+  snapshots before a later FMOVE clears exception status and successor FNEG
+  consumption of infinity-derived NaN sign metadata. No closure row is
+  promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_UNARY_DECOMPOSITION_BATCH.md`.
+
 - **Retire lossy FPP FSQRT/FSSQRT/FDSQRT to exact MPFR service**
   (2026-07-17): the AArch64 path acquired every source through its binary64
   shadow and emitted host `FSQRT D`, losing extended range/significand state,
