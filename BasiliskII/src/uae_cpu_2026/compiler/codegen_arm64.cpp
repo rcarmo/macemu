@@ -1065,8 +1065,73 @@ LENDFUNC(NONE,NONE,2,raw_fmov_to_l_rr,(W4 d, FR s))
 
 LOWFUNC(NONE,NONE,2,raw_fmov_to_s_rr,(W4 d, FR s))
 {
+	/* FCVT supplies the correctly rounded IEEE-single payload under FPCR.  Its
+	 * FPSR flags are host state, so sample them in an isolated window, restore
+	 * the caller's FPSR, and publish only the equivalent 68k exception fields. */
+	MRS_NZCV_x(REG_WORK4);
+	MRS_FPSR_x(REG_WORK3);
+	MOV_wi(REG_WORK1, 0);
+	MSR_FPSR_x(REG_WORK1);
 	FCVT_sd(SCRATCH_F64_1, s);
 	FMOV_ws(d, SCRATCH_F64_1);
+	MRS_FPSR_x(REG_WORK1);
+	MSR_FPSR_x(REG_WORK3);
+
+	MOV_wi(REG_WORK2, 0); /* replacement exception-status byte */
+	uae_u32* no_ioc = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 0, 0); /* IOC: signalling NaN */
+	LOAD_U32(REG_WORK3, FPSR_EXCEPTION_SNAN);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_ioc, (uintptr)get_target());
+	uae_u32* no_ofc = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 2, 0); /* OFC */
+	LOAD_U32(REG_WORK3, FPSR_EXCEPTION_OVFL);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_ofc, (uintptr)get_target());
+	uae_u32* no_ufc = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 3, 0); /* UFC */
+	LOAD_U32(REG_WORK3, FPSR_EXCEPTION_UNFL);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_ufc, (uintptr)get_target());
+	uae_u32* no_ixc = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 4, 0); /* IXC */
+	LOAD_U32(REG_WORK3, FPSR_EXCEPTION_INEX2);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_ixc, (uintptr)get_target());
+	LOAD_U64(REG_WORK3, (uintptr)&fpu.fpsr.exception_status);
+	STR_wXi(REG_WORK2, REG_WORK3, 0);
+
+	/* Accrued.INEX includes overflow even if a host omits IXC.  Accrued.UNFL
+	 * requires both underflow and inexact, matching update_exceptions(). */
+	MOV_wi(REG_WORK2, 0);
+	uae_u32* no_iop = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 0, 0);
+	LOAD_U32(REG_WORK3, FPSR_ACCR_IOP);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_iop, (uintptr)get_target());
+	uae_u32* no_accr_ovfl = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 2, 0);
+	LOAD_U32(REG_WORK3, FPSR_ACCR_OVFL | FPSR_ACCR_INEX);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_accr_ovfl, (uintptr)get_target());
+	uae_u32* no_accr_unfl = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 3, 0);
+	uae_u32* no_accr_unfl_inexact = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 4, 0);
+	LOAD_U32(REG_WORK3, FPSR_ACCR_UNFL);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_accr_unfl, (uintptr)get_target());
+	write_jmp_target(no_accr_unfl_inexact, (uintptr)get_target());
+	uae_u32* no_accr_inex = (uae_u32*)get_target();
+	TBZ_xii(REG_WORK1, 4, 0);
+	LOAD_U32(REG_WORK3, FPSR_ACCR_INEX);
+	ORR_www(REG_WORK2, REG_WORK2, REG_WORK3);
+	write_jmp_target(no_accr_inex, (uintptr)get_target());
+	LOAD_U64(REG_WORK3, (uintptr)&fpu.fpsr.accrued_exception);
+	LDR_wXi(REG_WORK1, REG_WORK3, 0);
+	ORR_www(REG_WORK1, REG_WORK1, REG_WORK2);
+	STR_wXi(REG_WORK1, REG_WORK3, 0);
+	MSR_NZCV_x(REG_WORK4);
 }
 LENDFUNC(NONE,NONE,2,raw_fmov_to_s_rr,(W4 d, FR s))
 

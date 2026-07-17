@@ -2437,6 +2437,7 @@ extern "C" void jit_op_trapcc(void)
 #ifdef USE_JIT_FPU
 #include "fpu/fpu.h"
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 /* Sync architectural FP registers and FPSR condition state to the native
@@ -2461,13 +2462,17 @@ extern "C" void jit_fpu_sync_to_shadow(void)
 #ifdef FPU_MPFR
     for (int i = 0; i < 8; i++) {
         regs.jit_fpregs[i] = mpfr_get_d(fpu.registers[i].f, MPFR_RNDN);
-        /* MPFR keeps NaN sign outside mpfr_t.  Preserve that architectural
-           metadata at the native-double boundary so sign-directed integer
-           FMOVE saturation survives dispatcher entry. */
-        if (mpfr_nan_p(fpu.registers[i].f))
-            regs.jit_fpregs[i] = std::copysign(
-                std::numeric_limits<double>::quiet_NaN(),
-                fpu.registers[i].nan_sign ? -1.0 : 1.0);
+        /* MPFR keeps NaN payload/sign outside mpfr_t.  Reconstruct the native
+           double shadow with the same high-order payload mapping used by
+           extract_to_double(), so a later IEEE-single destination can quiet
+           signalling NaNs without losing their architectural payload. */
+        if (mpfr_nan_p(fpu.registers[i].f)) {
+            uae_u64 bits = 0x7ff0000000000000ULL |
+                ((fpu.registers[i].nan_bits >> 11) & 0x000fffffffffffffULL);
+            if (fpu.registers[i].nan_sign)
+                bits |= 0x8000000000000000ULL;
+            std::memcpy(&regs.jit_fpregs[i], &bits, sizeof(bits));
+        }
     }
 #else
     for (int i = 0; i < 8; i++) {
@@ -2500,8 +2505,15 @@ extern "C" void jit_fpu_sync_from_shadow(void)
     for (int i = 0; i < 8; i++) {
         const double shadow = regs.jit_fpregs[i];
         mpfr_set_d(fpu.registers[i].f, shadow, MPFR_RNDN);
-        fpu.registers[i].nan_bits = 0xffffffffffffffffULL;
-        fpu.registers[i].nan_sign = std::isnan(shadow) && std::signbit(shadow);
+        if (std::isnan(shadow)) {
+            uae_u64 bits = 0;
+            std::memcpy(&bits, &shadow, sizeof(bits));
+            fpu.registers[i].nan_bits = (bits & 0x000fffffffffffffULL) << 11;
+            fpu.registers[i].nan_sign = (bits >> 63) != 0;
+        } else {
+            fpu.registers[i].nan_bits = 0xffffffffffffffffULL;
+            fpu.registers[i].nan_sign = 0;
+        }
     }
 #else
     for (int i = 0; i < 8; i++) {

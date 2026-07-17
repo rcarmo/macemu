@@ -441,6 +441,10 @@ const fppFmoveDestinationBasicMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-basic-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
+  "./fpp-fmove-single-destination-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -676,7 +680,7 @@ for (const contract of [
 ]) requireText(fmoveIntegerEmitter, contract, "native FPP integer destination classifier");
 for (const contract of [
   "regs.jit_host_fpcr = host_fpcr", "static const unsigned arm_round[4] = { 0, 3, 2, 1 }",
-  "fpu.registers[i].nan_sign ? -1.0 : 1.0", "std::isnan(shadow) && std::signbit(shadow)",
+  "if (fpu.registers[i].nan_sign)", "fpu.registers[i].nan_sign = (bits >> 63) != 0",
   'B2_TEST_REPLAY_FPCR', 'B2_TEST_REPLAY_FPSR',
 ]) requireText(`${compatSource}\n${basiliskGlueSource}`, contract, "native FPP destination architectural boundary");
 for (const contract of [
@@ -701,6 +705,45 @@ console.log("METRIC structural_fpp_fmove_destination_fpcr_modes=4");
 console.log("METRIC structural_fpp_fmove_destination_basic_ea_modes=3");
 console.log("METRIC structural_fpp_fmove_destination_exception_contracts=2");
 console.log("METRIC structural_fpp_fmove_destination_nan_sign_boundary=1");
+
+const fmoveSingleEmitter = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,NONE,2,raw_fmov_to_s_rr",
+  "LENDFUNC(NONE,NONE,2,raw_fmov_to_s_rr",
+  "native FPP IEEE-single destination conversion",
+);
+for (const contract of [
+  "MRS_NZCV_x(REG_WORK4);", "MRS_FPSR_x(REG_WORK3);", "MSR_FPSR_x(REG_WORK1);",
+  "FCVT_sd(SCRATCH_F64_1, s);", "FMOV_ws(d, SCRATCH_F64_1);",
+  "FPSR_EXCEPTION_SNAN", "FPSR_EXCEPTION_OVFL", "FPSR_EXCEPTION_UNFL", "FPSR_EXCEPTION_INEX2",
+  "FPSR_ACCR_IOP", "FPSR_ACCR_OVFL | FPSR_ACCR_INEX", "FPSR_ACCR_UNFL", "FPSR_ACCR_INEX",
+  "MSR_NZCV_x(REG_WORK4);",
+]) requireText(fmoveSingleEmitter, contract, "native FPP IEEE-single destination conversion");
+for (const contract of [
+  "fpu.registers[i].nan_bits >> 11", "std::memcpy(&regs.jit_fpregs[i], &bits, sizeof(bits))",
+  "fpu.registers[i].nan_bits = (bits & 0x000fffffffffffffULL) << 11",
+]) requireText(compatSource, contract, "native FPP NaN payload boundary");
+for (const contract of [
+  'name: "positive_zero"', 'name: "negative_zero"',
+  'name: "positive_infinity"', 'name: "negative_infinity"',
+  'name: "max_finite_exact"', 'name: "min_normal_exact"', 'name: "min_subnormal_exact"',
+  'name: "normal_inexact_nearest"', 'name: "normal_inexact_plus_inf"',
+  'name: "positive_overflow_nearest"', 'name: "positive_overflow_zero"',
+  'name: "positive_overflow_minus_inf"', 'name: "positive_overflow_plus_inf"',
+  'name: "negative_overflow_zero"', 'name: "negative_overflow_minus_inf"',
+  'name: "half_min_subnormal_nearest"', 'name: "half_min_subnormal_plus_inf"',
+  'name: "negative_half_min_subnormal_minus_inf"',
+  'name: "quiet_nan_payload_positive"', 'name: "quiet_nan_payload_negative"',
+  'name: "memory_aind_overflow"', 'B2_TEST_REPLAY_FPSR: "0c55ff08"',
+  'B2_TEST_REPLAY_FPCR: item.fpcr ?? "0"', 'B2_JIT_STRICT_FULL: "1"',
+  'B2_NATIVE_ASSERT_PC:', 'sr === "271f"', 'cow_clone', 'cow_release',
+  'const expected = process.env.CASE ? 1 : 21',
+]) requireText(fppFmoveSingleDestinationMatrix, contract, "native FPP IEEE-single destination matrix");
+console.log("METRIC structural_fpp_fmove_single_destination_exact_native_vectors=21");
+console.log("METRIC structural_fpp_fmove_single_destination_fpcr_modes=4");
+console.log("METRIC structural_fpp_fmove_single_destination_range_classes=4");
+console.log("METRIC structural_fpp_fmove_single_destination_nan_payloads=2");
+console.log("METRIC structural_fpp_fmove_single_destination_fpsr_contracts=4");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
