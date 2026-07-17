@@ -215,6 +215,14 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit ordinary FMOVE basic memory sources** (2026-07-17): `(An)`,
+  `(An)+`, and `-(An)` pass **18/18** strict exact-native vectors across
+  byte/word/long/single/double values, exact writeback, A7 byte geometry,
+  maximum A7/FP7 fields, FPSR, and integer CCR. No implementation change or
+  closure promotion was needed; `i_FPP` remains unreviewed. Integrated evidence
+  remains **904/904** with **31/31** allocator pressure. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_MEMORY_BASIC_SUBTRANCHE.md`.
+
 - **Repair the native FPP ordinary-FMOVE source subfamily** (2026-07-16):
   AArch64 integer FMOVE inputs no longer pass the host `temp_fp` pointer as a
   virtual integer register through the legacy x86 compatibility shim. Dn and

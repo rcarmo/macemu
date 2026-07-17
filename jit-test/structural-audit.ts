@@ -429,6 +429,10 @@ const fppFmoveSourceMatrix = await Bun.file(new URL(
   "./fpp-fmove-source-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveMemoryBasicMatrix = await Bun.file(new URL(
+  "./fpp-fmove-memory-basic-matrix.ts",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -583,6 +587,23 @@ console.log("METRIC structural_fpp_fmove_source_exact_native_vectors=43");
 console.log("METRIC structural_fpp_fmove_source_formats=6");
 console.log("METRIC structural_fpp_fmove_register_routes=8");
 console.log("METRIC structural_fpp_fmove_integer_ccr_preservation=1");
+for (const contract of [
+  'for (const mode of [', 'name: "aind"', 'name: "postinc"', 'name: "predec"',
+  'name: `byte_${mode.name}_a7_geometry`', 'effective: 0xa000, want: 0xa002',
+  'effective: 0xa00e, want: 0xa00e',
+  'name: "long_aind_a7_to_fp7_max_fields"',
+  'B2_TEST_MEMORY_BYTES: memoryBytes(effective, item.bytes)',
+  'B2_TEST_DUMP_FP: "1"', 'B2_JIT_STRICT_FULL: "1"',
+  'B2_NATIVE_ASSERT_PC: "0x1000"', 'sr === "271f"',
+  'address === wantAddress', 'cow_clone', 'cow_release',
+  'expected = process.env.CASE ? 1 : 18',
+]) requireText(fppFmoveMemoryBasicMatrix, contract, "native ordinary FMOVE basic-memory matrix");
+for (const format of ['name: "byte"', 'name: "word"', 'name: "long"', 'name: "single"', 'name: "double"'])
+  requireText(fppFmoveMemoryBasicMatrix, format, "native ordinary FMOVE basic-memory formats");
+console.log("METRIC structural_fpp_fmove_memory_basic_exact_native_vectors=18");
+console.log("METRIC structural_fpp_fmove_memory_basic_formats=5");
+console.log("METRIC structural_fpp_fmove_memory_basic_ea_modes=3");
+console.log("METRIC structural_fpp_fmove_memory_a7_geometry=1");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
