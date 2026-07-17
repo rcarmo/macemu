@@ -1595,6 +1595,13 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* The architectural constant ROM is extended precision. AArch64's
+			 * native path mixes binary32/binary64 approximations with helper
+			 * fallbacks, so retain one exact MPFR boundary for every selector. */
+			FAIL(1);
+			return;
+#endif
 
 			switch (extra & 0x7f)
 			{

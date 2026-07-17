@@ -461,6 +461,10 @@ const fppExplicitMoveFallbackMatrix = await Bun.file(new URL(
   "./fpp-explicit-move-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmovecrFallbackMatrix = await Bun.file(new URL(
+  "./fpp-fmovecr-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -845,6 +849,35 @@ for (const contract of [
 console.log("METRIC structural_fpp_explicit_move_service_vectors=13");
 console.log("METRIC structural_fpp_explicit_move_strict_rejections=2");
 console.log("METRIC structural_fpp_explicit_move_native_retired=1");
+
+const fmovecrStart = fppCompilerOperation.indexOf("if ((extra & 0xfc00) == 0x5c00)");
+const fmovecrSelector = fppCompilerOperation.indexOf("switch (extra & 0x7f)", fmovecrStart);
+const fmovecrGate = fppCompilerOperation.slice(fmovecrStart, fmovecrSelector);
+for (const contract of [
+  "The architectural constant ROM is extended precision", "FAIL(1);", "return;",
+]) requireText(fmovecrGate, contract, "FPP FMOVECR exact service boundary");
+if (fmovecrStart < 0 || fmovecrSelector < 0 || fmovecrStart >= fmovecrSelector)
+  fail("FPP FMOVECR exact service boundary does not precede selector dispatch");
+for (const contract of [
+  '[0, "pi", "40 00 00 00 c9 0f da a2 21 68 c2 35"]',
+  '[11, "log10_2"', '[15, "zero"', '[48, "ln_2"', '[49, "ln_10"',
+  '[50, "ten_pow_0"', '[63, "ten_pow_4096", "75 25 00 00 c4 60 52 02 8a 20 97 9b"]',
+  '"single_nearest"', '"single_zero"', '"single_minus"', '"single_plus"',
+  '"double_nearest"', '"double_zero"', '"double_minus"', '"double_plus"',
+  'name: `undefined_selector_${selector}_zero`',
+  'name: "pi_fp7_max_destination"', 'name: "ten_pow_4096_fp7_max_destination"',
+  'name: "undefined_127_fp7_max_destination"',
+  'B2_TEST_MEMDUMP: "0x9ffe:16"', 'B2_TEST_REPLAY_FPCR: item.fpcr ?? "0"',
+  'fpsr === item.fpsr', 'output.includes("JIT_FALLBACK op=f200 pc=00001000")',
+  'output.includes("strict full-JIT: opcode fallback")', '!output.includes("Caught SIGSEGV")',
+  'cow_clone', 'cow_release',
+  'expectedService = process.env.CASE ? selectedService.length : 36',
+  'expectedStrict = process.env.CASE ? selectedStrict.length : 3',
+]) requireText(fppFmovecrFallbackMatrix, contract, "FPP FMOVECR serviced fallback matrix");
+console.log("METRIC structural_fpp_fmovecr_defined_selectors=22");
+console.log("METRIC structural_fpp_fmovecr_service_vectors=36");
+console.log("METRIC structural_fpp_fmovecr_strict_rejections=3");
+console.log("METRIC structural_fpp_fmovecr_native_retired=1");
 
 const fmoveSingleEmitter = functionBody(
   codegenSource,

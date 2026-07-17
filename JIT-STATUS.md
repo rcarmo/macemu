@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire mixed-precision FMOVECR dispatch to exact MPFR service**
+  (2026-07-17): the AArch64 path mixed binary32/binary64 constants and fallback
+  helpers within one architectural constant-ROM family; π reproduced with only
+  binary32 precision. FMOVECR now exits before selector dispatch. Thirty-six
+  service vectors prove all 22 defined selectors, powers through `10^4096`,
+  eight π FPCR precision/rounding combinations, undefined-selector zero policy,
+  exact 80-bit output and FPSR; three strict FP7 cases reject native entry.
+  Integrated evidence is **904/904** with **31/31** pressure; no closure row is
+  promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVECR_SUBTRANCHE.md`.
+
 - **Retire unrounded FSMOVE/FDMOVE copies to exact MPFR service** (2026-07-17):
   the AArch64 path previously grouped ordinary FMOVE and explicit 24-/53-bit
   moves into one binary64 copy, omitting forced precision and exceptions.
