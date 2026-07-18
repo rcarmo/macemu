@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the definition-only AArch64 integral-rounding raw wrappers**
+  (2026-07-18): `frndint_rr` and `frndintz_rr` were already unreachable; exact
+  caller/body checks now establish that `raw_frndint_rr` and
+  `raw_frndintz_rr` are definition-only and classify both **unreachable**.
+  The accepted FINT/FINTRZ **55+2** matrix remains configured runtime evidence.
+  `FRINTI_dd` and `FRINTZ_dd` each retain another live audited caller and exact
+  2/2 source-site counts, so neither emitter is retired. This is a bounded raw
+  retirement, and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_UNARY_DECOMPOSITION_BATCH.md`.
+
 - **Retire the serviced AArch64 divide MIDFUNC/raw chain**
   (2026-07-18): configured control-flow proof confirms both `fdiv_rr` roots—
   FDIV/FSDIV/FDDIV and FSGLDIV—enter exact MPFR service before operand

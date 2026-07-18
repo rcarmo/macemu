@@ -82,3 +82,9 @@ The directly evidenced rows are promoted:
 
 No raw boundary, MIDFUNC, compound arithmetic path, Motorola-status path, or
 generator row is promoted. `generator,i_FPP` remains **unreviewed**.
+
+A later configured-root audit retired the definition-only `raw_frndint_rr` and
+`raw_frndintz_rr` wrappers beneath already-unreachable MIDFUNCs. That does not
+retire these emitter rows: `FRINTI_dd` retains its integer-destination rounding
+site, and `FRINTZ_dd` retains its modulus-truncation site. Both remain audited
+and reachable with the exact 2/2 configured-site counts pinned here.

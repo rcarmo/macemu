@@ -479,6 +479,8 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fsub_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 subtract selectors service before unreachable fsub_rr"],
   ["raw_fmul_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 multiply roots service before unreachable fmul_rr"],
   ["raw_fdiv_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 divide roots service before unreachable fdiv_rr; FDIV emitters remain reachable from remainder compositions"],
+  ["raw_frndint_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndint_rr; FRINTI_dd remains reachable from integer-destination rounding"],
+  ["raw_frndintz_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndintz_rr; FRINTZ_dd remains reachable from modulus truncation"],
 ]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));

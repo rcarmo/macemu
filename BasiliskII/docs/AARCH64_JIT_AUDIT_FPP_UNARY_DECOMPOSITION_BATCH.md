@@ -161,9 +161,20 @@ The structural audit requires:
 
 ## Closure decision
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending
-all remaining selector groups. The already classified unreachable
-`midfunc,frndint_rr` and `midfunc,frndintz_rr` rows remain unchanged. Raw
-rounding and decomposition emitters are not promoted by an MPFR-service batch;
-they remain reachable from other generic compositions and need their own
-closure contract or final source-unreachability proof.
+No closure row is promoted to **audited**. `generator,i_FPP` remains
+**unreviewed** pending all remaining selector groups. The already classified
+unreachable `midfunc,frndint_rr` and `midfunc,frndintz_rr` rows remain
+unchanged.
+
+A later configured-root audit established that `raw_frndint_rr` and
+`raw_frndintz_rr` are definition-only beneath those unreachable MIDFUNCs. They
+are therefore **unreachable**, guarded by exact parent/body, inactive
+`USE_X86_FPUCW`, definition-only reference, and future-caller checks. The
+closure deliberately stops at the raw wrappers: `FRINTI_dd` remains reachable
+through integer-destination rounding, and `FRINTZ_dd` remains reachable through
+modulus truncation; both retain audited status and exact 2/2 source-site counts.
+
+This is raw-boundary retirement, not emitter retirement or native acceptance.
+The accepted 55+2 FINT/FINTRZ matrix remains configured guest runtime evidence;
+the FGETEXP/FGETMAN decomposition paths and their separate raw/MIDFUNC residue
+are unchanged.

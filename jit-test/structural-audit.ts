@@ -1439,6 +1439,28 @@ for (const contract of ["case 0x01:", "FAIL(1);", "return;"])
   requireText(fintBlock, contract, "FPP FINT exact service boundary");
 for (const contract of ["case 0x03:", "#ifdef USE_X86_FPUCW", "FAIL(1);", "return;"])
   requireText(fintrzBlock, contract, "FPP FINTRZ configured service boundary");
+const fintrzLegacyCall = fintrzBlock.indexOf("frndint_rr(reg, src);");
+const fintrzInactiveGuard = fintrzBlock.indexOf("#ifdef USE_X86_FPUCW");
+const fintrzConfiguredService = fintrzBlock.indexOf("FAIL(1);", fintrzLegacyCall);
+if (fintrzInactiveGuard < 0 || fintrzLegacyCall < fintrzInactiveGuard || fintrzConfiguredService < fintrzLegacyCall)
+  fail("FPP FINTRZ legacy frndint_rr call is no longer confined before configured service");
+for (const [midName, rawName, signature, rawCall, emitter] of [
+  ["frndint_rr", "raw_frndint_rr", "(FW d, FR s)", "raw_frndint_rr(d, s);", "FRINTI_dd(d, s);"],
+  ["frndintz_rr", "raw_frndintz_rr", "(FW d, FR s)", "raw_frndintz_rr(d, s);", "FRINTZ_dd(d, s);"],
+] as const) {
+  const midStart = midfuncSource.indexOf(`MIDFUNC(2,${midName},${signature})`);
+  const midEnd = midfuncSource.indexOf(`MENDFUNC(2,${midName}`, midStart);
+  if (midStart < 0 || midEnd < 0) fail(`missing retired integral MIDFUNC ${midName}`);
+  requireText(midfuncSource.slice(midStart, midEnd), rawCall, `retired integral MIDFUNC ${midName}`);
+  const rawStart = codegenSource.indexOf(`LOWFUNC(NONE,NONE,2,${rawName},${signature})`);
+  const rawEnd = codegenSource.indexOf(`LENDFUNC(NONE,NONE,2,${rawName}`, rawStart);
+  if (rawStart < 0 || rawEnd < 0) fail(`missing retired integral raw boundary ${rawName}`);
+  requireText(codegenSource.slice(rawStart, rawEnd), emitter, `retired integral raw boundary ${rawName}`);
+}
+const frintiSites = (codegenSource.match(/\bFRINTI_dd\(/g) || []).length;
+const frintzSites = (codegenSource.match(/\bFRINTZ_dd\(/g) || []).length;
+if (frintiSites !== 2 || frintzSites !== 2)
+  fail(`integral emitter sites FRINTI/FRINTZ=${frintiSites}/${frintzSites}, expected 2/2`);
 const fgetexpStart = fppCompilerOperation.indexOf("case 0x1e:", fintrzEnd);
 const fgetexpEnd = fppCompilerOperation.indexOf("case 0x1f:", fgetexpStart);
 const fgetmanEnd = fppCompilerOperation.indexOf("case 0x20:", fgetexpEnd);
@@ -1514,6 +1536,8 @@ for (const contract of [
 console.log("METRIC structural_fpp_integral_rounding_service_vectors=55");
 console.log("METRIC structural_fpp_integral_rounding_strict_rejections=2");
 console.log("METRIC structural_fpp_integral_rounding_extended_source=1");
+console.log("METRIC structural_fpp_integral_rounding_unreachable_raw_boundaries=2");
+console.log("METRIC structural_fpp_integral_rounding_reachable_emitters=2");
 for (const contract of [
   'name: "fgetexp_positive_zero"', 'name: "fgetexp_negative_zero"',
   'name: "fgetexp_minimum_normal"', 'name: "fgetexp_maximum_finite"',
