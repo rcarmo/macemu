@@ -80,8 +80,13 @@ if (clone.status !== 0) {
   process.exit(1);
 }
 const disk = clone.stdout.trim().split("\n").at(-1)!;
-const selected = process.env.CASE ? cases.filter((item) => item.name === process.env.CASE) : cases;
-if (selected.length === 0) throw new Error(`unknown CASE=${process.env.CASE}`);
+const selected = process.env.CASE
+  ? cases.filter((item) => item.name === process.env.CASE)
+  : process.env.GROUP === "single" ? cases.filter((item) =>
+      ((Number.parseInt(item.extra, 16) >> 10) & 7) === 1,
+    )
+  : cases;
+if (selected.length === 0) throw new Error(`unknown CASE=${process.env.CASE} GROUP=${process.env.GROUP}`);
 let pass = 0;
 let fail = 0;
 try {
@@ -144,5 +149,5 @@ try {
   rmSync(diskDir, { recursive: true, force: true });
 }
 console.log(`FPP_FMOVE_MEMORY_BASIC_MATRIX pass=${pass} fail=${fail} total=${pass + fail}`);
-const expected = process.env.CASE ? 1 : 18;
+const expected = process.env.CASE ? 1 : process.env.GROUP === "single" ? 3 : 18;
 process.exit(fail === 0 && pass === expected && selected.length === expected ? 0 : 1);

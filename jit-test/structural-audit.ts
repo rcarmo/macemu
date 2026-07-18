@@ -421,6 +421,14 @@ const fcvtasEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fcvtas-conformance.sh",
   import.meta.url,
 )).text();
+const fcvtEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fcvt-conformance.cpp",
+  import.meta.url,
+)).text();
+const fcvtEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fcvt-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -750,7 +758,8 @@ for (const contract of [
   "for (let source = 0; source < 8; source++)",
   "fp_all_live_fp0_to_fp7", "B2_TEST_DUMP_FP: \"1\"", "B2_JIT_STRICT_FULL: \"1\"",
   "B2_NATIVE_ASSERT_PC: anchorHex", "sr === \"271f\"",
-  "cow_clone", "cow_release", "expectedTotal = process.env.CASE ? 1 : 43",
+  "cow_clone", "cow_release",
+  'expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 43',
 ]) requireText(fppFmoveSourceMatrix, contract, "native ordinary FMOVE source matrix");
 if (/\b(?:FSMOVE|FDMOVE)\b/.test(fppFmoveSourceMatrix)) {
   fail("ordinary FMOVE source matrix: explicit precision subfamily leaked into bounded scope");
@@ -813,7 +822,9 @@ for (const contract of [
   'B2_TEST_DUMP_FP: "1"', 'B2_JIT_STRICT_FULL: "1"',
   'B2_NATIVE_ASSERT_PC: "0x1000"', 'sr === "271f"',
   'address === wantAddress', 'cow_clone', 'cow_release',
-  'expected = process.env.CASE ? 1 : 18',
+  'process.env.GROUP === "single"',
+  '((Number.parseInt(item.extra, 16) >> 10) & 7) === 1',
+  'process.env.GROUP === "single" ? 3 : 18',
 ]) requireText(fppFmoveMemoryBasicMatrix, contract, "native ordinary FMOVE basic-memory matrix");
 for (const format of ['name: "byte"', 'name: "word"', 'name: "long"', 'name: "single"', 'name: "double"'])
   requireText(fppFmoveMemoryBasicMatrix, format, "native ordinary FMOVE basic-memory formats");
@@ -4974,6 +4985,67 @@ requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcvtas-confo
 console.log("METRIC structural_fcvtas_emitter_exact_words=1024");
 console.log("METRIC structural_fcvtas_emitter_native_vectors=256");
 console.log("METRIC structural_fcvtas_emitter_callers=1");
+
+/* FCVT_sd/FCVT_ds are the shared bidirectional binary64/binary32 conversion
+   pair. Close only their generic format/field/state contract; compound callers
+   retain separate memory/arithmetic/Motorola exception ownership. */
+const fcvtSdCallers = (codegenSource.match(/\bFCVT_sd\(/g) || []).length;
+const fcvtDsCallers = (codegenSource.match(/\bFCVT_ds\(/g) || []).length;
+if (fcvtSdCallers !== 7 || fcvtDsCallers !== 6)
+  fail(`FCVT emitter callers sd=${fcvtSdCallers} ds=${fcvtDsCallers}, expected 7/6`);
+for (const contract of [
+  "FCVT_ds(d, SCRATCH_F64_1);", "FCVT_sd(SCRATCH_F64_1, s);",
+  "FCVT_ds(r, r);", "FCVT_sd(SCRATCH_F64_1, d);",
+  "FCVT_sd(SCRATCH_F64_2, s);", "FCVT_ds(d, SCRATCH_F64_1);",
+]) requireText(codegenSource, contract, "generic FCVT configured source sites");
+const getFpSingleMemoryCall = getFpValueBody.indexOf("fmov_s_rr(FS1, S2);");
+const getFpSingleMemoryStart = getFpValueBody.lastIndexOf("case 1: /* single precision */", getFpSingleMemoryCall);
+const getFpSingleMemoryEnd = getFpValueBody.indexOf("case 2: /* extended precision */", getFpSingleMemoryCall);
+if (getFpSingleMemoryStart < 0 || getFpSingleMemoryEnd < 0)
+  fail("FCVT configured single-memory import boundary is incomplete");
+const getFpSingleMemory = getFpValueBody.slice(getFpSingleMemoryStart, getFpSingleMemoryEnd);
+for (const contract of [
+  "readlong(ad, S2, S3);", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)",
+  "fmov_s_rr(FS1, S2);", "#else", "fmovs_rm(FS1, (uintptr) temp_fp);",
+]) requireText(getFpSingleMemory, contract, "FCVT configured single-memory import routing");
+requireBefore(getFpSingleMemory, "readlong(ad, S2, S3);", "fmov_s_rr(FS1, S2);", "FCVT configured single-memory load order");
+const fmovSingleRegisterMidfunc = functionBody(
+  midfuncSource, "MIDFUNC(2,fmov_s_rr,(FW d, RR4 s))", "MENDFUNC(2,fmov_s_rr,(FW d, RR4 s))",
+  "FCVT configured fmov_s_rr route",
+);
+requireText(fmovSingleRegisterMidfunc, "raw_fmov_s_rr(d, s);", "FCVT configured fmov_s_rr route");
+const rawFmovSingleRegister = functionBody(
+  codegenSource, "LOWFUNC(NONE,NONE,2,raw_fmov_s_rr,(FW d, RR4 s))",
+  "LENDFUNC(NONE,NONE,2,raw_fmov_s_rr,(FW d, RR4 s))", "FCVT configured raw_fmov_s_rr route",
+);
+requireBefore(rawFmovSingleRegister, "FMOV_sw(SCRATCH_F64_1, s);", "FCVT_ds(d, SCRATCH_F64_1);", "FCVT configured raw_fmov_s_rr order");
+for (const contract of ["#define FCVT_sd(Sd,Dn)", "#define FCVT_ds(Dd,Sn)"])
+  requireText(codegenHeaderSource, contract, "generic FCVT emitter declaration");
+for (const contract of [
+  "0x1e624000u|(b<<5)|a", "0x1e22c000u|(b<<5)|a",
+  "inexact_normal", "half_min_subnormal", "negative_half_min_subnormal",
+  "positive_overflow", "negative_overflow", "signalling_nan", "single_snan",
+  "FCVT preserves source", "FCVT preserves NZCV", "FCVT preserves FPCR",
+  "FCVT preserves caller D8-D15", "FCVT restores caller FPCR", "FCVT restores caller FPSR",
+  "PROT_READ|PROT_WRITE", "mprotect(p,ps,PROT_READ|PROT_EXEC)",
+  "__builtin___clear_cache", "exact==2048&&nv==144&&wv==112&&av==64",
+]) requireText(fcvtEmitterProbeSource, contract, "generic FCVT native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fcvt-conformance.cpp"])
+  requireText(fcvtEmitterHarnessSource, contract, "generic FCVT conformance build");
+for (const contract of [
+  'process.env.GROUP === "single"',
+  'item.anchor === 0x1000 && ((extra >> 10) & 7) === 1',
+  'process.env.GROUP === "single" ? 8 : 43',
+]) requireText(fppFmoveSourceMatrix, contract, "FCVT single register/immediate source composition subset");
+for (const contract of [
+  'process.env.GROUP === "single"',
+  '((Number.parseInt(item.extra, 16) >> 10) & 7) === 1',
+  'process.env.GROUP === "single" ? 3 : 18',
+]) requireText(fppFmoveMemoryBasicMatrix, contract, "FCVT single memory-source composition subset");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcvt-conformance.sh"', "generic FCVT bounded acceptance gate");
+console.log("METRIC structural_fcvt_emitter_exact_words=2048");
+console.log("METRIC structural_fcvt_emitter_native_vectors=256");
+console.log("METRIC structural_fcvt_emitter_callers=13");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

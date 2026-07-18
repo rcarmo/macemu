@@ -98,8 +98,13 @@ The isolated complete replay passed 31/31.
 
 ## Closure decision
 
-No closure row is promoted. The deterministic inventory remains 997 rows and
-`generator,i_FPP`, `midfunc,fmov_to_s_rr`, and `raw_boundary,raw_fmov_to_s_rr`
-remain **unreviewed**. This checkpoint closes the ordinary IEEE-single
-conversion boundary but does not claim the remaining destination-EA or broader
-FPP lifecycle.
+This guest-semantic checkpoint does not promote `generator,i_FPP`,
+`midfunc,fmov_to_s_rr`, or `raw_boundary,raw_fmov_to_s_rr`; they remain
+**unreviewed**. It closes the ordinary IEEE-single conversion boundary but does
+not claim the remaining destination-EA or broader FPP lifecycle.
+
+A later direct generic-emitter audit independently exhausts all 2,048
+`FCVT_sd`/`FCVT_ds` encodings and 256 native conversions, including 64 aliases,
+all raw AArch64 FPCR modes, range/subnormal edges, qNaN/SNaN, exact host FPSR,
+and external AAPCS/FP-state restoration. It promotes only those two emitter rows
+to **audited**; see `AARCH64_JIT_AUDIT_FCVT_EMITTERS.md`.

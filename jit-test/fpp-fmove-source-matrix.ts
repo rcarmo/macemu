@@ -119,8 +119,12 @@ let pass = 0;
 let fail = 0;
 const selectedCases = process.env.CASE
   ? cases.filter((item) => item.name === process.env.CASE)
+  : process.env.GROUP === "single" ? cases.filter((item) => {
+      const extra = Number.parseInt(item.stream.trim().split(/\s+/)[1], 16);
+      return item.anchor === 0x1000 && ((extra >> 10) & 7) === 1;
+    })
   : cases;
-if (selectedCases.length === 0) throw new Error(`unknown CASE=${process.env.CASE}`);
+if (selectedCases.length === 0) throw new Error(`unknown CASE=${process.env.CASE} GROUP=${process.env.GROUP}`);
 try {
   for (const item of selectedCases) {
     const td = mkdtempSync(join(tmpdir(), "fpp-fmove-source-"));
@@ -190,5 +194,5 @@ try {
 }
 
 console.log(`FPP_FMOVE_SOURCE_MATRIX pass=${pass} fail=${fail} total=${pass + fail}`);
-const expectedTotal = process.env.CASE ? 1 : 43;
+const expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 43;
 process.exit(fail === 0 && pass === expectedTotal && selectedCases.length === expectedTotal ? 0 : 1);

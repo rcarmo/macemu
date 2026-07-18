@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FCVT_sd/FCVT_ds emitter pair**
+  (2026-07-18): all **2,048 encodings** and **256 native conversions** now pin
+  exact widening, FPCR-directed narrowing, normal/subnormal/range edges,
+  qNaN/SNaN quieting and IOC, IXC/UFC/OFC, **64 in-place aliases**, source/NZCV
+  preservation, and external D8-D15/FPCR/FPSR restoration. All 13 configured
+  source sites are pinned; composition evidence is the accepted **21/21**
+  single-destination matrix plus mechanically decoded **8/8** Dn/immediate and
+  **3/3** memory single-import subsets, with the configured AArch64 memory call
+  chain pinned structurally. Only `FCVT_sd`/`FCVT_ds` are audited; compound
+  raw/MIDFUNC paths and `i_FPP` remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FCVT_EMITTERS.md`.
+
 - **Audit the reachable generic AArch64 FCVTAS_wd emitter API**
   (2026-07-18): all **1,024 W/D encodings** and **256 native vectors** now pin
   nearest-away ties, four FPCR modes, exact/fractional IXC, invalid IOC, signed
