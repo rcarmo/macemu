@@ -43,6 +43,14 @@ double source:      exact fa3736d18fc27800; pre-destination exact; pre-source fa
 
 Each case enters natively at PC `0x1008`, then executes through semantic service;
 FPSR is snapshotted before the result store clears current exception status.
+The complete two-pass service profile is pinned as the initial destination load
+at `f239@0x1000`, followed by two identical source/FMUL, FPSR-capture, and store
+triples. Absolute-long source uses `f239@0x1008`, `f200@0x1010`, and
+`f239@0x1014`; register, postincrement, and predecrement forms use their exact
+`f200`/`f218`/`f220` source opcode at `0x1008`, then `f200@0x100c` and
+`f239@0x1010`. This replaces a stale total-only exception for the
+signalling-destination case; clean runtime records seven non-duplicative
+boundaries with PCs derived from each source form's encoded length.
 
 ## Structural and review decision
 
@@ -52,7 +60,22 @@ entry, and 30+3 counts. Independent review rejected earlier symmetric witnesses;
 they were replaced by the four one-sided cases above, and re-review approved.
 
 This guest-service checkpoint promotes no closure row. `i_FPP` remains
-unreviewed. Later direct generic-emitter audits independently close `FMUL_ddd`
-and `FMUL_sss` encoding/value/alias/state semantics without promoting this
-guest family; see `AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md` and
+unreviewed. Later direct generic-emitter audits independently closed
+`FMUL_ddd` and `FMUL_sss` encoding/value/alias/state semantics without
+promoting this guest family; see `AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md` and
 `AARCH64_JIT_AUDIT_FMUL_S_EMITTER.md`.
+
+A later configured-root reachability audit exhaustively retired the residual
+binary64 native chain. Both configured AArch64 `fmul_rr` roots—the
+FMUL/FSMUL/FDMUL selector block and separate FSGLMUL block—enter semantic
+service before operand acquisition and before their retained calls; there is no
+MIDFUNC caller. Therefore `fmul_rr`, `raw_fmul_rr`, and `FMUL_ddd` are
+**unreachable**. Positive ordered control-flow for both roots, exact root/edge
+counts, lower-chain shape, and future-caller checks are pinned in
+`closure-inventory.ts` and `structural-audit.ts`.
+
+This is retirement, not native acceptance. The earlier exhaustive direct
+binary64 emitter probe remains historical evidence, while this 30+3 matrix and
+the separate 22+1 FSGLMUL matrix own configured guest runtime fidelity.
+`FMUL_sss` is deliberately unchanged: it remains reachable and audited through
+a separate forced-single composition that does not use `fmul_rr`.

@@ -2020,8 +2020,14 @@ if (sglmulCompilerStart < 0 || sglmulCompilerEnd < 0) fail("FPP FSGLMUL compiler
 const sglmulCompilerBlock = fppCompilerOperation.slice(sglmulCompilerStart, sglmulCompilerEnd);
 for (const contract of ["case 0x27:", "jit_disable.fsglmul", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
   requireText(sglmulCompilerBlock, contract, "FPP FSGLMUL AArch64 service boundary");
-const sglmulGuardEnd = sglmulCompilerBlock.indexOf("#endif", sglmulCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)"));
-if (sglmulGuardEnd < 0 || sglmulGuardEnd > sglmulCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP FSGLMUL service exit does not precede acquisition");
+const sglmulGuardStart = sglmulCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const sglmulService = sglmulCompilerBlock.indexOf("FAIL(1);", sglmulGuardStart);
+const sglmulReturn = sglmulCompilerBlock.indexOf("return;", sglmulService);
+const sglmulAcquire = sglmulCompilerBlock.indexOf("get_fp_value(opcode, extra)");
+const sglmulNativeCall = sglmulCompilerBlock.indexOf("fmul_rr(");
+if (sglmulGuardStart < 0 || sglmulService < sglmulGuardStart || sglmulReturn < sglmulService ||
+    sglmulAcquire < sglmulReturn || sglmulNativeCall < sglmulAcquire)
+  fail("FPP FSGLMUL guarded service exit does not retire fmul_rr before operand acquisition");
 for (const contract of [
   "bool single_extended_result = operation == 36 || operation == 39", "case 39: // FSGLMUL",
   "mpfr_mul (single_extended, fpu.registers[reg].f, value.f, rnd)",
@@ -2039,6 +2045,12 @@ for (const contract of [
   'name: "fsglmul_source_snan_destination_precedence"', 'name: "fsglmul_destination_snan_quiet"',
   'name: "fsglmul_fp7_self_alias"', 'name: "fsglmul_fp7_destination_reseed"',
   'name: "fsglmul_postincrement_source"', 'name: "fsglmul_predecrement_source"', 'name: "fsglmul_accrued_preserve"',
+  'const profile = [...output.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'const capturePc = auditedOpcode === "f239" ? "00001010" : "0000100c"',
+  'const storePc = auditedOpcode === "f239" ? "00001014" : "00001010"',
+  'const passProfile = `${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'const expectedProfile = `f239@00001000 ${passProfile} ${passProfile}`',
+  'profile === expectedProfile',
   'const auditedOpcode = item.aliasFp7 ? "f200"', 'output.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)',
   'B2_NATIVE_ASSERT_PC: "0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${servicePass} strict_pass=${strictPass}',
@@ -2325,8 +2337,31 @@ if (mulCompilerStart < 0 || mulCompilerEnd < 0) fail("FPP multiply compiler boun
 const mulCompilerBlock = fppCompilerOperation.slice(mulCompilerStart, mulCompilerEnd);
 for (const contract of ["case 0x23:", "case 0x63:", "case 0x67:", "jit_disable.fmul", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
   requireText(mulCompilerBlock, contract, "FPP multiply AArch64 service boundary");
-const mulGuardEnd = mulCompilerBlock.indexOf("#endif", mulCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)"));
-if (mulGuardEnd < 0 || mulGuardEnd > mulCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP multiply service exit does not precede acquisition");
+const mulGuardStart = mulCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const mulService = mulCompilerBlock.indexOf("FAIL(1);", mulGuardStart);
+const mulReturn = mulCompilerBlock.indexOf("return;", mulService);
+const mulAcquire = mulCompilerBlock.indexOf("get_fp_value(opcode, extra)");
+const mulNativeCall = mulCompilerBlock.indexOf("fmul_rr(");
+if (mulGuardStart < 0 || mulService < mulGuardStart || mulReturn < mulService ||
+    mulAcquire < mulReturn || mulNativeCall < mulAcquire)
+  fail("FPP multiply guarded service exit does not retire fmul_rr before operand acquisition");
+const mulRootSpellings = (fppCompilerSource.match(/\bfmul_rr\(/g) || []).length;
+if (mulRootSpellings !== 2)
+  fail(`retired multiply MIDFUNC fmul_rr configured-root spellings=${mulRootSpellings} expected=2`);
+const mulMidfuncCallers = (midfuncSource.match(/\bfmul_rr\(/g) || []).length;
+if (mulMidfuncCallers !== 0)
+  fail(`retired multiply MIDFUNC fmul_rr gained ${mulMidfuncCallers} MIDFUNC caller spellings`);
+const mulMidStart = midfuncSource.indexOf("MIDFUNC(2,fmul_rr,(FRW d, FR s))");
+const mulMidEnd = midfuncSource.indexOf("MENDFUNC(2,fmul_rr", mulMidStart);
+if (mulMidStart < 0 || mulMidEnd < 0) fail("missing retired multiply MIDFUNC fmul_rr");
+const mulMidBody = midfuncSource.slice(mulMidStart, mulMidEnd);
+for (const contract of ["s = f_readreg(s);", "d = f_rmw(d);", "raw_fmul_rr(d, s);"])
+  requireText(mulMidBody, contract, "retired multiply MIDFUNC fmul_rr");
+const mulRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmul_rr,(FRW d, FR s))");
+const mulRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fmul_rr", mulRawStart);
+if (mulRawStart < 0 || mulRawEnd < 0) fail("missing retired multiply raw boundary raw_fmul_rr");
+requireText(codegenSource.slice(mulRawStart, mulRawEnd), "FMUL_ddd(d, d, s);", "retired multiply raw boundary raw_fmul_rr");
+requireText(codegenHeaderSource, "#define FMUL_ddd(Dd,Dn,Dm)", "retired multiply emitter FMUL_ddd");
 for (const contract of [
   "case 35: // FSMUL", "case 39: // FDMUL", "mpfr_mul (value2, fpu.registers[reg].f, value.f, rnd)",
   "(extra & 0x3f) == 35 || (extra & 0x3f) == 39", "|| operation == 35 || operation == 40;",
@@ -2346,12 +2381,22 @@ for (const contract of [
   'name:"fmul_destination_snan_quiet_then_destination_precedence"', 'name:"fsmul_source_only_snan"',
   'name:"fmul_fp7_self_alias"', 'name:"fsmul_fp7_destination_reseed"', 'name:"fmul_postincrement_source"',
   'name:"fdmul_predecrement_source"', 'name:"fmul_accrued_preserve"',
+  'profile=[...o.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'capturePc=auditedOpcode==="f239"?"00001010":"0000100c"',
+  'storePc=auditedOpcode==="f239"?"00001014":"00001010"',
+  'passProfile=`${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'expectedProfile=`f239@00001000 ${passProfile} ${passProfile}`',
+  'profile===expectedProfile',
   'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${sp} strict_pass=${st}', 'sc.length:30', 'ss.length:3',
 ]) requireText(fppMulServiceMatrix, contract, "FPP multiply service matrix");
 console.log("METRIC structural_fpp_mul_service_vectors=30");
 console.log("METRIC structural_fpp_mul_strict_rejections=3");
 console.log("METRIC structural_fpp_mul_one_sided_extended_operands=4");
+console.log("METRIC structural_fpp_mul_serviced_root_calls=2");
+console.log("METRIC structural_fpp_mul_unreachable_midfuncs=1");
+console.log("METRIC structural_fpp_mul_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_mul_unreachable_emitters=1");
 const subCompilerStart = fppCompilerOperation.indexOf("case 0x28:\t\t\t\t\t\t/* FSUB */");
 const subCompilerEnd = fppCompilerOperation.indexOf("case 0x30:\t\t\t\t\t\t/* FSINCOS */", subCompilerStart);
 if (subCompilerStart < 0 || subCompilerEnd < 0) fail("FPP subtract compiler boundary is incomplete");

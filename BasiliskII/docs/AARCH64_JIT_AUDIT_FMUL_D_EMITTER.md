@@ -6,9 +6,9 @@ Base: `1cd8a79a`
 
 ## Scope
 
-This checkpoint audits the complete reachable `FMUL_ddd(Dd,Dn,Dm)` API. It
-closes generic scalar-binary64 encoding, rounding, exception, alias, and state
-semantics only.
+This checkpoint directly audited the then-reachable `FMUL_ddd(Dd,Dn,Dm)` API.
+It closed generic scalar-binary64 encoding, rounding, exception, alias, and
+state semantics only.
 
 It does not promote `raw_fmul_rr`, a MIDFUNC wrapper, the serviced guest
 FMUL/FSMUL/FDMUL family, Motorola status publication, or `generator,i_FPP`.
@@ -57,9 +57,18 @@ METRIC emitter_fmul_alias_routes=272
 
 ## Closure decision
 
-The directly evidenced row is promoted:
+At this checkpoint the directly evidenced row was promoted:
 
 - `emitter_api,FMUL_ddd` → **audited**.
 
 No raw boundary, MIDFUNC, guest family, Motorola-status path, or generator row
-is promoted. `generator,i_FPP` remains **unreviewed**.
+was promoted. `generator,i_FPP` remained **unreviewed**.
+
+A later complete configured-root audit established that both AArch64 `fmul_rr`
+roots—FMUL/FSMUL/FDMUL and FSGLMUL—enter exact semantic service before operand
+acquisition, and no other caller exists. The current inventory therefore
+classifies `fmul_rr`, `raw_fmul_rr`, and binary64 `FMUL_ddd` as
+**unreachable**. This report remains direct encoding/host-semantic evidence for
+the retained dead emitter definition; it does not override configured
+reachability. The separate binary32 `FMUL_sss` route remains reachable and
+independently audited.

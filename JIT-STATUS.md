@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the residual AArch64 native binary64 multiply primitive chain**
+  (2026-07-18): configured control-flow proof confirms both `fmul_rr` roots—
+  FMUL/FSMUL/FDMUL and FSGLMUL—enter exact MPFR service before operand
+  acquisition. With no other configured root or MIDFUNC caller, `fmul_rr`,
+  `raw_fmul_rr`, and `FMUL_ddd` are now **unreachable**, guarded by two-root
+  control-flow, exact edge/lower-chain, and future-caller checks. The prior
+  32,768-word/604-route direct binary64 emitter audit remains historical
+  evidence; **30+3** FMUL-family and **22+1** FSGLMUL cases own configured
+  runtime fidelity with exact variable-length service profiles. `FMUL_sss`
+  remains separately reachable and audited. This is retirement rather than
+  native acceptance, and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_MUL_BATCH.md`.
+
 - **Retire the residual AArch64 native subtract primitive chain**
   (2026-07-18): configured control-flow proof confirms all FSUB/FSSUB/FDSUB
   selectors enter exact MPFR service before operand acquisition and `fsub_rr`.
@@ -267,14 +280,14 @@ inventory is 92/92, and the accepted register-count
   raw/MIDFUNC, conversion, and `i_FPP` boundaries remain separate. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FMUL_S_EMITTER.md`.
 
-- **Audit the reachable generic AArch64 FMUL_ddd emitter API**
+- **Audit the then-reachable generic AArch64 FMUL_ddd emitter API**
   (2026-07-18): all **32,768 encodings** plus **604 native semantic routes**
-  now pin halfway-product and directed rounding, signed overflow/underflow,
-  IXC/UFC/OFC, both zero×infinity IOC orders, left/right qNaN/SNaN,
-  **272 aliases**, all D fields, source/NZCV/FPCR/FPSR preservation, and
-  external FP-state restoration. The sole configured raw composition is
-  pinned. Only `FMUL_ddd` is audited; the serviced guest family, compound
-  raw/MIDFUNC paths, and `i_FPP` remain separate. See
+  pin halfway-product and directed rounding, signed overflow/underflow,
+  IXC/UFC/OFC, zero×infinity IOC, left/right qNaN/SNaN, **272 aliases**, all D
+  fields, and FP-state preservation. A later complete two-root audit retired
+  the residual binary64 chain and now classifies `FMUL_ddd`, `raw_fmul_rr`, and
+  `fmul_rr` unreachable; the direct probe remains historical evidence.
+  Binary32 `FMUL_sss` remains reachable and audited. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md`.
 
 - **Audit the then-reachable generic AArch64 FSUB_ddd emitter API**

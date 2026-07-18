@@ -40,6 +40,14 @@ The matrix covers:
   integer CCR preservation, exact native entry and strict rejection; and
 - exact fallback opcode attribution at PC `0x1008`.
 
+The complete two-pass service profile is also pinned: one initial
+`f239@0x1000` destination load followed by two identical source/FSGLMUL,
+FPSR-capture, and store triples. Absolute-long source uses PCs
+`0x1008/0x1010/0x1014`; register, postincrement, and predecrement forms use
+`0x1008/0x100c/0x1010` with their exact `f200`/`f218`/`f220` source opcode.
+This replaces the stale six-boundary exception for the signalling-destination
+case; clean runtime records the same seven non-duplicative boundaries.
+
 ## Structural and review decision
 
 The structural audit pins the pre-acquisition service guard, operation 39
@@ -51,5 +59,12 @@ Independent review accepted the implementation but required the explicit
 midpoint/double-round witness. It was independently derived, added, and passed
 before final approval.
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups.
+No closure row is promoted to **audited**. `generator,i_FPP` remains
+**unreviewed** pending all selector groups.
+
+A later combined multiply-root audit established that this selector and the
+FMUL/FSMUL/FDMUL block are the only configured `fmul_rr` roots, and both service
+before operand acquisition. With no MIDFUNC caller, `fmul_rr`,
+`raw_fmul_rr`, and binary64 `FMUL_ddd` are therefore **unreachable**. This
+matrix remains the 22+1 runtime-fidelity proof for the FSGLMUL root. The
+separate `FMUL_sss` forced-single emitter remains reachable and audited.
