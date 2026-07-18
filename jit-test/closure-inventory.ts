@@ -202,6 +202,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^FMUL_ddd$/, "AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md"],
   [/^FMUL_sss$/, "AARCH64_JIT_AUDIT_FMUL_S_EMITTER.md"],
   [/^FDIV_(?:ddd|sss)$/, "AARCH64_JIT_AUDIT_FDIV_EMITTERS.md"],
+  [/^FMSUB_dddd$/, "AARCH64_JIT_AUDIT_FMSUB_EMITTER.md"],
   [/^(?:B_i|BR_x|CC_B_i|B(?:CC|CS|EQ|GE|GT|HI|LE|LS|LT|MI|NE|PL|VC|VS)_i|CB(?:NZ|Z)_[wx]i|TBNZ_[wx]ii|TBZ_[wx]ii)$/, "AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [

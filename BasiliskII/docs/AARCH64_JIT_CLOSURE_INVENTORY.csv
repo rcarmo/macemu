@@ -119,7 +119,7 @@ emitter_api,FMOV_ss,unreachable,FMOV_ss,60,0,BasiliskII/src/uae_cpu_2026/compile
 emitter_api,FMOV_sw,audited,FMOV_sw,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,462,AARCH64_JIT_AUDIT_FMOV_SW_WS_EMITTERS.md
 emitter_api,FMOV_ws,audited,FMOV_ws,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,463,AARCH64_JIT_AUDIT_FMOV_SW_WS_EMITTERS.md
 emitter_api,FMOV_xd,audited,FMOV_xd,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,461,AARCH64_JIT_AUDIT_FMOV_DX_XD_EMITTERS.md
-emitter_api,FMSUB_dddd,unreviewed,FMSUB_dddd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,490,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,FMSUB_dddd,audited,FMSUB_dddd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,490,AARCH64_JIT_AUDIT_FMSUB_EMITTER.md
 emitter_api,FMUL_ddd,audited,FMUL_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,488,AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md
 emitter_api,FMUL_sss,audited,FMUL_sss,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,489,AARCH64_JIT_AUDIT_FMUL_S_EMITTER.md
 emitter_api,FNEG_dd,unreachable,FNEG_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,491,"only retained raw_fneg_rr emits it, and configured AArch64 sign selectors service before unreachable fneg_rr"

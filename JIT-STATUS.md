@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FMSUB_dddd emitter API**
+  (2026-07-18): all **1,048,576 four-field encodings** plus **400 native
+  routes** now pin true fused `Da−Dn×Dm` cancellation, directed rounding,
+  signed overflow/underflow, invalid and three-position qNaN/SNaN ownership,
+  **208 destination/source aliases**, preload order, and external FP-state
+  restoration. Both remainder-helper sites are pinned. Only `FMSUB_dddd` is
+  audited; remainder/raw/MIDFUNC/Motorola-status and `i_FPP` remain separate.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FMSUB_EMITTER.md`.
+
 - **Audit the reachable generic AArch64 FDIV_ddd/FDIV_sss emitter pair**
   (2026-07-18): separate binary64/binary32 probes close **65,536 encodings**
   and **1,272 native routes**, pinning ±1/3 rounding, signed overflow/

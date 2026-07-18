@@ -517,6 +517,14 @@ const fdivSingleEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fdiv-s-conformance.sh",
   import.meta.url,
 )).text();
+const fmsubEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fmsub-conformance.cpp",
+  import.meta.url,
+)).text();
+const fmsubEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fmsub-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5436,6 +5444,31 @@ for (const gate of [
 console.log("METRIC structural_fdiv_emitter_exact_words=65536");
 console.log("METRIC structural_fdiv_emitter_native_routes=1272");
 console.log("METRIC structural_fdiv_emitter_callers=4");
+
+/* FMSUB_dddd is the four-field fused Da-(Dn*Dm) encoder used by both
+   remainder quotient paths. */
+const fmsubCallers = (codegenSource.match(/\bFMSUB_dddd\(/g) || []).length;
+if (fmsubCallers !== 2) fail(`FMSUB emitter callers=${fmsubCallers}, expected 2`);
+requireText(codegenHeaderSource, "#define FMSUB_dddd(Dd,Dn,Dm,Da)", "generic FMSUB declaration");
+for (const contract of [
+  "FMSUB_dddd(d, SCRATCH_F64_1, s, d);", "FMSUB_dddd(d, SCRATCH_F64_2, s, d);",
+]) requireText(codegenSource, contract, "generic FMSUB configured sites");
+for (const contract of [
+  "0x1f408000u|(m<<16)|(a<<10)|(n<<5)|d", "for(unsigned a=0;a<32;a++)",
+  "fused_cancellation", "0x3970000000000000ull", "positive_midpoint", "negative_midpoint",
+  "positive_overflow", "negative_overflow", "positive_half_min_subnormal", "negative_half_min_subnormal",
+  "zero_times_infinity", "infinity_cancellation", "n_quiet_nan", "m_quiet_nan", "a_quiet_nan",
+  "n_signalling_nan", "m_signalling_nan", "a_signalling_nan",
+  "FMSUB N source/alias semantics", "FMSUB M source/alias semantics", "FMSUB A source/alias semantics",
+  "FMSUB source-alias load order", "FMSUB preserves NZCV", "FMSUB preserves FPCR", "FMSUB FPSR",
+  "exact==1048576&&native==400&&aliases==208",
+]) requireText(fmsubEmitterProbeSource, contract, "generic FMSUB native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fmsub-conformance.cpp"])
+  requireText(fmsubEmitterHarnessSource, contract, "generic FMSUB conformance build");
+requireText(harnessSource, 'timeout -k 5s 600s "$SCRIPT_DIR/emitter-fmsub-conformance.sh"', "generic FMSUB bounded gate");
+console.log("METRIC structural_fmsub_emitter_exact_words=1048576");
+console.log("METRIC structural_fmsub_emitter_native_routes=400");
+console.log("METRIC structural_fmsub_emitter_callers=2");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
