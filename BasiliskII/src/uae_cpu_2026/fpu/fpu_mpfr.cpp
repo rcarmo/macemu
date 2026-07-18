@@ -1825,6 +1825,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
        * transcendental operations must evaluate directly into the target-width
        * temporary to avoid double rounding. */
       int operation = extra & 0x3f;
+      bool single_extended_result = operation == 36;
       bool direct_result = operation == 2 || operation == 6
 	|| operation == 8 || operation == 9 || operation == 10
 	|| operation == 12 || operation == 13 || operation == 14
@@ -1835,7 +1836,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 35 || operation == 40;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31 || operation == 33
-	|| operation == 37 || operation == 38;
+	|| operation == 37 || operation == 38 || single_extended_result;
       if (extended_source)
 	{
 	  mpfr_set_prec (value.f, EXTENDED_PREC);
@@ -1851,6 +1852,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
       if (direct_result)
 	set_format (prec);
       MPFR_DECL_INIT (direct, prec);
+      MPFR_DECL_INIT (single_extended, SINGLE_PREC);
 
       switch (extra & 0x3f)
 	{
@@ -2009,22 +2011,19 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_mul (direct, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	case 36: // FSGLDIV
-	  {
-	    MPFR_DECL_INIT (value2, SINGLE_PREC);
-
-	    set_format (SINGLE_PREC);
-	    if (mpfr_zero_p (value.f))
-	      {
-		if (mpfr_regular_p (fpu.registers[reg].f))
-		  cur_exceptions |= FPSR_EXCEPTION_DZ;
-		else if (mpfr_zero_p (fpu.registers[reg].f))
-		  cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	      }
-	    else if (mpfr_inf_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
-	      cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	    t = mpfr_div (value2, fpu.registers[reg].f, value.f, rnd);
-	    mpfr_set (value.f, value2, rnd);
-	  }
+	  if (!mpfr_nan_p (fpu.registers[reg].f) && !mpfr_nan_p (value.f))
+	    {
+	      if (mpfr_zero_p (value.f))
+		{
+		  if (mpfr_regular_p (fpu.registers[reg].f))
+		    cur_exceptions |= FPSR_EXCEPTION_DZ;
+		  else if (mpfr_zero_p (fpu.registers[reg].f))
+		    cur_exceptions |= FPSR_EXCEPTION_OPERR;
+		}
+	      else if (mpfr_inf_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
+		cur_exceptions |= FPSR_EXCEPTION_OPERR;
+	    }
+	  t = mpfr_div (single_extended, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	case 37: // FREM
 	  t = do_remainder (value, reg, rnd);
@@ -2062,6 +2061,20 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	    mpfr_setsign (direct, direct, nan_sign, MPFR_RNDN);
 	  t = mpfr_check_range (direct, t, rnd);
 	  set_fp_register (reg, direct, nan_bits, nan_sign, t, rnd, true);
+	}
+      else if (single_extended_result)
+	{
+	  /* FSGLDIV/FSGLMUL round only the significand to single precision;
+	   * their exponent range remains extended. */
+	  set_format (EXTENDED_PREC);
+	  int rounded_t = mpfr_check_range (single_extended, t, rnd);
+	  uae_u64 nan_bits;
+	  int nan_sign;
+	  select_binary_nan (reg, value, &nan_bits, &nan_sign);
+	  if (mpfr_nan_p (single_extended))
+	    mpfr_setsign (single_extended, single_extended, nan_sign, MPFR_RNDN);
+	  set_fp_register (reg, single_extended, nan_bits, nan_sign,
+			   rounded_t, rnd, true);
 	}
       else if (extended_source)
 	{

@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FSGLDIV single-significand/extended-exponent service**
+  (2026-07-18): FSGLDIV preserves arbitrary-precision inputs, divides directly
+  into a 24-bit significand under extended exponent limits, and avoids both
+  operand pre-rounding and extended-to-single double rounding. A fixed **23
+  service + 1 strict** matrix covers one-sided operands, midpoint and directed
+  rounding, extended exponent range, specials, NaNs, aliases, EA effects and
+  FPSR. No closure row is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SGLDIV_BATCH.md`.
+
 - **Repair FPP FSCALE exponent and range service** (2026-07-18): FSCALE
   now preserves extended operands, chops the source toward zero independently
   of FPCR direction, post-rounds the result at FPCR width, and publishes
