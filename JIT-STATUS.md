@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit indexed FPP control-register memory transfers** (2026-07-18): the
+  existing MPFR service correctly composes FPCR/FPSR/FPIAR transfers with
+  An/PC brief, full direct, preindexed, and postindexed EAs. A fixed **14
+  service + 3 strict** matrix proves all/sparse masks, maximum word-index
+  fields, independent pointer cells, guarded bytes, base/index preservation,
+  represented FPCR/FPSR, full-width FPIAR, CCR, exact fallback attribution,
+  and strict rejection. No source repair or closure promotion was justified;
+  `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_CONTROL_MEMORY_INDEXED_BATCH.md`.
+
 - **Audit basic FPP control-register memory transfers** (2026-07-18): the
   existing MPFR service correctly transfers FPCR/FPSR/FPIAR in architectural
   order across `(An)`, postincrement, predecrement, displacement, absolute,

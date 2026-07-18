@@ -541,6 +541,10 @@ const fppControlMemoryBasicMatrix = await Bun.file(new URL(
   "./fpp-control-memory-basic-matrix.ts",
   import.meta.url,
 )).text();
+const fppControlMemoryIndexedMatrix = await Bun.file(new URL(
+  "./fpp-control-memory-indexed-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1842,6 +1846,29 @@ console.log("METRIC structural_fpp_control_memory_basic_service_vectors=15");
 console.log("METRIC structural_fpp_control_memory_basic_strict_rejections=3");
 console.log("METRIC structural_fpp_control_memory_basic_masks=2");
 console.log("METRIC structural_fpp_control_memory_basic_ea_classes=7");
+for (const contract of [
+  "case 6:", "*addr = get_disp_ea_020 (m68k_areg (regs, reg), next_iword())",
+  "case 3:", "pc = m68k_getpc ()", "*addr = get_disp_ea_020 (pc, next_iword())",
+]) requireText(fpuMpfrSource, contract, "MPFR indexed control-memory EA contract");
+for (const contract of [
+  'name:"to_brief_a0_d1_long_scale2_all"', 'name:"to_brief_a0_d7_word_scale8_sparse"',
+  'name:"to_full_direct_word_bd_all"', 'name:"to_full_preindexed_word_outer_all"',
+  'name:"to_full_postindexed_word_outer_sparse"', 'name:"from_brief_a0_d1_long_scale2_all"',
+  'name:"from_brief_a0_d7_word_scale8_sparse"', 'name:"from_full_direct_word_bd_all"',
+  'name:"from_full_preindexed_word_outer_all"', 'name:"from_full_postindexed_word_outer_sparse"',
+  'name:"from_pc_brief_d1_long_all"', 'name:"from_pc_full_direct_word_bd_sparse"',
+  'name:"from_pc_full_preindexed_word_outer_all"', 'name:"from_pc_full_postindexed_word_outer_sparse"',
+  '1926 0FF4 0000', 'poisonFpiar="F23C 8400 0BAD C0DE"',
+  'B2_TEST_REPLAY_FPCR:a.expected?"30":fpcr', 'B2_TEST_REPLAY_FPSR:a.expected?"04000000":fpsr',
+  'B2_TEST_MEMDUMP:', 'B2_TEST_SECOND_PC:"0x1008"',
+  'B2_NATIVE_ASSERT_PC:"0x1008"', 'o.includes(`JIT_FALLBACK op=${a.opcode} pc=00001008`)',
+  'strict full-JIT: opcode fallback pc=00001000 op=${a.opcode}',
+  "const es=process.env.CASE?sc.length:14", "et=process.env.CASE?ss.length:3",
+]) requireText(fppControlMemoryIndexedMatrix, contract, "FPP indexed control-memory service matrix");
+console.log("METRIC structural_fpp_control_memory_indexed_service_vectors=14");
+console.log("METRIC structural_fpp_control_memory_indexed_strict_rejections=3");
+console.log("METRIC structural_fpp_control_memory_indexed_indirect_forms=4");
+console.log("METRIC structural_fpp_control_memory_indexed_pc_forms=4");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");
