@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FCVTAS_wd emitter API**
+  (2026-07-18): all **1,024 W/D encodings** and **256 native vectors** now pin
+  nearest-away ties, four FPCR modes, exact/fractional IXC, invalid IOC, signed
+  saturation, NaNs, W0/W30/W31 and D31 ownership, source/NZCV preservation, and
+  external D8-D15/FPCR/FPSR call-boundary restoration. The sole caller's
+  FRINTI→FCVTAS order is structural, while a mechanically selected **36/36**
+  strict-native byte/word/long destination subset remains composition evidence.
+  Only `FCVTAS_wd` is audited;
+  adjacent conversions and `i_FPP` remain unreviewed/unreachable as inventoried.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FCVTAS_EMITTER.md`.
+
 - **Audit the reachable generic AArch64 FCMP emitter APIs**
   (2026-07-18): `FCMP_dd` and `FCMP_d0` now have direct generic closure across
   all **1,056 encodings** and **72 native vectors**, including maximum fields,

@@ -102,10 +102,20 @@ allocator pressure: pass=31 fail=0
 
 ## Closure decision
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed**. The
-reachable integer conversion MIDFUNC/raw rows remain unreviewed until their
-remaining generated compositions and the broader destination lifecycle are
-closed; single conversion remains explicitly outside this integer checkpoint.
+This guest-semantic subtranche does not promote `generator,i_FPP`, which remains
+**unreviewed**. The reachable integer conversion MIDFUNC/raw rows remain
+unreviewed until their remaining generated compositions and the broader
+destination lifecycle are closed; single conversion remains explicitly outside
+this integer checkpoint.
+
+A later direct generic-emitter audit independently exhausts all 1,024
+`FCVTAS_wd` encodings and 256 native result/state vectors, including W0/W30/W31,
+D31, four FPCR modes, fractional IXC, invalid IOC, saturation, NaNs, and external
+AAPCS/FP-state restoration. Its mechanically selected strict-native integer
+composition subset passes 36/36 byte/word/long cases; ordinary double stores
+now belong to their accepted semantic-service matrix. It promotes only
+`emitter_api,FCVTAS_wd` to **audited**; see
+`AARCH64_JIT_AUDIT_FCVTAS_EMITTER.md`.
 The deterministic inventory remains 997 rows. Its exact classification delta
 is reachability-only: `fmov_to_b_rr`, `fmov_to_w_rr`, and `fmov_to_d_rrr` move
 from unreachable to reachable/unreviewed through `put_fp_value()`, while

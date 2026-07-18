@@ -413,6 +413,14 @@ const fcmpEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fcmp-conformance.sh",
   import.meta.url,
 )).text();
+const fcvtasEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fcvtas-conformance.cpp",
+  import.meta.url,
+)).text();
+const fcvtasEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fcvtas-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -892,7 +900,8 @@ for (const contract of [
   'name: "double_aind_exact_clears_prior_status"', 'name: `byte_${mode.name}_a7_geometry`',
   'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_REPLAY_FPCR: item.replayFpcr ?? "0"',
   'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC:', 'sr === "271f"',
-  'cow_clone', 'cow_release', 'const expected = process.env.CASE ? 1 : 45',
+  'cow_clone', 'cow_release',
+  'const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 36 : 45',
 ]) requireText(fppFmoveDestinationBasicMatrix, contract, "native ordinary FMOVE basic-destination matrix");
 if (/\b(?:FSMOVE|FDMOVE)\b/.test(fppFmoveDestinationBasicMatrix))
   fail("ordinary FMOVE destination matrix: explicit precision subfamily leaked into bounded scope");
@@ -4933,6 +4942,38 @@ requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcmp-conform
 console.log("METRIC structural_fcmp_emitter_exact_words=1056");
 console.log("METRIC structural_fcmp_emitter_native_vectors=72");
 console.log("METRIC structural_fcmp_emitter_callers=8");
+
+/* FCVTAS_wd is a single-caller generic API inside FRINTI-based guest integer
+   conversion. Audit its own nearest-away/exception contract separately from
+   the caller's guest-FPCR rounding and Motorola saturation lifecycle. */
+const fcvtasCallers = (codegenSource.match(/\bFCVTAS_wd\(/g) || []).length;
+if (fcvtasCallers !== 1) fail(`FCVTAS_wd emitter callers=${fcvtasCallers} expected=1`);
+const fmovToIntStart = codegenSource.indexOf("STATIC_INLINE void fmov_to_int_emit(W4 d, FR s, int width)");
+const fmovToIntEnd = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmov_to_l_rr", fmovToIntStart);
+if (fmovToIntStart < 0 || fmovToIntEnd < 0) fail("missing fmov_to_int_emit caller boundary");
+const fmovToIntBody = codegenSource.slice(fmovToIntStart, fmovToIntEnd);
+requireBefore(fmovToIntBody, "FRINTI_dd(SCRATCH_F64_1, s);", "FCVTAS_wd(REG_WORK1, SCRATCH_F64_1);", "FCVTAS_wd guest rounding composition");
+requireText(codegenHeaderSource, "#define FCVTAS_wd(Wd,Dn)", "FCVTAS_wd emitter declaration");
+for (const contract of [
+  "for (unsigned w = 0; w < 32; ++w)", "for (unsigned d = 0; d < 32; ++d)",
+  "0x1e640000u | (d << 5) | w", "positive half", "negative half",
+  "positive overflow", "negative overflow", "quiet NaN", "signalling NaN",
+  "FCVTAS preserves source", "FCVTAS preserves NZCV", "FCVTAS preserves FPCR",
+  "FCVTAS preserves caller D8-D15", "FCVTAS restores caller FPCR", "FCVTAS restores caller FPSR",
+  "PROT_READ | PROT_WRITE", "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 1024 && native_vectors == 256",
+]) requireText(fcvtasEmitterProbeSource, contract, "generic FCVTAS native conformance");
+for (const contract of [
+  'process.env.GROUP === "integer"', 'new Set([0, 4, 6])',
+  '(Number.parseInt(item.extra, 16) >> 10) & 7',
+  'process.env.GROUP === "integer" ? 36 : 45',
+]) requireText(fppFmoveDestinationBasicMatrix, contract, "FCVTAS guest integer composition subset");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fcvtas-conformance.cpp"])
+  requireText(fcvtasEmitterHarnessSource, contract, "generic FCVTAS conformance build");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcvtas-conformance.sh"', "generic FCVTAS bounded acceptance gate");
+console.log("METRIC structural_fcvtas_emitter_exact_words=1024");
+console.log("METRIC structural_fcvtas_emitter_native_vectors=256");
+console.log("METRIC structural_fcvtas_emitter_callers=1");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
