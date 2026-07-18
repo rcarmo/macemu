@@ -99,7 +99,7 @@ emitter_api,EXTR_wwwi,unreachable,EXTR_wwwi,60,0,BasiliskII/src/uae_cpu_2026/com
 emitter_api,EXTR_xxxi,unreachable,EXTR_xxxi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,349,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FABS_dd,unreachable,FABS_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,479,"only retained raw_fabs_rr emits it, and configured AArch64 sign selectors service before unreachable fabs_rr"
 emitter_api,FABS_ss,unreachable,FABS_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,480,no path from reachable AArch64 compiler/emitter roots
-emitter_api,FADD_ddd,unreviewed,FADD_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,481,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,FADD_ddd,unreachable,FADD_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,481,"only retained raw_fadd_rr emits it, and configured AArch64 add selectors service before unreachable fadd_rr"
 emitter_api,FADD_sss,unreachable,FADD_sss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,482,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FCMP_d0,unreviewed,FCMP_d0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,484,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,FCMP_dd,unreviewed,FCMP_dd,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,483,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -440,7 +440,7 @@ midfunc,dont_care_fflags,unreviewed,dont_care_fflags,68,32,BasiliskII/src/uae_cp
 midfunc,dont_care_flags,audited,dont_care_flags,68,2112,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,155,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,f_forget_about,unreviewed,f_forget_about,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,855,reachable; no accepted family-level closure report
 midfunc,fabs_rr,unreachable,fabs_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1087,all configured AArch64 FABS/FSABS/FDABS selectors enter semantic service before operand acquisition or the retained native MIDFUNC call
-midfunc,fadd_rr,unreviewed,fadd_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1117,reachable; no accepted family-level closure report
+midfunc,fadd_rr,unreachable,fadd_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1117,all configured AArch64 FADD/FSADD/FDADD selectors enter semantic service before operand acquisition or the retained native MIDFUNC call
 midfunc,fcuts_r,unreachable,fcuts_r,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1187,no path from configured generated/support/FPU compiler roots
 midfunc,fdiv_rr,unreviewed,fdiv_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1107,reachable; no accepted family-level closure report
 midfunc,fflags_into_flags,unreviewed,fflags_into_flags,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1273,reachable; no accepted family-level closure report
@@ -885,7 +885,7 @@ raw_boundary,compemu_raw_set_pc_full_from_reg,audited,compemu_raw_set_pc_full_fr
 raw_boundary,compemu_raw_set_pc_full_i,audited,compemu_raw_set_pc_full_i,86,8,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,387,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_set_pc_i,audited,compemu_raw_set_pc_i,86,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,365,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_fabs_rr,unreachable,raw_fabs_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1216,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fabs_rr
-raw_boundary,raw_fadd_rr,unreviewed,raw_fadd_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1234,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fadd_rr,unreachable,raw_fadd_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1234,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 add selectors service before unreachable fadd_rr
 raw_boundary,raw_fcuts_r,unreviewed,raw_fcuts_r,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1342,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fdiv_rr,unreviewed,raw_fdiv_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1228,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fflags_into_flags,unreviewed,raw_fflags_into_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1522,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification

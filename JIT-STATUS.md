@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the residual AArch64 native FADD primitive chain**
+  (2026-07-18): configured control-flow proof confirms FADD/FSADD/FDADD enter
+  exact MPFR service before operand acquisition and `fadd_rr`. With no other
+  configured root or MIDFUNC caller, `fadd_rr`, `raw_fadd_rr`, and `FADD_ddd`
+  are unreachable rather than unreviewed. Root, graph-edge, raw-wrapper, and
+  emitter checks fail closed on any future caller. Existing runtime semantics
+  remain owned by the fixed **35 service + 3 strict** matrix; this is source
+  retirement, not native acceptance, and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_ADD_BATCH.md`.
+
 - **Retire the residual AArch64 native FABS/FNEG primitive chains**
   (2026-07-18): configured control-flow proof confirms all six sign selectors
   enter exact MPFR service before operand acquisition and before the retained
@@ -380,8 +390,9 @@ inventory is 92/92, and the accepted register-count
   range, cancellation-zero, binary NaN and Motorola status correctly. A fixed
   **35 service + 3 strict** matrix covers extended-only-bit witnesses,
   directed rounding, forced cancellation, range, infinities, NaNs, aliases,
-  EA effects and exact FPSR. No closure row is promoted and `i_FPP` plus
-  generic `FADD_ddd` remain unreviewed. See
+  EA effects and exact FPSR. No row is promoted to audited; the later
+  configured-root addendum classifies `fadd_rr`, `raw_fadd_rr`, and `FADD_ddd`
+  unreachable, while `i_FPP` remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_ADD_BATCH.md`.
 
 - **Repair FPP FMOD truncating remainder and quotient service**

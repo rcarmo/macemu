@@ -3,8 +3,9 @@
 ## Scope
 
 This bounded `i_FPP` batch covers ordinary `FADD` (`0x22`) and forced-result
-`FSADD`/`FDADD` (`0x62`/`0x66`). It does not classify the reachable generic
-`FADD_ddd` encoder, multiply/subtract families, FREM/FSCALE, control operations,
+`FSADD`/`FDADD` (`0x62`/`0x66`). Its later configured-root closure addendum also
+retires their residual AArch64 `fadd_rr` → `raw_fadd_rr` → `FADD_ddd` chain. It
+does not classify multiply/subtract families, FREM/FSCALE, control operations,
 or the complete `i_FPP` lifecycle.
 
 ## Authoritative semantics
@@ -76,6 +77,10 @@ The fixed matrix covers:
 Every service case enters a compiled block natively at PC `0x1008` and executes
 the add selector through configured MPFR service. FPSR is snapshotted into D0
 before the following extended store clears operation-local exception status.
+The destination-SNaN witness additionally pins its exact seven-boundary profile:
+initial destination/source imports and add/store, followed by replay
+source/add/store. This corrects an older stale six-marker count without changing
+its already-correct bytes, FPSR, D0, A0, or CCR oracle.
 
 ## Structural contracts
 
@@ -92,6 +97,16 @@ bounded tranche.
 
 ## Closure decision
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups. The reachable generic `FADD_ddd` encoder remains unreviewed;
-semantic service does not prove its encoding or caller contracts.
+No row is promoted to **audited**. `generator,i_FPP` remains **unreviewed**
+pending all selector groups.
+
+A later configured-root reachability audit corrected the original conservative
+classification of the retained native addition chain. Every configured AArch64
+FADD/FSADD/FDADD selector enters semantic service before operand acquisition and
+before `fadd_rr`; there is no other configured root or MIDFUNC caller. Therefore
+`fadd_rr`, `raw_fadd_rr`, and `FADD_ddd` are **unreachable**. Positive ordered
+control-flow, exact root/graph-edge counts, lower-chain shape, and future-caller
+checks are pinned in `closure-inventory.ts` and `structural-audit.ts`. This is
+retirement, not native acceptance: the retained post-return code is not
+executed, while the 35+3 semantic-service matrix remains its runtime-fidelity
+proof.

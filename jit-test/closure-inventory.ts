@@ -269,13 +269,15 @@ for (const def of midDefs) {
 const semanticServiceMid = new Map<string, string>([
   ["fabs_rr", "all configured AArch64 FABS/FSABS/FDABS selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
   ["fneg_rr", "all configured AArch64 FNEG/FSNEG/FDNEG selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
+  ["fadd_rr", "all configured AArch64 FADD/FSADD/FDADD selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
 ]);
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
-const signServiceBlocks: Array<[string, string, string]> = [
+const semanticServiceBlocks: Array<[string, string, string]> = [
   ["fabs_rr", "case 0x18:", "case 0x19:"],
   ["fneg_rr", "case 0x1a:", "case 0x1c:"],
+  ["fadd_rr", "case 0x22:", "case 0x23:"],
 ];
-for (const [name, startMarker, endMarker] of signServiceBlocks) {
+for (const [name, startMarker, endMarker] of semanticServiceBlocks) {
   const start = source.fpp.indexOf(startMarker);
   const end = source.fpp.indexOf(endMarker, start + startMarker.length);
   if (start < 0 || end < 0) throw new Error(`configured sign service block disappeared: ${name}`);
@@ -286,7 +288,7 @@ for (const [name, startMarker, endMarker] of signServiceBlocks) {
   const operand = block.indexOf("get_fp_value");
   const call = block.indexOf(`${name}(`);
   if (gate < 0 || fail < gate || ret < fail || operand < ret || call < operand)
-    throw new Error(`configured AArch64 sign service no longer precedes ${name}`);
+    throw new Error(`configured AArch64 semantic service no longer precedes ${name}`);
 }
 const rootMidText = `${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`;
 for (const name of semanticServiceMid.keys()) {
@@ -294,9 +296,9 @@ for (const name of semanticServiceMid.keys()) {
   const midReferences = midDefs.reduce((sum, def) =>
     sum + (def.name === name ? 0 : countToken(def.body, name)), 0);
   if (rootReferences !== 1)
-    throw new Error(`serviced sign MIDFUNC ${name} configured-root references=${rootReferences}, expected retained selector call only`);
+    throw new Error(`serviced native MIDFUNC ${name} configured-root references=${rootReferences}, expected retained selector call only`);
   if (midReferences !== 0)
-    throw new Error(`serviced sign MIDFUNC ${name} gained ${midReferences} MIDFUNC caller(s)`);
+    throw new Error(`serviced native MIDFUNC ${name} gained ${midReferences} MIDFUNC caller(s)`);
 }
 const rootMid = new Set<string>();
 for (const name of midNames) {
@@ -433,6 +435,7 @@ const auditedRaw = /^(?:compemu_raw_(?:branch|call|call_observer_|cmp_pc|endbloc
 const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fabs_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fabs_rr"],
   ["raw_fneg_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fneg_rr"],
+  ["raw_fadd_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 add selectors service before unreachable fadd_rr"],
 ]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
@@ -445,7 +448,7 @@ for (const name of [...rawNames].sort()) {
   const references = countToken(configuredRawText, name);
   const primitiveAudit = acceptedPrimitiveAudit(name);
   if (structuralUnreachableRaw.has(name) && references !== 2)
-    throw new Error(`serviced sign raw boundary ${name} references=${references}, expected definition-only count 2`);
+    throw new Error(`serviced native raw boundary ${name} references=${references}, expected definition-only count 2`);
   const status: Status = (auditedRaw.test(name) || primitiveAudit) ? "audited"
     : structuralUnreachableRaw.has(name) || references <= 1 ? "unreachable" : "unreviewed";
   const evidence = status === "audited"
@@ -478,11 +481,12 @@ const emitterRootText = `${activeGenerated}\n${activeGencomp}\n${activeCodegen}\
 const semanticServiceEmitter = new Map<string, string>([
   ["FABS_dd", "only retained raw_fabs_rr emits it, and configured AArch64 sign selectors service before unreachable fabs_rr"],
   ["FNEG_dd", "only retained raw_fneg_rr emits it, and configured AArch64 sign selectors service before unreachable fneg_rr"],
+  ["FADD_ddd", "only retained raw_fadd_rr emits it, and configured AArch64 add selectors service before unreachable fadd_rr"],
 ]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {
   if (countToken(activeCodegen, name) !== 1 || countToken(emitterNonCodegenRootText, name) !== 0)
-    throw new Error(`serviced sign emitter ${name} gained a configured caller`);
+    throw new Error(`serviced native emitter ${name} gained a configured caller`);
 }
 const reachableEmitter = new Set<string>();
 for (const name of emitterNames)

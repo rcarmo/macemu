@@ -2101,10 +2101,31 @@ for (const contract of [
   "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;",
 ]) requireText(addCompilerBlock, contract, "FPP add AArch64 service boundary");
 const addGuardStart = addCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
-const addGuardEnd = addCompilerBlock.indexOf("#endif", addGuardStart);
+const addService = addCompilerBlock.indexOf("FAIL(1);", addGuardStart);
+const addReturn = addCompilerBlock.indexOf("return;", addService);
 const addAcquire = addCompilerBlock.indexOf("get_fp_value(opcode, extra)");
-if (addGuardStart < 0 || addGuardEnd < addGuardStart || addAcquire < 0 || addGuardEnd > addAcquire)
-  fail("FPP add guarded service exit does not precede operand acquisition");
+const addNativeCall = addCompilerBlock.indexOf("fadd_rr(");
+if (addGuardStart < 0 || addService < addGuardStart || addReturn < addService ||
+    addAcquire < addReturn || addNativeCall < addAcquire)
+  fail("FPP add guarded service exit does not retire fadd_rr before operand acquisition");
+const addRootSpellings = (fppCompilerSource.match(/\bfadd_rr\(/g) || []).length;
+if (addRootSpellings !== 1)
+  fail(`retired add MIDFUNC fadd_rr configured-root spellings=${addRootSpellings} expected=1`);
+const addMidfuncCallers = (midfuncSource.match(/\bfadd_rr\(/g) || []).length;
+if (addMidfuncCallers !== 0)
+  fail(`retired add MIDFUNC fadd_rr gained ${addMidfuncCallers} MIDFUNC caller spellings`);
+const addMidStart = midfuncSource.indexOf("MIDFUNC(2,fadd_rr,(FRW d, FR s))");
+const addMidEnd = midfuncSource.indexOf("MENDFUNC(2,fadd_rr", addMidStart);
+if (addMidStart < 0 || addMidEnd < 0) fail("missing retired add MIDFUNC fadd_rr");
+requireText(midfuncSource.slice(addMidStart, addMidEnd), "raw_fadd_rr(d, s);", "retired add MIDFUNC fadd_rr");
+const addRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fadd_rr,(FRW d, FR s))");
+const addRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fadd_rr", addRawStart);
+if (addRawStart < 0 || addRawEnd < 0) fail("missing retired add raw boundary raw_fadd_rr");
+requireText(codegenSource.slice(addRawStart, addRawEnd), "FADD_ddd(d, d, s);", "retired add raw boundary raw_fadd_rr");
+requireText(codegenHeaderSource, "#define FADD_ddd(Dd,Dn,Dm)", "retired add emitter FADD_ddd");
+console.log("METRIC structural_fpp_add_unreachable_midfuncs=1");
+console.log("METRIC structural_fpp_add_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_add_unreachable_emitters=1");
 for (const contract of [
   "case 34: // FSADD", "case 38: // FDADD",
   "mpfr_add (value2, fpu.registers[reg].f, value.f, rnd)",
@@ -2140,6 +2161,9 @@ for (const contract of [
   'name:"fsadd_fp7_destination_reseed"', 'name:"fadd_postincrement_source"',
   'name:"fdadd_predecrement_source"', 'name:"fadd_accrued_preserve"',
   'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'fm=[...o.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'snanProfile="f239@00001000 f239@00001008 f200@00001010 f239@00001014 f239@00001008 f200@00001010 f239@00001014"',
+  'attributionOk=!a.destinationSnan||fm.join(" ")===snanProfile',
   'service_pass=${sp} strict_pass=${st}', 'sc.length:35', 'ss.length:3',
 ]) requireText(fppAddServiceMatrix, contract, "FPP add service matrix");
 console.log("METRIC structural_fpp_add_service_vectors=35");
