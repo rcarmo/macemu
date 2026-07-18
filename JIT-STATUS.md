@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire lossy ordinary-FMOVE binary64 destinations to exact MPFR service**
+  (2026-07-18): the AArch64 path stored an already narrowed binary64 shadow and
+  cleared the instruction's conversion status, losing extended significand,
+  exponent, and NaN metadata plus INEX2/OVFL/UNFL/SNAN. Double destinations now
+  leave before EA acquisition. A fixed **28 service + 3 strict** matrix proves
+  all FPCR directions, exact/inexact normal and range edges, signed specials,
+  NaN payload/quieting without source mutation, FP0/FP7, ten writable EA
+  classes, guarded bytes, writeback, CCR, and exact fallback attribution. No
+  closure row is promoted;
+  `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_DOUBLE_DESTINATION_BATCH.md`.
+
 - **Audit dynamic-list FPP FMOVEM service** (2026-07-18): the AArch64 compiler
   already rejects register-supplied lists before EA acquisition, and the MPFR
   service correctly consumes the selected Dn low byte. A fixed **12 service +

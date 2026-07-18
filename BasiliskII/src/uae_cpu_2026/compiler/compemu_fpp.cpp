@@ -1276,6 +1276,18 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 			return;
 		}
 
+#if defined(CPU_AARCH64) || defined(CPU_aarch64)
+		/* An architectural extended register can contain precision, exponent,
+		 * or NaN metadata that the native binary64 shadow has already lost.
+		 * A double destination must perform its own conversion and publish its
+		 * exception status, so retain the MPFR service before EA mutation. */
+		if (((extra >> 10) & 7) == 5)
+		{
+			FAIL(1);
+			return;
+		}
+#endif
+
 		if (put_fp_value((extra >> 7) & 7, opcode, extra) < 0)
 		{
 			FAIL(1);

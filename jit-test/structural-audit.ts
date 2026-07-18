@@ -445,6 +445,10 @@ const fppFmoveDestinationBasicMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-basic-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveDoubleDestinationMatrix = await Bun.file(new URL(
+  "./fpp-fmove-double-destination-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveDestinationExtendedEaMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-extended-ea-matrix.ts",
   import.meta.url,
@@ -833,6 +837,57 @@ console.log("METRIC structural_fpp_fmove_destination_fpcr_modes=4");
 console.log("METRIC structural_fpp_fmove_destination_basic_ea_modes=3");
 console.log("METRIC structural_fpp_fmove_destination_exception_contracts=2");
 console.log("METRIC structural_fpp_fmove_destination_nan_sign_boundary=1");
+
+const fmoveMemoryCompilerStart = fppCompilerSource.indexOf("case 3:\t\t\t\t\t\t\t/* FMOVE Fpn,<ea> */");
+const fmoveMemoryCompilerEnd = fppCompilerSource.indexOf("case 6:", fmoveMemoryCompilerStart);
+if (fmoveMemoryCompilerStart < 0 || fmoveMemoryCompilerEnd < 0)
+  fail("FPP ordinary FMOVE destination compiler boundary is incomplete");
+const fmoveMemoryCompilerBlock = fppCompilerSource.slice(fmoveMemoryCompilerStart, fmoveMemoryCompilerEnd);
+for (const contract of [
+  "#if defined(CPU_AARCH64) || defined(CPU_aarch64)", "((extra >> 10) & 7) == 5",
+  "architectural extended register", "binary64 shadow", "before EA mutation", "FAIL(1);", "return;",
+]) requireText(fmoveMemoryCompilerBlock, contract, "FPP double-destination exact service boundary");
+const fmoveDoubleGate = fmoveMemoryCompilerBlock.indexOf("((extra >> 10) & 7) == 5");
+const fmovePut = fmoveMemoryCompilerBlock.indexOf("put_fp_value(");
+if (fmoveDoubleGate < 0 || fmovePut < 0 || fmoveDoubleGate >= fmovePut)
+  fail("FPP double-destination service gate does not precede put_fp_value/EA acquisition");
+for (const contract of [
+  "static bool\nfpuop_fmove_memory", "mpfr_clear_flags ();", "cur_exceptions = 0;",
+  "case 5:", "extract_to_double (value, words);", "put_long (addr, words[0]);",
+  "put_long (addr + 4, words[1]);", "update_exceptions ();",
+  "uae_u64 nan_bits = value.nan_bits;", "nan_bits |= 1ULL << 62;",
+  "Destination conversion quiets the emitted NaN but must not mutate",
+]) requireText(fpuMpfrSource, contract, "MPFR double-destination conversion contract");
+const extractDoubleBody = functionBody(fpuMpfrSource, "static void\nextract_to_double", "static void\nextract_to_extended", "MPFR double extractor");
+if (extractDoubleBody.includes("value.nan_bits |= 1ULL << 62"))
+  fail("MPFR double destination mutates its architectural NaN source metadata");
+for (const contract of [
+  'name: "double_positive_zero"', 'name: "double_negative_zero"',
+  'name: "double_half_nearest_even"', 'name: "double_half_plus_infinity"',
+  'name: "double_negative_half_minus_infinity"', 'name: "double_maximum_finite_exact"',
+  'name: "double_positive_overflow_nearest"', 'name: "double_positive_overflow_zero"',
+  'name: "double_negative_overflow_minus"', 'name: "double_minimum_normal_exact"',
+  'name: "double_minimum_subnormal_exact"', 'name: "double_half_minimum_subnormal_nearest"',
+  'name: "double_half_minimum_subnormal_plus"', 'name: "double_negative_half_minimum_subnormal_minus"',
+  'name: "double_quiet_nan_payload"', 'name: "double_negative_quiet_nan_payload_fp7"',
+  'name: "double_signalling_nan_quiets_without_source_mutation"', 'preserveSource: true',
+  'F206 A800 F239 6800 0000 A020', 'sourcePreserved', 'conversionFpsrPreserved',
+  'name: "double_a7_postincrement"',
+  'name: "double_a7_predecrement"', 'name: "double_d16_a0"', 'name: "double_brief_a0_d1"',
+  'name: "double_full_direct"', 'name: "double_full_preindexed"', 'name: "double_full_postindexed"',
+  'name: "double_absolute_short"', 'name: "double_absolute_long"',
+  'B2_TEST_REPLAY_FPCR: item.fpcr ?? "0"', 'B2_TEST_REPLAY_FPSR: "0c55ff08"',
+  'B2_TEST_REPLAY_FP7_EXT" : "B2_TEST_REPLAY_FP0_EXT"', 'B2_TEST_SECOND_PC: "0x1008"',
+  'B2_NATIVE_ASSERT_PC: "0x1008"', 'output.includes(`JIT_FALLBACK op=${opcode.toLowerCase()} pc=00001008`)',
+  'strict full-JIT: opcode fallback pc=00001000 op=${item.opcode}',
+  'const expectedService = process.env.CASE ? selectedCases.length : 28',
+  'const expectedStrict = process.env.CASE ? selectedStrict.length : 3',
+]) requireText(fppFmoveDoubleDestinationMatrix, contract, "FPP double-destination service matrix");
+console.log("METRIC structural_fpp_fmove_double_destination_service_vectors=28");
+console.log("METRIC structural_fpp_fmove_double_destination_strict_rejections=3");
+console.log("METRIC structural_fpp_fmove_double_destination_fpcr_modes=4");
+console.log("METRIC structural_fpp_fmove_double_destination_ea_classes=10");
+console.log("METRIC structural_fpp_fmove_double_destination_special_classes=3");
 
 for (const contract of [
   "case 5: /* d16(An) */", "case 6: /* d8(An,Xn) */",

@@ -750,13 +750,16 @@ extract_to_double (fpu_register &value, uint32_t *words)
     }
   else if (mpfr_nan_p (dbl))
     {
-      if ((value.nan_bits & (1ULL << 62)) == 0)
+      /* Destination conversion quiets the emitted NaN but must not mutate the
+       * architectural source register of the source-only FMOVE. */
+      uae_u64 nan_bits = value.nan_bits;
+      if ((nan_bits & (1ULL << 62)) == 0)
 	{
-	  value.nan_bits |= 1ULL << 62;
+	  nan_bits |= 1ULL << 62;
 	  cur_exceptions |= FPSR_EXCEPTION_SNAN;
 	}
-      words[0] = 0x7ff00000 | ((value.nan_bits >> (32 + 11)) & 0xfffff);
-      words[1] = value.nan_bits >> 11;
+      words[0] = 0x7ff00000 | ((nan_bits >> (32 + 11)) & 0xfffff);
+      words[1] = nan_bits >> 11;
       if (value.nan_sign)
 	words[0] |= 0x80000000;
     }
