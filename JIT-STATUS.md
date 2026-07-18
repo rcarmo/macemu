@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FATAN/FASIN/FATANH service precision and DZ status**
+  (2026-07-17): these three configured MPFR selectors now acquire sources at
+  extended precision/range and evaluate directly into a separate FPCR-width
+  result, avoiding source narrowing and transcendental double rounding.
+  FATANH now explicitly publishes DZ for `±1` rather than relying on an MPFR
+  flag without the architectural status split. A fixed **38 service + 3
+  strict** matrix covers source-sensitive single/double results, every single
+  rounding mode, signed zero, `±pi/2`, domains, NaN metadata, underflow,
+  aliasing and FPSR. No closure row is promoted and `i_FPP` remains
+  unreviewed. See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_INVERSE_BATCH.md`.
+
 - **Repair FPP FSINH/FLOGNP1/FETOXM1/FTANH service precision**
   (2026-07-17): these four configured MPFR selectors acquired architectural
   operands in a temporary already narrowed to FPCR single/double precision.

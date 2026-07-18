@@ -1707,7 +1707,8 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
        * temporary to avoid double rounding. */
       int operation = extra & 0x3f;
       bool direct_result = operation == 2 || operation == 6
-	|| operation == 8 || operation == 9;
+	|| operation == 8 || operation == 9 || operation == 10
+	|| operation == 12 || operation == 13;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31;
       if (extended_source)
@@ -1763,17 +1764,23 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_tanh (direct, value.f, rnd);
 	  break;
 	case 10: // FATAN
-	  t = mpfr_atan (value.f, value.f, rnd);
+	  t = mpfr_atan (direct, value.f, rnd);
 	  break;
 	case 12: // FASIN
 	  if (mpfr_cmpabs (value.f, FPU_CONSTANT_ONE) > 0)
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_asin (value.f, value.f, rnd);
+	  t = mpfr_asin (direct, value.f, rnd);
 	  break;
 	case 13: // FATANH
-	  if (mpfr_cmpabs (value.f, FPU_CONSTANT_ONE) > 0)
-	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_atanh (value.f, value.f, rnd);
+	  if (!mpfr_nan_p (value.f))
+	    {
+	      int cmp = mpfr_cmpabs (value.f, FPU_CONSTANT_ONE);
+	      if (cmp == 0)
+		cur_exceptions |= FPSR_EXCEPTION_DZ;
+	      else if (cmp > 0)
+		cur_exceptions |= FPSR_EXCEPTION_OPERR;
+	    }
+	  t = mpfr_atanh (direct, value.f, rnd);
 	  break;
 	case 14: // FSIN
 	  if (mpfr_inf_p (value.f))

@@ -489,6 +489,10 @@ const fppHyperbolicLog1pFallbackMatrix = await Bun.file(new URL(
   "./fpp-hyperbolic-log1p-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppInverseFallbackMatrix = await Bun.file(new URL(
+  "./fpp-inverse-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1189,7 +1193,8 @@ for (const [label, disable, name] of servicedMonadicCases) {
 }
 for (const contract of [
   "bool direct_result = operation == 2 || operation == 6",
-  "|| operation == 8 || operation == 9;",
+  "|| operation == 8 || operation == 9 || operation == 10",
+  "|| operation == 12 || operation == 13;",
   "|| direct_result || operation == 30 || operation == 31;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
@@ -1226,6 +1231,51 @@ console.log("METRIC structural_fpp_hyperbolic_log1p_service_vectors=48");
 console.log("METRIC structural_fpp_hyperbolic_log1p_strict_rejections=4");
 console.log("METRIC structural_fpp_hyperbolic_log1p_extended_source=1");
 console.log("METRIC structural_fpp_hyperbolic_log1p_direct_result=1");
+let inverseCompilerCursor = fppCompilerOperation.indexOf("case 0x09:");
+for (const [label, disable, name] of [
+  ["case 0x0a:", "jit_disable.fatan", "FATAN"],
+  ["case 0x0c:", "jit_disable.fasin", "FASIN"],
+  ["case 0x0d:", "jit_disable.fatanh", "FATANH"],
+] as const) {
+  const start = fppCompilerOperation.indexOf(label, inverseCompilerCursor);
+  const next = fppCompilerOperation.indexOf("case 0x", start + label.length);
+  if (start < 0 || next < 0) fail(`FPP ${name} service boundary is incomplete`);
+  const block = fppCompilerOperation.slice(start, next);
+  for (const contract of [label, disable, "FAIL(1);", "return;"])
+    requireText(block, contract, `FPP ${name} configured service boundary`);
+  inverseCompilerCursor = next;
+}
+for (const contract of [
+  "operation == 8 || operation == 9 || operation == 10",
+  "|| operation == 12 || operation == 13;",
+  "case 10: // FATAN", "mpfr_atan (direct, value.f, rnd)",
+  "case 12: // FASIN", "mpfr_asin (direct, value.f, rnd)",
+  "case 13: // FATANH", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
+  "cur_exceptions |= FPSR_EXCEPTION_DZ;", "cur_exceptions |= FPSR_EXCEPTION_OPERR;",
+  "mpfr_atanh (direct, value.f, rnd)",
+]) requireText(ordinaryFppBlock, contract, "MPFR inverse-function extended-source/direct-result contract");
+for (const contract of [
+  'name: `${item.name}_extended_source_single_${suffix}`',
+  'name: `${item.name}_extended_source_double_nearest`',
+  'name: `${name}_positive_zero`', 'name: `${name}_negative_zero`',
+  'name: "fatan_positive_infinity"', 'name: "fatan_negative_infinity"',
+  'name: "fasin_positive_one"', 'name: "fasin_outside_domain_operr"',
+  'name: "fatanh_positive_one_dz"', 'name: "fatanh_negative_one_dz"',
+  'name: "fatanh_outside_domain_operr"', 'name: "fatan_negative_qnan_payload"',
+  'name: "fasin_signalling_nan_quiet"', 'name: "fatanh_quiet_nan_payload"',
+  'name: "fatan_extended_min_single_underflow"', 'name: "fasin_extended_min_single_underflow"',
+  'name: "fatanh_extended_min_single_underflow"', 'name: "fatan_fp7_self_alias"',
+  'name: "fatanh_fp7_self_alias"', 'name: "fasin_accrued_preserve"',
+  'd0 === (item.operationFpsr ?? item.fpsr)', 'fallbackCount === (item.alias ? 4 : 3)',
+  'strict full-JIT: opcode fallback pc=00001000 op=f239', '!output.includes("NATEXEC pc=00001000")',
+  "expectedService = process.env.CASE ? selectedCases.length : 38",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 3",
+]) requireText(fppInverseFallbackMatrix, contract, "FPP inverse-function fallback matrix");
+console.log("METRIC structural_fpp_inverse_service_vectors=38");
+console.log("METRIC structural_fpp_inverse_strict_rejections=3");
+console.log("METRIC structural_fpp_inverse_extended_source=1");
+console.log("METRIC structural_fpp_inverse_direct_result=1");
+console.log("METRIC structural_fpp_inverse_atanh_dz=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 
