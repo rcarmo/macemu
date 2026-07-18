@@ -529,6 +529,10 @@ const fppSglmulServiceMatrix = await Bun.file(new URL(
   "./fpp-sglmul-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppSincosServiceMatrix = await Bun.file(new URL(
+  "./fpp-sincos-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1734,6 +1738,40 @@ console.log("METRIC structural_fpp_sglmul_service_vectors=22");
 console.log("METRIC structural_fpp_sglmul_strict_rejections=1");
 console.log("METRIC structural_fpp_sglmul_one_sided_operands=2");
 console.log("METRIC structural_fpp_sglmul_direct_single_round=1");
+const sincosCompilerStart = fppCompilerOperation.indexOf("case 0x30:\t\t\t\t\t\t/* FSINCOS */");
+const sincosCompilerEnd = fppCompilerOperation.indexOf("case 0x38:\t\t\t\t\t\t/* FCMP */", sincosCompilerStart);
+if (sincosCompilerStart < 0 || sincosCompilerEnd < 0) fail("FPP FSINCOS compiler boundary is incomplete");
+const sincosCompilerBlock = fppCompilerOperation.slice(sincosCompilerStart, sincosCompilerEnd);
+for (const contract of ["case 0x30:", "case 0x37:", "jit_disable.fsincos", "FAIL(1);", "return;"])
+  requireText(sincosCompilerBlock, contract, "FPP FSINCOS configured service boundary");
+for (const forbidden of ["get_fp_value(opcode, extra)", "fsin_rr(", "fcos_rr("])
+  if (sincosCompilerBlock.includes(forbidden)) fail(`FPP FSINCOS compiler case retains forbidden ${forbidden}`);
+for (const contract of [
+  "if (operation < 8)", "mpfr_set_prec (value.f, EXTENDED_PREC)", "set_format (EXTENDED_PREC)",
+  "MPFR_DECL_INIT (sin_result, prec)", "MPFR_DECL_INIT (cos_result, prec)",
+  "mpfr_sin_cos (sin_result, cos_result, value.f, rnd)",
+  "mpfr_setsign (sin_result, sin_result, value.nan_sign, MPFR_RNDN)",
+  "mpfr_setsign (cos_result, cos_result, value.nan_sign, MPFR_RNDN)",
+  "if (reg2 != reg)", "set_fp_register (reg2, cos_result", "t >> 2, rnd, false",
+  "set_fp_register (reg, sin_result", "t & 3, rnd, true",
+]) requireText(fpuMpfrSource, contract, "MPFR FSINCOS dual-result service contract");
+for (const contract of [
+  'name:"fsincos_positive_zero"', 'name:"fsincos_negative_zero"', 'name:"fsincos_pio2"', 'name:"fsincos_pi"',
+  'name:"fsincos_extended_source_single"', 'name:"fsincos_extended_source_double"',
+  'name:"fsincos_directed_single_plus"', 'name:"fsincos_directed_single_minus"',
+  'name:"fsincos_same_register_sine_wins"', 'name:"fsincos_fp7_sine_destination"',
+  'name:"fsincos_positive_infinity"', 'name:"fsincos_negative_infinity"',
+  'name:"fsincos_qnan_payload",cosreg:3,input:x.nqnan,sine:x.nqnan,cosine:x.nqnan,operationFpsr:"09000000",fpsr:"09000000"',
+  'name:"fsincos_snan_quiet"', 'name:"fsincos_single_underflow_sine"',
+  'name:"fsincos_postincrement_source"', 'name:"fsincos_predecrement_source"', 'name:"fsincos_accrued_preserve"',
+  'const sinreg=a.sinreg??0', 'same=a.cosreg===sinreg',
+  'o.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)', 'B2_NATIVE_ASSERT_PC:"0x1008"',
+  'strict full-JIT: opcode fallback pc=00001000 op=f200', 'service_pass=${sp} strict_pass=${st}', 'sc.length:18', 'ss.length:1',
+]) requireText(fppSincosServiceMatrix, contract, "FPP FSINCOS service matrix");
+console.log("METRIC structural_fpp_sincos_service_vectors=18");
+console.log("METRIC structural_fpp_sincos_strict_rejections=1");
+console.log("METRIC structural_fpp_sincos_dual_results=1");
+console.log("METRIC structural_fpp_sincos_destination_registers=8");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

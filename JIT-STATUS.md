@@ -215,6 +215,14 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FSINCOS dual-result service** (2026-07-18): all eight
+  cosine-register selectors now retain one extended source, evaluate sine and
+  cosine directly at FPCR width, preserve NaN sign, publish sine-derived FPSR,
+  and enforce same-register sine-wins ordering. A fixed **18 service + 1
+  strict** matrix covers precision/direction, FP7 destinations, specials,
+  NaNs, EA effects and FPSR. No closure row is promoted and `i_FPP` remains
+  unreviewed. See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SINCOS_BATCH.md`.
+
 - **Repair FPP FSGLMUL single-significand/extended-exponent service**
   (2026-07-18): FSGLMUL preserves arbitrary-precision factors and multiplies
   directly into a 24-bit significand under extended exponent limits. A fixed

@@ -1771,29 +1771,47 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
     }
   else if ((extra & 0x30) == 0x30)
     {
-      if ((extra & 15) > 10 || (extra & 15) == 9)
+      int operation = extra & 15;
+      if (operation > 10 || operation == 9)
 	{
 	  ret = false;
 	  goto out;
+	}
+      if (operation < 8)
+	{
+	  /* FSINCOS converts its source to extended precision before evaluating
+	   * both functions; FPCR precision applies to the two completed results. */
+	  mpfr_set_prec (value.f, EXTENDED_PREC);
+	  set_format (EXTENDED_PREC);
 	}
       if (!get_fp_value (opcode, extra, value))
 	{
+	  if (operation < 8)
+	    set_format (prec);
 	  ret = false;
 	  goto out;
 	}
 
-      if ((extra & 15) < 8)
+      if (operation < 8)
 	{
 	  // FSINCOS
 	  int reg2 = extra & 7;
-	  MPFR_DECL_INIT (value2, prec);
+	  set_format (prec);
+	  MPFR_DECL_INIT (sin_result, prec);
+	  MPFR_DECL_INIT (cos_result, prec);
 
 	  if (mpfr_inf_p (value.f))
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_sin_cos (value.f, value2, value.f, rnd);
+	  t = mpfr_sin_cos (sin_result, cos_result, value.f, rnd);
+	  if (mpfr_nan_p (sin_result))
+	    mpfr_setsign (sin_result, sin_result, value.nan_sign, MPFR_RNDN);
+	  if (mpfr_nan_p (cos_result))
+	    mpfr_setsign (cos_result, cos_result, value.nan_sign, MPFR_RNDN);
 	  if (reg2 != reg)
-	    set_fp_register (reg2, value2, t >> 2, rnd, false);
-	  set_fp_register (reg, value, t & 3, rnd, true);
+	    set_fp_register (reg2, cos_result, value.nan_bits, value.nan_sign,
+			     t >> 2, rnd, false);
+	  set_fp_register (reg, sin_result, value.nan_bits, value.nan_sign,
+			   t & 3, rnd, true);
 	}
       else if ((extra & 15) == 8)
 	// FCMP
