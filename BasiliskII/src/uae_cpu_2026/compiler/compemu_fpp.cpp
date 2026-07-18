@@ -1471,6 +1471,18 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 			return;
 		}
 
+#if defined(CPU_AARCH64) || defined(CPU_aarch64)
+		/* Direct Dn/An and immediate control-register transfers must remain one
+		   architectural service.  The residual native path cannot represent the
+		   complete FPCR/FPSR state, and mixed masks can otherwise mutate one
+		   destination before a later unsupported register forces fallback. */
+		if ((opcode & 0x30) == 0 || (opcode & 0x3f) == 0x3c)
+		{
+			FAIL(1);
+			return;
+		}
+#endif
+
 		/* rare */
 		if ((opcode & 0x30) == 0)
 		{

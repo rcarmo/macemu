@@ -533,6 +533,10 @@ const fppSincosServiceMatrix = await Bun.file(new URL(
   "./fpp-sincos-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppControlDirectServiceMatrix = await Bun.file(new URL(
+  "./fpp-control-direct-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1772,6 +1776,39 @@ console.log("METRIC structural_fpp_sincos_service_vectors=18");
 console.log("METRIC structural_fpp_sincos_strict_rejections=1");
 console.log("METRIC structural_fpp_sincos_dual_results=1");
 console.log("METRIC structural_fpp_sincos_destination_registers=8");
+const controlCompilerStart = fppCompilerOperation.indexOf("case 4:\t\t\t\t\t\t\t/* FMOVEM <ea>,<control> */");
+const controlCompilerEnd = fppCompilerOperation.indexOf("case 0:", controlCompilerStart);
+if (controlCompilerStart < 0 || controlCompilerEnd < 0) fail("FPP direct control compiler boundary is incomplete");
+const controlCompilerBlock = fppCompilerOperation.slice(controlCompilerStart, controlCompilerEnd);
+for (const contract of [
+  "case 4:", "case 5:", "jit_disable.fmovec", "#if defined(CPU_AARCH64) || defined(CPU_aarch64)",
+  "(opcode & 0x30) == 0 || (opcode & 0x3f) == 0x3c", "mixed masks", "FAIL(1);", "return;",
+]) requireText(controlCompilerBlock, contract, "FPP direct/immediate control service boundary");
+const controlGuardStart = controlCompilerBlock.indexOf("#if defined(CPU_AARCH64) || defined(CPU_aarch64)");
+const controlDirectStart = controlCompilerBlock.indexOf("/* rare */");
+if (controlGuardStart < 0 || controlDirectStart < 0 || controlGuardStart >= controlDirectStart)
+  fail("FPP direct/immediate control service gate does not precede residual mutation paths");
+for (const contract of [
+  "list = (extra >> 10) & 7", "if (list == 0)", "case 1:", "case 2:", "case 4:",
+  "m68k_dreg (regs, reg) = fpu.instruction_address", "m68k_areg (regs, reg) = fpu.instruction_address",
+  "set_fpsr (m68k_dreg (regs, reg))", "set_fpcr (m68k_dreg (regs, reg))",
+  "fpu.instruction_address = m68k_areg (regs, reg)", "fpu.instruction_address = next_ilong ()",
+]) requireText(fpuMpfrSource, contract, "MPFR direct/immediate control transfer contract");
+for (const contract of [
+  'name: "fpcr_to_d7_masks_68040"', 'name: "d7_to_fpcr_then_d1"', 'name: "immediate_to_fpcr_then_d2"',
+  'name: "fpsr_to_d6_masks_reserved_bits"', 'name: "d6_to_fpsr_then_d0"', 'name: "immediate_to_fpsr_then_d3"',
+  'name: "fpiar_to_d5_full_width"', 'name: "fpiar_to_a7_full_width"', 'name: "d5_to_fpiar_then_d4"',
+  'name: "a5_to_fpiar_then_d4"', 'name: "immediate_to_fpiar_then_d4"',
+  'B2_TEST_SECOND_PC: "0x1008"', 'B2_NATIVE_ASSERT_PC: "0x1008"',
+  'output.includes(`JIT_FALLBACK op=${item.auditedOpcode} pc=00001008`)',
+  'strict full-JIT: opcode fallback pc=00001000 op=${item.opcode}',
+  "expectedService = process.env.CASE ? selectedCases.length : 11",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 4",
+]) requireText(fppControlDirectServiceMatrix, contract, "FPP direct/immediate control service matrix");
+console.log("METRIC structural_fpp_control_direct_service_vectors=11");
+console.log("METRIC structural_fpp_control_direct_strict_rejections=4");
+console.log("METRIC structural_fpp_control_direct_registers=3");
+console.log("METRIC structural_fpp_control_direct_ea_classes=3");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

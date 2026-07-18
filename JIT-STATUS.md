@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Make direct FPP control-register transfers fail closed as one service**
+  (2026-07-18): FPCR/FPSR/FPIAR Dn, An, and immediate forms now leave AArch64
+  compilation before any partial mutation. A fixed **11 service + 4 strict**
+  matrix covers legal directions, maximum fields, 68040 FPCR masking, FPSR
+  represented-bit masking, full-width FPIAR, sequential visibility, integer
+  CCR, native entry/fallback attribution, and strict rejection. Memory control
+  forms remain separate; no closure row is promoted and `i_FPP` remains
+  unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_CONTROL_DIRECT_BATCH.md`.
+
 - **Repair FPP FSINCOS dual-result service** (2026-07-18): all eight
   cosine-register selectors now retain one extended source, evaluate sine and
   cosine directly at FPCR width, preserve NaN sign, publish sine-derived FPSR,
