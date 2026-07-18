@@ -549,6 +549,10 @@ const fppFmovemStaticServiceMatrix = await Bun.file(new URL(
   "./fpp-fmovem-static-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmovemDynamicServiceMatrix = await Bun.file(new URL(
+  "./fpp-fmovem-dynamic-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1910,6 +1914,44 @@ console.log("METRIC structural_fpp_fmovem_static_service_vectors=10");
 console.log("METRIC structural_fpp_fmovem_static_strict_rejections=3");
 console.log("METRIC structural_fpp_fmovem_static_exact80_registers=3");
 console.log("METRIC structural_fpp_fmovem_static_masks=2");
+const fmovemDynamicFails = [...fmovemCompilerBlock.matchAll(/case 1:\s*\/\* dynamic pred \*\//g)].map((match) => match.index);
+const fmovemAcquires = [...fmovemCompilerBlock.matchAll(/get_fp_ad\(opcode\)/g)].map((match) => match.index);
+if (fmovemDynamicFails.length !== 4 || fmovemAcquires.length !== 2 ||
+    fmovemDynamicFails[0] >= fmovemAcquires[0] || fmovemDynamicFails[2] >= fmovemAcquires[1])
+  fail("FPP dynamic FMOVEM service boundaries do not precede both EA acquisitions");
+for (const contract of [
+  "if (extra & 0x800)", "(extra >> 4) & 7", "& 0xff",
+  "if (extra & 0x1000)", "case 040:", "addr -= 12",
+  "if (list & (1 << i))", "if (list & (0x80 >> i))",
+  "extract_to_extended", "set_from_extended",
+]) requireText(fpuMpfrSource, contract, "MPFR dynamic FMOVEM list/order contract");
+for (const contract of [
+  'name:"dynamic_to_aind_all_exact80_d7"',
+  'name:"dynamic_to_predec_all_direct_mask_d3"',
+  'name:"dynamic_to_brief_sparse_reversed_mask_d0"',
+  'name:"dynamic_to_full_preindexed_all_d7"',
+  'name:"dynamic_from_aind_all_exact80_d0"',
+  'name:"dynamic_from_postinc_all_exact80_d7"',
+  'name:"dynamic_from_brief_sparse_reversed_mask_d3"',
+  'name:"dynamic_from_full_postindexed_all_d7"',
+  'name:"dynamic_from_pc_brief_all_d0"',
+  'name:"dynamic_from_pc_full_preindexed_sparse_d7"',
+  'name:"dynamic_to_predec_empty_low_byte_d7"',
+  'name:"dynamic_from_postinc_empty_low_byte_d0"',
+  'v0="3f ff 00 00 80 00 00 00 00 00 00 01"',
+  'v1="7f fe 00 00 ff ff ff ff ff ff ff ff"',
+  'v7="ff ff 00 00 c0 00 de ad be ef 12 34"',
+  'regs:{7:0x000001c1}', 'regs:{0:0x000001c1}',
+  'B2_TEST_REPLAY_FP0_EXT:E(a.direction==="to"?v0:poison0)',
+  'B2_TEST_SECOND_PC:"0x1008"', 'B2_NATIVE_ASSERT_PC:"0x1008"',
+  'o.includes(`JIT_FALLBACK op=${a.opcode} pc=00001008`)',
+  'strict full-JIT: opcode fallback pc=00001000 op=${a.opcode}',
+  "const es=process.env.CASE?sc.length:12", "et=process.env.CASE?ss.length:3",
+]) requireText(fppFmovemDynamicServiceMatrix, contract, "FPP dynamic FMOVEM service matrix");
+console.log("METRIC structural_fpp_fmovem_dynamic_service_vectors=12");
+console.log("METRIC structural_fpp_fmovem_dynamic_strict_rejections=3");
+console.log("METRIC structural_fpp_fmovem_dynamic_mask_registers=3");
+console.log("METRIC structural_fpp_fmovem_dynamic_empty_masks=2");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

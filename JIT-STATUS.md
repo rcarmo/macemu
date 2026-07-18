@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit dynamic-list FPP FMOVEM service** (2026-07-18): the AArch64 compiler
+  already rejects register-supplied lists before EA acquisition, and the MPFR
+  service correctly consumes the selected Dn low byte. A fixed **12 service +
+  3 strict** matrix proves D0/D3/D7 selection, high-bit masking, all/sparse/empty
+  lists, exact FP0/FP1/FP7 80-bit order, regular/predecrement mask conventions,
+  legal update modes, indexed and PC EAs, poisoned replay, guarded bytes, CCR,
+  and exact fallback attribution. This evidence-only checkpoint changes no
+  implementation and promotes no closure row; `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVEM_DYNAMIC_BATCH.md`.
+
 - **Retire static-list FPP FMOVEM to exact MPFR service** (2026-07-18): the
   residual AArch64 path serialized binary64 shadows as extended frames and
   could lose low significand bits, extended exponent range, and NaN metadata.
