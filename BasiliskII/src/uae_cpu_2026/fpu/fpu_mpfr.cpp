@@ -1701,17 +1701,18 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_sub (value2, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	}
-      if ((extra & 0x3f) == 32 || (extra & 0x3f) == 36)
+      if ((extra & 0x3f) == 32 || (extra & 0x3f) == 36
+          || (extra & 0x3f) == 34 || (extra & 0x3f) == 38)
 	{
 	  /* Forced precision includes its exponent range.  MPFR arithmetic may
-	   * produce an infinity or zero before publishing overflow/underflow;
-	   * classify that rounded result while the forced format is active. */
+	   * produce an infinity or inexact zero before publishing range status;
+	   * exact add cancellation is zero without underflow. */
 	  t = mpfr_check_range (value2, t, rnd);
 	  if (mpfr_regular_p (fpu.registers[reg].f) && mpfr_regular_p (value.f))
 	    {
 	      if (mpfr_inf_p (value2))
 		cur_exceptions |= FPSR_EXCEPTION_OVFL | FPSR_EXCEPTION_INEX2;
-	      else if (mpfr_zero_p (value2))
+	      else if (mpfr_zero_p (value2) && t != 0)
 		cur_exceptions |= FPSR_EXCEPTION_UNFL | FPSR_EXCEPTION_INEX2;
 	    }
 	  uae_u64 nan_bits;
@@ -1786,7 +1787,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 15 || operation == 16 || operation == 17
 	|| operation == 18 || operation == 20 || operation == 21
 	|| operation == 22 || operation == 25 || operation == 28
-	|| operation == 29 || operation == 32;
+	|| operation == 29 || operation == 32 || operation == 34;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31 || operation == 33;
       if (extended_source)
@@ -1953,7 +1954,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  if (mpfr_inf_p (fpu.registers[reg].f) && mpfr_inf_p (value.f)
 	      && mpfr_signbit (fpu.registers[reg].f) != mpfr_signbit (value.f))
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_add (value.f, fpu.registers[reg].f, value.f, rnd);
+	  t = mpfr_add (direct, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	case 35: // FMUL
 	  if ((mpfr_zero_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
@@ -2009,7 +2010,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  /* MPFR does not retain architectural NaN payload/sign metadata. */
 	  uae_u64 nan_bits = value.nan_bits;
 	  int nan_sign = value.nan_sign;
-	  if (operation == 32)
+	  if (operation == 32 || operation == 34)
 	    select_binary_nan (reg, value, &nan_bits, &nan_sign);
 	  if (mpfr_nan_p (direct))
 	    mpfr_setsign (direct, direct, nan_sign, MPFR_RNDN);

@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FADD/FSADD/FDADD operand and result precision**
+  (2026-07-18): all three preserve extended operands; ordinary FADD evaluates
+  directly into the FPCR-width result, while forced adds publish 24-/53-bit
+  range, cancellation-zero, binary NaN and Motorola status correctly. A fixed
+  **35 service + 3 strict** matrix covers extended-only-bit witnesses,
+  directed rounding, forced cancellation, range, infinities, NaNs, aliases,
+  EA effects and exact FPSR. No closure row is promoted and `i_FPP` plus
+  generic `FADD_ddd` remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_ADD_BATCH.md`.
+
 - **Repair FPP FMOD truncating remainder and quotient service**
   (2026-07-18): FMOD no longer compiles through IEEE FREM on any host; exact
   MPFR service retains extended operands, computes the truncating quotient

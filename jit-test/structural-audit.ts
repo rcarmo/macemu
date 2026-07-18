@@ -513,6 +513,10 @@ const fppFmodServiceMatrix = await Bun.file(new URL(
   "./fpp-fmod-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppAddServiceMatrix = await Bun.file(new URL(
+  "./fpp-add-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fpuHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/fpu/fpu.h",
   import.meta.url,
@@ -1222,7 +1226,7 @@ for (const contract of [
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
-  "|| operation == 29 || operation == 32;",
+  "|| operation == 29 || operation == 32 || operation == 34;",
   "|| direct_result || operation == 30 || operation == 31 || operation == 33;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
@@ -1372,7 +1376,7 @@ for (const contract of [
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
-  "|| operation == 29 || operation == 32;",
+  "|| operation == 29 || operation == 32 || operation == 34;",
   "case 14: // FSIN", "mpfr_sin (direct, value.f, rnd)",
   "case 16: // FETOX", "mpfr_exp (direct, value.f, rnd)",
   "case 17: // FTWOTOX", "mpfr_exp2 (direct, value.f, rnd)",
@@ -1432,7 +1436,7 @@ for (const [label, disable, name] of [
   }
 }
 for (const contract of [
-  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29 || operation == 32;",
+  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29 || operation == 32 || operation == 34;",
   "case 25: // FCOSH", "mpfr_cosh (direct, value.f, rnd)",
   "case 28: // FACOS", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
   "mpfr_acos (direct, value.f, rnd)", "case 29: // FCOS",
@@ -1471,7 +1475,7 @@ const divideAcquire = divideCompilerBlock.indexOf("get_fp_value(opcode, extra)")
 if (divideGuardStart < 0 || divideGuardEnd < divideGuardStart || divideAcquire < 0 || divideGuardEnd > divideAcquire)
   fail("FPP divide guarded service exit does not precede operand acquisition");
 for (const contract of [
-  "|| operation == 29 || operation == 32;", "case 32: // FDIV",
+  "|| operation == 29 || operation == 32 || operation == 34;", "case 32: // FDIV",
   "mpfr_div (direct, fpu.registers[reg].f, value.f, rnd)",
   "case 32: // FSDIV", "case 36: // FDDIV",
   "mpfr_div (value2, fpu.registers[reg].f, value.f, rnd)",
@@ -1559,6 +1563,60 @@ for (const contract of [
 console.log("METRIC structural_fpp_fmod_service_vectors=31");
 console.log("METRIC structural_fpp_fmod_strict_rejections=1");
 console.log("METRIC structural_fpp_fmod_truncating_quotient=1");
+const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
+const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
+if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");
+const addCompilerBlock = fppCompilerOperation.slice(addCompilerStart, addCompilerEnd);
+for (const contract of [
+  "case 0x22:", "case 0x62:", "case 0x66:", "jit_disable.fadd",
+  "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;",
+]) requireText(addCompilerBlock, contract, "FPP add AArch64 service boundary");
+const addGuardStart = addCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const addGuardEnd = addCompilerBlock.indexOf("#endif", addGuardStart);
+const addAcquire = addCompilerBlock.indexOf("get_fp_value(opcode, extra)");
+if (addGuardStart < 0 || addGuardEnd < addGuardStart || addAcquire < 0 || addGuardEnd > addAcquire)
+  fail("FPP add guarded service exit does not precede operand acquisition");
+for (const contract of [
+  "case 34: // FSADD", "case 38: // FDADD",
+  "mpfr_add (value2, fpu.registers[reg].f, value.f, rnd)",
+  "(extra & 0x3f) == 34 || (extra & 0x3f) == 38",
+  "mpfr_zero_p (value2) && t != 0", "select_binary_nan (reg, value, &nan_bits, &nan_sign)",
+  "|| operation == 32 || operation == 34;", "case 34: // FADD",
+  "mpfr_add (direct, fpu.registers[reg].f, value.f, rnd)",
+  "operation == 32 || operation == 34",
+]) requireText(fpuMpfrSource, contract, "MPFR FADD/FSADD/FDADD service contract");
+for (const contract of [
+  'name:"fadd_extended_low_bit"', 'name:"fadd_exact_extended"',
+  'name:"fadd_single_nearest"', 'name:"fadd_single_plus"',
+  'name:"fadd_double_nearest"', 'name:"fadd_double_plus"',
+  'name:"fsadd_forced_nearest"', 'name:"fsadd_forced_plus"',
+  'name:"fsadd_forced_extended_operand",selector:"62",destination:x.p1,source:x.singleHalfPlusExtendedBit,output:x.singleNext,operationFpsr:"00000208",fpsr:"00000008"',
+  'name:"fdadd_forced_nearest"', 'name:"fdadd_forced_plus"',
+  'name:"fdadd_forced_extended_operand",selector:"66",destination:x.p1,source:x.doubleHalfPlusExtendedBit,output:x.doubleNext,operationFpsr:"00000208",fpsr:"00000008"',
+  'name:"fadd_exact_cancellation_nearest"', 'name:"fadd_exact_cancellation_minus"',
+  'name:"fsadd_exact_cancellation_no_underflow",selector:"62",destination:x.p1,source:x.n1,output:x.pz,operationFpsr:"04000000",fpsr:"04000000"',
+  'name:"fdadd_exact_cancellation_minus_no_underflow",selector:"66",destination:x.p1,source:x.n1,output:x.nz,fpcr:"20",operationFpsr:"0c000000",fpsr:"0c000000"',
+  'name:"fadd_negative_zero_pair"', 'name:"fadd_mixed_zero_nearest"',
+  'name:"fsadd_forced_overflow",selector:"62",destination:x.max,source:x.max,output:x.pinf,operationFpsr:"02001248",fpsr:"02000048"',
+  'name:"fdadd_forced_overflow",selector:"66",destination:x.max,source:x.max,output:x.pinf,operationFpsr:"02001248",fpsr:"02000048"',
+  'name:"fsadd_forced_underflow",selector:"62",destination:x.minNormal,source:x.negLargestSubnormal,output:x.pz,operationFpsr:"04000a28",fpsr:"04000028"',
+  'name:"fdadd_forced_underflow",selector:"66",destination:x.minNormal,source:x.negLargestSubnormal,output:x.pz,operationFpsr:"04000a28",fpsr:"04000028"',
+  'name:"fadd_opposite_infinities_invalid",selector:"22",destination:x.pinf,source:x.ninf,output:x.canonical,operationFpsr:"01002080",fpsr:"01000080"',
+  'name:"fsadd_same_infinities"',
+  'name:"fadd_destination_qnan_precedence",selector:"22",destination:x.qnanA,source:x.nqnanB,output:x.qnanA,operationFpsr:"01000000",fpsr:"01000000"',
+  'name:"fadd_source_snan_quiet_then_destination_precedence",selector:"22",destination:x.qnanA,source:x.nsnanB,output:x.qnanA,operationFpsr:"01004080",fpsr:"01000080"',
+  'name:"fadd_destination_snan_quiet_then_destination_precedence",selector:"22",destination:x.snanA,source:x.nqnanB,output:x.quietA,operationFpsr:"01004080",fpsr:"01000080",destinationSnan:true',
+  'name:"fsadd_source_only_snan",selector:"62",destination:x.p1,source:x.nsnanB,output:"ff ff 00 00 c0 00 de ad be ef 12 34",operationFpsr:"09004080",fpsr:"09000080"',
+  'name:"fadd_fp7_self_alias"',
+  'name:"fsadd_fp7_destination_reseed"', 'name:"fadd_postincrement_source"',
+  'name:"fdadd_predecrement_source"', 'name:"fadd_accrued_preserve"',
+  'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'service_pass=${sp} strict_pass=${st}', 'sc.length:35', 'ss.length:3',
+]) requireText(fppAddServiceMatrix, contract, "FPP add service matrix");
+console.log("METRIC structural_fpp_add_service_vectors=35");
+console.log("METRIC structural_fpp_add_strict_rejections=3");
+console.log("METRIC structural_fpp_add_extended_operands=1");
+console.log("METRIC structural_fpp_add_cancellation_range=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

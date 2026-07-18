@@ -2135,6 +2135,12 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x22:						/* FADD */
 		case 0x62:						/* FSADD */
 		case 0x66:						/* FDADD */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Binary64 native operands cannot represent extended addends,
+			 * forced result formats, NaN ownership, or Motorola exceptions. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fadd)
 			{
 				FAIL(1);
