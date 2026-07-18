@@ -285,6 +285,7 @@ const semanticServiceMid = new Map<string, string>([
   ["fneg_rr", "all configured AArch64 FNEG/FSNEG/FDNEG selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
   ["fadd_rr", "all configured AArch64 FADD/FSADD/FDADD selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
   ["fsqrt_rr", "all configured AArch64 FSQRT/FSSQRT/FDSQRT selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
+  ["fsub_rr", "all configured AArch64 FSUB/FSSUB/FDSUB selectors enter semantic service before operand acquisition or the retained native MIDFUNC call; configured FCMP uses fcompare_result_rr"],
 ]);
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
 const semanticServiceBlocks: Array<[string, string, string]> = [
@@ -292,6 +293,7 @@ const semanticServiceBlocks: Array<[string, string, string]> = [
   ["fneg_rr", "case 0x1a:", "case 0x1c:"],
   ["fadd_rr", "case 0x22:", "case 0x23:"],
   ["fsqrt_rr", "case 0x04:", "case 0x06:"],
+  ["fsub_rr", "case 0x28:", "case 0x30:"],
 ];
 for (const [name, startMarker, endMarker] of semanticServiceBlocks) {
   const start = source.fpp.indexOf(startMarker);
@@ -453,6 +455,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fneg_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fneg_rr"],
   ["raw_fadd_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 add selectors service before unreachable fadd_rr"],
   ["raw_fsqrt_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
+  ["raw_fsub_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 subtract selectors service before unreachable fsub_rr"],
 ]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
@@ -500,6 +503,7 @@ const semanticServiceEmitter = new Map<string, string>([
   ["FNEG_dd", "only retained raw_fneg_rr emits it, and configured AArch64 sign selectors service before unreachable fneg_rr"],
   ["FADD_ddd", "only retained raw_fadd_rr emits it, and configured AArch64 add selectors service before unreachable fadd_rr"],
   ["FSQRT_dd", "only retained raw_fsqrt_rr emits it, and configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
+  ["FSUB_ddd", "only retained raw_fsub_rr emits it, and configured AArch64 subtract selectors service before unreachable fsub_rr"],
 ]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {

@@ -129,7 +129,7 @@ emitter_api,FRINTI_dd,audited,FRINTI_dd,60,2,BasiliskII/src/uae_cpu_2026/compile
 emitter_api,FRINTZ_dd,audited,FRINTZ_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,471,AARCH64_JIT_AUDIT_FRINT_EMITTERS.md
 emitter_api,FSQRT_dd,unreachable,FSQRT_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,493,"only retained raw_fsqrt_rr emits it, and configured AArch64 square-root selectors service before unreachable fsqrt_rr"
 emitter_api,FSQRT_ss,unreachable,FSQRT_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,494,no path from reachable AArch64 compiler/emitter roots
-emitter_api,FSUB_ddd,audited,FSUB_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,495,AARCH64_JIT_AUDIT_FSUB_EMITTER.md
+emitter_api,FSUB_ddd,unreachable,FSUB_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,495,"only retained raw_fsub_rr emits it, and configured AArch64 subtract selectors service before unreachable fsub_rr"
 emitter_api,FSUB_sss,unreachable,FSUB_sss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,496,no path from reachable AArch64 compiler/emitter roots
 emitter_api,immEncode,unreviewed,immEncode,60,23,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,59,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,immOP_AND,unreviewed,immOP_AND,60,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,425,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -482,7 +482,7 @@ midfunc,frndintz_rr,unreachable,frndintz_rr,68,0,BasiliskII/src/uae_cpu_2026/com
 midfunc,fsgldiv_rr,unreachable,fsgldiv_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1177,no path from configured generated/support/FPU compiler roots
 midfunc,fsglmul_rr,unreachable,fsglmul_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1205,no path from configured generated/support/FPU compiler roots
 midfunc,fsqrt_rr,unreachable,fsqrt_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1077,all configured AArch64 FSQRT/FSSQRT/FDSQRT selectors enter semantic service before operand acquisition or the retained native MIDFUNC call
-midfunc,fsub_rr,unreviewed,fsub_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1137,reachable; no accepted family-level closure report
+midfunc,fsub_rr,unreachable,fsub_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1137,all configured AArch64 FSUB/FSSUB/FDSUB selectors enter semantic service before operand acquisition or the retained native MIDFUNC call; configured FCMP uses fcompare_result_rr
 midfunc,jff_ABCD_b,audited,ABCD,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8103,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
 midfunc,jff_ADD_b,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,255,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jff_ADD_b_imm,audited,ADD_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,240,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
@@ -924,7 +924,7 @@ raw_boundary,raw_frndintz_rr,unreviewed,raw_frndintz_rr,60,2,BasiliskII/src/uae_
 raw_boundary,raw_fsgldiv_rr,unreviewed,raw_fsgldiv_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1333,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fsglmul_rr,unreviewed,raw_fsglmul_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1357,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fsqrt_rr,unreachable,raw_fsqrt_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1210,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 square-root selectors service before unreachable fsqrt_rr
-raw_boundary,raw_fsub_rr,unreviewed,raw_fsub_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1246,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsub_rr,unreachable,raw_fsub_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1246,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 subtract selectors service before unreachable fsub_rr
 raw_boundary,raw_pop_preserved_regs,audited,raw_pop_preserved_regs,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,92,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_push_regs_to_preserve,audited,raw_push_regs_to_preserve,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,92,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_reg_to_flags,audited,raw_reg_to_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,211,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md

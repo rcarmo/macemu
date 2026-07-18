@@ -2358,8 +2358,40 @@ if (subCompilerStart < 0 || subCompilerEnd < 0) fail("FPP subtract compiler boun
 const subCompilerBlock = fppCompilerOperation.slice(subCompilerStart, subCompilerEnd);
 for (const contract of ["case 0x28:", "case 0x68:", "case 0x6c:", "jit_disable.fsub", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
   requireText(subCompilerBlock, contract, "FPP subtract AArch64 service boundary");
-const subGuardEnd = subCompilerBlock.indexOf("#endif", subCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)"));
-if (subGuardEnd < 0 || subGuardEnd > subCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP subtract service exit does not precede acquisition");
+const subGuardStart = subCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const subService = subCompilerBlock.indexOf("FAIL(1);", subGuardStart);
+const subReturn = subCompilerBlock.indexOf("return;", subService);
+const subAcquire = subCompilerBlock.indexOf("get_fp_value(opcode, extra)");
+const subNativeCall = subCompilerBlock.indexOf("fsub_rr(");
+if (subGuardStart < 0 || subService < subGuardStart || subReturn < subService ||
+    subAcquire < subReturn || subNativeCall < subAcquire)
+  fail("FPP subtract guarded service exit does not retire fsub_rr before operand acquisition");
+const subRootSpellings = (fppCompilerSource.match(/\bfsub_rr\(/g) || []).length;
+if (subRootSpellings !== 2)
+  fail(`retired subtract MIDFUNC fsub_rr source spellings=${subRootSpellings} expected=2`);
+const configuredFcmpStart = subCompilerEnd;
+const configuredFcmpEnd = fppCompilerOperation.indexOf("case 0x3a:", configuredFcmpStart);
+const configuredFcmpBlock = fppCompilerOperation.slice(configuredFcmpStart, configuredFcmpEnd);
+requireText(configuredFcmpBlock, "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "configured AArch64 FCMP path");
+requireText(configuredFcmpBlock, "fcompare_result_rr(FP_RESULT, reg, src);", "configured AArch64 FCMP path");
+const fcmpElse = configuredFcmpBlock.indexOf("#else");
+const fcmpLegacySub = configuredFcmpBlock.indexOf("fsub_rr(FP_RESULT, src);");
+if (fcmpElse < 0 || fcmpLegacySub < fcmpElse)
+  fail("legacy FCMP fsub_rr spelling is no longer confined to the non-AArch64 branch");
+const subMidfuncCallers = (midfuncSource.match(/\bfsub_rr\(/g) || []).length;
+if (subMidfuncCallers !== 0)
+  fail(`retired subtract MIDFUNC fsub_rr gained ${subMidfuncCallers} MIDFUNC caller spellings`);
+const subMidStart = midfuncSource.indexOf("MIDFUNC(2,fsub_rr,(FRW d, FR s))");
+const subMidEnd = midfuncSource.indexOf("MENDFUNC(2,fsub_rr", subMidStart);
+if (subMidStart < 0 || subMidEnd < 0) fail("missing retired subtract MIDFUNC fsub_rr");
+const subMidBody = midfuncSource.slice(subMidStart, subMidEnd);
+for (const contract of ["s = f_readreg(s);", "d = f_rmw(d);", "raw_fsub_rr(d, s);"])
+  requireText(subMidBody, contract, "retired subtract MIDFUNC fsub_rr");
+const subRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fsub_rr,(FRW d, FR s))");
+const subRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fsub_rr", subRawStart);
+if (subRawStart < 0 || subRawEnd < 0) fail("missing retired subtract raw boundary raw_fsub_rr");
+requireText(codegenSource.slice(subRawStart, subRawEnd), "FSUB_ddd(d, d, s);", "retired subtract raw boundary raw_fsub_rr");
+requireText(codegenHeaderSource, "#define FSUB_ddd(Dd,Dn,Dm)", "retired subtract emitter FSUB_ddd");
 for (const contract of [
   "case 40: // FSUB", "case 40: // FSSUB", "case 44: // FDSUB",
   "mpfr_sub (direct, fpu.registers[reg].f, value.f, rnd)",
@@ -2387,7 +2419,13 @@ for (const contract of [
   'name:"fssub_destination_qnan_precedence"', 'name:"fdsub_source_snan_quiet_then_destination_precedence"',
   'name:"fsub_fp7_self_alias"', 'name:"fssub_fp7_destination_reseed"',
   'name:"fsub_postincrement_source"', 'name:"fdsub_predecrement_source"', 'name:"fsub_accrued_preserve"',
+  'profile=[...o.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
   'auditedOpcode=a.aliasFp7?"f200":a.ea==="postinc"?"f218":a.ea==="predec"?"f220":"f239"',
+  'capturePc=auditedOpcode==="f239"?"00001010":"0000100c"',
+  'storePc=auditedOpcode==="f239"?"00001014":"00001010"',
+  'passProfile=`${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'expectedProfile=`f239@00001000 ${passProfile} ${passProfile}`',
+  'profile===expectedProfile',
   'o.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)',
   'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${sp} strict_pass=${st}', 'sc.length:40', 'ss.length:3',
@@ -2395,6 +2433,9 @@ for (const contract of [
 console.log("METRIC structural_fpp_sub_service_vectors=40");
 console.log("METRIC structural_fpp_sub_strict_rejections=3");
 console.log("METRIC structural_fpp_sub_one_sided_extended_operands=6");
+console.log("METRIC structural_fpp_sub_unreachable_midfuncs=1");
+console.log("METRIC structural_fpp_sub_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_sub_unreachable_emitters=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

@@ -50,6 +50,15 @@ The source-only single and destination-only double records are also executed
 through ordinary FSUB at FPCR single/double precision. Every service case enters
 a compiled block natively at PC `0x1008`, then requires the exact audited
 fallback opcode for its addressing form (`f239`, `f218`, `f220`, or `f200`).
+The complete two-pass service profile is pinned as the initial destination load
+at `f239@0x1000`, followed by two identical source/FSUB, FPSR-capture, and store
+triples. Absolute-long source uses `f239@0x1008`, `f200@0x1010`, and
+`f239@0x1014`; register, postincrement, and predecrement forms use their exact
+`f200`/`f218`/`f220` source opcode at `0x1008`, then `f200@0x100c` and
+`f239@0x1010`. This replaces a stale total-only exception for the
+signalling-destination case; the clean runtime correctly records seven
+non-duplicative boundaries with PCs derived from each source form's encoded
+length.
 
 ## Structural and review decision
 
@@ -64,5 +73,21 @@ initially narrow forced-special coverage. The matrix was replaced with the six
 one-sided records and forced infinity/NaN cases above; re-review approved the
 bounded checkpoint.
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups.
+No closure row is promoted to **audited**. `generator,i_FPP` remains
+**unreviewed** pending all selector groups.
+
+A later configured-root reachability audit exhaustively retired the residual
+native chain. Every configured AArch64 FSUB/FSSUB/FDSUB selector enters semantic
+service before operand acquisition and before `fsub_rr`. The other textual
+`fsub_rr` call is confined to FCMP's inactive non-AArch64 branch; configured
+AArch64 FCMP uses `fcompare_result_rr`, and there is no MIDFUNC caller.
+Therefore `fsub_rr`, `raw_fsub_rr`, and `FSUB_ddd` are **unreachable**.
+Positive ordered control-flow, configured-branch selection, exact root/edge
+counts, lower-chain shape, and future-caller checks are pinned in
+`closure-inventory.ts` and `structural-audit.ts`.
+
+This is retirement, not native acceptance. The earlier exhaustive direct
+`FSUB_ddd` probe remains historical encoding and host-instruction evidence,
+while the 40+3 semantic-service matrix owns configured guest runtime fidelity.
+Source-unreachable APIs are not kept classified as audited solely because dead
+definitions remain.

@@ -6,9 +6,9 @@ Base: `918b2293`
 
 ## Scope
 
-This checkpoint audits the complete reachable `FSUB_ddd(Dd,Dn,Dm)` API. It
-closes generic scalar-binary64 encoding, rounding, exception, alias, and state
-semantics only.
+This checkpoint directly audited the then-reachable `FSUB_ddd(Dd,Dn,Dm)` API.
+It closed generic scalar-binary64 encoding, rounding, exception, alias, and
+state semantics only.
 
 It does not promote `raw_fsub_rr`, a MIDFUNC wrapper, the already serviced guest
 FSUB/FSSUB/FDSUB family, Motorola status publication, or `generator,i_FPP`.
@@ -61,9 +61,17 @@ METRIC emitter_fsub_alias_routes=256
 
 ## Closure decision
 
-The directly evidenced row is promoted:
+At this checkpoint the directly evidenced row was promoted:
 
 - `emitter_api,FSUB_ddd` → **audited**.
 
 No raw boundary, MIDFUNC, guest instruction family, Motorola-status path, or
-generator row is promoted. `generator,i_FPP` remains **unreviewed**.
+generator row was promoted. `generator,i_FPP` remained **unreviewed**.
+
+A later complete configured-root audit established that every AArch64
+FSUB/FSSUB/FDSUB selector enters exact semantic service before `fsub_rr`, while
+configured AArch64 FCMP uses `fcompare_result_rr` and no other caller exists.
+The current inventory therefore classifies `fsub_rr`, `raw_fsub_rr`, and
+`FSUB_ddd` as **unreachable**. This report remains direct encoding/host-semantic
+evidence for the retained dead emitter definition; it does not override
+configured reachability.
