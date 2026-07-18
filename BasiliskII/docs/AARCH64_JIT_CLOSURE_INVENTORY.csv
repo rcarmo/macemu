@@ -446,7 +446,7 @@ midfunc,fdiv_rr,unreachable,fdiv_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,fflags_into_flags,unreviewed,fflags_into_flags,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1273,reachable; no accepted family-level closure report
 midfunc,ffunc_rr,unreviewed,ffunc_rr,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1225,reachable; no accepted family-level closure report
 midfunc,fmod_rr,unreachable,fmod_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1167,no path from configured generated/support/FPU compiler roots
-midfunc,fmov_b_rr,unreviewed,fmov_b_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,912,reachable; no accepted family-level closure report
+midfunc,fmov_b_rr,audited,fmov_b_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,912,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md
 midfunc,fmov_d_ri_0,unreviewed,fmov_d_ri_0,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1009,reachable; no accepted family-level closure report
 midfunc,fmov_d_ri_1,unreviewed,fmov_d_ri_1,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1017,reachable; no accepted family-level closure report
 midfunc,fmov_d_ri_10,unreachable,fmov_d_ri_10,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1025,no path from configured generated/support/FPU compiler roots
@@ -454,7 +454,7 @@ midfunc,fmov_d_ri_100,unreachable,fmov_d_ri_100,68,1,BasiliskII/src/uae_cpu_2026
 midfunc,fmov_d_rm,unreviewed,fmov_d_rm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1041,reachable; no accepted family-level closure report
 midfunc,fmov_d_rrr,unreachable,fmov_d_rrr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,922,no path from configured generated/support/FPU compiler roots
 midfunc,fmov_l_ri,unreachable,fmov_l_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,934,no path from configured generated/support/FPU compiler roots
-midfunc,fmov_l_rr,unreviewed,fmov_l_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,882,reachable; no accepted family-level closure report
+midfunc,fmov_l_rr,audited,fmov_l_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,882,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md
 midfunc,fmov_rm,unreviewed,fmov_rm,68,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1057,reachable; no accepted family-level closure report
 midfunc,fmov_rr,audited,fmov_rr,68,21,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,869,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md
 midfunc,fmov_s_ri,unreviewed,fmov_s_ri,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,958,reachable; no accepted family-level closure report
@@ -464,7 +464,7 @@ midfunc,fmov_to_d_rrr,unreviewed,fmov_to_d_rrr,68,1,BasiliskII/src/uae_cpu_2026/
 midfunc,fmov_to_l_rr,unreviewed,fmov_to_l_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,967,reachable; no accepted family-level closure report
 midfunc,fmov_to_s_rr,unreviewed,fmov_to_s_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,977,reachable; no accepted family-level closure report
 midfunc,fmov_to_w_rr,unreviewed,fmov_to_w_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,987,reachable; no accepted family-level closure report
-midfunc,fmov_w_rr,unreviewed,fmov_w_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,902,reachable; no accepted family-level closure report
+midfunc,fmov_w_rr,audited,fmov_w_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,902,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md
 midfunc,fmovs_rm,unreviewed,fmovs_rm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1049,reachable; no accepted family-level closure report
 midfunc,fmovs_rr,unreachable,fmovs_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1215,no path from configured generated/support/FPU compiler roots
 midfunc,fmul_rr,unreachable,fmul_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1127,both configured AArch64 roots (FMUL/FSMUL/FDMUL and FSGLMUL) enter semantic service before operand acquisition or the retained native MIDFUNC calls
@@ -892,14 +892,14 @@ raw_boundary,raw_fflags_into_flags,unreviewed,raw_fflags_into_flags,60,2,Basilis
 raw_boundary,raw_ffunc_rr,unreviewed,raw_ffunc_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1373,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_flags_to_reg,audited,raw_flags_to_reg,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,192,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,raw_fmod_rr,unreachable,raw_fmod_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1325,only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain
-raw_boundary,raw_fmov_b_rr,unreviewed,raw_fmov_b_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,934,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_b_rr,audited,raw_fmov_b_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,934,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md
 raw_boundary,raw_fmov_d_ri_0,unreviewed,raw_fmov_d_ri_0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1163,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_d_ri_1,unreviewed,raw_fmov_d_ri_1,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1169,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_d_ri_10,unreachable,raw_fmov_d_ri_10,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1175,only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_10 and fmov_l_ri; FMOV_di remains reachable from other compositions
 raw_boundary,raw_fmov_d_ri_100,unreachable,raw_fmov_d_ri_100,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1181,only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_100 and fmov_l_ri; SCVTF_dw remains reachable from other compositions
 raw_boundary,raw_fmov_d_rm,unreviewed,raw_fmov_d_rm,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1188,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_d_rrr,unreachable,raw_fmov_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,941,only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions
-raw_boundary,raw_fmov_l_rr,unreviewed,raw_fmov_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,914,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_l_rr,audited,raw_fmov_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,914,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md
 raw_boundary,raw_fmov_rr,audited,raw_fmov_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,886,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md
 raw_boundary,raw_fmov_s_rr,unreviewed,raw_fmov_s_rr,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,920,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_to_b_rr,unreviewed,raw_fmov_to_b_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1157,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
@@ -907,7 +907,7 @@ raw_boundary,raw_fmov_to_d_rrr,unreviewed,raw_fmov_to_d_rrr,60,3,BasiliskII/src/
 raw_boundary,raw_fmov_to_l_rr,unreviewed,raw_fmov_to_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1073,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_to_s_rr,unreviewed,raw_fmov_to_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1079,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_to_w_rr,unreviewed,raw_fmov_to_w_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1151,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fmov_w_rr,unreviewed,raw_fmov_w_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,927,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_w_rr,audited,raw_fmov_w_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,927,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md
 raw_boundary,raw_fmovs_rm,unreviewed,raw_fmovs_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1195,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmovs_rr,unreachable,raw_fmovs_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1366,only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions
 raw_boundary,raw_fmul_rr,unreachable,raw_fmul_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1240,only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 multiply roots service before unreachable fmul_rr

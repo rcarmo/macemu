@@ -854,9 +854,9 @@ for (const contract of [
   'name: "imm_double_fraction"', 'name: "imm_double_negative_inf"',
   "B2_TEST_DUMP_FP: \"1\"", "B2_JIT_STRICT_FULL: \"1\"",
   "B2_NATIVE_ASSERT_PC: anchorHex", "sr === \"271f\"",
-  "cow_clone", "cow_release", 'group !== undefined && group !== "single"',
+  "cow_clone", "cow_release", 'group !== undefined && group !== "single" && group !== "integer"',
   'throw new Error(`unknown GROUP=${group}`)',
-  'expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 29',
+  'expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : process.env.GROUP === "integer" ? 18 : 29',
 ]) requireText(fppFmoveSourceMatrix, contract, "native ordinary FMOVE source matrix");
 for (const stale of ["fp1_to_fp0", "fp_all_live_fp0_to_fp7", "fpRegistersMatch"])
   if (fppFmoveSourceMatrix.includes(stale)) fail(`native ordinary FMOVE source matrix retains superseded register-source case ${stale}`);
@@ -867,6 +867,62 @@ console.log("METRIC structural_fpp_fmove_source_exact_native_vectors=29");
 console.log("METRIC structural_fpp_fmove_source_formats=5");
 console.log("METRIC structural_fpp_fmove_register_routes=0");
 console.log("METRIC structural_fpp_fmove_integer_ccr_preservation=1");
+for (const contract of [
+  'group !== undefined && group !== "single" && group !== "integer"',
+  'group === "integer" ? cases.filter((item) => {',
+  'return size === 0 || size === 4 || size === 6;',
+  'process.env.GROUP === "integer" ? 18 : 29',
+]) requireText(fppFmoveSourceMatrix, contract, "native integer-to-FP FMOVE subset");
+const integerFmoveCaseNames = [
+  "dn_byte_negative", "dn_byte_positive", "dn_word_negative", "dn_word_positive",
+  "dn_long_negative", "dn_long_positive", "imm_byte_negative", "imm_word_negative",
+  "imm_long_negative", "dn_byte_min", "dn_word_min", "dn_long_minus_one",
+  "imm_byte_positive", "imm_word_positive", "imm_long_positive",
+  "dn_byte_d7_max_field", "dn_word_d7_max_field", "dn_long_d7_max_field",
+] as const;
+for (const name of integerFmoveCaseNames)
+  requireText(fppFmoveSourceMatrix, `name: "${name}"`, "native integer-to-FP FMOVE subset");
+for (const [width, sourceType, signHelper] of [
+  ["b", "RR1", "SIGNED8_REG_2_REG(REG_WORK1, s);"],
+  ["w", "RR2", "SIGNED16_REG_2_REG(REG_WORK1, s);"],
+  ["l", "RR4", ""],
+] as const) {
+  const midBody = functionBody(
+    midfuncSource, `MIDFUNC(2,fmov_${width}_rr,(FW d, ${sourceType} s))`,
+    `MENDFUNC(2,fmov_${width}_rr,(FW d, ${sourceType} s))`, `integer-to-FP FMOVE.${width} MIDFUNC`,
+  );
+  for (const contract of ["s = readreg(s);", "d = f_writereg(d);", `raw_fmov_${width}_rr(d, s);`, "f_unlock(d);", "unlock2(s);"])
+    requireText(midBody, contract, `integer-to-FP FMOVE.${width} MIDFUNC`);
+  requireBefore(midBody, "s = readreg(s);", "d = f_writereg(d);", `integer-to-FP FMOVE.${width} source acquisition`);
+  requireBefore(midBody, `raw_fmov_${width}_rr(d, s);`, "f_unlock(d);", `integer-to-FP FMOVE.${width} result lifetime`);
+  requireBefore(midBody, "f_unlock(d);", "unlock2(s);", `integer-to-FP FMOVE.${width} unlock order`);
+  const rawBody = functionBody(
+    codegenSource, `LOWFUNC(NONE,NONE,2,raw_fmov_${width}_rr,(FW d, ${sourceType} s))`,
+    `LENDFUNC(NONE,NONE,2,raw_fmov_${width}_rr,(FW d, ${sourceType} s))`, `integer-to-FP FMOVE.${width} raw`,
+  );
+  if (signHelper) {
+    requireBefore(rawBody, signHelper, "SCVTF_dw(d, REG_WORK1);", `integer-to-FP FMOVE.${width} sign-extension order`);
+  } else {
+    requireText(rawBody, "SCVTF_dw(d, s);", "integer-to-FP FMOVE.l conversion");
+  }
+  const rootSites = (fppCompilerSource.match(new RegExp(`\\bfmov_${width}_rr\\(`, "g")) || []).length;
+  if (rootSites !== 2) fail(`integer-to-FP FMOVE.${width} configured roots=${rootSites}, expected=2`);
+}
+for (const contract of [
+  "STATIC_INLINE void SIGNED8_REG_2_REG", "SXTB_ww(d, s);",
+  "STATIC_INLINE void SIGNED16_REG_2_REG", "SXTH_ww(d, s);",
+  "Use 32-bit sign extension to keep upper 32 bits clean.",
+]) requireText(codegenSource, contract, "integer-to-FP FMOVE sign extension");
+const integerFmoveScvtfSites = (codegenSource.match(/\bSCVTF_dw\(/g) || []).length;
+const integerFmoveSxtbSites = (codegenSource.match(/\bSXTB_ww\(/g) || []).length;
+const integerFmoveSxthCodegenSites = (codegenSource.match(/\bSXTH_ww\(/g) || []).length;
+const integerFmoveSxthMidSites = (midfunc2Source.match(/\bSXTH_ww\(/g) || []).length;
+if (integerFmoveScvtfSites !== 6 || integerFmoveSxtbSites !== 1 || integerFmoveSxthCodegenSites !== 1 || integerFmoveSxthMidSites !== 3)
+  fail(`integer-to-FP FMOVE shared emitter sites SCVTF/SXTB/SXTH-codegen/SXTH-mid=${integerFmoveScvtfSites}/${integerFmoveSxtbSites}/${integerFmoveSxthCodegenSites}/${integerFmoveSxthMidSites}, expected 6/1/1/3`);
+console.log("METRIC structural_fpp_fmove_integer_source_vectors=18");
+console.log("METRIC structural_fpp_fmove_integer_source_midfuncs=3");
+console.log("METRIC structural_fpp_fmove_integer_source_raw_boundaries=3");
+console.log("METRIC structural_fpp_fmove_integer_source_shared_emitters=3");
 const fppCompilerOperationForMove = functionBody(
   fppCompilerSource,
   "void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)",
@@ -5586,7 +5642,7 @@ for (const contract of ["-Wall -Wextra -Werror", "emitter-fcvt-conformance.cpp"]
 for (const contract of [
   'process.env.GROUP === "single"',
   'item.anchor === 0x1000 && ((extra >> 10) & 7) === 1',
-  'process.env.GROUP === "single" ? 8 : 29',
+  'process.env.GROUP === "single" ? 8 : process.env.GROUP === "integer" ? 18 : 29',
 ]) requireText(fppFmoveSourceMatrix, contract, "FCVT single register/immediate source composition subset");
 for (const contract of [
   'process.env.GROUP === "single"',

@@ -118,6 +118,7 @@ const activeFppCompat = configuredExpandedSource(paths.fppCompat, true);
 const activeCodegen = configuredExpandedSource(paths.codegen, true);
 
 const auditFamilyRules: Array<[RegExp, string]> = [
+  [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^i_FBcc$/, "AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md"],
   [/^i_EXT$/, "AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md"],
   [/^i_EXG$/, "AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md"],
@@ -206,6 +207,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^(?:B_i|BR_x|CC_B_i|B(?:CC|CS|EQ|GE|GT|HI|LE|LS|LT|MI|NE|PL|VC|VS)_i|CB(?:NZ|Z)_[wx]i|TBNZ_[wx]ii|TBZ_[wx]ii)$/, "AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [
+  [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
 ];
 const familyOf = (name: string) => name

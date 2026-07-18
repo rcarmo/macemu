@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the AArch64 FMOVE signed-integer source lifecycle** (2026-07-18):
+  closes the byte/word/long `fmov_*_rr` MIDFUNC/raw pairs across exact two-root
+  Dn/fetched reachability, 32-bit sign extension, `SCVTF_dw` conversion,
+  allocator lifetime, and same-number maximum fields. The new fail-closed
+  `GROUP=integer` matrix passes **18/18** and the full source owner remains
+  **29/29**; invalid groups reject. Exactly six rows become audited. Shared
+  `SCVTF_dw` retains its independent audit, while SXTB/SXTH/SBFM and
+  `generator,i_FPP` remain separate/unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md`.
+
 - **Retire the definition-only legacy AArch64 FScc raw chain and residual
   low-byte emitters** (2026-07-18): configured `i_FScc` uses the distinct
   `comp_fscc_opp` CMOV route, while `fp_fscc_ri` has no configured caller and

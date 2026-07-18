@@ -98,8 +98,16 @@ pairs; the existing 31-cell integer matrix remains cross-subsystem evidence.
 ## Closure decision
 
 The original repair promoted no row to audited. It created direct configured
-call paths to `fmov_b_rr`, `fmov_w_rr`, `fmov_s_rr`, and `fmov_l_rr`; those
-current compound MIDFUNC classifications remain separate.
+call paths to `fmov_b_rr`, `fmov_w_rr`, `fmov_s_rr`, and `fmov_l_rr`; their
+compound MIDFUNC classifications initially remained separate.
+
+A later signed-integer source lifecycle audit added the fail-closed 18-case
+integer subset and promoted the byte/word/long MIDFUNC/raw pairs to
+**audited**. It pins both configured roots per width, 32-bit sign extension,
+exact `SCVTF_dw` conversion, allocator lifetime, maximum same-number fields,
+and shared-emitter ownership. Single-source `fmov_s_rr` remains separate; no
+generic SBFM/SXTB/SXTH row is promoted. See
+`AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md`.
 
 A later configured-root audit established that the legacy split-word
 `fmov_d_rrr` MIDFUNC has no production caller and that `raw_fmov_d_rrr` is
