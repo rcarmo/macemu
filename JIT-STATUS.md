@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Close the configured AArch64 `i_FPP` generator lifecycle** (2026-07-18):
+  reconciles every live top-level form and ordinary operation selector against
+  the accepted focused FPP evidence graph. The fail-closed executable census
+  proves **8/8 top-level forms**, exact set equality for **61 operation
+  selectors** across **22 semantic owners**, and **10 top-level
+  FMOVE/FMOVEM/FMOVECR/control owners**; missing or duplicate ownership,
+  missing matrix/report pairs, and new unowned source selectors reject. The
+  accepted integration epoch is **904/904**, allocator pressure **31/31**, and
+  the strict negative contract passes. Exactly `generator,i_FPP` becomes
+  audited; compound MIDFUNC/raw and generic emitter rows remain independently
+  classified. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md`.
+
 - **Audit the AArch64 FMOVE signed-integer source lifecycle** (2026-07-18):
   closes the byte/word/long `fmov_*_rr` MIDFUNC/raw pairs across exact two-root
   Dn/fetched reachability, 32-bit sign extension, `SCVTF_dw` conversion,

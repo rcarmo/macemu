@@ -118,6 +118,7 @@ const activeFppCompat = configuredExpandedSource(paths.fppCompat, true);
 const activeCodegen = configuredExpandedSource(paths.codegen, true);
 
 const auditFamilyRules: Array<[RegExp, string]> = [
+  [/^i_FPP$/, "AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md"],
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^i_FBcc$/, "AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md"],
   [/^i_EXT$/, "AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md"],

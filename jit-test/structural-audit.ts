@@ -561,6 +561,10 @@ const fppFmoveSourceMatrix = await Bun.file(new URL(
   "./fpp-fmove-source-matrix.ts",
   import.meta.url,
 )).text();
+const fppLifecycleCensus = await Bun.file(new URL(
+  "./fpp-lifecycle-census.ts",
+  import.meta.url,
+)).text();
 const fppFmoveRegisterServiceMatrix = await Bun.file(new URL(
   "./fpp-fmove-register-service-matrix.ts",
   import.meta.url,
@@ -923,6 +927,26 @@ console.log("METRIC structural_fpp_fmove_integer_source_vectors=18");
 console.log("METRIC structural_fpp_fmove_integer_source_midfuncs=3");
 console.log("METRIC structural_fpp_fmove_integer_source_raw_boundaries=3");
 console.log("METRIC structural_fpp_fmove_integer_source_shared_emitters=3");
+for (const contract of [
+  'expectedSelectors.length !== 61',
+  'exactTopForms.length !== 8 || exactTopForms.some((value, index) => value !== index)',
+  'top_forms=8 operation_selectors=${expectedSelectors.length} selector_owners=${owners.length} top_level_owners=${topOwners.length}',
+  'integrated_pass=904 integrated_fail=0 regpressure_pass=31 strict_negative=1',
+  'if (seen.has(selector)) fail',
+  'operation selector ownership mismatch source=[${hex(sourceSelectors)}] owners=[${hex(expectedSelectors)}]',
+  'sourceSelectors.some((value, index) => value !== expectedSelectors[index])',
+  'requireText(lifecycle, `case 0x${selector.toString(16).padStart(2, "0")}:`',
+  'METRIC pass=904', 'METRIC fail=0', 'selected=31 pass=31 fail=0',
+  'strict_full_jit_negative_gate=1',
+]) requireText(fppLifecycleCensus, contract, "FPP lifecycle census");
+const fppLifecycleOwnerEntries = (fppLifecycleCensus.match(/name: "[^"]+", selectors:/g) || []).length;
+const fppLifecycleTopOwnerEntries = (fppLifecycleCensus.match(/^  \["[^"]+", "fpp-/gm) || []).length;
+if (fppLifecycleOwnerEntries !== 22 || fppLifecycleTopOwnerEntries !== 10)
+  fail(`FPP lifecycle census owner counts=${fppLifecycleOwnerEntries}/${fppLifecycleTopOwnerEntries}, expected 22/10`);
+console.log("METRIC structural_fpp_lifecycle_top_forms=8");
+console.log("METRIC structural_fpp_lifecycle_operation_selectors=61");
+console.log("METRIC structural_fpp_lifecycle_selector_owners=22");
+console.log("METRIC structural_fpp_lifecycle_top_level_owners=10");
 const fppCompilerOperationForMove = functionBody(
   fppCompilerSource,
   "void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)",

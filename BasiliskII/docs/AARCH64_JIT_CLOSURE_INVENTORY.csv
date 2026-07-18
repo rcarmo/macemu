@@ -345,7 +345,7 @@ generator,i_EXG,audited,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,
 generator,i_EXT,audited,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2126,BasiliskII/docs/AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md
 generator,i_FBcc,audited,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3749,BasiliskII/docs/AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md
 generator,i_FDBcc,serviced,FDBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3765,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FPP,unreviewed,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3734,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
+generator,i_FPP,audited,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3734,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md
 generator,i_FRESTORE,serviced,FRESTORE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3798,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_FSAVE,serviced,FSAVE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3793,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_FScc,unreviewed,FScc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3771,native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report
