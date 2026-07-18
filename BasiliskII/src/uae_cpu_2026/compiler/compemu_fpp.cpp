@@ -2226,6 +2226,12 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 			return;
 			break;
 		case 0x27:						/* FSGLMUL */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Binary64 native operands cannot retain extended factors, the
+			 * single significand/extended exponent result, or Motorola status. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fsglmul)
 			{
 				FAIL(1);

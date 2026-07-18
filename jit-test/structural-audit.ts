@@ -525,6 +525,10 @@ const fppSgldivServiceMatrix = await Bun.file(new URL(
   "./fpp-sgldiv-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppSglmulServiceMatrix = await Bun.file(new URL(
+  "./fpp-sglmul-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1697,6 +1701,39 @@ console.log("METRIC structural_fpp_sgldiv_service_vectors=23");
 console.log("METRIC structural_fpp_sgldiv_strict_rejections=1");
 console.log("METRIC structural_fpp_sgldiv_one_sided_operands=2");
 console.log("METRIC structural_fpp_sgldiv_direct_single_round=1");
+const sglmulCompilerStart = fppCompilerOperation.indexOf("case 0x27:\t\t\t\t\t\t/* FSGLMUL */");
+const sglmulCompilerEnd = fppCompilerOperation.indexOf("case 0x28:\t\t\t\t\t\t/* FSUB */", sglmulCompilerStart);
+if (sglmulCompilerStart < 0 || sglmulCompilerEnd < 0) fail("FPP FSGLMUL compiler boundary is incomplete");
+const sglmulCompilerBlock = fppCompilerOperation.slice(sglmulCompilerStart, sglmulCompilerEnd);
+for (const contract of ["case 0x27:", "jit_disable.fsglmul", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
+  requireText(sglmulCompilerBlock, contract, "FPP FSGLMUL AArch64 service boundary");
+const sglmulGuardEnd = sglmulCompilerBlock.indexOf("#endif", sglmulCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)"));
+if (sglmulGuardEnd < 0 || sglmulGuardEnd > sglmulCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP FSGLMUL service exit does not precede acquisition");
+for (const contract of [
+  "bool single_extended_result = operation == 36 || operation == 39", "case 39: // FSGLMUL",
+  "mpfr_mul (single_extended, fpu.registers[reg].f, value.f, rnd)",
+  "mpfr_zero_p (value.f) && mpfr_inf_p (fpu.registers[reg].f)",
+  "mpfr_inf_p (value.f) && mpfr_zero_p (fpu.registers[reg].f)",
+  "set_format (EXTENDED_PREC)", "mpfr_check_range (single_extended, t, rnd)",
+]) requireText(fpuMpfrSource, contract, "MPFR FSGLMUL single-significand/extended-exponent contract");
+for (const contract of [
+  'name: "fsglmul_extended_destination_one_sided"', 'name: "fsglmul_extended_source_one_sided"',
+  'name: "fsglmul_double_round_midpoint", selector: "27", destination: "3f ff 00 00 80 00 00 80 80 00 00 81", source: "3f fe 00 00 ff ff ff ff 00 00 00 00", output: "3f ff 00 00 80 00 01 00 00 00 00 00"',
+  'name: "fsglmul_single_nearest_independent_fpcr"', 'name: "fsglmul_single_plus"', 'name: "fsglmul_negative_minus"',
+  'name: "fsglmul_extended_exponent_no_single_overflow"', 'name: "fsglmul_extended_exponent_no_single_underflow"',
+  'name: "fsglmul_zero_infinity_invalid"', 'name: "fsglmul_infinity_zero_invalid"',
+  'name: "fsglmul_destination_qnan"', 'name: "fsglmul_source_qnan"',
+  'name: "fsglmul_source_snan_destination_precedence"', 'name: "fsglmul_destination_snan_quiet"',
+  'name: "fsglmul_fp7_self_alias"', 'name: "fsglmul_fp7_destination_reseed"',
+  'name: "fsglmul_postincrement_source"', 'name: "fsglmul_predecrement_source"', 'name: "fsglmul_accrued_preserve"',
+  'const auditedOpcode = item.aliasFp7 ? "f200"', 'output.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)',
+  'B2_NATIVE_ASSERT_PC: "0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'service_pass=${servicePass} strict_pass=${strictPass}',
+]) requireText(fppSglmulServiceMatrix, contract, "FPP FSGLMUL service matrix");
+console.log("METRIC structural_fpp_sglmul_service_vectors=22");
+console.log("METRIC structural_fpp_sglmul_strict_rejections=1");
+console.log("METRIC structural_fpp_sglmul_one_sided_operands=2");
+console.log("METRIC structural_fpp_sglmul_direct_single_round=1");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

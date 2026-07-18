@@ -1825,7 +1825,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
        * transcendental operations must evaluate directly into the target-width
        * temporary to avoid double rounding. */
       int operation = extra & 0x3f;
-      bool single_extended_result = operation == 36;
+      bool single_extended_result = operation == 36 || operation == 39;
       bool direct_result = operation == 2 || operation == 6
 	|| operation == 8 || operation == 9 || operation == 10
 	|| operation == 12 || operation == 13 || operation == 14
@@ -2032,16 +2032,10 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = do_scale (value, reg, rnd);
 	  break;
 	case 39: // FSGLMUL
-	  {
-	    MPFR_DECL_INIT (value2, SINGLE_PREC);
-
-	    set_format (SINGLE_PREC);
-	    if ((mpfr_zero_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
-		|| (mpfr_inf_p (value.f) && mpfr_zero_p (fpu.registers[reg].f)))
-	      cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	    t = mpfr_mul (value2, fpu.registers[reg].f, value.f, rnd);
-	    mpfr_set (value.f, value2, rnd);
-	  }
+	  if ((mpfr_zero_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
+	      || (mpfr_inf_p (value.f) && mpfr_zero_p (fpu.registers[reg].f)))
+	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
+	  t = mpfr_mul (single_extended, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	case 40: // FSUB
 	  if (mpfr_inf_p (fpu.registers[reg].f) && mpfr_inf_p (value.f)
