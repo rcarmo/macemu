@@ -69,4 +69,11 @@ The directly evidenced row is promoted:
 - `emitter_api,FMOV_di` → **audited**.
 
 No wrapper, raw boundary, MIDFUNC, arithmetic path, or generator row is
-promoted. `generator,i_FPP` remains **unreviewed**.
+promoted by this emitter checkpoint. `generator,i_FPP` remains **unreviewed**.
+
+A later configured-root audit retired the definition-only
+`raw_fmov_d_ri_10` wrapper beneath unreachable `fmov_d_ri_10` and
+`fmov_l_ri`. That does not retire `FMOV_di`: four other configured source sites
+remain, and the exact five-site inventory continues to include the historical
+wrapper definition. The zero/one constant wrappers remain separate and
+reachable as inventoried.

@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the definition-only AArch64 constant-10/100 raw wrappers**
+  (2026-07-18): FMOVECR already enters exact MPFR service before selector
+  dispatch. The intermediate `fmov_l_ri` has no configured root, and its
+  `fmov_d_ri_10`/`fmov_d_ri_100` children were already unreachable. Exact
+  two-level caller/body checks now classify only `raw_fmov_d_ri_10` and
+  `raw_fmov_d_ri_100` **unreachable**. The accepted FMOVECR **36+3** matrix owns
+  configured runtime fidelity. Shared `FMOV_di`/`SCVTF_dw` remain audited and
+  reachable at exact 5/6 source sites; zero/one wrappers remain unchanged. This
+  is a two-row raw retirement, and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVECR_SUBTRANCHE.md`.
+
 - **Retire the definition-only AArch64 cut-to-single raw wrapper**
   (2026-07-18): `fcuts_r` was already unreachable after FSMOVE/FDMOVE moved to
   exact MPFR service before operand acquisition. Exact caller/body checks now

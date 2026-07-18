@@ -1238,6 +1238,44 @@ console.log("METRIC structural_fpp_fmovecr_defined_selectors=22");
 console.log("METRIC structural_fpp_fmovecr_service_vectors=36");
 console.log("METRIC structural_fpp_fmovecr_strict_rejections=3");
 console.log("METRIC structural_fpp_fmovecr_native_retired=1");
+const fmovLongImmStart = midfuncSource.indexOf("MIDFUNC(2,fmov_l_ri,(FW d, IM32 i))");
+const fmovLongImmEnd = midfuncSource.indexOf("MENDFUNC(2,fmov_l_ri,(FW d, IM32 i))", fmovLongImmStart);
+if (fmovLongImmStart < 0 || fmovLongImmEnd < 0) fail("missing retired fmov_l_ri intermediate MIDFUNC");
+const fmovLongImmBody = midfuncSource.slice(fmovLongImmStart, fmovLongImmEnd);
+for (const contract of ["case 10:", "fmov_d_ri_10(d);", "case 100:", "fmov_d_ri_100(d);"])
+  requireText(fmovLongImmBody, contract, "retired fmov_l_ri constant dispatch");
+if ((midfuncSource.match(/\bfmov_l_ri\b/g) || []).length !== 2)
+  fail("fmov_l_ri gained a configured caller");
+for (const [midName, rawName, rawContracts] of [
+  ["fmov_d_ri_10", "raw_fmov_d_ri_10", ["FMOV_di(r, 0b00100100);"]],
+  ["fmov_d_ri_100", "raw_fmov_d_ri_100", ["MOV_wi(REG_WORK1, 100);", "SCVTF_dw(r, REG_WORK1);"]],
+] as const) {
+  const midStart = midfuncSource.indexOf(`MIDFUNC(1,${midName},(FW r))`);
+  const midEnd = midfuncSource.indexOf(`MENDFUNC(1,${midName},(FW r))`, midStart);
+  if (midStart < 0 || midEnd < 0) fail(`missing retired constant MIDFUNC ${midName}`);
+  requireText(midfuncSource.slice(midStart, midEnd), `${rawName}(r);`, `retired constant MIDFUNC ${midName}`);
+  if ((midfuncSource.match(new RegExp(`\\b${midName}\\b`, "g")) || []).length !== 3)
+    fail(`retired constant MIDFUNC ${midName} caller graph changed`);
+  const rawStart = codegenSource.indexOf(`LOWFUNC(NONE,NONE,1,${rawName},(FW r))`);
+  const rawEnd = codegenSource.indexOf(`LENDFUNC(NONE,NONE,1,${rawName},(FW r))`, rawStart);
+  if (rawStart < 0 || rawEnd < 0) fail(`missing retired constant raw boundary ${rawName}`);
+  const rawBody = codegenSource.slice(rawStart, rawEnd);
+  let previous = -1;
+  for (const contract of rawContracts) {
+    requireText(rawBody, contract, `retired constant raw boundary ${rawName}`);
+    const position = rawBody.indexOf(contract);
+    if (position <= previous) fail(`retired constant raw boundary ${rawName} lower-body order changed`);
+    previous = position;
+  }
+  if ((codegenSource.match(new RegExp(`\\b${rawName}\\b`, "g")) || []).length !== 2)
+    fail(`constant raw boundary ${rawName} gained a configured caller`);
+}
+const constantFmovDiSites = (codegenSource.match(/\bFMOV_di\(/g) || []).length;
+const constantScvtfSites = (codegenSource.match(/\bSCVTF_dw\(/g) || []).length;
+if (constantFmovDiSites !== 5 || constantScvtfSites !== 6)
+  fail(`constant residual emitter sites FMOV_di/SCVTF_dw=${constantFmovDiSites}/${constantScvtfSites}, expected 5/6`);
+console.log("METRIC structural_fpp_fmovecr_unreachable_constant_raw_boundaries=2");
+console.log("METRIC structural_fpp_fmovecr_reachable_constant_emitters=2");
 
 const fabsStart = fppCompilerOperation.indexOf("case 0x18:");
 const fabsEnd = fppCompilerOperation.indexOf("case 0x19:", fabsStart);

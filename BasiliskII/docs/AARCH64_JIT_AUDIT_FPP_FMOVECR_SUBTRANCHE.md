@@ -74,8 +74,18 @@ allocator pressure (isolated): pass=31 fail=0
 
 ## Closure decision
 
-No closure row is promoted. The deterministic inventory remains 997 rows with
-zero classification changes. The conservative source graph still sees constant
-helper text after the architecture gate, so its current MIDFUNC/raw rows remain
-unchanged. `generator,i_FPP` remains **unreviewed** pending the other FPP
-subfamilies.
+The original FMOVECR checkpoint promoted no closure row. `generator,i_FPP`
+remains **unreviewed** pending the other FPP subfamilies.
+
+A later configured-root audit resolved the constant-helper graph beneath the
+AArch64 service gate. `fmov_l_ri` has no configured root, and its constant-10
+and constant-100 children are already unreachable. Their definition-only raw
+wrappers `raw_fmov_d_ri_10` and `raw_fmov_d_ri_100` are therefore
+**unreachable**, guarded by the exact two-level dispatch, distinct lower bodies,
+`LOWFUNC`/`LENDFUNC`-only references, and future-caller checks.
+
+This is a two-row raw-boundary retirement, not native acceptance. The accepted
+**36+3** FMOVECR matrix remains configured guest runtime evidence. Shared
+`FMOV_di` and `SCVTF_dw` emitters remain audited and reachable with exact 5/6
+configured sites. The zero/one MIDFUNC and raw wrappers remain reachable and
+unreviewed; they are deliberately outside this checkpoint.

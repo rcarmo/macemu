@@ -76,4 +76,10 @@ The directly evidenced row is promoted:
 - `emitter_api,SCVTF_dw` → **audited**.
 
 No raw boundary, MIDFUNC, memory path, Motorola-status path, or generator row is
-promoted. `generator,i_FPP` remains **unreviewed**.
+promoted by this emitter checkpoint. `generator,i_FPP` remains **unreviewed**.
+
+A later configured-root audit retired the definition-only
+`raw_fmov_d_ri_100` wrapper beneath unreachable `fmov_d_ri_100` and
+`fmov_l_ri`. That does not retire `SCVTF_dw`: five other configured source sites
+remain, and the exact six-site inventory continues to include the historical
+wrapper definition.
