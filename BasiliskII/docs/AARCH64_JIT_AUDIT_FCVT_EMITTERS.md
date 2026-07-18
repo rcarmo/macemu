@@ -103,4 +103,10 @@ The directly evidenced rows are promoted:
 - `emitter_api,FCVT_ds` → **audited**.
 
 No compound raw boundary, MIDFUNC, arithmetic family, memory path, or generator
-row is promoted. `generator,i_FPP` remains **unreviewed**.
+row is promoted by this emitter checkpoint. `generator,i_FPP` remains
+**unreviewed**.
+
+A later configured-root audit retired the definition-only `raw_fcuts_r` wrapper
+beneath already-unreachable `fcuts_r`. That does not retire either emitter:
+`FCVT_sd` and `FCVT_ds` retain their other audited compositions and exact 7/6
+configured source-site counts.

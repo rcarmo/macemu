@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the definition-only AArch64 cut-to-single raw wrapper**
+  (2026-07-18): `fcuts_r` was already unreachable after FSMOVE/FDMOVE moved to
+  exact MPFR service before operand acquisition. Exact caller/body checks now
+  establish that `raw_fcuts_r` has only its `LOWFUNC`/`LENDFUNC` definition and
+  classify it **unreachable**. The accepted explicit-move **13+2** matrix owns
+  configured runtime fidelity. `FCVT_sd` and `FCVT_ds` remain audited/reachable
+  at exact 7/6 source-site counts, so neither shared emitter is retired. This is
+  a one-row raw retirement, and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_EXPLICIT_MOVE_SUBTRANCHE.md`.
+
 - **Retire the definition-only AArch64 integral-rounding raw wrappers**
   (2026-07-18): `frndint_rr` and `frndintz_rr` were already unreachable; exact
   caller/body checks now establish that `raw_frndint_rr` and

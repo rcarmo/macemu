@@ -1189,6 +1189,26 @@ for (const contract of [
 console.log("METRIC structural_fpp_explicit_move_service_vectors=13");
 console.log("METRIC structural_fpp_explicit_move_strict_rejections=2");
 console.log("METRIC structural_fpp_explicit_move_native_retired=1");
+const fcutsMidStart = midfuncSource.indexOf("MIDFUNC(1,fcuts_r,(FRW r))");
+const fcutsMidEnd = midfuncSource.indexOf("MENDFUNC(1,fcuts_r,(FRW r))", fcutsMidStart);
+if (fcutsMidStart < 0 || fcutsMidEnd < 0) fail("missing retired cut-to-single MIDFUNC fcuts_r");
+requireText(midfuncSource.slice(fcutsMidStart, fcutsMidEnd), "raw_fcuts_r(r);", "retired cut-to-single MIDFUNC fcuts_r");
+if ((midfuncSource.match(/\bfcuts_r\b/g) || []).length !== 2)
+  fail("cut-to-single MIDFUNC fcuts_r gained a configured caller");
+const fcutsRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,1,raw_fcuts_r,(FRW r))");
+const fcutsRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,1,raw_fcuts_r,(FRW r))", fcutsRawStart);
+if (fcutsRawStart < 0 || fcutsRawEnd < 0) fail("missing retired cut-to-single raw boundary raw_fcuts_r");
+const fcutsRawBody = codegenSource.slice(fcutsRawStart, fcutsRawEnd);
+for (const contract of ["FCVT_sd(SCRATCH_F64_1, r);", "FCVT_ds(r, SCRATCH_F64_1);"])
+  requireText(fcutsRawBody, contract, "retired cut-to-single raw boundary raw_fcuts_r");
+if ((codegenSource.match(/\braw_fcuts_r\b/g) || []).length !== 2)
+  fail("cut-to-single raw boundary raw_fcuts_r gained a configured caller");
+const fcutsFcvtSdSites = (codegenSource.match(/\bFCVT_sd\(/g) || []).length;
+const fcutsFcvtDsSites = (codegenSource.match(/\bFCVT_ds\(/g) || []).length;
+if (fcutsFcvtSdSites !== 7 || fcutsFcvtDsSites !== 6)
+  fail(`cut-to-single residual FCVT sites sd/ds=${fcutsFcvtSdSites}/${fcutsFcvtDsSites}, expected 7/6`);
+console.log("METRIC structural_fpp_explicit_move_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_explicit_move_reachable_fcvt_emitters=2");
 
 const fmovecrStart = fppCompilerOperation.indexOf("if ((extra & 0xfc00) == 0x5c00)");
 const fmovecrSelector = fppCompilerOperation.indexOf("switch (extra & 0x7f)", fmovecrStart);

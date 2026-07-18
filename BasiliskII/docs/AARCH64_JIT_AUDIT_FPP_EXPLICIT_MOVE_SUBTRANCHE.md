@@ -83,6 +83,17 @@ allocator pressure (isolated): pass=31 fail=0
 
 ## Closure decision
 
-No closure row is promoted. The deterministic inventory remains 997 rows with
-zero classification changes. `fmovs_rr` and `fcuts_r` remain unreachable;
-`generator,i_FPP` remains **unreviewed** pending the other FPP subfamilies.
+The original explicit-move checkpoint promoted no closure row. `fmovs_rr` and
+`fcuts_r` were already unreachable; `generator,i_FPP` remains **unreviewed**
+pending the other FPP subfamilies.
+
+A later configured-root audit established that `raw_fcuts_r` is definition-only
+beneath unreachable `fcuts_r`. Its exact MIDFUNC parent, narrowing-then-widening
+body, `LOWFUNC`/`LENDFUNC`-only reference count, and future-caller absence are
+now fail-closed structural contracts, so `raw_fcuts_r` is **unreachable**.
+
+This is raw-boundary retirement, not native acceptance. The accepted **13+2**
+FSMOVE/FDMOVE matrix remains configured guest runtime evidence. `FCVT_sd` and
+`FCVT_ds` remain audited and reachable through their other compositions, with
+all **7/6** configured sites retained; `fmovs_rr` and its separate raw wrapper
+are unchanged.
