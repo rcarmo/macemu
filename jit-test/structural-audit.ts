@@ -1234,6 +1234,28 @@ if (fcutsFcvtSdSites !== 7 || fcutsFcvtDsSites !== 6)
   fail(`cut-to-single residual FCVT sites sd/ds=${fcutsFcvtSdSites}/${fcutsFcvtDsSites}, expected 7/6`);
 console.log("METRIC structural_fpp_explicit_move_unreachable_raw_boundaries=1");
 console.log("METRIC structural_fpp_explicit_move_reachable_fcvt_emitters=2");
+const fmovsMidStart = midfuncSource.indexOf("MIDFUNC(2,fmovs_rr,(FW d, FR s))");
+const fmovsMidEnd = midfuncSource.indexOf("MENDFUNC(2,fmovs_rr,(FW d, FR s))", fmovsMidStart);
+if (fmovsMidStart < 0 || fmovsMidEnd < 0) fail("missing retired distinct-destination single-round MIDFUNC fmovs_rr");
+requireText(midfuncSource.slice(fmovsMidStart, fmovsMidEnd), "raw_fmovs_rr(d, s);", "retired distinct-destination single-round MIDFUNC fmovs_rr");
+if ((midfuncSource.match(/\bfmovs_rr\b/g) || []).length !== 2)
+  fail("distinct-destination single-round MIDFUNC fmovs_rr gained a configured caller");
+const fmovsRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmovs_rr,(FW d, FR s))");
+const fmovsRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fmovs_rr,(FW d, FR s))", fmovsRawStart);
+if (fmovsRawStart < 0 || fmovsRawEnd < 0) fail("missing retired distinct-destination single-round raw boundary raw_fmovs_rr");
+const fmovsRawBody = codegenSource.slice(fmovsRawStart, fmovsRawEnd);
+const fmovsNarrow = fmovsRawBody.indexOf("FCVT_sd(SCRATCH_F64_1, s);");
+const fmovsWiden = fmovsRawBody.indexOf("FCVT_ds(d, SCRATCH_F64_1);");
+if (fmovsNarrow < 0 || fmovsWiden <= fmovsNarrow)
+  fail("retired distinct-destination single-round raw boundary conversion order changed");
+if ((codegenSource.match(/\braw_fmovs_rr\b/g) || []).length !== 2)
+  fail("distinct-destination single-round raw boundary raw_fmovs_rr gained a configured caller");
+const fmovsFcvtSdSites = (codegenSource.match(/\bFCVT_sd\(/g) || []).length;
+const fmovsFcvtDsSites = (codegenSource.match(/\bFCVT_ds\(/g) || []).length;
+if (fmovsFcvtSdSites !== 7 || fmovsFcvtDsSites !== 6)
+  fail(`distinct-destination single-round residual FCVT sites sd/ds=${fmovsFcvtSdSites}/${fmovsFcvtDsSites}, expected 7/6`);
+console.log("METRIC structural_fpp_fmovs_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_fmovs_reachable_fcvt_emitters=2");
 
 const fmovecrStart = fppCompilerOperation.indexOf("if ((extra & 0xfc00) == 0x5c00)");
 const fmovecrSelector = fppCompilerOperation.indexOf("switch (extra & 0x7f)", fmovecrStart);

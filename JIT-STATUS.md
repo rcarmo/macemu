@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the definition-only AArch64 distinct-destination single-round raw
+  wrapper** (2026-07-18): `fmovs_rr` has no configured production root, and
+  exact caller/body checks establish that `raw_fmovs_rr` has only its
+  `LOWFUNC`/`LENDFUNC` definition with ordered `FCVT_sd`→`FCVT_ds` conversion.
+  The raw row is now **unreachable**. Direct FCVT conformance remains **2,048
+  words / 256 native conversions / 64 aliases**, and the live ordinary
+  single-destination matrix remains **21/21**. Shared `FCVT_sd`/`FCVT_ds` stay
+  audited/reachable at exact 7/6 source sites. This is a one-row graph
+  correction, not FSMOVE service evidence; `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FCVT_EMITTERS.md`.
+
 - **Repair current ordinary-FMOVE source acceptance and retire the dead
   split-double raw wrapper** (2026-07-18): the former 43-case native matrix
   retained 14 FP-register cases after those routes moved to exact MPFR service.

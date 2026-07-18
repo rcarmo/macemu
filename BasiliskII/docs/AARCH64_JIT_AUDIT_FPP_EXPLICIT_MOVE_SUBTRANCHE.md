@@ -96,5 +96,10 @@ now fail-closed structural contracts, so `raw_fcuts_r` is **unreachable**.
 This is raw-boundary retirement, not native acceptance. The accepted **13+2**
 FSMOVE/FDMOVE matrix remains configured guest runtime evidence. `FCVT_sd` and
 `FCVT_ds` remain audited and reachable through their other compositions, with
-all **7/6** configured sites retained; `fmovs_rr` and its separate raw wrapper
-are unchanged.
+all **7/6** configured sites retained.
+
+A subsequent graph-only checkpoint also retired the definition-only
+`raw_fmovs_rr` wrapper beneath unreachable `fmovs_rr`. That distinct-destination
+narrow/widen primitive had no configured guest selector and is not evidence for
+FSMOVE/FDMOVE service; direct FCVT conformance and the live ordinary
+single-destination matrix own its lower shared operations.

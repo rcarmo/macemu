@@ -106,7 +106,13 @@ No compound raw boundary, MIDFUNC, arithmetic family, memory path, or generator
 row is promoted by this emitter checkpoint. `generator,i_FPP` remains
 **unreviewed**.
 
-A later configured-root audit retired the definition-only `raw_fcuts_r` wrapper
-beneath already-unreachable `fcuts_r`. That does not retire either emitter:
-`FCVT_sd` and `FCVT_ds` retain their other audited compositions and exact 7/6
-configured source-site counts.
+Later configured-root audits retired the definition-only `raw_fcuts_r` and
+`raw_fmovs_rr` wrappers beneath already-unreachable `fcuts_r` and `fmovs_rr`.
+The former rounds in place; the latter narrows a source and widens into a
+distinct destination. Exact parent/body/future-caller checks guard both graph
+corrections.
+
+Neither correction retires an emitter: `FCVT_sd` and `FCVT_ds` retain their
+other audited compositions and exact 7/6 configured source-site counts. Direct
+FCVT conformance and the live 21-case ordinary single-destination matrix remain
+current runtime evidence.
