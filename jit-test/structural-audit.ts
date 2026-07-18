@@ -2260,6 +2260,37 @@ console.log("METRIC structural_fpp_sglmul_service_vectors=22");
 console.log("METRIC structural_fpp_sglmul_strict_rejections=1");
 console.log("METRIC structural_fpp_sglmul_one_sided_operands=2");
 console.log("METRIC structural_fpp_sglmul_direct_single_round=1");
+const sglmulMidStart = midfuncSource.indexOf("MIDFUNC(2,fsglmul_rr,(FRW d, FR s))");
+const sglmulMidEnd = midfuncSource.indexOf("MENDFUNC(2,fsglmul_rr,(FRW d, FR s))", sglmulMidStart);
+if (sglmulMidStart < 0 || sglmulMidEnd < 0) fail("missing retired FSGLMUL MIDFUNC fsglmul_rr");
+requireText(midfuncSource.slice(sglmulMidStart, sglmulMidEnd), "raw_fsglmul_rr(d, s);", "retired FSGLMUL MIDFUNC fsglmul_rr");
+if ((midfuncSource.match(/\bfsglmul_rr\b/g) || []).length !== 2)
+  fail("FSGLMUL MIDFUNC fsglmul_rr gained a configured caller");
+const sglmulRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fsglmul_rr,(FRW d, FR s))");
+const sglmulRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fsglmul_rr,(FRW d, FR s))", sglmulRawStart);
+if (sglmulRawStart < 0 || sglmulRawEnd < 0) fail("missing retired FSGLMUL raw boundary raw_fsglmul_rr");
+const sglmulRawBody = codegenSource.slice(sglmulRawStart, sglmulRawEnd);
+let sglmulPrevious = -1;
+for (const contract of [
+  "FCVT_sd(SCRATCH_F64_1, d);", "FCVT_sd(SCRATCH_F64_2, s);",
+  "FMUL_sss(SCRATCH_F64_1, SCRATCH_F64_1, SCRATCH_F64_2);", "FCVT_ds(d, SCRATCH_F64_1);",
+]) {
+  requireText(sglmulRawBody, contract, "retired FSGLMUL raw boundary raw_fsglmul_rr");
+  const position = sglmulRawBody.indexOf(contract);
+  if (position <= sglmulPrevious) fail("retired FSGLMUL raw conversion/multiply order changed");
+  sglmulPrevious = position;
+}
+if ((codegenSource.match(/\braw_fsglmul_rr\b/g) || []).length !== 2)
+  fail("FSGLMUL raw boundary raw_fsglmul_rr gained a configured caller");
+const sglmulFmulSingleSites = (codegenSource.match(/\bFMUL_sss\(/g) || []).length;
+const sglmulFmulDoubleSites = (codegenSource.match(/\bFMUL_ddd\(/g) || []).length;
+const sglmulFcvtSdSites = (codegenSource.match(/\bFCVT_sd\(/g) || []).length;
+const sglmulFcvtDsSites = (codegenSource.match(/\bFCVT_ds\(/g) || []).length;
+if (sglmulFmulSingleSites !== 1 || sglmulFmulDoubleSites !== 1 || sglmulFcvtSdSites !== 7 || sglmulFcvtDsSites !== 6)
+  fail(`FSGLMUL residual sites FMUL_s/d FCVT_sd/ds=${sglmulFmulSingleSites}/${sglmulFmulDoubleSites} ${sglmulFcvtSdSites}/${sglmulFcvtDsSites}, expected 1/1 7/6`);
+console.log("METRIC structural_fpp_sglmul_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_sglmul_unreachable_single_emitters=1");
+console.log("METRIC structural_fpp_sglmul_unreachable_double_emitters=1");
 const sincosCompilerStart = fppCompilerOperation.indexOf("case 0x30:\t\t\t\t\t\t/* FSINCOS */");
 const sincosCompilerEnd = fppCompilerOperation.indexOf("case 0x38:\t\t\t\t\t\t/* FCMP */", sincosCompilerStart);
 if (sincosCompilerStart < 0 || sincosCompilerEnd < 0) fail("FPP FSINCOS compiler boundary is incomplete");

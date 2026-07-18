@@ -70,5 +70,6 @@ acquisition, and no other caller exists. The current inventory therefore
 classifies `fmul_rr`, `raw_fmul_rr`, and binary64 `FMUL_ddd` as
 **unreachable**. This report remains direct encoding/host-semantic evidence for
 the retained dead emitter definition; it does not override configured
-reachability. The separate binary32 `FMUL_sss` route remains reachable and
-independently audited.
+reachability. A later complete FSGLMUL lower-chain audit likewise classifies
+the sole-site binary32 `FMUL_sss` emitter unreachable; its independent direct
+audit remains historical evidence.

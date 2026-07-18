@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the serviced AArch64 FSGLMUL lower chain and sole binary32 multiply
+  emitter** (2026-07-18): FSGLMUL enters exact MPFR service before operand
+  acquisition; `fsglmul_rr` has no configured caller and `raw_fsglmul_rr` is
+  definition-only. Exact ordered conversion/multiply/widen checks now classify
+  the raw wrapper and its sole-site `FMUL_sss` emitter **unreachable**. The
+  accepted FSGLMUL **22+1** matrix owns configured runtime fidelity; direct
+  `FMUL_sss` evidence remains historical. Binary64 `FMUL_ddd` is already
+  unreachable, while shared FCVT emitters stay audited at 7/6. This is a
+  two-row lower-chain retirement; `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SGLMUL_BATCH.md`.
+
 - **Retire the serviced AArch64 FSGLDIV lower chain and sole binary32 divide
   emitter** (2026-07-18): FSGLDIV enters exact MPFR service before operand
   acquisition; `fsgldiv_rr` has no configured caller and `raw_fsgldiv_rr` is
@@ -301,9 +312,10 @@ inventory is 92/92, and the accepted register-count
   control-flow, exact edge/lower-chain, and future-caller checks. The prior
   32,768-word/604-route direct binary64 emitter audit remains historical
   evidence; **30+3** FMUL-family and **22+1** FSGLMUL cases own configured
-  runtime fidelity with exact variable-length service profiles. `FMUL_sss`
-  remains separately reachable and audited. This is retirement rather than
-  native acceptance, and `i_FPP` remains unreviewed. See
+  runtime fidelity with exact variable-length service profiles. A later
+  lower-chain audit also retires definition-only `raw_fsglmul_rr` and its
+  sole-site `FMUL_sss` emitter. This is retirement rather than native
+  acceptance, and `i_FPP` remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_MUL_BATCH.md`.
 
 - **Retire the residual AArch64 native subtract primitive chain**
@@ -348,14 +360,16 @@ inventory is 92/92, and the accepted register-count
   guest/raw/MIDFUNC/conversion and `i_FPP` boundaries remain separate. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FDIV_EMITTERS.md`.
 
-- **Audit the reachable generic AArch64 FMUL_sss emitter API**
+- **Audit the then-reachable generic AArch64 FMUL_sss emitter API**
   (2026-07-18): all **32,768 encodings** plus **608 native binary32 routes**
   now pin 24-bit halfway rounding, signed overflow/underflow, IXC/UFC/OFC,
   both zero×infinity IOC orders, left/right qNaN/SNaN, W-lane images,
   **276 aliases**, full-lane clearing, distinct-value Sn==Sm load ownership,
   all S fields, and external FP-state restoration. The sole
-  forced-single composition is pinned. Only `FMUL_sss` is audited; guest,
-  raw/MIDFUNC, conversion, and `i_FPP` boundaries remain separate. See
+  forced-single composition is pinned. A later complete lower-chain audit
+  classified its definition-only wrapper and sole-site emitter unreachable;
+  this direct audit remains historical evidence, while the 22+1 FSGLMUL matrix
+  owns configured runtime fidelity and `i_FPP` remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FMUL_S_EMITTER.md`.
 
 - **Audit the then-reachable generic AArch64 FMUL_ddd emitter API**
@@ -364,8 +378,9 @@ inventory is 92/92, and the accepted register-count
   IXC/UFC/OFC, zero×infinity IOC, left/right qNaN/SNaN, **272 aliases**, all D
   fields, and FP-state preservation. A later complete two-root audit retired
   the residual binary64 chain and now classifies `FMUL_ddd`, `raw_fmul_rr`, and
-  `fmul_rr` unreachable; the direct probe remains historical evidence.
-  Binary32 `FMUL_sss` remains reachable and audited. See
+  `fmul_rr` unreachable; the direct probe remains historical evidence. A later
+  lower-chain audit likewise retires sole-site binary32 `FMUL_sss`; its direct
+  probe also remains historical evidence. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md`.
 
 - **Audit the then-reachable generic AArch64 FSUB_ddd emitter API**

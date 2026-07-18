@@ -59,12 +59,19 @@ Independent review accepted the implementation but required the explicit
 midpoint/double-round witness. It was independently derived, added, and passed
 before final approval.
 
-No closure row is promoted to **audited**. `generator,i_FPP` remains
-**unreviewed** pending all selector groups.
+No closure row was promoted to **audited** at this guest-service checkpoint.
+`generator,i_FPP` remains **unreviewed** pending all selector groups.
 
 A later combined multiply-root audit established that this selector and the
 FMUL/FSMUL/FDMUL block are the only configured `fmul_rr` roots, and both service
 before operand acquisition. With no MIDFUNC caller, `fmul_rr`,
-`raw_fmul_rr`, and binary64 `FMUL_ddd` are therefore **unreachable**. This
-matrix remains the 22+1 runtime-fidelity proof for the FSGLMUL root. The
-separate `FMUL_sss` forced-single emitter remains reachable and audited.
+`raw_fmul_rr`, and binary64 `FMUL_ddd` are therefore **unreachable**.
+
+The complete lower-chain audit additionally proves that `fsglmul_rr` has no
+configured caller and `raw_fsglmul_rr` is definition-only with exact ordered
+`FCVT_sd` -> `FMUL_sss` -> `FCVT_ds` composition. The raw wrapper and its
+sole-site binary32 `FMUL_sss` emitter are therefore also **unreachable**. This
+matrix remains the 22+1 configured runtime-fidelity owner. The exhaustive
+direct `FMUL_sss` audit remains historical encoding and host-semantic evidence
+for the retained dead definition; shared `FCVT_sd`/`FCVT_ds` remain audited and
+reachable from other compositions. `generator,i_FPP` remains **unreviewed**.

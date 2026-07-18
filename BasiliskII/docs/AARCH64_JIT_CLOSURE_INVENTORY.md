@@ -19,8 +19,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 58 | 44 | 0 | 28 |
 | midfunc | 422 | 263 | 0 | 120 | 39 |
-| emitter_api | 294 | 67 | 0 | 98 | 129 |
-| raw_boundary | 83 | 26 | 0 | 15 | 42 |
+| emitter_api | 294 | 66 | 0 | 99 | 129 |
+| raw_boundary | 83 | 26 | 0 | 16 | 41 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.

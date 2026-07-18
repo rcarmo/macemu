@@ -77,5 +77,9 @@ counts, lower-chain shape, and future-caller checks are pinned in
 This is retirement, not native acceptance. The earlier exhaustive direct
 binary64 emitter probe remains historical evidence, while this 30+3 matrix and
 the separate 22+1 FSGLMUL matrix own configured guest runtime fidelity.
-`FMUL_sss` is deliberately unchanged: it remains reachable and audited through
-a separate forced-single composition that does not use `fmul_rr`.
+
+A later complete FSGLMUL lower-chain audit proved that `fsglmul_rr` has no
+configured caller and its retained `raw_fsglmul_rr` composition is
+definition-only. Consequently the raw wrapper and sole-site `FMUL_sss` emitter
+are also **unreachable**. The exhaustive direct binary32 emitter probe remains
+historical evidence; shared conversion emitters stay reachable elsewhere.

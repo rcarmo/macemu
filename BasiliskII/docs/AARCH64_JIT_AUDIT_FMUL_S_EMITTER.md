@@ -6,9 +6,9 @@ Base: `ba8604ef`
 
 ## Scope
 
-This checkpoint audits the complete reachable `FMUL_sss(Sd,Sn,Sm)` API. It
-closes generic scalar-binary32 encoding, rounding, exception, lane, alias, and
-state semantics only.
+This checkpoint directly audited the then-reachable `FMUL_sss(Sd,Sn,Sm)` API.
+It closed generic scalar-binary32 encoding, rounding, exception, lane, alias,
+and state semantics only.
 
 It does not promote `raw_fsglmul_rr`, a MIDFUNC wrapper, the serviced guest
 FSGLMUL or FMUL/FSMUL/FDMUL families, conversion wrappers, Motorola status, or
@@ -52,9 +52,20 @@ METRIC emitter_fmul_s_alias_routes=276
 
 ## Closure decision
 
-The directly evidenced row is promoted:
+At this checkpoint the directly evidenced row was promoted:
 
 - `emitter_api,FMUL_sss` → **audited**.
 
 No raw boundary, MIDFUNC, conversion wrapper, guest family, Motorola-status
-path, or generator row is promoted. `generator,i_FPP` remains **unreviewed**.
+path, or generator row was promoted. `generator,i_FPP` remained
+**unreviewed**.
+
+A later complete configured-root audit established that FSGLMUL enters exact
+semantic service before operand acquisition, `fsglmul_rr` has no configured
+caller, and its retained `raw_fsglmul_rr` composition is definition-only. The
+current inventory therefore classifies `raw_fsglmul_rr` and its sole-site
+binary32 `FMUL_sss` emitter as **unreachable**. This report remains direct
+encoding/host-semantic evidence for the retained dead emitter definition; it
+does not override configured reachability. The 22+1 FSGLMUL service matrix owns
+configured guest runtime fidelity, while `FCVT_sd`/`FCVT_ds` remain reachable
+through other compositions.
