@@ -129,7 +129,7 @@ emitter_api,FRINTI_dd,audited,FRINTI_dd,60,2,BasiliskII/src/uae_cpu_2026/compile
 emitter_api,FRINTZ_dd,audited,FRINTZ_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,471,AARCH64_JIT_AUDIT_FRINT_EMITTERS.md
 emitter_api,FSQRT_dd,audited,FSQRT_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,493,AARCH64_JIT_AUDIT_FSQRT_EMITTER.md
 emitter_api,FSQRT_ss,unreachable,FSQRT_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,494,no path from reachable AArch64 compiler/emitter roots
-emitter_api,FSUB_ddd,unreviewed,FSUB_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,495,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,FSUB_ddd,audited,FSUB_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,495,AARCH64_JIT_AUDIT_FSUB_EMITTER.md
 emitter_api,FSUB_sss,unreachable,FSUB_sss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,496,no path from reachable AArch64 compiler/emitter roots
 emitter_api,immEncode,unreviewed,immEncode,60,23,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,59,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,immOP_AND,unreviewed,immOP_AND,60,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,425,reachable encoder API; requires opcode/width/branch-range contract classification

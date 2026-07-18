@@ -477,6 +477,14 @@ const fsqrtEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fsqrt-conformance.sh",
   import.meta.url,
 )).text();
+const fsubEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fsub-conformance.cpp",
+  import.meta.url,
+)).text();
+const fsubEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fsub-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5280,6 +5288,34 @@ requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fsqrt-confor
 console.log("METRIC structural_fsqrt_emitter_exact_words=1024");
 console.log("METRIC structural_fsqrt_emitter_native_routes=4096");
 console.log("METRIC structural_fsqrt_emitter_callers=1");
+
+/* FSUB_ddd is the sole configured scalar-binary64 subtract encoder. Close its
+   generic encoding/value/alias/exception/state contract only. */
+const fsubEmitterCallers = (codegenSource.match(/\bFSUB_ddd\(/g) || []).length;
+if (fsubEmitterCallers !== 1) fail(`FSUB emitter callers=${fsubEmitterCallers}, expected 1`);
+requireText(codegenHeaderSource, "#define FSUB_ddd(Dd,Dn,Dm)", "generic FSUB declaration");
+const rawFsub = functionBody(codegenSource,
+  "LOWFUNC(NONE,NONE,2,raw_fsub_rr,(FRW d, FR s))",
+  "LENDFUNC(NONE,NONE,2,raw_fsub_rr,(FRW d, FR s))", "generic FSUB configured composition");
+requireText(rawFsub, "FSUB_ddd(d, d, s);", "generic FSUB configured composition");
+for (const contract of [
+  "0x1e603800u|(m<<16)|(n<<5)|d", "for(unsigned d=0;d<32;d++)",
+  "for(unsigned n=0;n<32;n++)", "for(unsigned m=0;m<32;m++)",
+  "positive_midpoint", "negative_midpoint", "positive_overflow", "negative_overflow",
+  "exact_cancel", "negative_zero_minus_positive_zero", "infinity_minus_infinity",
+  "left_quiet_nan", "right_quiet_nan", "left_signalling_nan", "right_signalling_nan", "finite_equal_sources",
+  "FSUB N source/alias semantics", "FSUB M source/alias semantics",
+  "FSUB preserves NZCV", "FSUB preserves FPCR", "FSUB FPSR",
+  "FSUB preserves caller D8-D15", "FSUB restores caller FPCR", "FSUB restores caller FPSR",
+  "PROT_READ|PROT_WRITE", "PROT_READ|PROT_EXEC", "__builtin___clear_cache",
+  "exact==32768&&native==576&&aliases==256",
+]) requireText(fsubEmitterProbeSource, contract, "generic FSUB native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fsub-conformance.cpp"])
+  requireText(fsubEmitterHarnessSource, contract, "generic FSUB conformance build");
+requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fsub-conformance.sh"', "generic FSUB bounded acceptance gate");
+console.log("METRIC structural_fsub_emitter_exact_words=32768");
+console.log("METRIC structural_fsub_emitter_native_routes=576");
+console.log("METRIC structural_fsub_emitter_callers=1");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
