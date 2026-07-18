@@ -501,6 +501,10 @@ const fppNativeTranscendentalServiceMatrix = await Bun.file(new URL(
   "./fpp-native-transcendental-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppCoshAcosCosServiceMatrix = await Bun.file(new URL(
+  "./fpp-cosh-acos-cos-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1205,7 +1209,8 @@ for (const contract of [
   "|| operation == 12 || operation == 13 || operation == 14",
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
-  "|| operation == 22;",
+  "|| operation == 22 || operation == 25 || operation == 28",
+  "|| operation == 29;",
   "|| direct_result || operation == 30 || operation == 31;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
@@ -1354,7 +1359,8 @@ for (const contract of [
   "operation == 12 || operation == 13 || operation == 14",
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
-  "|| operation == 22;",
+  "|| operation == 22 || operation == 25 || operation == 28",
+  "|| operation == 29;",
   "case 14: // FSIN", "mpfr_sin (direct, value.f, rnd)",
   "case 16: // FETOX", "mpfr_exp (direct, value.f, rnd)",
   "case 17: // FTWOTOX", "mpfr_exp2 (direct, value.f, rnd)",
@@ -1384,6 +1390,61 @@ console.log("METRIC structural_fpp_native_transcendental_service_vectors=49");
 console.log("METRIC structural_fpp_native_transcendental_strict_rejections=4");
 console.log("METRIC structural_fpp_native_transcendental_extended_source=1");
 console.log("METRIC structural_fpp_native_transcendental_direct_result=1");
+for (const [label, disable, name] of [
+  ["case 0x19:\t\t\t\t\t\t/* FCOSH */", "jit_disable.fcosh", "FCOSH"],
+  ["case 0x1c:\t\t\t\t\t\t/* FACOS */", "jit_disable.facos", "FACOS"],
+  ["case 0x1d:\t\t\t\t\t\t/* FCOS */", "jit_disable.fcos", "FCOS"],
+] as const) {
+  const start = fppCompilerOperation.indexOf(label);
+  const next = fppCompilerOperation.indexOf("case 0x", start + label.length);
+  if (start < 0 || next < 0) fail(`FPP ${name} service boundary is incomplete`);
+  const block = fppCompilerOperation.slice(start, next);
+  for (const contract of [label, disable, "FAIL(1);", "return;"])
+    requireText(block, contract, `FPP ${name} configured service boundary`);
+  const acquire = block.indexOf("get_fp_value(opcode, extra)");
+  if (name === "FCOS") {
+    const guardStart = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+    const guardEnd = block.indexOf("#endif", guardStart);
+    const guarded = guardStart >= 0 && guardEnd > guardStart
+      ? block.slice(guardStart, guardEnd) : "";
+    for (const contract of ["FAIL(1);", "return;"])
+      requireText(guarded, contract, "FPP FCOS guarded AArch64 service exit");
+    if (acquire < 0 || guardEnd > acquire)
+      fail("FPP FCOS guarded AArch64 service exit does not precede operand acquisition");
+  } else {
+    const disable = block.indexOf("jit_disable.");
+    const disableEnd = block.indexOf("\n\t\t\t}", disable);
+    const configured = block.indexOf("FAIL(1);\n\t\t\treturn;", disableEnd);
+    if (disable < 0 || disableEnd < 0 || configured < 0 || acquire >= 0)
+      fail(`FPP ${name} configured service case can acquire an operand`);
+  }
+}
+for (const contract of [
+  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29;",
+  "case 25: // FCOSH", "mpfr_cosh (direct, value.f, rnd)",
+  "case 28: // FACOS", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
+  "mpfr_acos (direct, value.f, rnd)", "case 29: // FCOS",
+  "mpfr_inf_p (value.f)", "mpfr_cos (direct, value.f, rnd)",
+]) requireText(ordinaryFppBlock, contract, "MPFR cosh/acos/cos extended-source/direct-result contract");
+for (const contract of [
+  'name:`${a.name}_extended_source_single_${s}`', 'name:`${a.name}_extended_source_double_nearest`',
+  'name:`${name}_positive_zero`', 'name:`${name}_negative_zero`',
+  'name:"fcosh_positive_infinity"', 'name:"fcosh_negative_infinity"',
+  'name:"facos_positive_one"', 'name:"facos_negative_one"',
+  'name:"facos_outside_domain_operr"', 'name:"facos_infinity_operr"',
+  'name:"fcos_positive_infinity_operr"', 'name:"fcos_negative_infinity_operr"',
+  'name:"fcosh_negative_qnan_payload"', 'name:"facos_signalling_nan_quiet"',
+  'name:"fcos_quiet_nan_payload"', 'name:"fcosh_finite_single_overflow"',
+  'name:"fcosh_fp7_self_alias"', 'name:"fcos_fp7_self_alias"', 'name:"facos_accrued_preserve"',
+  'B2_NATIVE_ASSERT_PC:"0x1000"',
+  'fc===(a.alias?4:3)&&o.includes("NATEXEC pc=00001000")&&o.includes("JIT_FALLBACK op=f239 pc=00001000")&&!o.includes("Caught SIGSEGV")',
+  'strict full-JIT: opcode fallback pc=00001000 op=f239',
+  "const es=process.env.CASE?sc.length:36", "et=process.env.CASE?ss.length:3",
+]) requireText(fppCoshAcosCosServiceMatrix, contract, "FPP cosh/acos/cos service matrix");
+console.log("METRIC structural_fpp_cosh_acos_cos_service_vectors=36");
+console.log("METRIC structural_fpp_cosh_acos_cos_strict_rejections=3");
+console.log("METRIC structural_fpp_cosh_acos_cos_extended_source=1");
+console.log("METRIC structural_fpp_cosh_acos_cos_direct_result=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

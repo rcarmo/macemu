@@ -2057,6 +2057,12 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* As with FSIN, the binary64 shadow and host libm route lose the
+			 * extended source and exact FPCR/FPSR result contract. */
+			FAIL(1);
+			return;
+#endif
 
 			dont_care_fflags();
 			src = get_fp_value(opcode, extra);

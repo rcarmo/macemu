@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FCOSH/FACOS service and retire lossy native FCOS**
+  (2026-07-18): all three now acquire extended sources and evaluate directly
+  into FPCR-width MPFR results; FCOS exits before AArch64 binary64/native-libm
+  lowering. A fixed **36 service + 3 strict** matrix covers source-sensitive
+  single/double results, directed rounding, signed zero, infinity/domain rules,
+  NaN metadata, FCOSH finite overflow, aliases and exact FPSR. No closure row
+  is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_COSH_ACOS_COS_BATCH.md`.
+
 - **Retire lossy native FSIN/FETOX/FTWOTOX/FLOG2 to exact service**
   (2026-07-18): the four remaining binary64-native transcendental routes now
   exit before narrowing extended operands and evaluate directly into FPCR-width

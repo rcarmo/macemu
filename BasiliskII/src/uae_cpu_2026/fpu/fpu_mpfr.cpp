@@ -1711,7 +1711,8 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 12 || operation == 13 || operation == 14
 	|| operation == 15 || operation == 16 || operation == 17
 	|| operation == 18 || operation == 20 || operation == 21
-	|| operation == 22;
+	|| operation == 22 || operation == 25 || operation == 28
+	|| operation == 29;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31;
       if (extended_source)
@@ -1830,7 +1831,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  value.nan_sign = 0;
 	  break;
 	case 25: // FCOSH
-	  t = mpfr_cosh (value.f, value.f, rnd);
+	  t = mpfr_cosh (direct, value.f, rnd);
 	  break;
 	case 26: // FNEG
 	  t = mpfr_neg (value.f, value.f, rnd);
@@ -1839,12 +1840,12 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	case 28: // FACOS
 	  if (mpfr_cmpabs (value.f, FPU_CONSTANT_ONE) > 0)
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_acos (value.f, value.f, rnd);
+	  t = mpfr_acos (direct, value.f, rnd);
 	  break;
 	case 29: // FCOS
 	  if (mpfr_inf_p (value.f))
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_cos (value.f, value.f, rnd);
+	  t = mpfr_cos (direct, value.f, rnd);
 	  break;
 	case 30: // FGETEXP
 	  t = do_getexp (value, rnd);
