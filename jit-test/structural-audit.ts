@@ -397,6 +397,14 @@ const branchEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-branch-conformance.sh",
   import.meta.url,
 )).text();
+const fmovEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fmov-conformance.cpp",
+  import.meta.url,
+)).text();
+const fmovEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fmov-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -4784,6 +4792,55 @@ for (const contract of [
 for (const contract of ["-Wall -Wextra -Werror", "emitter-eor-conformance.cpp"])
   requireText(eorEmitterHarnessSource, contract, "generic EOR conformance build");
 requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-eor-conformance.sh"', "generic EOR bounded acceptance gate");
+
+/* FMOV_dd/raw_fmov_rr/fmov_rr form one binary64 bit-copy primitive stack.
+   Architectural 80-bit register FMOVE is serviced before reaching it; pin the
+   remaining fixed-home ownership and complete D-register encoding contract. */
+requireText(codegenHeaderSource, "#define FMOV_dd(Dd,Dn)", "FMOV_dd emitter declaration");
+const rawFmovStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmov_rr,(FW d, FR s))");
+const rawFmovEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fmov_rr", rawFmovStart);
+if (rawFmovStart < 0 || rawFmovEnd < 0) fail("missing raw_fmov_rr boundary");
+const rawFmovBody = codegenSource.slice(rawFmovStart, rawFmovEnd);
+requireText(rawFmovBody, "FMOV_dd(d, s);", "raw_fmov_rr exact wrapper");
+if ((rawFmovBody.match(/FMOV_dd\(/g) || []).length !== 1)
+  fail("raw_fmov_rr must emit exactly one FMOV_dd");
+const midFmovStart = midfuncSource.indexOf("MIDFUNC(2,fmov_rr,(FW d, FR s))");
+const midFmovEnd = midfuncSource.indexOf("MENDFUNC(2,fmov_rr", midFmovStart);
+if (midFmovStart < 0 || midFmovEnd < 0) fail("missing fmov_rr MIDFUNC");
+const midFmovBody = midfuncSource.slice(midFmovStart, midFmovEnd);
+for (const contract of [
+  "if (d == s)", "s = f_readreg(s);", "d = f_writereg(d);",
+  "raw_fmov_rr(d, s);", "f_unlock(s);", "f_unlock(d);",
+]) requireText(midFmovBody, contract, "fmov_rr ownership contract");
+requireBefore(midFmovBody, "s = f_readreg(s);", "d = f_writereg(d);", "fmov_rr source preservation");
+requireBefore(midFmovBody, "d = f_writereg(d);", "raw_fmov_rr(d, s);", "fmov_rr destination publication");
+for (const contract of [
+  "if (r < 8)\n        bestreg = r + 8", "else if (r == FP_RESULT)\n        bestreg = 6",
+  "else // FS1\n        bestreg = 7", "static void f_unlock(int r)\n{\n}",
+  "f_mark_runtime_dirty(r);", "live.fate[r].status = DIRTY;",
+]) requireText(allocatorSource, contract, "fmov_rr fixed-home allocator contract");
+const authoritativeFmovSpellings = (fppCompilerSource.match(/\bfmov_rr\(/g) || []).length;
+if (authoritativeFmovSpellings !== 7)
+  fail(`fmov_rr authoritative caller spellings=${authoritativeFmovSpellings} expected=7`);
+for (const contract of [
+  "#define MAKE_FPSR(r) do { fmov_rr(FP_RESULT,r); } while (0)",
+  "fmov_rr(dest_reg, val);", "fmov_rr(reg, src);",
+  "fcompare_result_rr(FP_RESULT, reg, src);", "fmov_rr(FS1, src);",
+  "fmov_rr(FP_RESULT, FS1);", "fmov_rr(FP_RESULT, src);",
+]) requireText(fppCompilerSource, contract, "fmov_rr configured caller roles");
+for (const contract of [
+  "for (unsigned d = 0; d < 32; ++d)", "for (unsigned s = 0; s < 32; ++s)",
+  "0x1e604000u | (s << 5) | d", "signalling NaN payload", "negative quiet NaN payload",
+  "MSR_NZCV_x(3)", "MSR_FPCR_x(4)", "MSR_FPSR_x(5)",
+  "PROT_READ | PROT_WRITE", "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 1024 && native_vectors == 10240",
+]) requireText(fmovEmitterProbeSource, contract, "FMOV primitive native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fmov-conformance.cpp"])
+  requireText(fmovEmitterHarnessSource, contract, "FMOV primitive conformance build");
+requireText(harnessSource, 'timeout -k 5s 90s "$SCRIPT_DIR/emitter-fmov-conformance.sh"', "FMOV primitive bounded acceptance gate");
+console.log("METRIC structural_fmov_primitive_exact_words=1024");
+console.log("METRIC structural_fmov_primitive_native_vectors=10240");
+console.log("METRIC structural_fmov_primitive_caller_spellings=7");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable AArch64 FMOV binary64 primitive stack**
+  (2026-07-18): `FMOV_dd`, `raw_fmov_rr`, and `fmov_rr` now have direct
+  closure evidence after architectural 80-bit register FMOVE was removed from
+  this path. A native RW-to-RX probe proves all **1,024 D-register encodings**
+  and **10,240 bit-copy vectors**, including **320 self aliases**, ten exact bit
+  classes, source preservation, and unchanged NZCV/FPCR/FPSR. Structural
+  evidence pins the one-instruction raw wrapper, fixed D6/D7/D8-D15 virtual
+  homes, source-before-destination ownership, dirty publication, and complete
+  configured caller roles. The three primitive rows are audited; `i_FPP`
+  remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md`.
+
 - **Retire lossy ordinary register-FMOVE copies to exact MPFR service**
   (2026-07-18): the AArch64 path copied only the binary64 shadow, losing
   extended significand/exponent and NaN metadata. Register-source FMOVE now

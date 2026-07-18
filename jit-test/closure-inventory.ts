@@ -188,7 +188,11 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^AND_(?:ww3f|www|xxx)$/, "AARCH64_JIT_AUDIT_AND_EMITTERS.md"],
   [/^(?:EOR_(?:www|wwwLSLi|xxbit|xxCflag)|immOP_EOR)$/, "AARCH64_JIT_AUDIT_EOR_EMITTERS.md"],
   [/^NEG_ww$/, "AARCH64_JIT_AUDIT_NEG_LIFECYCLE.md"],
+  [/^FMOV_dd$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
   [/^(?:B_i|BR_x|CC_B_i|B(?:CC|CS|EQ|GE|GT|HI|LE|LS|LT|MI|NE|PL|VC|VS)_i|CB(?:NZ|Z)_[wx]i|TBNZ_[wx]ii|TBZ_[wx]ii)$/, "AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
+];
+const primitiveAuditRules: Array<[RegExp, string]> = [
+  [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
 ];
 const familyOf = (name: string) => name
   .replace(/^i_/, "")
@@ -196,7 +200,7 @@ const familyOf = (name: string) => name
   .replace(/_(?:b|w|l|q)$/, "")
   .replace(/(?:32|64)$/, "");
 
-for (const [, reports] of [...auditFamilyRules, ...emitterAuditRules]) {
+for (const [, reports] of [...auditFamilyRules, ...emitterAuditRules, ...primitiveAuditRules]) {
   for (const report of reports.split(";").map((item) => item.trim())) {
     if (!existsSync(resolve(root, "BasiliskII/docs", report)))
       throw new Error(`accepted audit report is missing: ${report}`);
@@ -206,6 +210,8 @@ const acceptedAudit = (name: string): string | undefined =>
   auditFamilyRules.find(([pattern]) => pattern.test(name))?.[1];
 const acceptedEmitterAudit = (name: string): string | undefined =>
   emitterAuditRules.find(([pattern]) => pattern.test(name))?.[1];
+const acceptedPrimitiveAudit = (name: string): string | undefined =>
+  primitiveAuditRules.find(([pattern]) => pattern.test(name))?.[1];
 
 interface MidDef { name: string; file: string; line: number; body: string; }
 const midDefs: MidDef[] = [];
@@ -321,7 +327,7 @@ if (countToken(configuredFpp, "frndint_rr") !== 0)
 const rows: Row[] = [];
 for (const def of midDefs) {
   const references = countToken(rootMidText, def.name) + [...midDefs].reduce((sum, item) => item.name === def.name ? sum : sum + countToken(item.body, def.name), 0);
-  const audit = acceptedAudit(def.name);
+  const audit = acceptedAudit(def.name) ?? acceptedPrimitiveAudit(def.name);
   const status: Status = !reachableMid.has(def.name) ? "unreachable" : audit ? "audited" : "unreviewed";
   const evidence = status === "unreachable"
     ? (structuralUnreachableMid.get(def.name) ?? (overriddenMidfunc(def.name) ? "post-registration AArch64 semantic-service override" : "no path from configured generated/support/FPU compiler roots"))
@@ -401,11 +407,14 @@ for (const name of [...rawNames].sort()) {
   const activeReachableMid = [...reachableMid].map((mid) => activeMidBodies.get(mid) ?? "").join("\n");
   const configuredRawText = `${activeGenerated}\n${activeGencomp}\n${activeCodegen}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
   const references = countToken(configuredRawText, name);
-  const status: Status = auditedRaw.test(name) ? "audited" : references <= 1 ? "unreachable" : "unreviewed";
+  const primitiveAudit = acceptedPrimitiveAudit(name);
+  const status: Status = (auditedRaw.test(name) || primitiveAudit) ? "audited" : references <= 1 ? "unreachable" : "unreviewed";
   const evidence = status === "audited"
-    ? name === "compemu_raw_call_preserve_nzcv"
-      ? "BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md"
-      : "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
+    ? primitiveAudit
+      ? `BasiliskII/docs/${primitiveAudit}`
+      : name === "compemu_raw_call_preserve_nzcv"
+        ? "BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md"
+        : "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
     : status === "unreachable" ? "no production caller"
     : /^raw_f/.test(name) && name !== "raw_flags_to_reg"
       ? "reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification"
