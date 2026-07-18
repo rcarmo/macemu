@@ -6,8 +6,9 @@ Base: `43233f32`
 
 ## Scope
 
-This checkpoint audits the complete reachable `FMSUB_dddd(Dd,Dn,Dm,Da)` API,
-whose scalar-binary64 result is fused `Da − Dn×Dm` with one final rounding.
+This checkpoint directly audited the then-reachable
+`FMSUB_dddd(Dd,Dn,Dm,Da)` API, whose scalar-binary64 result is fused
+`Da − Dn×Dm` with one final rounding.
 It closes encoding, fused arithmetic, exception, four-field alias, and state
 semantics only.
 
@@ -54,9 +55,17 @@ METRIC emitter_fmsub_alias_routes=208
 
 ## Closure decision
 
-Promoted row:
+At this checkpoint the directly evidenced row was promoted:
 
 - `emitter_api,FMSUB_dddd` → **audited**.
 
-No raw, MIDFUNC, remainder guest family, Motorola-status, or generator row is
-promoted. `generator,i_FPP` remains **unreviewed**.
+No raw, MIDFUNC, remainder guest family, Motorola-status, or generator row was
+promoted. `generator,i_FPP` remained **unreviewed**.
+
+A later paired remainder lower-chain audit proved that FMOD and FREM enter exact
+semantic service before native lowering, `fmod_rr`/`frem1_rr` have no configured
+callers, and both retained `raw_fmod_rr`/`raw_frem1_rr` compositions are
+definition-only. Both `FMSUB_dddd` sites therefore lie below unreachable raw
+wrappers, so the current inventory classifies the emitter **unreachable**. The
+direct audit above remains historical encoding and host-semantic evidence; the
+31+1 FMOD and 33+1 FREM matrices own configured guest runtime fidelity.

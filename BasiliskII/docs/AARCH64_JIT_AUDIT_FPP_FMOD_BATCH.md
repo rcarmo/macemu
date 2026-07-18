@@ -77,6 +77,15 @@ Every service case enters a compiled block natively at PC `0x1008` and executes
 FMOD through configured semantic service. FPSR is snapshotted into D0 before the
 following extended store clears operation-local exception status.
 
+The complete two-pass service profile is pinned as the initial destination load
+at `f239@0x1000`, followed by two identical source/FMOD, FPSR-capture, and store
+triples. Absolute-long source uses `f239@0x1008`, `f200@0x1010`, and
+`f239@0x1014`; register, postincrement, and predecrement forms use their exact
+`f200`/`f218`/`f220` source opcode at `0x1008`, then `f200@0x100c` and
+`f239@0x1010`. This replaces a stale six-fallback exception for the
+signalling-destination case; clean runtime records seven non-duplicative
+boundaries with PCs derived from each source form's encoded length.
+
 ## Integrated acceptance epoch
 
 One integrated runtime epoch passed all six phases in 2,333 seconds:
@@ -103,8 +112,8 @@ The structural audit requires an unconditional FMOD service exit before operand
 acquisition on every host and forbids `get_fp_value`, `frem_rr`, and native FPSR
 publication in the compiler case. It pins extended-source membership, exact
 `mpfr_rem1` quotient publication, quotient sign for zero-magnitude specials,
-common binary NaN ownership, all 31 matrix cases, native-entry proof, and strict
-rejection.
+common binary NaN ownership, all 31 matrix cases, native-entry proof, exact
+two-pass opcode/PC profiles, and strict rejection.
 
 Independent review initially rejected a residual non-AArch64 `frem_rr` path and
 a false-positive `2 mod 1.5` discriminator. Both were repaired: no host may
@@ -113,6 +122,17 @@ nearest-even FREM. Re-review approved the bounded tranche.
 
 ## Closure decision
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups. This service evidence does not classify the still-reachable
-FREM emitter path or generic raw FPU emitters.
+No closure row was promoted at this guest-service checkpoint.
+`generator,i_FPP` remained **unreviewed** pending all selector groups.
+
+A later paired lower-chain audit combines FMOD with FREM because both retained
+wrappers share the same native divide/fused-subtract ownership. `fmod_rr` and
+`frem1_rr` have no configured callers; `raw_fmod_rr` and `raw_frem1_rr` are
+definition-only with exact `FDIV_ddd` -> `FRINTZ_dd`/`FRINTA_dd` ->
+`FMSUB_dddd` order. The two raw wrappers, all three retained `FDIV_ddd` sites,
+both `FMSUB_dddd` sites, both retained `FRINTZ_dd` sites, and sole-site
+`FRINTA_dd` are therefore **unreachable**. `FRINTI_dd` remains the sole live
+member of the direct rounding cluster, audited/reachable at two sites. The
+repaired 31+1 FMOD and 33+1 FREM matrices own configured runtime fidelity;
+direct divide/fused-subtract/round audits remain historical encoding and
+host-semantic evidence. `generator,i_FPP` remains **unreviewed**.

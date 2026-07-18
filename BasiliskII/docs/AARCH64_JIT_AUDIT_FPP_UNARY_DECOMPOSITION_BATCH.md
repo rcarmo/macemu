@@ -170,11 +170,16 @@ A later configured-root audit established that `raw_frndint_rr` and
 `raw_frndintz_rr` are definition-only beneath those unreachable MIDFUNCs. They
 are therefore **unreachable**, guarded by exact parent/body, inactive
 `USE_X86_FPUCW`, definition-only reference, and future-caller checks. The
-closure deliberately stops at the raw wrappers: `FRINTI_dd` remains reachable
-through integer-destination rounding, and `FRINTZ_dd` remains reachable through
-modulus truncation; both retain audited status and exact 2/2 source-site counts.
+closure initially stopped at the raw wrappers: `FRINTI_dd` remained reachable
+through integer-destination rounding, and `FRINTZ_dd` remained reachable through
+modulus truncation, with exact 2/2 retained-site counts.
 
-This is raw-boundary retirement, not emitter retirement or native acceptance.
+A later paired FMOD/FREM lower-chain audit retired definition-only
+`raw_fmod_rr`/`raw_frem1_rr`; both `FRINTZ_dd` sites and sole-site `FRINTA_dd`
+are now **unreachable**. Their direct audit remains historical evidence, while
+`FRINTI_dd` stays audited/reachable at two sites.
+
+This was raw-boundary retirement at landing time, not native acceptance.
 The accepted 55+2 FINT/FINTRZ matrix remains configured guest runtime evidence;
 the FGETEXP/FGETMAN decomposition paths and their separate raw/MIDFUNC residue
 are unchanged.

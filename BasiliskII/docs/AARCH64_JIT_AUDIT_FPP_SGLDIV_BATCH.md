@@ -76,6 +76,8 @@ configured caller, `raw_fsgldiv_rr` is definition-only, and its `FDIV_sss` call
 is the sole binary32 divide-emitter site. The raw wrapper and `FDIV_sss` are now
 **unreachable**, guarded by exact parent, ordered
 `FCVT_sd`→`FDIV_sss`→`FCVT_ds`, site-count, and future-caller checks.
-`FDIV_ddd` remains audited/reachable at three sites through ordinary and two
-remainder compositions; shared FCVT emitters remain audited/reachable. This is
-retirement, not native acceptance, and `generator,i_FPP` remains unreviewed.
+A later paired remainder lower-chain audit also classifies all three retained
+`FDIV_ddd` sites unreachable: ordinary, FMOD, and FREM wrappers are all dead
+after configured service. Direct binary64 evidence remains historical; shared
+FCVT emitters remain audited/reachable. This is retirement, not native
+acceptance, and `generator,i_FPP` remains unreviewed.

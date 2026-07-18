@@ -2023,7 +2023,7 @@ if (fmodCompilerStart < 0 || fmodCompilerEnd < 0) fail("FPP FMOD compiler bounda
 const fmodCompilerBlock = fppCompilerOperation.slice(fmodCompilerStart, fmodCompilerEnd);
 for (const contract of ["case 0x21:", "jit_disable.fmod", "FAIL(1);", "return;"])
   requireText(fmodCompilerBlock, contract, "FPP FMOD exact service boundary");
-for (const forbidden of ["get_fp_value(opcode, extra)", "frem_rr(", "MAKE_FPSR("])
+for (const forbidden of ["get_fp_value(opcode, extra)", "fmod_rr(", "frem_rr(", "MAKE_FPSR("])
   if (fmodCompilerBlock.includes(forbidden)) fail(`FPP FMOD compiler case retains forbidden ${forbidden}`);
 for (const contract of [
   "do_fmod (fpu_register &value, int reg, mpfr_rnd_t rnd)",
@@ -2052,6 +2052,11 @@ for (const contract of [
   'name:"fmod_source_only_snan"', 'name:"fmod_fp7_self_alias"',
   'name:"fmod_fp7_destination_reseed"', 'name:"fmod_postincrement_source"',
   'name:"fmod_predecrement_source"', 'name:"fmod_quotient_replaced_accrued_preserved"',
+  'profile=[...o.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'auditedOpcode=a.aliasFp7?"f200":a.ea==="postinc"?"f218":a.ea==="predec"?"f220":"f239"',
+  'capturePc=auditedOpcode==="f239"?"00001010":"0000100c"', 'storePc=auditedOpcode==="f239"?"00001014":"00001010"',
+  'passProfile=`${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'expectedProfile=`f239@00001000 ${passProfile} ${passProfile}`', 'profile===expectedProfile',
   'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${sp} strict_pass=${st}', 'sc.length:31', 'ss.length:1',
 ]) requireText(fppFmodServiceMatrix, contract, "FPP FMOD service matrix");
@@ -2064,7 +2069,7 @@ if (fremCompilerStart < 0 || fremCompilerEnd < 0) fail("FPP FREM compiler bounda
 const fremCompilerBlock = fppCompilerOperation.slice(fremCompilerStart, fremCompilerEnd);
 for (const contract of ["case 0x25:", "jit_disable.frem", "exact semantic service", "FAIL(1);", "return;"])
   requireText(fremCompilerBlock, contract, "FPP FREM service boundary");
-for (const forbidden of ["get_fp_value(opcode, extra)", "frem1_rr(", "MAKE_FPSR("])
+for (const forbidden of ["get_fp_value(opcode, extra)", "frem_rr(", "frem1_rr(", "MAKE_FPSR("])
   if (fremCompilerBlock.includes(forbidden)) fail(`FPP FREM compiler case retains forbidden ${forbidden}`);
 for (const contract of [
   "|| operation == 37 || operation == 38 || single_extended_result;", "case 37: // FREM", "do_remainder (value, reg, rnd)",
@@ -2089,6 +2094,11 @@ for (const contract of [
   'name:"frem_destination_snan_quiet_then_destination_precedence"', 'name:"frem_source_only_snan"',
   'name:"frem_fp7_self_alias"', 'name:"frem_fp7_destination_reseed"',
   'name:"frem_postincrement_source"', 'name:"frem_predecrement_source"', 'name:"frem_quotient_replaced_accrued_preserved"',
+  'profile=[...o.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'auditedOpcode=a.aliasFp7?"f200":a.ea==="postinc"?"f218":a.ea==="predec"?"f220":"f239"',
+  'capturePc=auditedOpcode==="f239"?"00001010":"0000100c"', 'storePc=auditedOpcode==="f239"?"00001014":"00001010"',
+  'passProfile=`${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'expectedProfile=`f239@00001000 ${passProfile} ${passProfile}`', 'profile===expectedProfile',
   'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${sp} strict_pass=${st}', 'sc.length:33', 'ss.length:1',
 ]) requireText(fppFremServiceMatrix, contract, "FPP FREM service matrix");
@@ -2096,6 +2106,48 @@ console.log("METRIC structural_fpp_frem_service_vectors=33");
 console.log("METRIC structural_fpp_frem_strict_rejections=1");
 console.log("METRIC structural_fpp_frem_nearest_even_quotient=2");
 console.log("METRIC structural_fpp_frem_quotient_bits=7");
+for (const [name, rawName] of [["fmod_rr", "raw_fmod_rr"], ["frem1_rr", "raw_frem1_rr"]] as const) {
+  const midStart = midfuncSource.indexOf(`MIDFUNC(2,${name},(FRW d, FR s))`);
+  const midEnd = midfuncSource.indexOf(`MENDFUNC(2,${name},(FRW d, FR s))`, midStart);
+  if (midStart < 0 || midEnd < 0) fail(`missing retired remainder MIDFUNC ${name}`);
+  requireText(midfuncSource.slice(midStart, midEnd), `${rawName}(d, s);`, `retired remainder MIDFUNC ${name}`);
+  if ((midfuncSource.match(new RegExp(`\\b${name}\\b`, "g")) || []).length !== 2)
+    fail(`remainder MIDFUNC ${name} gained a configured caller`);
+}
+const remainderRawContracts = [
+  {
+    name: "raw_fmod_rr",
+    contracts: ["FDIV_ddd(SCRATCH_F64_1, d, s);", "FRINTZ_dd(SCRATCH_F64_1, SCRATCH_F64_1);", "FMSUB_dddd(d, SCRATCH_F64_1, s, d);"],
+  },
+  {
+    name: "raw_frem1_rr",
+    contracts: ["FDIV_ddd(SCRATCH_F64_2, d, s);", "FRINTA_dd(SCRATCH_F64_2, SCRATCH_F64_2);", "FMSUB_dddd(d, SCRATCH_F64_2, s, d);"],
+  },
+] as const;
+for (const raw of remainderRawContracts) {
+  const rawStart = codegenSource.indexOf(`LOWFUNC(NONE,NONE,2,${raw.name},(FRW d, FR s))`);
+  const rawEnd = codegenSource.indexOf(`LENDFUNC(NONE,NONE,2,${raw.name},(FRW d, FR s))`, rawStart);
+  if (rawStart < 0 || rawEnd < 0) fail(`missing retired remainder raw boundary ${raw.name}`);
+  const rawBody = codegenSource.slice(rawStart, rawEnd);
+  let previous = -1;
+  for (const contract of raw.contracts) {
+    requireText(rawBody, contract, `retired remainder raw boundary ${raw.name}`);
+    const position = rawBody.indexOf(contract);
+    if (position <= previous) fail(`retired remainder raw order changed in ${raw.name}`);
+    previous = position;
+  }
+  if ((codegenSource.match(new RegExp(`\\b${raw.name}\\b`, "g")) || []).length !== 2)
+    fail(`remainder raw boundary ${raw.name} gained a configured caller`);
+}
+const remainderFdivSites = (codegenSource.match(/\bFDIV_ddd\(/g) || []).length;
+const remainderFmsubSites = (codegenSource.match(/\bFMSUB_dddd\(/g) || []).length;
+const remainderFrintzSites = (codegenSource.match(/\bFRINTZ_dd\(/g) || []).length;
+const remainderFrintaSites = (codegenSource.match(/\bFRINTA_dd\(/g) || []).length;
+if (remainderFdivSites !== 3 || remainderFmsubSites !== 2 || remainderFrintzSites !== 2 || remainderFrintaSites !== 1)
+  fail(`remainder residual sites FDIV/FMSUB/FRINTZ/FRINTA=${remainderFdivSites}/${remainderFmsubSites}/${remainderFrintzSites}/${remainderFrintaSites}, expected 3/2/2/1`);
+console.log("METRIC structural_fpp_remainder_unreachable_raw_boundaries=2");
+console.log("METRIC structural_fpp_remainder_unreachable_emitters=4");
+console.log("METRIC structural_fpp_remainder_historical_direct_emitter_clusters=3");
 const scaleCompilerStart = fppCompilerOperation.indexOf("case 0x26:\t\t\t\t\t\t/* FSCALE */");
 const scaleCompilerEnd = fppCompilerOperation.indexOf("case 0x27:\t\t\t\t\t\t/* FSGLMUL */", scaleCompilerStart);
 if (scaleCompilerStart < 0 || scaleCompilerEnd < 0) fail("FPP FSCALE compiler boundary is incomplete");

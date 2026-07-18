@@ -143,8 +143,11 @@ there is no MIDFUNC caller. Therefore `fdiv_rr` and `raw_fdiv_rr` are
 root/edge counts, lower-chain shape, and future-caller checks.
 
 The original closure stopped there. A later FSGLDIV lower-chain audit retired
-definition-only `raw_fsgldiv_rr` and its sole-site `FDIV_sss` emitter.
-`FDIV_sss` is therefore unreachable, while `FDIV_ddd` remains reachable and
-audited through two separate remainder compositions in addition to the
-now-dead `raw_fdiv_rr` definition. Both decisions are retirement, not native
-acceptance, and `generator,i_FPP` remains unreviewed.
+definition-only `raw_fsgldiv_rr` and its sole-site `FDIV_sss` emitter. A
+subsequent paired remainder lower-chain audit proved `raw_fmod_rr` and
+`raw_frem1_rr` definition-only after configured FMOD/FREM service. All three
+retained `FDIV_ddd` sites now lie below unreachable raw wrappers, so both divide
+emitters are **unreachable**. Their direct audits remain historical evidence;
+the 37+3 divide, 23+1 FSGLDIV, 31+1 FMOD, and 33+1 FREM matrices own configured
+runtime fidelity. These decisions are retirement, not native acceptance, and
+`generator,i_FPP` remains unreviewed.

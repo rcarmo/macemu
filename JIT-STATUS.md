@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the paired serviced AArch64 FMOD/FREM lower chains and their final
+  divide/fused-subtract emitters** (2026-07-18): FMOD and FREM enter exact MPFR
+  service; `fmod_rr`/`frem1_rr` have no configured callers and
+  `raw_fmod_rr`/`raw_frem1_rr` are definition-only. Exact ordered
+  divide→round→fused-subtract checks classify both raw wrappers plus retained
+  `FDIV_ddd`, `FMSUB_dddd`, `FRINTZ_dd`, and `FRINTA_dd` **unreachable**. The
+  repaired FMOD **31+1** and FREM **33+1** matrices pin exact seven-boundary
+  two-pass profiles; direct FDIV/FMSUB/FRINT evidence remains historical.
+  `FRINTI_dd` alone stays audited/reachable at two sites. This is a six-row
+  lower-chain retirement; `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOD_BATCH.md` and
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FREM_BATCH.md`.
+
 - **Retire the serviced AArch64 FSGLMUL lower chain and sole binary32 multiply
   emitter** (2026-07-18): FSGLMUL enters exact MPFR service before operand
   acquisition; `fsglmul_rr` has no configured caller and `raw_fsglmul_rr` is
@@ -232,8 +245,9 @@ inventory is 92/92, and the accepted register-count
   definition-only. Exact ordered conversion/divide/widen checks now classify
   the raw wrapper and its sole-site `FDIV_sss` emitter **unreachable**. The
   accepted FSGLDIV **23+1** matrix owns configured runtime fidelity; direct
-  `FDIV_sss` evidence remains historical. Binary64 `FDIV_ddd` stays audited and
-  reachable at three sites, while shared FCVT emitters stay audited at 7/6.
+  `FDIV_sss` evidence remains historical. A later paired remainder closure also
+  retires all three binary64 `FDIV_ddd` sites, while shared FCVT emitters stay
+  audited at 7/6.
   This is a two-row lower-chain retirement; `i_FPP` remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SGLDIV_BATCH.md`.
 
@@ -286,8 +300,9 @@ inventory is 92/92, and the accepted register-count
   caller/body checks now establish that `raw_frndint_rr` and
   `raw_frndintz_rr` are definition-only and classify both **unreachable**.
   The accepted FINT/FINTRZ **55+2** matrix remains configured runtime evidence.
-  `FRINTI_dd` and `FRINTZ_dd` each retain another live audited caller and exact
-  2/2 source-site counts, so neither emitter is retired. This is a bounded raw
+  A later paired remainder closure also retires both retained `FRINTZ_dd` sites
+  plus sole-site `FRINTA_dd`; `FRINTI_dd` stays audited/reachable at two sites.
+  This is a bounded raw
   retirement, and `i_FPP` remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_UNARY_DECOMPOSITION_BATCH.md`.
 
@@ -298,9 +313,9 @@ inventory is 92/92, and the accepted register-count
   `raw_fdiv_rr` are now **unreachable**, guarded by two-root control-flow,
   exact edge/lower-chain, and future-caller checks. The **37+3** FDIV-family
   and **23+1** FSGLDIV matrices pass with exact variable-length service
-  profiles. `FDIV_ddd` remains reachable/audited through two remainder
-  compositions, and `FDIV_sss` through its forced-single composition; neither
-  emitter is retired. This is a bounded MIDFUNC/raw retirement, and `i_FPP`
+  profiles. Later lower-chain closures retire both `FDIV_sss` and all three
+  retained `FDIV_ddd` sites after their remaining wrappers also become
+  unreachable. This is a bounded MIDFUNC/raw retirement, and `i_FPP`
   remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_DIVIDE_BATCH.md`.
 
@@ -342,22 +357,25 @@ inventory is 92/92, and the accepted register-count
   retirement rather than native acceptance, and `i_FPP` remains unreviewed.
   See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SQRT_SUBTRANCHE.md`.
 
-- **Audit the reachable generic AArch64 FMSUB_dddd emitter API**
+- **Audit the then-reachable generic AArch64 FMSUB_dddd emitter API**
   (2026-07-18): all **1,048,576 four-field encodings** plus **400 native
   routes** now pin true fused `Da−Dn×Dm` cancellation, directed rounding,
   signed overflow/underflow, invalid and three-position qNaN/SNaN ownership,
   **208 destination/source aliases**, preload order, and external FP-state
-  restoration. Both remainder-helper sites are pinned. Only `FMSUB_dddd` is
-  audited; remainder/raw/MIDFUNC/Motorola-status and `i_FPP` remain separate.
+  restoration. Both remainder-helper sites are pinned. A later paired
+  lower-chain audit classifies both definition-only wrappers and `FMSUB_dddd`
+  unreachable; the direct audit remains historical while FMOD/FREM matrices
+  own configured fidelity and `i_FPP` remains unreviewed.
   See `BasiliskII/docs/AARCH64_JIT_AUDIT_FMSUB_EMITTER.md`.
 
-- **Audit the reachable generic AArch64 FDIV_ddd/FDIV_sss emitter pair**
+- **Audit the then-reachable generic AArch64 FDIV_ddd/FDIV_sss emitter pair**
   (2026-07-18): separate binary64/binary32 probes close **65,536 encodings**
   and **1,272 native routes**, pinning ±1/3 rounding, signed overflow/
   underflow, DZC/IOC, zero/infinity rules, left/right qNaN/SNaN, full single
   lanes, **584 aliases**, every field, and external FP-state restoration. All
-  3/1 configured sites are pinned. Only `FDIV_ddd`/`FDIV_sss` are audited;
-  guest/raw/MIDFUNC/conversion and `i_FPP` boundaries remain separate. See
+  3/1 retained sites are pinned. Later lower-chain audits classify both emitters
+  unreachable; direct evidence remains historical while divide/FSGLDIV/FMOD/
+  FREM matrices own configured fidelity and `i_FPP` remains unreviewed. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FDIV_EMITTERS.md`.
 
 - **Audit the then-reachable generic AArch64 FMUL_sss emitter API**

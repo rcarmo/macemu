@@ -478,14 +478,16 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fsqrt_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
   ["raw_fsub_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 subtract selectors service before unreachable fsub_rr"],
   ["raw_fmul_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 multiply roots service before unreachable fmul_rr"],
-  ["raw_fdiv_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 divide roots service before unreachable fdiv_rr; FDIV emitters remain reachable from remainder compositions"],
+  ["raw_fdiv_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 divide roots service before unreachable fdiv_rr; later paired remainder retirement also makes FDIV_ddd unreachable"],
   ["raw_frndint_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndint_rr; FRINTI_dd remains reachable from integer-destination rounding"],
-  ["raw_frndintz_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndintz_rr; FRINTZ_dd remains reachable from modulus truncation"],
+  ["raw_frndintz_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndintz_rr; later paired remainder retirement also makes FRINTZ_dd unreachable"],
   ["raw_fcuts_r", "only its LOWFUNC/LENDFUNC definition remains below unreachable fcuts_r after configured AArch64 FSMOVE/FDMOVE service; FCVT_sd/FCVT_ds remain reachable from other compositions"],
   ["raw_fmov_d_ri_10", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_10 and fmov_l_ri; FMOV_di remains reachable from other compositions"],
   ["raw_fmov_d_ri_100", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_100 and fmov_l_ri; SCVTF_dw remains reachable from other compositions"],
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
+  ["raw_fmod_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],
+  ["raw_frem1_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frem1_rr after configured FREM service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FMOD lower chain"],
   ["raw_fsgldiv_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsgldiv_rr after configured AArch64 FSGLDIV service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
   ["raw_fsglmul_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsglmul_rr after configured AArch64 FSGLMUL service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
 ]);
@@ -538,12 +540,18 @@ const semanticServiceEmitter = new Map<string, string>([
   ["FSUB_ddd", "only retained raw_fsub_rr emits it, and configured AArch64 subtract selectors service before unreachable fsub_rr"],
   ["FMUL_ddd", "only retained raw_fmul_rr emits it, and both configured AArch64 multiply roots service before unreachable fmul_rr"],
   ["FMUL_sss", "only retained raw_fsglmul_rr emits it, and configured AArch64 FSGLMUL services before unreachable fsglmul_rr"],
+  ["FDIV_ddd", "all three retained sites are below unreachable raw_fdiv_rr plus paired definition-only raw_fmod_rr/raw_frem1_rr after configured divide/FMOD/FREM service"],
   ["FDIV_sss", "only retained raw_fsgldiv_rr emits it, and configured AArch64 FSGLDIV services before unreachable fsgldiv_rr"],
+  ["FMSUB_dddd", "both retained sites are below paired definition-only raw_fmod_rr/raw_frem1_rr after configured FMOD/FREM service"],
+  ["FRINTA_dd", "its sole retained site is below definition-only raw_frem1_rr after configured FREM service"],
+  ["FRINTZ_dd", "both retained sites are below definition-only raw_frndintz_rr/raw_fmod_rr after configured FINT/FINTRZ and FMOD service"],
 ]);
+const semanticServiceEmitterSites = new Map<string, number>([["FDIV_ddd", 3], ["FMSUB_dddd", 2], ["FRINTZ_dd", 2]]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {
-  if (countToken(activeCodegen, name) !== 1 || countToken(emitterNonCodegenRootText, name) !== 0)
-    throw new Error(`serviced native emitter ${name} gained a configured caller`);
+  const expectedSites = semanticServiceEmitterSites.get(name) ?? 1;
+  if (countToken(activeCodegen, name) !== expectedSites || countToken(emitterNonCodegenRootText, name) !== 0)
+    throw new Error(`serviced native emitter ${name} sites/callers changed; expected ${expectedSites} retained codegen sites and zero configured external callers`);
 }
 const reachableEmitter = new Set<string>();
 for (const name of emitterNames)

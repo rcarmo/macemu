@@ -6,7 +6,7 @@ Base: `d21ffe10`
 
 ## Scope
 
-This checkpoint audits the complete reachable scalar division pair:
+This checkpoint directly audited the then-reachable scalar division pair:
 
 - `FDIV_ddd(Dd,Dn,Dm)` for binary64;
 - `FDIV_sss(Sd,Sn,Sm)` for binary32.
@@ -57,13 +57,13 @@ METRIC emitter_fdiv_s_alias_routes=292
 
 ## Closure decision
 
-Promoted rows:
+At this checkpoint the directly evidenced rows were promoted:
 
 - `emitter_api,FDIV_ddd` → **audited**;
 - `emitter_api,FDIV_sss` → **audited**.
 
-No raw, MIDFUNC, conversion, guest family, Motorola-status, or generator row is
-promoted. `generator,i_FPP` remains **unreviewed**.
+No raw, MIDFUNC, conversion, guest family, Motorola-status, or generator row
+was promoted. `generator,i_FPP` remained **unreviewed**.
 
 A later configured-root audit retired `fdiv_rr` and `raw_fdiv_rr` after proving
 both guest roots service before acquisition. A subsequent lower-chain audit
@@ -71,8 +71,12 @@ retired definition-only `raw_fsgldiv_rr` and its sole-site binary32
 `FDIV_sss` emitter. `FDIV_sss` is therefore **unreachable**; the direct audit
 above remains historical encoding/native evidence.
 
-`FDIV_ddd` remains audited and reachable at three configured sites: its
-historical ordinary wrapper definition plus two live remainder compositions.
-The exact 3/1 source-site inventory remains fail-closed even though only the
-binary64 row retains reachable/audited status. `generator,i_FPP` remains
-unreviewed.
+A later paired remainder lower-chain audit proved that FMOD and FREM enter exact
+semantic service, `fmod_rr`/`frem1_rr` have no configured callers, and retained
+`raw_fmod_rr`/`raw_frem1_rr` are definition-only. All three `FDIV_ddd` sites now
+lie below unreachable raw wrappers: one in `raw_fdiv_rr` and two in the paired
+remainder wrappers. `FDIV_ddd` is therefore also **unreachable**. The exact 3/1
+retained-site inventory remains fail-closed, and both direct emitter probes
+remain historical encoding/native evidence. The 37+3 divide, 23+1 FSGLDIV,
+31+1 FMOD, and 33+1 FREM matrices own configured runtime fidelity.
+`generator,i_FPP` remains unreviewed.

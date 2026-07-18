@@ -50,17 +50,38 @@ Every service case enters natively at PC `0x1008` before configured semantic
 service. FPSR is snapshotted into D0 before the following extended store clears
 operation-local exception status.
 
+The complete two-pass service profile is pinned as the initial destination load
+at `f239@0x1000`, followed by two identical source/FREM, FPSR-capture, and store
+triples. Absolute-long source uses `f239@0x1008`, `f200@0x1010`, and
+`f239@0x1014`; register, postincrement, and predecrement forms use their exact
+`f200`/`f218`/`f220` source opcode at `0x1008`, then `f200@0x100c` and
+`f239@0x1010`. This replaces a stale six-fallback exception for the
+signalling-destination case; clean runtime records seven non-duplicative
+boundaries with PCs derived from each source form's encoded length.
+
 ## Structural and review decision
 
 The structural audit forbids operand acquisition/native remainder publication
 in the compiler case and pins extended-source membership, destination/source
 order, `mpfr_remquo`, quotient sign/seven-bit publication, special/NaN paths,
-all high-risk complete vectors, native entry, strict rejection, and 33+1
-accounting.
+all high-risk complete vectors, native entry, exact two-pass opcode/PC
+profiles, strict rejection, and 33+1 accounting.
 
 Independent review required explicit ties-to-even witnesses and a quotient
 whose low seven bits cannot be confused with a narrower mask. Both were added;
 review completion is recorded with the checkpoint evidence.
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups.
+No closure row was promoted at this guest-service checkpoint.
+`generator,i_FPP` remained **unreviewed** pending all selector groups.
+
+A later paired lower-chain audit combines FREM with FMOD because both retained
+wrappers share the same native divide/fused-subtract ownership. `frem1_rr` and
+`fmod_rr` have no configured callers; `raw_frem1_rr` and `raw_fmod_rr` are
+definition-only with exact `FDIV_ddd` -> `FRINTA_dd`/`FRINTZ_dd` ->
+`FMSUB_dddd` order. The two raw wrappers, all three retained `FDIV_ddd` sites,
+both `FMSUB_dddd` sites, sole-site `FRINTA_dd`, and both retained `FRINTZ_dd`
+sites are therefore **unreachable**. `FRINTI_dd` remains the sole live member
+of the direct rounding cluster, audited/reachable at two sites. The repaired
+33+1 FREM and 31+1 FMOD matrices own configured runtime fidelity; direct
+divide/fused-subtract/round audits remain historical encoding and host-semantic
+evidence. `generator,i_FPP` remains **unreviewed**.

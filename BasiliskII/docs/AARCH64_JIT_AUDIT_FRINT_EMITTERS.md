@@ -6,7 +6,8 @@ Base: `2dda64d7`
 
 ## Scope
 
-This checkpoint audits the complete reachable scalar-binary64 rounding cluster:
+This checkpoint directly audited the then-reachable scalar-binary64 rounding
+cluster:
 
 - `FRINTA_dd(Dd,Dn)`: round to integral, nearest with ties away from zero;
 - `FRINTI_dd(Dd,Dn)`: round to integral using the raw AArch64 FPCR mode;
@@ -74,17 +75,20 @@ METRIC emitter_frint_alias_routes=384
 
 ## Closure decision
 
-The directly evidenced rows are promoted:
+At this checkpoint the directly evidenced rows were promoted:
 
 - `emitter_api,FRINTA_dd` → **audited**;
 - `emitter_api,FRINTI_dd` → **audited**;
 - `emitter_api,FRINTZ_dd` → **audited**.
 
 No raw boundary, MIDFUNC, compound arithmetic path, Motorola-status path, or
-generator row is promoted. `generator,i_FPP` remains **unreviewed**.
+generator row was promoted. `generator,i_FPP` remained **unreviewed**.
 
 A later configured-root audit retired the definition-only `raw_frndint_rr` and
-`raw_frndintz_rr` wrappers beneath already-unreachable MIDFUNCs. That does not
-retire these emitter rows: `FRINTI_dd` retains its integer-destination rounding
-site, and `FRINTZ_dd` retains its modulus-truncation site. Both remain audited
-and reachable with the exact 2/2 configured-site counts pinned here.
+`raw_frndintz_rr` wrappers beneath already-unreachable MIDFUNCs. A subsequent
+paired remainder lower-chain audit proved `raw_fmod_rr`/`raw_frem1_rr`
+definition-only after configured FMOD/FREM service. Consequently the sole
+`FRINTA_dd` site and both `FRINTZ_dd` sites lie below unreachable raw wrappers;
+those two emitter rows are now **unreachable**. Their direct results above
+remain historical encoding/host-semantic evidence. `FRINTI_dd` retains two
+live integer-destination/current-mode sites and remains **audited/reachable**.
