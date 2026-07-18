@@ -39,7 +39,6 @@ const x = {
   sqrtTwoDouble: "3f ff 00 00 b5 04 f3 33 f9 de 68 00",
   sqrtSingleHalfExtended: "3f ff 00 00 80 00 00 80 00 00 00 00",
   sqrtDoubleHalfExtended: "3f ff 00 00 80 00 00 00 00 00 04 00",
-  sqrtSingleHalfForcedDouble: "3f ff 00 00 80 00 00 7f ff ff c0 00",
   fssqrtExtendedRangeSource: "40 fd 00 00 80 00 00 00 00 00 00 00",
   fssqrtExtendedRangeResult: "40 7e 00 00 80 00 00 00 00 00 00 00",
   fdsqrtExtendedRangeSource: "47 fd 00 00 80 00 00 00 00 00 00 00",
@@ -108,7 +107,7 @@ for (const [prefix, selector, oppositePrecision, sqrtTwo] of [
   { name: `${prefix}_signalling_nan`, selector, input: x.signallingNan, output: x.canonicalPositiveNan, fpsr: "01000080" },
   { name: `${prefix}_maximum_overflow`, selector, input: x.maximumExtended, output: x.positiveInfinity, fpsr: "02000048" },
   { name: `${prefix}_minimum_underflow`, selector, input: x.minimumNormalExtended, output: x.positiveZero, fpsr: "04000028" },
-  { name: `${prefix}_opposite_precision_override`, selector, input: x.singleHalfSquare, output: prefix === "fssqrt" ? x.positiveOne : x.sqrtSingleHalfForcedDouble, fpcr: oppositePrecision, fpsr: "00000008" },
+  { name: `${prefix}_opposite_precision_override`, selector, input: x.singleHalfSquare, output: prefix === "fssqrt" ? x.positiveOne : x.sqrtSingleHalfExtended, fpcr: oppositePrecision, fpsr: prefix === "fssqrt" ? "00000008" : "00000000" },
   { name: `${prefix}_accrued_preserve`, selector, input: x.positiveTwo, output: sqrtTwo, replayFpsr: "0455ff00", fpsr: "00550008" },
 );
 

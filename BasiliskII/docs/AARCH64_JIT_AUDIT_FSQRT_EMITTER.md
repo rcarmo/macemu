@@ -6,9 +6,9 @@ Base: `41cfba11`
 
 ## Scope
 
-This checkpoint audits the complete reachable `FSQRT_dd(Dd,Dn)` API. It closes
-the generic scalar-binary64 encoding, rounding, exception, alias, and state
-contract only.
+This checkpoint directly audited the then-reachable `FSQRT_dd(Dd,Dn)` API. It
+closed the generic scalar-binary64 encoding, rounding, exception, alias, and
+state contract only.
 
 It does not promote `raw_fsqrt_rr`, a MIDFUNC wrapper, guest FPP operation
 semantics, Motorola status publication, or `generator,i_FPP`.
@@ -58,9 +58,16 @@ METRIC emitter_fsqrt_alias_routes=128
 
 ## Closure decision
 
-The directly evidenced row is promoted:
+At this checkpoint the directly evidenced row was promoted:
 
 - `emitter_api,FSQRT_dd` → **audited**.
 
 No raw boundary, MIDFUNC, guest instruction family, Motorola-status path, or
-generator row is promoted. `generator,i_FPP` remains **unreviewed**.
+generator row was promoted. `generator,i_FPP` remained **unreviewed**.
+
+A later complete configured-root audit established that every AArch64
+FSQRT/FSSQRT/FDSQRT selector enters exact semantic service before `fsqrt_rr`,
+and that no other configured caller exists. The current inventory therefore
+classifies `fsqrt_rr`, `raw_fsqrt_rr`, and `FSQRT_dd` as **unreachable**. This
+report remains the direct encoding/host-semantic evidence for the retained dead
+emitter definition; it does not override configured reachability.

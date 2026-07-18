@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the residual AArch64 native square-root primitive chain**
+  (2026-07-18): configured control-flow proof confirms all
+  FSQRT/FSSQRT/FDSQRT selectors enter exact MPFR service before operand
+  acquisition and `fsqrt_rr`. With no other configured root or MIDFUNC caller,
+  `fsqrt_rr`, `raw_fsqrt_rr`, and `FSQRT_dd` are now **unreachable**, guarded
+  by exact root/edge, lower-chain, and future-caller checks. The prior 1,024-word
+  and 4,096-route direct emitter audit remains historical evidence; the 54
+  service plus three strict cases own configured runtime fidelity. This is
+  retirement rather than native acceptance, and `i_FPP` remains unreviewed.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SQRT_SUBTRANCHE.md`.
+
 - **Audit the reachable generic AArch64 FMSUB_dddd emitter API**
   (2026-07-18): all **1,048,576 four-field encodings** plus **400 native
   routes** now pin true fused `Da−Dn×Dm` cancellation, directed rounding,
@@ -263,14 +274,15 @@ inventory is 92/92, and the accepted register-count
   `i_FPP` remain separate. See
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FSUB_EMITTER.md`.
 
-- **Audit the reachable generic AArch64 FSQRT_dd emitter API**
+- **Audit the then-reachable generic AArch64 FSQRT_dd emitter API**
   (2026-07-18): all **1,024 encodings** and **4,096 native field/mode routes**
-  now pin directed √2 rounding, exact roots and subnormal-root behavior,
-  signed zero, negative-invalid default NaN/IOC, qNaN/SNaN payload handling,
-  IXC, **128 aliases**, source/NZCV/FPCR/FPSR preservation, and external
-  D8-D15/FP-state restoration. The sole configured source site is pinned.
-  Only `FSQRT_dd` is audited; compound raw/MIDFUNC paths and `i_FPP` remain
-  unreviewed. See `BasiliskII/docs/AARCH64_JIT_AUDIT_FSQRT_EMITTER.md`.
+  pin directed √2 rounding, exact roots and subnormal-root behavior, signed
+  zero, negative-invalid default NaN/IOC, qNaN/SNaN payload handling, IXC,
+  **128 aliases**, source/NZCV/FPCR/FPSR preservation, and external
+  D8-D15/FP-state restoration. A later complete configured-root audit retired
+  the sole residual chain and now classifies `FSQRT_dd`, `raw_fsqrt_rr`, and
+  `fsqrt_rr` unreachable; the direct probe remains historical evidence. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FSQRT_EMITTER.md`.
 
 - **Audit the reachable generic AArch64 FMOV_di immediate emitter API**
   (2026-07-18): all **8,192 encodings** and **32,768 native

@@ -1341,9 +1341,30 @@ for (const contract of [
   "forced single/double rounding", "FAIL(1);", "return;",
 ]) requireText(fsqrtBlock, contract, "FPP square-root family exact service boundary");
 const fsqrtGate = fsqrtBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const fsqrtService = fsqrtBlock.indexOf("FAIL(1);", fsqrtGate);
+const fsqrtReturn = fsqrtBlock.indexOf("return;", fsqrtService);
 const fsqrtOperand = fsqrtBlock.indexOf("get_fp_value");
-if (fsqrtGate < 0 || fsqrtOperand < 0 || fsqrtGate >= fsqrtOperand)
-  fail("FPP square-root family service gate must precede native operand acquisition");
+const fsqrtNativeCall = fsqrtBlock.indexOf("fsqrt_rr(");
+if (fsqrtGate < 0 || fsqrtService < fsqrtGate || fsqrtReturn < fsqrtService ||
+    fsqrtOperand < fsqrtReturn || fsqrtNativeCall < fsqrtOperand)
+  fail("FPP square-root guarded service exit does not retire fsqrt_rr before operand acquisition");
+const fsqrtRootSpellings = (fppCompilerSource.match(/\bfsqrt_rr\(/g) || []).length;
+if (fsqrtRootSpellings !== 1)
+  fail(`retired square-root MIDFUNC fsqrt_rr configured-root spellings=${fsqrtRootSpellings} expected=1`);
+const fsqrtMidfuncCallers = (midfuncSource.match(/\bfsqrt_rr\(/g) || []).length;
+if (fsqrtMidfuncCallers !== 0)
+  fail(`retired square-root MIDFUNC fsqrt_rr gained ${fsqrtMidfuncCallers} MIDFUNC caller spellings`);
+const fsqrtMidStart = midfuncSource.indexOf("MIDFUNC(2,fsqrt_rr,(FW d, FR s))");
+const fsqrtMidEnd = midfuncSource.indexOf("MENDFUNC(2,fsqrt_rr", fsqrtMidStart);
+if (fsqrtMidStart < 0 || fsqrtMidEnd < 0) fail("missing retired square-root MIDFUNC fsqrt_rr");
+const fsqrtMidBody = midfuncSource.slice(fsqrtMidStart, fsqrtMidEnd);
+for (const contract of ["s = f_readreg(s);", "d = f_writereg(d);", "raw_fsqrt_rr(d, s);"])
+  requireText(fsqrtMidBody, contract, "retired square-root MIDFUNC fsqrt_rr");
+const fsqrtRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fsqrt_rr,(FW d, FR s))");
+const fsqrtRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fsqrt_rr", fsqrtRawStart);
+if (fsqrtRawStart < 0 || fsqrtRawEnd < 0) fail("missing retired square-root raw boundary raw_fsqrt_rr");
+requireText(codegenSource.slice(fsqrtRawStart, fsqrtRawEnd), "FSQRT_dd(d, s);", "retired square-root raw boundary raw_fsqrt_rr");
+requireText(codegenHeaderSource, "#define FSQRT_dd(Dd,Dn)", "retired square-root emitter FSQRT_dd");
 for (const contract of [
   'name: "fsqrt_positive_zero"', 'name: "fsqrt_negative_zero"',
   'name: "fsqrt_negative_invalid"', 'name: "fsqrt_signalling_nan_quiet"',
@@ -1367,7 +1388,8 @@ for (const contract of [
   'name: `${prefix}_accrued_preserve`',
   '["fssqrt", "0441", "80", x.sqrtTwoSingle]',
   '["fdsqrt", "0445", "40", x.sqrtTwoDouble]',
-  'input: x.singleHalfSquare, output: prefix === "fssqrt" ? x.positiveOne : x.sqrtSingleHalfForcedDouble',
+  'input: x.singleHalfSquare, output: prefix === "fssqrt" ? x.positiveOne : x.sqrtSingleHalfExtended',
+  'fpsr: prefix === "fssqrt" ? "00000008" : "00000000"',
   'fpsr === item.fpsr', "fallbackCount === 3", 'sr === "271f"',
   'output.includes("strict full-JIT: opcode fallback pc=00001008 op=f200")',
   '!output.includes("NATEXEC pc=00001008")', '!output.includes("JIT_STRICT_SUMMARY ")',
@@ -1380,6 +1402,9 @@ for (const contract of [
 console.log("METRIC structural_fpp_sqrt_service_vectors=54");
 console.log("METRIC structural_fpp_sqrt_strict_rejections=3");
 console.log("METRIC structural_fpp_sqrt_native_retired=1");
+console.log("METRIC structural_fpp_sqrt_unreachable_midfuncs=1");
+console.log("METRIC structural_fpp_sqrt_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_sqrt_unreachable_emitters=1");
 const forcedFppStart = fpuMpfrSource.indexOf("else if (extra & 0x40)");
 const forcedFppEnd = fpuMpfrSource.indexOf("else if ((extra & 0x30) == 0x30)", forcedFppStart);
 if (forcedFppStart < 0 || forcedFppEnd < 0)

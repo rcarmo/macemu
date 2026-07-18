@@ -284,17 +284,19 @@ const semanticServiceMid = new Map<string, string>([
   ["fabs_rr", "all configured AArch64 FABS/FSABS/FDABS selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
   ["fneg_rr", "all configured AArch64 FNEG/FSNEG/FDNEG selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
   ["fadd_rr", "all configured AArch64 FADD/FSADD/FDADD selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
+  ["fsqrt_rr", "all configured AArch64 FSQRT/FSSQRT/FDSQRT selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
 ]);
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
 const semanticServiceBlocks: Array<[string, string, string]> = [
   ["fabs_rr", "case 0x18:", "case 0x19:"],
   ["fneg_rr", "case 0x1a:", "case 0x1c:"],
   ["fadd_rr", "case 0x22:", "case 0x23:"],
+  ["fsqrt_rr", "case 0x04:", "case 0x06:"],
 ];
 for (const [name, startMarker, endMarker] of semanticServiceBlocks) {
   const start = source.fpp.indexOf(startMarker);
   const end = source.fpp.indexOf(endMarker, start + startMarker.length);
-  if (start < 0 || end < 0) throw new Error(`configured sign service block disappeared: ${name}`);
+  if (start < 0 || end < 0) throw new Error(`configured semantic-service block disappeared: ${name}`);
   const block = source.fpp.slice(start, end);
   const gate = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
   const fail = block.indexOf("FAIL(1);", gate);
@@ -450,6 +452,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fabs_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fabs_rr"],
   ["raw_fneg_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fneg_rr"],
   ["raw_fadd_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 add selectors service before unreachable fadd_rr"],
+  ["raw_fsqrt_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
 ]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
@@ -496,6 +499,7 @@ const semanticServiceEmitter = new Map<string, string>([
   ["FABS_dd", "only retained raw_fabs_rr emits it, and configured AArch64 sign selectors service before unreachable fabs_rr"],
   ["FNEG_dd", "only retained raw_fneg_rr emits it, and configured AArch64 sign selectors service before unreachable fneg_rr"],
   ["FADD_ddd", "only retained raw_fadd_rr emits it, and configured AArch64 add selectors service before unreachable fadd_rr"],
+  ["FSQRT_dd", "only retained raw_fsqrt_rr emits it, and configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
 ]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {
