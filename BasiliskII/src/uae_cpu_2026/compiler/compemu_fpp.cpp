@@ -2249,6 +2249,12 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x28:						/* FSUB */
 		case 0x68:						/* FSSUB */
 		case 0x6c:						/* FDSUB */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Binary64 native operands cannot represent extended subtrahends,
+			 * forced result formats, NaN ownership, or Motorola exceptions. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fsub)
 			{
 				FAIL(1);

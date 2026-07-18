@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FSUB/FSSUB/FDSUB operand and result precision**
+  (2026-07-18): all three preserve extended operands and destination-minus-
+  source order; ordinary FSUB evaluates directly at FPCR width and forced
+  subtracts publish 24-/53-bit range, exact cancellation, and common binary
+  NaN ownership. Six one-sided pre-rounding witnesses plus rounding, signed
+  zero, forced range, infinities, NaNs, aliases, EA effects and FPSR pass in a
+  fixed **40 service + 3 strict** matrix. No closure row is promoted and
+  `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SUB_BATCH.md`.
+
 - **Repair FPP FMUL/FSMUL/FDMUL operand and result precision**
   (2026-07-18): all three retain extended factors; ordinary FMUL evaluates
   directly at FPCR width and forced multiplies publish 24-/53-bit range and

@@ -521,6 +521,10 @@ const fppMulServiceMatrix = await Bun.file(new URL(
   "./fpp-mul-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppSubServiceMatrix = await Bun.file(new URL(
+  "./fpp-sub-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fpuHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/fpu/fpu.h",
   import.meta.url,
@@ -1230,7 +1234,7 @@ for (const contract of [
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
-  "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35;",
+  "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;",
   "|| direct_result || operation == 30 || operation == 31 || operation == 33;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
@@ -1380,7 +1384,7 @@ for (const contract of [
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
-  "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35;",
+  "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;",
   "case 14: // FSIN", "mpfr_sin (direct, value.f, rnd)",
   "case 16: // FETOX", "mpfr_exp (direct, value.f, rnd)",
   "case 17: // FTWOTOX", "mpfr_exp2 (direct, value.f, rnd)",
@@ -1440,7 +1444,7 @@ for (const [label, disable, name] of [
   }
 }
 for (const contract of [
-  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35;",
+  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;",
   "case 25: // FCOSH", "mpfr_cosh (direct, value.f, rnd)",
   "case 28: // FACOS", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
   "mpfr_acos (direct, value.f, rnd)", "case 29: // FCOS",
@@ -1479,7 +1483,7 @@ const divideAcquire = divideCompilerBlock.indexOf("get_fp_value(opcode, extra)")
 if (divideGuardStart < 0 || divideGuardEnd < divideGuardStart || divideAcquire < 0 || divideGuardEnd > divideAcquire)
   fail("FPP divide guarded service exit does not precede operand acquisition");
 for (const contract of [
-  "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35;", "case 32: // FDIV",
+  "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;", "case 32: // FDIV",
   "mpfr_div (direct, fpu.registers[reg].f, value.f, rnd)",
   "case 32: // FSDIV", "case 36: // FDDIV",
   "mpfr_div (value2, fpu.registers[reg].f, value.f, rnd)",
@@ -1631,9 +1635,9 @@ const mulGuardEnd = mulCompilerBlock.indexOf("#endif", mulCompilerBlock.indexOf(
 if (mulGuardEnd < 0 || mulGuardEnd > mulCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP multiply service exit does not precede acquisition");
 for (const contract of [
   "case 35: // FSMUL", "case 39: // FDMUL", "mpfr_mul (value2, fpu.registers[reg].f, value.f, rnd)",
-  "(extra & 0x3f) == 35 || (extra & 0x3f) == 39", "|| operation == 35;",
+  "(extra & 0x3f) == 35 || (extra & 0x3f) == 39", "|| operation == 35 || operation == 40;",
   "case 35: // FMUL", "mpfr_mul (direct, fpu.registers[reg].f, value.f, rnd)",
-  "operation == 32 || operation == 34 || operation == 35",
+  "operation == 32 || operation == 34 || operation == 35 || operation == 40",
 ]) requireText(fpuMpfrSource, contract, "MPFR FMUL/FSMUL/FDMUL service contract");
 for (const contract of [
   'name:"fmul_exact_extended"', 'name:"fmul_extended_low_bit"',
@@ -1654,6 +1658,49 @@ for (const contract of [
 console.log("METRIC structural_fpp_mul_service_vectors=30");
 console.log("METRIC structural_fpp_mul_strict_rejections=3");
 console.log("METRIC structural_fpp_mul_one_sided_extended_operands=4");
+const subCompilerStart = fppCompilerOperation.indexOf("case 0x28:\t\t\t\t\t\t/* FSUB */");
+const subCompilerEnd = fppCompilerOperation.indexOf("case 0x30:\t\t\t\t\t\t/* FSINCOS */", subCompilerStart);
+if (subCompilerStart < 0 || subCompilerEnd < 0) fail("FPP subtract compiler boundary is incomplete");
+const subCompilerBlock = fppCompilerOperation.slice(subCompilerStart, subCompilerEnd);
+for (const contract of ["case 0x28:", "case 0x68:", "case 0x6c:", "jit_disable.fsub", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
+  requireText(subCompilerBlock, contract, "FPP subtract AArch64 service boundary");
+const subGuardEnd = subCompilerBlock.indexOf("#endif", subCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)"));
+if (subGuardEnd < 0 || subGuardEnd > subCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP subtract service exit does not precede acquisition");
+for (const contract of [
+  "case 40: // FSUB", "case 40: // FSSUB", "case 44: // FDSUB",
+  "mpfr_sub (direct, fpu.registers[reg].f, value.f, rnd)",
+  "mpfr_sub (value2, fpu.registers[reg].f, value.f, rnd)",
+  "(extra & 0x3f) == 40 || (extra & 0x3f) == 44", "|| operation == 40;",
+  "mpfr_zero_p (value2) && t != 0", "select_binary_nan (reg, value, &nan_bits, &nan_sign)",
+  "operation == 32 || operation == 34 || operation == 35 || operation == 40",
+]) requireText(fpuMpfrSource, contract, "MPFR FSUB/FSSUB/FDSUB service contract");
+for (const contract of [
+  'name:"fsub_extended_low_bit"', 'name:"fsub_exact_extended"',
+  'name:"fsub_single_nearest"', 'name:"fsub_single_plus"', 'name:"fsub_double_nearest"', 'name:"fsub_double_plus"',
+  'name:"fsub_single_source_extended",selector:"28",destination:x.singleSubDestB,source:x.singleSubSourceB,output:"3f fe 00 00 8a ae 9b 00 00 00 00 00",fpcr:"40"',
+  'name:"fsub_double_destination_extended",selector:"28",destination:x.doubleSubDest,source:x.doubleSubSource,output:"3f fd 00 00 f3 e7 a9 6e 58 bd 20 00",fpcr:"80"',
+  'name:"fssub_forced_destination_extended",selector:"68",destination:x.singleSubDest,source:x.singleSubSource,output:"3f fe 00 00 a0 a6 58 00 00 00 00 00"',
+  'name:"fssub_forced_source_extended",selector:"68",destination:x.singleSubDestB,source:x.singleSubSourceB,output:"3f fe 00 00 8a ae 9b 00 00 00 00 00"',
+  'name:"fdsub_forced_destination_extended",selector:"6c",destination:x.doubleSubDest,source:x.doubleSubSource,output:"3f fd 00 00 f3 e7 a9 6e 58 bd 20 00"',
+  'name:"fdsub_forced_source_extended",selector:"6c",destination:x.doubleSubDestB,source:x.doubleSubSourceB,output:"3f fe 00 00 a0 13 9b 5a 74 7a b0 00"',
+  'name:"fsub_exact_cancellation_nearest"', 'name:"fsub_exact_cancellation_minus"',
+  'name:"fssub_exact_cancellation_no_underflow"', 'name:"fdsub_exact_cancellation_minus_no_underflow"',
+  'name:"fssub_forced_overflow"', 'name:"fdsub_forced_overflow"', 'name:"fssub_forced_underflow"', 'name:"fdsub_forced_underflow"',
+  'name:"fsub_same_infinities_invalid"', 'name:"fsub_opposite_infinities"',
+  'name:"fssub_same_infinities_invalid"', 'name:"fdsub_opposite_infinities"',
+  'name:"fsub_destination_qnan_precedence"', 'name:"fsub_source_snan_quiet_then_destination_precedence"',
+  'name:"fsub_destination_snan_quiet_then_destination_precedence"', 'name:"fssub_source_only_snan"',
+  'name:"fssub_destination_qnan_precedence"', 'name:"fdsub_source_snan_quiet_then_destination_precedence"',
+  'name:"fsub_fp7_self_alias"', 'name:"fssub_fp7_destination_reseed"',
+  'name:"fsub_postincrement_source"', 'name:"fdsub_predecrement_source"', 'name:"fsub_accrued_preserve"',
+  'auditedOpcode=a.aliasFp7?"f200":a.ea==="postinc"?"f218":a.ea==="predec"?"f220":"f239"',
+  'o.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)',
+  'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'service_pass=${sp} strict_pass=${st}', 'sc.length:40', 'ss.length:3',
+]) requireText(fppSubServiceMatrix, contract, "FPP subtract service matrix");
+console.log("METRIC structural_fpp_sub_service_vectors=40");
+console.log("METRIC structural_fpp_sub_strict_rejections=3");
+console.log("METRIC structural_fpp_sub_one_sided_extended_operands=6");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 
