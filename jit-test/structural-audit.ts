@@ -501,6 +501,22 @@ const fmulSingleEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fmul-s-conformance.sh",
   import.meta.url,
 )).text();
+const fdivDoubleEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fdiv-d-conformance.cpp",
+  import.meta.url,
+)).text();
+const fdivDoubleEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fdiv-d-conformance.sh",
+  import.meta.url,
+)).text();
+const fdivSingleEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fdiv-s-conformance.cpp",
+  import.meta.url,
+)).text();
+const fdivSingleEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fdiv-s-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5386,6 +5402,40 @@ requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fmul-s-confo
 console.log("METRIC structural_fmul_single_emitter_exact_words=32768");
 console.log("METRIC structural_fmul_single_emitter_native_routes=608");
 console.log("METRIC structural_fmul_single_emitter_callers=1");
+
+/* FDIV_ddd/FDIV_sss are one scalar division encoding cluster. */
+const fdivDoubleCallers = (codegenSource.match(/\bFDIV_ddd\(/g) || []).length;
+const fdivSingleCallers = (codegenSource.match(/\bFDIV_sss\(/g) || []).length;
+if (fdivDoubleCallers !== 3 || fdivSingleCallers !== 1)
+  fail(`FDIV emitter callers d/s=${fdivDoubleCallers}/${fdivSingleCallers}, expected 3/1`);
+for (const contract of ["#define FDIV_ddd(Dd,Dn,Dm)", "#define FDIV_sss(Sd,Sn,Sm)"])
+  requireText(codegenHeaderSource, contract, "generic FDIV declarations");
+for (const contract of [
+  "FDIV_ddd(d, d, s);", "FDIV_ddd(SCRATCH_F64_1, d, s);",
+  "FDIV_ddd(SCRATCH_F64_2, d, s);", "FDIV_sss(SCRATCH_F64_1, SCRATCH_F64_1, SCRATCH_F64_2);",
+]) requireText(codegenSource, contract, "generic FDIV configured sites");
+for (const [probe, base, context] of [
+  [fdivDoubleEmitterProbeSource, "0x1e601800u|(m<<16)|(n<<5)|d", "generic FDIV binary64 conformance"],
+  [fdivSingleEmitterProbeSource, "0x1e201800u|(m<<16)|(n<<5)|d", "generic FDIV binary32 conformance"],
+] as const) for (const contract of [
+  base, "positive_one_third", "negative_one_third", "positive_divide_by_zero",
+  "negative_divide_by_zero", "zero_divide_zero", "finite_divide_infinity",
+  "infinity_divide_infinity", "left_quiet_nan", "right_quiet_nan",
+  "left_signalling_nan", "right_signalling_nan", "distinct n==m second-load divide",
+  "distinct n==m second-load image", "FDIV N source/alias semantics", "FDIV M source/alias semantics",
+  "exact==32768&&native==636&&aliases==292",
+]) requireText(probe, contract, context);
+for (const [harness, file, context] of [
+  [fdivDoubleEmitterHarnessSource, "emitter-fdiv-d-conformance.cpp", "generic FDIV binary64 build"],
+  [fdivSingleEmitterHarnessSource, "emitter-fdiv-s-conformance.cpp", "generic FDIV binary32 build"],
+] as const) for (const contract of ["-Wall -Wextra -Werror", file]) requireText(harness, contract, context);
+for (const gate of [
+  'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fdiv-d-conformance.sh"',
+  'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fdiv-s-conformance.sh"',
+]) requireText(harnessSource, gate, "generic FDIV bounded gates");
+console.log("METRIC structural_fdiv_emitter_exact_words=65536");
+console.log("METRIC structural_fdiv_emitter_native_routes=1272");
+console.log("METRIC structural_fdiv_emitter_callers=4");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

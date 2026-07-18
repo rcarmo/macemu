@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FDIV_ddd/FDIV_sss emitter pair**
+  (2026-07-18): separate binary64/binary32 probes close **65,536 encodings**
+  and **1,272 native routes**, pinning ±1/3 rounding, signed overflow/
+  underflow, DZC/IOC, zero/infinity rules, left/right qNaN/SNaN, full single
+  lanes, **584 aliases**, every field, and external FP-state restoration. All
+  3/1 configured sites are pinned. Only `FDIV_ddd`/`FDIV_sss` are audited;
+  guest/raw/MIDFUNC/conversion and `i_FPP` boundaries remain separate. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FDIV_EMITTERS.md`.
+
 - **Audit the reachable generic AArch64 FMUL_sss emitter API**
   (2026-07-18): all **32,768 encodings** plus **608 native binary32 routes**
   now pin 24-bit halfway rounding, signed overflow/underflow, IXC/UFC/OFC,
