@@ -429,6 +429,14 @@ const fcvtEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fcvt-conformance.sh",
   import.meta.url,
 )).text();
+const fmovSwWsEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fmov-sw-ws-conformance.cpp",
+  import.meta.url,
+)).text();
+const fmovSwWsEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fmov-sw-ws-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5046,6 +5054,41 @@ requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcvt-conform
 console.log("METRIC structural_fcvt_emitter_exact_words=2048");
 console.log("METRIC structural_fcvt_emitter_native_vectors=256");
 console.log("METRIC structural_fcvt_emitter_callers=13");
+
+/* FMOV_sw/FMOV_ws are reciprocal 32-bit bit-transfer encoders. Close only
+   their format/field/lane/state contract; their raw and MIDFUNC compositions
+   retain separate conversion, rounding, memory, and Motorola-status ownership. */
+const fmovSwCallers = (codegenSource.match(/\bFMOV_sw\(/g) || []).length;
+const fmovWsCallers = (codegenSource.match(/\bFMOV_ws\(/g) || []).length;
+if (fmovSwCallers !== 1 || fmovWsCallers !== 1)
+  fail(`FMOV W/S emitter callers sw=${fmovSwCallers} ws=${fmovWsCallers}, expected 1/1`);
+for (const contract of ["#define FMOV_sw(Sd,Wn)", "#define FMOV_ws(Wd,Sn)"])
+  requireText(codegenHeaderSource, contract, "generic FMOV W/S emitter declaration");
+requireBefore(rawFmovSingleRegister, "FMOV_sw(SCRATCH_F64_1, s);", "FCVT_ds(d, SCRATCH_F64_1);", "FMOV_sw configured composition");
+const rawFmovToSingleStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmov_to_s_rr");
+const rawFmovToSingleEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fmov_to_s_rr", rawFmovToSingleStart);
+if (rawFmovToSingleStart < 0 || rawFmovToSingleEnd < 0)
+  fail("FMOV_ws configured composition boundary is incomplete");
+const rawFmovToSingle = codegenSource.slice(rawFmovToSingleStart, rawFmovToSingleEnd);
+requireBefore(rawFmovToSingle, "FCVT_sd(SCRATCH_F64_1, s);", "FMOV_ws(d, SCRATCH_F64_1);", "FMOV_ws configured composition");
+for (const contract of [
+  "0x1e270000u | (b << 5) | a", "0x1e260000u | (b << 5) | a",
+  "for (unsigned destination = 0; destination < 32; ++destination)",
+  "for (unsigned source = 0; source < 32; ++source)",
+  "FMOV_sw low word and upper-lane zero", "FMOV_ws W result or WZR discard",
+  "FMOV_sw preserves W source", "FMOV_ws preserves S source lane",
+  "FMOV preserves NZCV", "FMOV preserves FPCR", "FMOV preserves FPSR",
+  "FMOV preserves caller D8-D15", "FMOV restores caller FPCR", "FMOV restores caller FPSR",
+  "for (unsigned reg = 19; reg <= 30; ++reg)",
+  "PROT_READ | PROT_WRITE", "PROT_READ | PROT_EXEC", "__builtin___clear_cache",
+  "exact_words == 2048 && native_routes == 2048 && same_number_routes == 64",
+]) requireText(fmovSwWsEmitterProbeSource, contract, "generic FMOV W/S native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fmov-sw-ws-conformance.cpp"])
+  requireText(fmovSwWsEmitterHarnessSource, contract, "generic FMOV W/S conformance build");
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/emitter-fmov-sw-ws-conformance.sh"', "generic FMOV W/S bounded acceptance gate");
+console.log("METRIC structural_fmov_sw_ws_emitter_exact_words=2048");
+console.log("METRIC structural_fmov_sw_ws_emitter_native_routes=2048");
+console.log("METRIC structural_fmov_sw_ws_emitter_callers=2");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FMOV_sw/FMOV_ws bit-transfer pair**
+  (2026-07-18): all **2,048 encodings** and **2,048 native field routes** now
+  pin exact W↔S low-word copying, S upper-lane zeroing, W zero extension,
+  W31 source/discard behavior, S31, W0/W30, all callee-saved field numbers,
+  **64 same-number cross-bank routes**, source preservation, and external
+  D8-D15/FPCR/FPSR restoration. Both configured raw compositions and their
+  conversion order are pinned. Only `FMOV_sw`/`FMOV_ws` are audited; compound
+  raw/MIDFUNC paths and `i_FPP` remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_SW_WS_EMITTERS.md`.
+
 - **Audit the reachable generic AArch64 FCVT_sd/FCVT_ds emitter pair**
   (2026-07-18): all **2,048 encodings** and **256 native conversions** now pin
   exact widening, FPCR-directed narrowing, normal/subnormal/range edges,
