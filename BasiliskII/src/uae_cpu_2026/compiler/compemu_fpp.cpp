@@ -1291,6 +1291,19 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 			return;
 		}
 
+#if defined(CPU_AARCH64) || defined(CPU_aarch64)
+		/* Native FP shadows are binary64 and cannot serialize an architectural
+		   extended register list without losing low significand bits, extended
+		   exponent range, or NaN metadata. Static FMOVEM lists therefore cross
+		   the exact MPFR service boundary before EA acquisition or mutation.
+		   Dynamic lists already fail closed below and remain separately audited. */
+		if ((extra & 0x0800) == 0)
+		{
+			FAIL(1);
+			return;
+		}
+#endif
+
 		{
 			int ad;
 			uae_u32 list = 0;

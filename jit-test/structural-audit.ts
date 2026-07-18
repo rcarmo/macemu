@@ -545,6 +545,10 @@ const fppControlMemoryIndexedMatrix = await Bun.file(new URL(
   "./fpp-control-memory-indexed-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmovemStaticServiceMatrix = await Bun.file(new URL(
+  "./fpp-fmovem-static-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1869,6 +1873,43 @@ console.log("METRIC structural_fpp_control_memory_indexed_service_vectors=14");
 console.log("METRIC structural_fpp_control_memory_indexed_strict_rejections=3");
 console.log("METRIC structural_fpp_control_memory_indexed_indirect_forms=4");
 console.log("METRIC structural_fpp_control_memory_indexed_pc_forms=4");
+const fmovemCompilerStart = fppCompilerOperation.indexOf("case 6:\t\t\t\t\t\t\t/* FMOVEM <ea>,<reglist> */");
+const fmovemCompilerEnd = fppCompilerOperation.indexOf("case 4:", fmovemCompilerStart);
+if (fmovemCompilerStart < 0 || fmovemCompilerEnd < 0) fail("FPP FMOVEM compiler boundary is incomplete");
+const fmovemCompilerBlock = fppCompilerOperation.slice(fmovemCompilerStart, fmovemCompilerEnd);
+for (const contract of [
+  "case 6:", "case 7:", "jit_disable.fmovem", "#if defined(CPU_AARCH64) || defined(CPU_aarch64)",
+  "if ((extra & 0x0800) == 0)", "binary64", "Static FMOVEM lists", "FAIL(1);", "return;",
+]) requireText(fmovemCompilerBlock, contract, "FPP static FMOVEM exact service boundary");
+const fmovemGate = fmovemCompilerBlock.indexOf("if ((extra & 0x0800) == 0)");
+const fmovemAcquire = fmovemCompilerBlock.indexOf("get_fp_ad(opcode)");
+if (fmovemGate < 0 || fmovemAcquire < 0 || fmovemGate >= fmovemAcquire)
+  fail("FPP static FMOVEM service gate does not precede EA acquisition");
+for (const contract of [
+  "static bool\nfpuop_fmovem_register", "set_format (EXTENDED_PREC)",
+  "if (extra & 0x800)", "list = extra & 0xff", "case 040:", "if (extra & 0x1000)",
+  "for (i = 7; i >= 0; i--)", "addr -= 12", "for (i = 0; i < 8; i++)",
+  "if (list & (0x80 >> i))", "extract_to_extended", "set_from_extended",
+]) requireText(fpuMpfrSource, contract, "MPFR static FMOVEM list/order contract");
+for (const contract of [
+  'name:"static_to_aind_all_exact80"', 'name:"static_to_predec_all_direct_mask"',
+  'name:"static_to_brief_sparse_reversed_mask"', 'name:"static_to_full_preindexed_all"',
+  'name:"static_from_aind_all_exact80"', 'name:"static_from_postinc_all_exact80"',
+  'name:"static_from_brief_sparse_reversed_mask"', 'name:"static_from_full_postindexed_all"',
+  'name:"static_from_pc_brief_all"', 'name:"static_from_pc_full_preindexed_sparse"',
+  'v0="3f ff 00 00 80 00 00 00 00 00 00 01"',
+  'v1="7f fe 00 00 ff ff ff ff ff ff ff ff"',
+  'v7="ff ff 00 00 c0 00 de ad be ef 12 34"',
+  'B2_TEST_REPLAY_FP0_EXT:E(a.direction==="to"?v0:poison0)',
+  'B2_TEST_SECOND_PC:"0x1008"', 'B2_NATIVE_ASSERT_PC:"0x1008"',
+  'o.includes(`JIT_FALLBACK op=${a.opcode} pc=00001008`)',
+  'strict full-JIT: opcode fallback pc=00001000 op=${a.opcode}',
+  "const es=process.env.CASE?sc.length:10", "et=process.env.CASE?ss.length:3",
+]) requireText(fppFmovemStaticServiceMatrix, contract, "FPP static FMOVEM service matrix");
+console.log("METRIC structural_fpp_fmovem_static_service_vectors=10");
+console.log("METRIC structural_fpp_fmovem_static_strict_rejections=3");
+console.log("METRIC structural_fpp_fmovem_static_exact80_registers=3");
+console.log("METRIC structural_fpp_fmovem_static_masks=2");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

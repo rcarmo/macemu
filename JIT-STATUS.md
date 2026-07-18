@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire static-list FPP FMOVEM to exact MPFR service** (2026-07-18): the
+  residual AArch64 path serialized binary64 shadows as extended frames and
+  could lose low significand bits, extended exponent range, and NaN metadata.
+  Static lists now leave before EA acquisition. A fixed **10 service + 3
+  strict** matrix proves FP0/FP1/FP7 exact 80-bit order, regular/predecrement
+  masks, legal update modes, indexed and PC EAs, poison replay, guarded bytes,
+  CCR, and exact fallback attribution. Dynamic lists remain separate; no
+  closure row is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVEM_STATIC_BATCH.md`.
+
 - **Audit indexed FPP control-register memory transfers** (2026-07-18): the
   existing MPFR service correctly composes FPCR/FPSR/FPIAR transfers with
   An/PC brief, full direct, preindexed, and postindexed EAs. A fixed **14
