@@ -2160,6 +2160,12 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x23:						/* FMUL */
 		case 0x63:						/* FSMUL */
 		case 0x67:						/* FDMUL */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Binary64 native operands cannot represent extended factors,
+			 * forced result formats, NaN ownership, or Motorola exceptions. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fmul)
 			{
 				FAIL(1);

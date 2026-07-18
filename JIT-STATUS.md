@@ -215,6 +215,14 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FMUL/FSMUL/FDMUL operand and result precision**
+  (2026-07-18): all three retain extended factors; ordinary FMUL evaluates
+  directly at FPCR width and forced multiplies publish 24-/53-bit range and
+  common binary NaN ownership. Four one-sided pre-rounding witnesses, plus
+  signed specials, OPERR, range, aliases and EA effects, pass in a fixed **30
+  service + 3 strict** matrix. No closure row is promoted. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_MUL_BATCH.md`.
+
 - **Repair FPP FADD/FSADD/FDADD operand and result precision**
   (2026-07-18): all three preserve extended operands; ordinary FADD evaluates
   directly into the FPCR-width result, while forced adds publish 24-/53-bit
