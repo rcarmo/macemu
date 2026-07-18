@@ -51,5 +51,7 @@ forced result paths, exact witness records, special/range/NaN classes, native
 entry, and 30+3 counts. Independent review rejected earlier symmetric witnesses;
 they were replaced by the four one-sided cases above, and re-review approved.
 
-No closure row is promoted. `i_FPP`, `FMUL_ddd`, and `FMUL_sss` remain
-unreviewed pending their complete lifecycle/encoding contracts.
+This guest-service checkpoint promotes no closure row. `i_FPP` and `FMUL_sss`
+remain unreviewed. A later direct generic-emitter audit independently closes
+`FMUL_ddd` encoding/value/alias/state semantics without promoting this guest
+family; see `AARCH64_JIT_AUDIT_FMUL_D_EMITTER.md`.
