@@ -1256,6 +1256,66 @@ if (fmovsFcvtSdSites !== 7 || fmovsFcvtDsSites !== 6)
   fail(`distinct-destination single-round residual FCVT sites sd/ds=${fmovsFcvtSdSites}/${fmovsFcvtDsSites}, expected 7/6`);
 console.log("METRIC structural_fpp_fmovs_unreachable_raw_boundaries=1");
 console.log("METRIC structural_fpp_fmovs_reachable_fcvt_emitters=2");
+const fsccMidStart = midfuncSource.indexOf("MIDFUNC(2,fp_fscc_ri,(RW4 d, int cc))");
+const fsccMidEnd = midfuncSource.indexOf("MENDFUNC(2,fp_fscc_ri,(RW4 d, int cc))", fsccMidStart);
+if (fsccMidStart < 0 || fsccMidEnd < 0) fail("missing retired legacy FScc MIDFUNC fp_fscc_ri");
+requireText(midfuncSource.slice(fsccMidStart, fsccMidEnd), "raw_fp_fscc_ri(d, cc);", "retired legacy FScc MIDFUNC fp_fscc_ri");
+if ((midfuncSource.match(/\bfp_fscc_ri\b/g) || []).length !== 2)
+  fail("legacy FScc MIDFUNC fp_fscc_ri gained a configured caller");
+const fsccRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))");
+const fsccRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))", fsccRawStart);
+if (fsccRawStart < 0 || fsccRawEnd < 0) fail("missing retired legacy FScc raw boundary raw_fp_fscc_ri");
+const fsccRawBody = codegenSource.slice(fsccRawStart, fsccRawEnd);
+for (const contract of [
+  "switch (cc)", "case NATIVE_CC_F_NEVER:", "case NATIVE_CC_NE:", "case NATIVE_CC_EQ:",
+  "case NATIVE_CC_F_OGT:", "case NATIVE_CC_F_OGE:", "case NATIVE_CC_F_OLT:", "case NATIVE_CC_F_OLE:",
+  "case NATIVE_CC_F_OGL:", "case NATIVE_CC_F_OR:", "case NATIVE_CC_F_UN:", "case NATIVE_CC_F_UEQ:",
+  "case NATIVE_CC_F_UGT:", "case NATIVE_CC_F_UGE:", "case NATIVE_CC_F_ULT:", "case NATIVE_CC_F_ULE:",
+]) requireText(fsccRawBody, contract, "retired legacy FScc raw condition table");
+const fsccRawCounts = [
+  ["case NATIVE_CC_", 15], ["CLEAR_LOW8_xx(", 11], ["SET_LOW8_xx(", 10],
+  ["CSETM_wc(", 4], ["BFXIL_xxii(", 4], ["BVS_i(", 10], ["B_i(", 10],
+] as const;
+for (const [token, expected] of fsccRawCounts) {
+  const count = fsccRawBody.split(token).length - 1;
+  if (count !== expected) fail(`retired legacy FScc raw ${token} count=${count}, expected=${expected}`);
+}
+if ((codegenSource.match(/\braw_fp_fscc_ri\b/g) || []).length !== 2)
+  fail("legacy FScc raw boundary raw_fp_fscc_ri gained a configured caller");
+const liveFsccStart = fppCompilerSource.indexOf("void comp_fscc_opp(uae_u32 opcode, uae_u16 extra)");
+const liveFsccEnd = fppCompilerSource.indexOf("void comp_ftrapcc_opp", liveFsccStart);
+if (liveFsccStart < 0 || liveFsccEnd < 0) fail("configured FScc compiler route is incomplete");
+const liveFsccBody = fppCompilerSource.slice(liveFsccStart, liveFsccEnd);
+for (const contract of ["fflags_into_flags();", "switch (extra & 0x0f)", "cmov_l_rr(", "mov_b_rr(reg, S4);"])
+  requireText(liveFsccBody, contract, "configured FScc compiler route");
+for (const forbidden of ["fp_fscc_ri(", "raw_fp_fscc_ri("])
+  if (liveFsccBody.includes(forbidden)) fail(`configured FScc route gained retired legacy ${forbidden}`);
+const fsccRawEmitterSites = new Map<string, number>([["CLEAR_LOW8_xx", 11], ["SET_LOW8_xx", 10]]);
+for (const [name, expected] of fsccRawEmitterSites) {
+  const sites = (codegenSource.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (sites !== expected) fail(`legacy FScc raw emitter ${name} codegen sites=${sites}, expected=${expected}`);
+}
+for (const name of ["jnf_CLR_b", "jff_CLR_b"]) {
+  const start = midfunc2Source.indexOf(`MIDFUNC(1,${name},`);
+  const end = midfunc2Source.indexOf(`MENDFUNC(1,${name},`, start);
+  if (start < 0 || end < 0) fail(`missing unreachable CLR namesake ${name}`);
+  const sites = (midfunc2Source.slice(start, end).match(/\bCLEAR_LOW8_xx\(/g) || []).length;
+  if (sites !== 1) fail(`unreachable CLR namesake ${name} CLEAR_LOW8_xx sites=${sites}, expected=1`);
+}
+const fsccDeadLow8Corpus = `${codegenSource}\n${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${generatedSource}`;
+const fsccGlobalClearSites = (fsccDeadLow8Corpus.match(/\bCLEAR_LOW8_xx\(/g) || []).length;
+const fsccGlobalSetSites = (fsccDeadLow8Corpus.match(/\bSET_LOW8_xx\(/g) || []).length;
+if (fsccGlobalClearSites !== 13 || fsccGlobalSetSites !== 10)
+  fail(`dead low-byte emitter global sites clear/set=${fsccGlobalClearSites}/${fsccGlobalSetSites}, expected 13/10`);
+const fsccConfiguredNonRawText = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${generatedSource}`;
+for (const [name, minimum] of [["CSETM_wc", 5], ["BFXIL_xxii", 25]] as const) {
+  const sites = (fsccConfiguredNonRawText.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (sites < minimum) fail(`legacy FScc live shared emitter ${name} external sites=${sites}, expected at least ${minimum}`);
+}
+console.log("METRIC structural_fpp_legacy_fscc_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_legacy_fscc_condition_cases=15");
+console.log("METRIC structural_fpp_live_fscc_generator_unreviewed=1");
+console.log("METRIC structural_fpp_legacy_fscc_live_shared_emitters_unreviewed=2");
 
 const fmovecrStart = fppCompilerOperation.indexOf("if ((extra & 0xfc00) == 0x5c00)");
 const fmovecrSelector = fppCompilerOperation.indexOf("switch (extra & 0x7f)", fmovecrStart);

@@ -68,7 +68,7 @@ emitter_api,CCMP_wwfc,unreachable,CCMP_wwfc,60,0,BasiliskII/src/uae_cpu_2026/com
 emitter_api,CCMP_xxfc,unreachable,CCMP_xxfc,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,387,no path from reachable AArch64 compiler/emitter roots
 emitter_api,CLEAR_LOW16_xx,unreachable,CLEAR_LOW16_xx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,445,no path from reachable AArch64 compiler/emitter roots
 emitter_api,CLEAR_LOW4_xx,unreachable,CLEAR_LOW4_xx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,443,no path from reachable AArch64 compiler/emitter roots
-emitter_api,CLEAR_LOW8_xx,unreviewed,CLEAR_LOW8_xx,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,444,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,CLEAR_LOW8_xx,unreachable,CLEAR_LOW8_xx,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,444,eleven sites are inside definition-only raw_fp_fscc_ri and two more are inside unreachable jnf_CLR_b/jff_CLR_b namesakes; no reachable configured caller remains
 emitter_api,CLEAR_NZCV,unreachable,CLEAR_NZCV,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,429,no path from reachable AArch64 compiler/emitter roots
 emitter_api,CLEAR_xxbit,unreviewed,CLEAR_xxbit,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,440,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,CLEAR_xxCflag,unreviewed,CLEAR_xxCflag,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,433,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -230,7 +230,7 @@ emitter_api,SCVTF_dx,unreachable,SCVTF_dx,60,0,BasiliskII/src/uae_cpu_2026/compi
 emitter_api,SCVTF_sw,unreachable,SCVTF_sw,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,476,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SDIV_www,unreviewed,SDIV_www,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,231,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SDIV_xxx,unreviewed,SDIV_xxx,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,232,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SET_LOW8_xx,unreviewed,SET_LOW8_xx,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,447,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SET_LOW8_xx,unreachable,SET_LOW8_xx,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,447,all ten retained sites are inside definition-only raw_fp_fscc_ri below unreachable fp_fscc_ri; configured i_FScc uses a distinct CMOV route
 emitter_api,SET_xxbit,unreviewed,SET_xxbit,60,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,441,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SET_xxCflag,unreachable,SET_xxCflag,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,437,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SET_xxVflag,unreviewed,SET_xxVflag,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,436,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -914,7 +914,7 @@ raw_boundary,raw_fmul_rr,unreachable,raw_fmul_rr,60,2,BasiliskII/src/uae_cpu_202
 raw_boundary,raw_fneg_rr,unreachable,raw_fneg_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1222,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fneg_rr
 raw_boundary,raw_fp_from_double_mr,unreviewed,raw_fp_from_double_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1508,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fp_from_exten_mr,unreviewed,raw_fp_from_exten_mr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1409,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
-raw_boundary,raw_fp_fscc_ri,unreviewed,raw_fp_fscc_ri,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1527,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fp_fscc_ri,unreachable,raw_fp_fscc_ri,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1527,only its LOWFUNC/LENDFUNC definition remains below unreachable fp_fscc_ri; configured i_FScc uses the distinct comp_fscc_opp CMOV route and remains unreviewed
 raw_boundary,raw_fp_to_double_rm,unreviewed,raw_fp_to_double_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1515,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fp_to_exten_rm,unreviewed,raw_fp_to_exten_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1462,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fpowx_rr,unreviewed,raw_fpowx_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1387,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification

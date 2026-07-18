@@ -487,6 +487,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
   ["raw_fmod_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],
+  ["raw_fp_fscc_ri", "only its LOWFUNC/LENDFUNC definition remains below unreachable fp_fscc_ri; configured i_FScc uses the distinct comp_fscc_opp CMOV route and remains unreviewed"],
   ["raw_frem1_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frem1_rr after configured FREM service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FMOD lower chain"],
   ["raw_fsgldiv_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsgldiv_rr after configured AArch64 FSGLDIV service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
   ["raw_fsglmul_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsglmul_rr after configured AArch64 FSGLMUL service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
@@ -543,10 +544,12 @@ const semanticServiceEmitter = new Map<string, string>([
   ["FDIV_ddd", "all three retained sites are below unreachable raw_fdiv_rr plus paired definition-only raw_fmod_rr/raw_frem1_rr after configured divide/FMOD/FREM service"],
   ["FDIV_sss", "only retained raw_fsgldiv_rr emits it, and configured AArch64 FSGLDIV services before unreachable fsgldiv_rr"],
   ["FMSUB_dddd", "both retained sites are below paired definition-only raw_fmod_rr/raw_frem1_rr after configured FMOD/FREM service"],
+  ["CLEAR_LOW8_xx", "eleven sites are inside definition-only raw_fp_fscc_ri and two more are inside unreachable jnf_CLR_b/jff_CLR_b namesakes; no reachable configured caller remains"],
+  ["SET_LOW8_xx", "all ten retained sites are inside definition-only raw_fp_fscc_ri below unreachable fp_fscc_ri; configured i_FScc uses a distinct CMOV route"],
   ["FRINTA_dd", "its sole retained site is below definition-only raw_frem1_rr after configured FREM service"],
   ["FRINTZ_dd", "both retained sites are below definition-only raw_frndintz_rr/raw_fmod_rr after configured FINT/FINTRZ and FMOD service"],
 ]);
-const semanticServiceEmitterSites = new Map<string, number>([["FDIV_ddd", 3], ["FMSUB_dddd", 2], ["FRINTZ_dd", 2]]);
+const semanticServiceEmitterSites = new Map<string, number>([["FDIV_ddd", 3], ["FMSUB_dddd", 2], ["CLEAR_LOW8_xx", 11], ["SET_LOW8_xx", 10], ["FRINTZ_dd", 2]]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {
   const expectedSites = semanticServiceEmitterSites.get(name) ?? 1;

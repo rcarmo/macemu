@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the definition-only legacy AArch64 FScc raw chain and residual
+  low-byte emitters** (2026-07-18): configured `i_FScc` uses the distinct
+  `comp_fscc_opp` CMOV route, while `fp_fscc_ri` has no configured caller and
+  `raw_fp_fscc_ri` is definition-only. Exact 15-condition switch and global
+  13/10 clear/set partition checks—11/10 in dead FScc plus two clear sites in
+  unreachable CLR namesakes—classify the raw wrapper plus `CLEAR_LOW8_xx` and
+  `SET_LOW8_xx` **unreachable**. The live `i_FScc` generator and shared
+  `CSETM_wc`/`BFXIL_xxii` APIs remain **unreviewed**; the passing
+  `fscc_false_byte` vector is only a live-route smoke check, not FScc semantic
+  closure. This is a three-row graph correction. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_LEGACY_FSCC_RAW.md`.
+
 - **Retire the paired serviced AArch64 FMOD/FREM lower chains and their final
   divide/fused-subtract emitters** (2026-07-18): FMOD and FREM enter exact MPFR
   service; `fmod_rr`/`frem1_rr` have no configured callers and
