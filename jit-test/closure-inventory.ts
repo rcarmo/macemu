@@ -189,6 +189,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^(?:EOR_(?:www|wwwLSLi|xxbit|xxCflag)|immOP_EOR)$/, "AARCH64_JIT_AUDIT_EOR_EMITTERS.md"],
   [/^NEG_ww$/, "AARCH64_JIT_AUDIT_NEG_LIFECYCLE.md"],
   [/^FMOV_dd$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
+  [/^FCMP_(?:dd|d0)$/, "AARCH64_JIT_AUDIT_FCMP_EMITTERS.md"],
   [/^(?:B_i|BR_x|CC_B_i|B(?:CC|CS|EQ|GE|GT|HI|LE|LS|LT|MI|NE|PL|VC|VS)_i|CB(?:NZ|Z)_[wx]i|TBNZ_[wx]ii|TBZ_[wx]ii)$/, "AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [

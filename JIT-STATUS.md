@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FCMP emitter APIs**
+  (2026-07-18): `FCMP_dd` and `FCMP_d0` now have direct generic closure across
+  all **1,056 encodings** and **72 native vectors**, including maximum fields,
+  self aliases, ordered/equal/unordered classes, qNaN/SNaN in either operand,
+  exact NZCV, operand preservation, unchanged FPCR, and FPSR IOC only for
+  signalling NaN. All five register-register and three register-zero callers
+  are pinned; the accepted 176-vector guest FCMP matrix remains composition
+  evidence. Only the two emitter rows are audited; `i_FPP` remains unreviewed.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FCMP_EMITTERS.md`.
+
 - **Retire the residual AArch64 native FADD primitive chain**
   (2026-07-18): configured control-flow proof confirms FADD/FSADD/FDADD enter
   exact MPFR service before operand acquisition and `fadd_rr`. With no other

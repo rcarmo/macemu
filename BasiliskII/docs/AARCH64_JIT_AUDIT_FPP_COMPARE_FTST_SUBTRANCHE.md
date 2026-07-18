@@ -105,8 +105,13 @@ Markdown  f6b7db6a4ddb897b9c246a04b21c51000debf8bcaf01357e7682c73b6ac174ee
 
 ## Closure decision
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** until all
-reachable FPP subfamilies have direct evidence or an explicit serviced/
-unreachable classification. The next FPP chunk is source conversion and FMOVE
-register/immediate behavior, which supplies operands to this accepted producer
-slice.
+This guest-semantic subtranche does not promote `generator,i_FPP`, which remains
+**unreviewed** until all reachable FPP subfamilies have direct evidence or an
+explicit serviced/unreachable classification.
+
+A later direct generic-emitter audit independently exhausts all 1,056
+`FCMP_dd`/`FCMP_d0` encodings and 72 native result/state vectors across their
+eight configured callers. It promotes only those two emitter rows to
+**audited**; the FPP-local classifier remains outside the census and no adjacent
+conversion, arithmetic, MIDFUNC, raw, or generator row is promoted. See
+`AARCH64_JIT_AUDIT_FCMP_EMITTERS.md`.

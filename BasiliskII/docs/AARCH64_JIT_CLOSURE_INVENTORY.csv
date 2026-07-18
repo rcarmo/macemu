@@ -101,8 +101,8 @@ emitter_api,FABS_dd,unreachable,FABS_dd,60,1,BasiliskII/src/uae_cpu_2026/compile
 emitter_api,FABS_ss,unreachable,FABS_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,480,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FADD_ddd,unreachable,FADD_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,481,"only retained raw_fadd_rr emits it, and configured AArch64 add selectors service before unreachable fadd_rr"
 emitter_api,FADD_sss,unreachable,FADD_sss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,482,no path from reachable AArch64 compiler/emitter roots
-emitter_api,FCMP_d0,unreviewed,FCMP_d0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,484,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,FCMP_dd,unreviewed,FCMP_dd,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,483,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,FCMP_d0,audited,FCMP_d0,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,484,AARCH64_JIT_AUDIT_FCMP_EMITTERS.md
+emitter_api,FCMP_dd,audited,FCMP_dd,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,483,AARCH64_JIT_AUDIT_FCMP_EMITTERS.md
 emitter_api,FCMP_ss,unreachable,FCMP_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,485,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FCVT_ds,unreviewed,FCVT_ds,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,467,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,FCVT_sd,unreviewed,FCVT_sd,60,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,468,reachable encoder API; requires opcode/width/branch-range contract classification

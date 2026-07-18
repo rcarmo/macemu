@@ -405,6 +405,14 @@ const fmovEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fmov-conformance.sh",
   import.meta.url,
 )).text();
+const fcmpEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fcmp-conformance.cpp",
+  import.meta.url,
+)).text();
+const fcmpEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fcmp-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -4893,6 +4901,38 @@ requireText(harnessSource, 'timeout -k 5s 90s "$SCRIPT_DIR/emitter-fmov-conforma
 console.log("METRIC structural_fmov_primitive_exact_words=1024");
 console.log("METRIC structural_fmov_primitive_native_vectors=10240");
 console.log("METRIC structural_fmov_primitive_caller_spellings=7");
+
+/* FCMP_dd and FCMP_d0 are shared by the live FPP classifier, conversions, and
+   status publication. Pin the whole generic API rather than inferring it from
+   the guest-level FCMP matrix alone. */
+const fcmpDdCallers = (codegenSource.match(/\bFCMP_dd\(/g) || []).length;
+const fcmpD0Callers = (codegenSource.match(/\bFCMP_d0\(/g) || []).length;
+if (fcmpDdCallers !== 5 || fcmpD0Callers !== 3)
+  fail(`FCMP emitter callers dd=${fcmpDdCallers} d0=${fcmpD0Callers}, expected 5/3`);
+for (const contract of [
+  "FCMP_dd(SCRATCH_F64_1, SCRATCH_F64_2);", "FCMP_dd(s, SCRATCH_F64_1);",
+  "FCMP_dd(d, s);", "FCMP_d0(d);", "FCMP_d0(s);", "FCMP_d0(r);",
+]) requireText(codegenSource, contract, "generic FCMP configured callers");
+for (const contract of [
+  "#define FCMP_dd(Dn,Dm)", "#define FCMP_d0(Dn)",
+]) requireText(codegenHeaderSource, contract, "generic FCMP emitter declaration");
+for (const contract of [
+  "for (unsigned n = 0; n < 32; ++n)", "for (unsigned m = 0; m < 32; ++m)",
+  "0x1e602000u | (m << 16) | (n << 5)", "0x1e602008u | (n << 5)",
+  "FCMP preserves lhs", "FCMP preserves rhs", "FCMP preserves FPCR",
+  "fcmp_invoke_checked", "FCMP preserves caller D8-D15",
+  "FCMP restores caller FPCR", "FCMP restores caller FPSR",
+  "FCMP FPSR invalid contract", "FCMP lhs qNaN", "FCMP rhs qNaN",
+  "FCMP lhs sNaN", "FCMP rhs sNaN", "FCMP_d0 sNaN",
+  "PROT_READ | PROT_WRITE", "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 1056 && dd_vectors == 40 && d0_vectors == 32",
+]) requireText(fcmpEmitterProbeSource, contract, "generic FCMP native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fcmp-conformance.cpp"])
+  requireText(fcmpEmitterHarnessSource, contract, "generic FCMP conformance build");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcmp-conformance.sh"', "generic FCMP bounded acceptance gate");
+console.log("METRIC structural_fcmp_emitter_exact_words=1056");
+console.log("METRIC structural_fcmp_emitter_native_vectors=72");
+console.log("METRIC structural_fcmp_emitter_callers=8");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
