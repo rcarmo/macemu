@@ -469,6 +469,14 @@ const fmovDiEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fmov-di-conformance.sh",
   import.meta.url,
 )).text();
+const fsqrtEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fsqrt-conformance.cpp",
+  import.meta.url,
+)).text();
+const fsqrtEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fsqrt-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5247,6 +5255,31 @@ requireText(harnessSource, 'timeout -k 5s 900s "$SCRIPT_DIR/emitter-fmov-di-conf
 console.log("METRIC structural_fmov_di_emitter_exact_words=8192");
 console.log("METRIC structural_fmov_di_emitter_native_routes=32768");
 console.log("METRIC structural_fmov_di_emitter_callers=5");
+
+/* FSQRT_dd is the sole configured scalar-binary64 square-root encoder. Close
+   only its generic encoding/value/exception/state contract. */
+const fsqrtCallers = (codegenSource.match(/\bFSQRT_dd\(/g) || []).length;
+if (fsqrtCallers !== 1) fail(`FSQRT emitter callers=${fsqrtCallers}, expected 1`);
+requireText(codegenHeaderSource, "#define FSQRT_dd(Dd,Dn)", "generic FSQRT declaration");
+const rawFsqrt = functionBody(codegenSource,
+  "LOWFUNC(NONE,NONE,2,raw_fsqrt_rr,(FW d, FR s))",
+  "LENDFUNC(NONE,NONE,2,raw_fsqrt_rr,(FW d, FR s))", "generic FSQRT configured composition");
+requireText(rawFsqrt, "FSQRT_dd(d, s);", "generic FSQRT configured composition");
+for (const contract of [
+  "0x1e61c000u|(s<<5)|d", "for(unsigned d=0;d<32;d++)", "for(unsigned s=0;s<32;s++)",
+  "for(unsigned mode=0;mode<4;mode++)", "sqrt_two", "minimum_subnormal", "negative_zero",
+  "negative_one", "negative_infinity", "quiet_nan", "signalling_nan",
+  "FSQRT source/alias semantics", "FSQRT preserves NZCV", "FSQRT preserves FPCR", "FSQRT FPSR",
+  "FSQRT preserves caller D8-D15", "FSQRT restores caller FPCR", "FSQRT restores caller FPSR",
+  "PROT_READ|PROT_WRITE", "PROT_READ|PROT_EXEC", "__builtin___clear_cache",
+  "exact==1024&&routes==4096&&aliases==128",
+]) requireText(fsqrtEmitterProbeSource, contract, "generic FSQRT native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fsqrt-conformance.cpp"])
+  requireText(fsqrtEmitterHarnessSource, contract, "generic FSQRT conformance build");
+requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fsqrt-conformance.sh"', "generic FSQRT bounded acceptance gate");
+console.log("METRIC structural_fsqrt_emitter_exact_words=1024");
+console.log("METRIC structural_fsqrt_emitter_native_routes=4096");
+console.log("METRIC structural_fsqrt_emitter_callers=1");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

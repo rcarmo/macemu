@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FSQRT_dd emitter API**
+  (2026-07-18): all **1,024 encodings** and **4,096 native field/mode routes**
+  now pin directed √2 rounding, exact roots and subnormal-root behavior,
+  signed zero, negative-invalid default NaN/IOC, qNaN/SNaN payload handling,
+  IXC, **128 aliases**, source/NZCV/FPCR/FPSR preservation, and external
+  D8-D15/FP-state restoration. The sole configured source site is pinned.
+  Only `FSQRT_dd` is audited; compound raw/MIDFUNC paths and `i_FPP` remain
+  unreviewed. See `BasiliskII/docs/AARCH64_JIT_AUDIT_FSQRT_EMITTER.md`.
+
 - **Audit the reachable generic AArch64 FMOV_di immediate emitter API**
   (2026-07-18): all **8,192 encodings** and **32,768 native
   destination/immediate/mode routes** now pin the complete 256-value
