@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FMOV_di immediate emitter API**
+  (2026-07-18): all **8,192 encodings** and **32,768 native
+  destination/immediate/mode routes** now pin the complete 256-value
+  `VFPExpandImm` domain, D0-D31, FPCR-mode independence, NZCV/FPCR/FPSR
+  preservation, and external D8-D15/FP-state restoration. All five configured
+  constant sites are pinned. Only `FMOV_di` is audited; wrappers, compound
+  raw/MIDFUNC paths, and `i_FPP` remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_DI_EMITTER.md`.
+
 - **Audit the reachable generic AArch64 FRINTA/FRINTI/FRINTZ emitter cluster**
   (2026-07-18): all **3,072 encodings** and **12,288 native field/mode
   routes** now pin nearest-away, raw-FPCR-current, and toward-zero rounding,

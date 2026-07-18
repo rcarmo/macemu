@@ -112,7 +112,7 @@ emitter_api,FCVTZS_xd,unreachable,FCVTZS_xd,60,0,BasiliskII/src/uae_cpu_2026/com
 emitter_api,FDIV_ddd,unreviewed,FDIV_ddd,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,486,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,FDIV_sss,unreviewed,FDIV_sss,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,487,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,FMOV_dd,audited,FMOV_dd,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,458,AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md
-emitter_api,FMOV_di,unreviewed,FMOV_di,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,464,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,FMOV_di,audited,FMOV_di,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,464,AARCH64_JIT_AUDIT_FMOV_DI_EMITTER.md
 emitter_api,FMOV_dx,audited,FMOV_dx,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,460,AARCH64_JIT_AUDIT_FMOV_DX_XD_EMITTERS.md
 emitter_api,FMOV_si,unreachable,FMOV_si,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,465,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FMOV_ss,unreachable,FMOV_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,459,no path from reachable AArch64 compiler/emitter roots

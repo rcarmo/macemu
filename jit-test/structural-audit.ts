@@ -461,6 +461,14 @@ const frintEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-frint-conformance.sh",
   import.meta.url,
 )).text();
+const fmovDiEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fmov-di-conformance.cpp",
+  import.meta.url,
+)).text();
+const fmovDiEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fmov-di-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5212,6 +5220,33 @@ requireText(harnessSource, 'timeout -k 5s 600s "$SCRIPT_DIR/emitter-frint-confor
 console.log("METRIC structural_frint_emitter_exact_words=3072");
 console.log("METRIC structural_frint_emitter_native_routes=12288");
 console.log("METRIC structural_frint_emitter_callers=5");
+
+/* FMOV_di is the complete scalar-binary64 architectural imm8 expansion API.
+   Close only encoding/value/state; constant wrappers retain separate roles. */
+const fmovDiCallers = (codegenSource.match(/\bFMOV_di\(/g) || []).length;
+if (fmovDiCallers !== 5) fail(`FMOV_di emitter callers=${fmovDiCallers}, expected 5`);
+requireText(codegenHeaderSource, "#define FMOV_di(Dd,i)", "generic FMOV immediate declaration");
+for (const contract of [
+  "FMOV_di(r, 0b01110000);", "FMOV_di(r, 0b00100100);",
+  "FMOV_di(result, 0b01110000);", "FMOV_di(0, 0b00000000);", "FMOV_di(0, 0b00100100);",
+]) requireText(codegenSource, contract, "generic FMOV immediate configured sites");
+for (const contract of [
+  "0x1e601000u|(immediate<<13)|destination",
+  "for(unsigned destination=0;destination<32;++destination)",
+  "for(unsigned immediate=0;immediate<256;++immediate)",
+  "for(unsigned mode=0;mode<4;++mode)",
+  "static std::uint64_t expand_imm8", "(immediate >> 7) & 1", "(immediate >> 6) & 1",
+  "FMOV_di VFPExpandImm", "FMOV_di preserves NZCV", "FMOV_di preserves FPCR", "FMOV_di preserves FPSR",
+  "FMOV_di preserves caller D8-D15", "FMOV_di restores caller FPCR", "FMOV_di restores caller FPSR",
+  "PROT_READ|PROT_WRITE", "PROT_READ|PROT_EXEC", "__builtin___clear_cache",
+  "exact_words==8192&&native_routes==32768",
+]) requireText(fmovDiEmitterProbeSource, contract, "generic FMOV immediate native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fmov-di-conformance.cpp"])
+  requireText(fmovDiEmitterHarnessSource, contract, "generic FMOV immediate conformance build");
+requireText(harnessSource, 'timeout -k 5s 900s "$SCRIPT_DIR/emitter-fmov-di-conformance.sh"', "generic FMOV immediate bounded acceptance gate");
+console.log("METRIC structural_fmov_di_emitter_exact_words=8192");
+console.log("METRIC structural_fmov_di_emitter_native_routes=32768");
+console.log("METRIC structural_fmov_di_emitter_callers=5");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
