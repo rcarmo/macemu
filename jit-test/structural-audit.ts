@@ -1807,10 +1807,29 @@ for (const contract of [
   "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;",
 ]) requireText(divideCompilerBlock, contract, "FPP divide AArch64 service boundary");
 const divideGuardStart = divideCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
-const divideGuardEnd = divideCompilerBlock.indexOf("#endif", divideGuardStart);
+const divideService = divideCompilerBlock.indexOf("FAIL(1);", divideGuardStart);
+const divideReturn = divideCompilerBlock.indexOf("return;", divideService);
 const divideAcquire = divideCompilerBlock.indexOf("get_fp_value(opcode, extra)");
-if (divideGuardStart < 0 || divideGuardEnd < divideGuardStart || divideAcquire < 0 || divideGuardEnd > divideAcquire)
-  fail("FPP divide guarded service exit does not precede operand acquisition");
+const divideNativeCall = divideCompilerBlock.indexOf("fdiv_rr(");
+if (divideGuardStart < 0 || divideService < divideGuardStart || divideReturn < divideService ||
+    divideAcquire < divideReturn || divideNativeCall < divideAcquire)
+  fail("FPP divide guarded service exit does not retire fdiv_rr before operand acquisition");
+const divideRootSpellings = (fppCompilerSource.match(/\bfdiv_rr\(/g) || []).length;
+if (divideRootSpellings !== 2)
+  fail(`retired divide MIDFUNC fdiv_rr configured-root spellings=${divideRootSpellings} expected=2`);
+const divideMidfuncCallers = (midfuncSource.match(/\bfdiv_rr\(/g) || []).length;
+if (divideMidfuncCallers !== 0)
+  fail(`retired divide MIDFUNC fdiv_rr gained ${divideMidfuncCallers} MIDFUNC caller spellings`);
+const divideMidStart = midfuncSource.indexOf("MIDFUNC(2,fdiv_rr,(FRW d, FR s))");
+const divideMidEnd = midfuncSource.indexOf("MENDFUNC(2,fdiv_rr", divideMidStart);
+if (divideMidStart < 0 || divideMidEnd < 0) fail("missing retired divide MIDFUNC fdiv_rr");
+const divideMidBody = midfuncSource.slice(divideMidStart, divideMidEnd);
+for (const contract of ["s = f_readreg(s);", "d = f_rmw(d);", "raw_fdiv_rr(d, s);"])
+  requireText(divideMidBody, contract, "retired divide MIDFUNC fdiv_rr");
+const divideRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fdiv_rr,(FRW d, FR s))");
+const divideRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fdiv_rr", divideRawStart);
+if (divideRawStart < 0 || divideRawEnd < 0) fail("missing retired divide raw boundary raw_fdiv_rr");
+requireText(codegenSource.slice(divideRawStart, divideRawEnd), "FDIV_ddd(d, d, s);", "retired divide raw boundary raw_fdiv_rr");
 for (const contract of [
   "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;", "case 32: // FDIV",
   "mpfr_div (direct, fpu.registers[reg].f, value.f, rnd)",
@@ -1851,6 +1870,12 @@ for (const contract of [
   'name: "fdiv_postincrement_source"', 'name: "fddiv_predecrement_source"',
   'name: "fdiv_accrued_preserve"',
   '"B2_TEST_REPLAY_FP7_EXT" : "B2_TEST_REPLAY_FP0_EXT"', 'B2_NATIVE_ASSERT_PC: "0x1008"',
+  'const profile = [...output.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'const capturePc = auditedOpcode === "f239" ? "00001010" : "0000100c"',
+  'const storePc = auditedOpcode === "f239" ? "00001014" : "00001010"',
+  'const passProfile = `${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'const expectedProfile = `f239@00001000 ${passProfile} ${passProfile}`',
+  'profile === expectedProfile',
   'output.includes("NATEXEC pc=00001008")',
   'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${servicePass} strict_pass=${strictPass}',
@@ -1859,6 +1884,10 @@ console.log("METRIC structural_fpp_divide_service_vectors=37");
 console.log("METRIC structural_fpp_divide_strict_rejections=3");
 console.log("METRIC structural_fpp_divide_binary_nan_ownership=1");
 console.log("METRIC structural_fpp_divide_forced_range=1");
+console.log("METRIC structural_fpp_divide_serviced_root_calls=2");
+console.log("METRIC structural_fpp_divide_unreachable_midfuncs=1");
+console.log("METRIC structural_fpp_divide_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_divide_reachable_emitters=2");
 const fmodCompilerStart = fppCompilerOperation.indexOf("case 0x21:\t\t\t\t\t\t/* FMOD */");
 const fmodCompilerEnd = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */", fmodCompilerStart);
 if (fmodCompilerStart < 0 || fmodCompilerEnd < 0) fail("FPP FMOD compiler boundary is incomplete");
@@ -1986,8 +2015,14 @@ if (sgldivCompilerStart < 0 || sgldivCompilerEnd < 0) fail("FPP FSGLDIV compiler
 const sgldivCompilerBlock = fppCompilerOperation.slice(sgldivCompilerStart, sgldivCompilerEnd);
 for (const contract of ["case 0x24:", "jit_disable.fsgldiv", "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
   requireText(sgldivCompilerBlock, contract, "FPP FSGLDIV AArch64 service boundary");
-const sgldivGuardEnd = sgldivCompilerBlock.indexOf("#endif", sgldivCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)"));
-if (sgldivGuardEnd < 0 || sgldivGuardEnd > sgldivCompilerBlock.indexOf("get_fp_value(opcode, extra)")) fail("FPP FSGLDIV service exit does not precede acquisition");
+const sgldivGuardStart = sgldivCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const sgldivService = sgldivCompilerBlock.indexOf("FAIL(1);", sgldivGuardStart);
+const sgldivReturn = sgldivCompilerBlock.indexOf("return;", sgldivService);
+const sgldivAcquire = sgldivCompilerBlock.indexOf("get_fp_value(opcode, extra)");
+const sgldivNativeCall = sgldivCompilerBlock.indexOf("fdiv_rr(");
+if (sgldivGuardStart < 0 || sgldivService < sgldivGuardStart || sgldivReturn < sgldivService ||
+    sgldivAcquire < sgldivReturn || sgldivNativeCall < sgldivAcquire)
+  fail("FPP FSGLDIV guarded service exit does not retire fdiv_rr before operand acquisition");
 for (const contract of [
   "bool single_extended_result = operation == 36", "|| operation == 38 || single_extended_result;",
   "MPFR_DECL_INIT (single_extended, SINGLE_PREC)", "case 36: // FSGLDIV",
@@ -2006,6 +2041,12 @@ for (const contract of [
   'name: "fsgldiv_source_snan_quiet_destination_precedence"', 'name: "fsgldiv_destination_snan_quiet"',
   'name: "fsgldiv_fp7_self_alias"', 'name: "fsgldiv_fp7_destination_reseed"',
   'name: "fsgldiv_postincrement_source"', 'name: "fsgldiv_predecrement_source"', 'name: "fsgldiv_accrued_preserve"',
+  'const profile = [...output.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]',
+  'const capturePc = auditedOpcode === "f239" ? "00001010" : "0000100c"',
+  'const storePc = auditedOpcode === "f239" ? "00001014" : "00001010"',
+  'const passProfile = `${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`',
+  'const expectedProfile = `f239@00001000 ${passProfile} ${passProfile}`',
+  'profile === expectedProfile',
   'const auditedOpcode = item.aliasFp7 ? "f200"', 'output.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)',
   'B2_NATIVE_ASSERT_PC: "0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
   'service_pass=${servicePass} strict_pass=${strictPass}',

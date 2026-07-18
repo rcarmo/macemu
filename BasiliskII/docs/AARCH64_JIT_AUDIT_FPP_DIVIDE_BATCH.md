@@ -87,6 +87,15 @@ FDIV/FSDIV/FDDIV through the configured MPFR fallback. FPSR is snapshotted into
 D0 before the following extended store clears current exception status; final
 FPSR verifies condition codes and accrued exceptions separately.
 
+The complete two-pass service profile is pinned as the initial destination load
+at `f239@0x1000`, followed by two identical source/FDIV, FPSR-capture, and store
+triples. Absolute-long source uses `f239@0x1008`, `f200@0x1010`, and
+`f239@0x1014`; register, postincrement, and predecrement forms use their exact
+`f200`/`f218`/`f220` source opcode at `0x1008`, then `f200@0x100c` and
+`f239@0x1010`. This replaces stale six-boundary exceptions for three
+signalling-destination cases; clean runtime records seven non-duplicative
+boundaries with PCs derived from each source form's encoded length.
+
 ## Integrated acceptance epoch
 
 One integrated runtime epoch passed all six phases in 2,318 seconds:
@@ -123,6 +132,18 @@ prove reseeding. Re-review approved the bounded tranche.
 
 ## Closure decision
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups. This service evidence does not classify reachable generic raw
-FPU emitters.
+No closure row is promoted to **audited**. `generator,i_FPP` remains
+**unreviewed** pending all selector groups.
+
+A later configured-root reachability audit established that both `fdiv_rr`
+roots—the FDIV/FSDIV/FDDIV selector block and separate FSGLDIV block—enter
+semantic service before operand acquisition and before their retained calls;
+there is no MIDFUNC caller. Therefore `fdiv_rr` and `raw_fdiv_rr` are
+**unreachable**, guarded by positive ordered control-flow for both roots, exact
+root/edge counts, lower-chain shape, and future-caller checks.
+
+The closure intentionally stops there. `FDIV_ddd` remains reachable and audited
+through two separate remainder compositions in addition to the now-dead
+`raw_fdiv_rr` definition, and `FDIV_sss` remains reachable/audited through its
+forced-single composition. This is MIDFUNC/raw retirement, not emitter
+retirement or native acceptance.

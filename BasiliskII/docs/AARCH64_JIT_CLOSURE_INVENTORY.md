@@ -18,9 +18,9 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 58 | 44 | 0 | 28 |
-| midfunc | 422 | 263 | 0 | 119 | 40 |
+| midfunc | 422 | 263 | 0 | 120 | 39 |
 | emitter_api | 294 | 68 | 0 | 97 | 129 |
-| raw_boundary | 83 | 26 | 0 | 6 | 51 |
+| raw_boundary | 83 | 26 | 0 | 7 | 50 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.

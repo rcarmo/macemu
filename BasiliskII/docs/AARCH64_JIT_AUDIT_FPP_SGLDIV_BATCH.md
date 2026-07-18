@@ -42,6 +42,14 @@ The matrix covers:
   integer CCR preservation, exact native entry and strict rejection; and
 - exact fallback opcode attribution at PC `0x1008` for register and EA forms.
 
+The complete two-pass service profile is pinned as one initial
+`f239@0x1000` destination load followed by two identical source/FSGLDIV,
+FPSR-capture, and store triples. Absolute-long source uses PCs
+`0x1008/0x1010/0x1014`; register, postincrement, and predecrement forms use
+`0x1008/0x100c/0x1010` with their exact `f200`/`f218`/`f220` source opcode.
+This replaces the stale six-boundary exception for the signalling-destination
+case; clean runtime records seven non-duplicative boundaries.
+
 ## Structural and review decision
 
 The structural audit pins the AArch64 pre-acquisition service guard, operation
@@ -54,5 +62,13 @@ missing midpoint/directed witnesses, and generic fallback attribution. All were
 repaired. A final source review also removed accidental FSGLMUL membership from
 the new predicate, keeping this checkpoint bounded.
 
-No closure row is promoted. `generator,i_FPP` remains **unreviewed** pending all
-selector groups.
+No closure row is promoted to **audited**. `generator,i_FPP` remains
+**unreviewed** pending all selector groups.
+
+A later combined divide-root audit established that this selector and the
+FDIV/FSDIV/FDDIV block are the only configured `fdiv_rr` roots, and both
+service before operand acquisition. With no MIDFUNC caller, `fdiv_rr` and
+`raw_fdiv_rr` are therefore **unreachable**. This matrix remains the 23+1
+runtime-fidelity proof for the FSGLDIV root. `FDIV_ddd` and `FDIV_sss` remain
+reachable and audited through separate remainder/forced-single compositions;
+this checkpoint does not retire either emitter.

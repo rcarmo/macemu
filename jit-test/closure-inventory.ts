@@ -287,6 +287,7 @@ const semanticServiceMid = new Map<string, string>([
   ["fsqrt_rr", "all configured AArch64 FSQRT/FSSQRT/FDSQRT selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
   ["fsub_rr", "all configured AArch64 FSUB/FSSUB/FDSUB selectors enter semantic service before operand acquisition or the retained native MIDFUNC call; configured FCMP uses fcompare_result_rr"],
   ["fmul_rr", "both configured AArch64 roots (FMUL/FSMUL/FDMUL and FSGLMUL) enter semantic service before operand acquisition or the retained native MIDFUNC calls"],
+  ["fdiv_rr", "both configured AArch64 roots (FDIV/FSDIV/FDDIV and FSGLDIV) enter semantic service before operand acquisition or the retained native MIDFUNC calls"],
 ]);
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
 const semanticServiceBlocks: Array<[string, string, string]> = [
@@ -309,25 +310,30 @@ for (const [name, startMarker, endMarker] of semanticServiceBlocks) {
   if (gate < 0 || fail < gate || ret < fail || operand < ret || call < operand)
     throw new Error(`configured AArch64 semantic service no longer precedes ${name}`);
 }
-for (const [startMarker, endMarker] of [["case 0x23:", "case 0x24:"], ["case 0x27:", "case 0x28:"]]) {
-  const start = source.fpp.indexOf(startMarker);
-  const end = source.fpp.indexOf(endMarker, start + startMarker.length);
-  if (start < 0 || end < 0) throw new Error(`configured multiply service block disappeared: ${startMarker}`);
-  const block = source.fpp.slice(start, end);
-  const gate = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
-  const fail = block.indexOf("FAIL(1);", gate);
-  const ret = block.indexOf("return;", fail);
-  const operand = block.indexOf("get_fp_value");
-  const call = block.indexOf("fmul_rr(");
-  if (gate < 0 || fail < gate || ret < fail || operand < ret || call < operand)
-    throw new Error(`configured AArch64 semantic service no longer precedes fmul_rr in ${startMarker}`);
+for (const [name, blocks] of [
+  ["fmul_rr", [["case 0x23:", "case 0x24:"], ["case 0x27:", "case 0x28:"]]],
+  ["fdiv_rr", [["case 0x20:", "case 0x21:"], ["case 0x24:", "case 0x25:"]]],
+] as const) {
+  for (const [startMarker, endMarker] of blocks) {
+    const start = source.fpp.indexOf(startMarker);
+    const end = source.fpp.indexOf(endMarker, start + startMarker.length);
+    if (start < 0 || end < 0) throw new Error(`configured ${name} service block disappeared: ${startMarker}`);
+    const block = source.fpp.slice(start, end);
+    const gate = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+    const fail = block.indexOf("FAIL(1);", gate);
+    const ret = block.indexOf("return;", fail);
+    const operand = block.indexOf("get_fp_value");
+    const call = block.indexOf(`${name}(`);
+    if (gate < 0 || fail < gate || ret < fail || operand < ret || call < operand)
+      throw new Error(`configured AArch64 semantic service no longer precedes ${name} in ${startMarker}`);
+  }
 }
 const rootMidText = `${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`;
 for (const name of semanticServiceMid.keys()) {
   const rootReferences = countToken(rootMidText, name);
   const midReferences = midDefs.reduce((sum, def) =>
     sum + (def.name === name ? 0 : countToken(def.body, name)), 0);
-  const expectedRootReferences = name === "fmul_rr" ? 2 : 1;
+  const expectedRootReferences = name === "fmul_rr" || name === "fdiv_rr" ? 2 : 1;
   if (rootReferences !== expectedRootReferences)
     throw new Error(`serviced native MIDFUNC ${name} configured-root references=${rootReferences}, expected ${expectedRootReferences} retained selector call(s)`);
   if (midReferences !== 0)
@@ -472,6 +478,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fsqrt_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
   ["raw_fsub_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 subtract selectors service before unreachable fsub_rr"],
   ["raw_fmul_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 multiply roots service before unreachable fmul_rr"],
+  ["raw_fdiv_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 divide roots service before unreachable fdiv_rr; FDIV emitters remain reachable from remainder compositions"],
 ]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));

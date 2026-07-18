@@ -137,13 +137,17 @@ try {
       const mem = output.match(/^MEMDUMP [^:]+:(.*)$/m)?.[1].trim().toLowerCase();
       const expected = `a5 5a ${item.output} 3c c3`, fpsr = dump?.match(/ FPSR=([0-9a-f]+)/i)?.[1].toLowerCase();
       const d0 = dump?.match(/ D0=([0-9a-f]+)/i)?.[1].toLowerCase(), a0 = dump?.match(/ A0=([0-9a-f]+)/i)?.[1].toLowerCase(), sr = dump?.match(/ SR=([0-9a-f]+)/i)?.[1].toLowerCase();
-      const fallbackCount = (output.match(/JIT_FALLBACK/g) ?? []).length;
+      const profile = [...output.matchAll(/JIT_FALLBACK op=([0-9a-f]+) pc=([0-9a-f]+)/gi)]
+        .map((match) => `${match[1].toLowerCase()}@${match[2].toLowerCase()}`).join(" ");
       const auditedOpcode = item.aliasFp7 ? "f200" : item.ea === "postinc" ? "f218" : item.ea === "predec" ? "f220" : "f239";
-      const expectedFallbacks = item.destinationSnan ? 6 : 7;
+      const capturePc = auditedOpcode === "f239" ? "00001010" : "0000100c";
+      const storePc = auditedOpcode === "f239" ? "00001014" : "00001010";
+      const passProfile = `${auditedOpcode}@00001008 f200@${capturePc} f239@${storePc}`;
+      const expectedProfile = `f239@00001000 ${passProfile} ${passProfile}`;
       const expectedD0 = item.operationFpsr ?? (parseInt(item.fpsr, 16) & 8 ? (parseInt(item.fpsr, 16) | 0x200).toString(16).padStart(8, "0") : item.fpsr);
       const expectedA0 = item.expectedA0 ? (parseInt(item.expectedA0, 16) - 0xa000 + 0x9020).toString(16).padStart(8, "0") : "0000a000";
-      if (run.status === 0 && mem === expected && fpsr === item.fpsr && d0 === expectedD0 && a0 === expectedA0 && sr === "271f" && fallbackCount === expectedFallbacks && output.includes("NATEXEC pc=00001008") && output.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`) && !output.includes("Caught SIGSEGV")) servicePass++;
-      else { fail++; console.error(`FPP_SGLDIV_FAIL case=${item.name} rc=${run.status} mem=${mem} want=${expected} d0=${d0} want_d0=${expectedD0} fpsr=${fpsr} want_fpsr=${item.fpsr} a0=${a0} want_a0=${expectedA0} sr=${sr} fallbacks=${fallbackCount} want_fallbacks=${expectedFallbacks}`); }
+      if (run.status === 0 && mem === expected && fpsr === item.fpsr && d0 === expectedD0 && a0 === expectedA0 && sr === "271f" && profile === expectedProfile && output.includes("NATEXEC pc=00001008") && output.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`) && !output.includes("Caught SIGSEGV")) servicePass++;
+      else { fail++; console.error(`FPP_SGLDIV_FAIL case=${item.name} rc=${run.status} mem=${mem} want=${expected} d0=${d0} want_d0=${expectedD0} fpsr=${fpsr} want_fpsr=${item.fpsr} a0=${a0} want_a0=${expectedA0} sr=${sr} fallback_profile=${profile} want_profile=${expectedProfile}`); }
     } finally { rmSync(td, { recursive: true, force: true }); }
   }
   for (const item of selectedStrict) {

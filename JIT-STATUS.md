@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the serviced AArch64 divide MIDFUNC/raw chain**
+  (2026-07-18): configured control-flow proof confirms both `fdiv_rr` roots—
+  FDIV/FSDIV/FDDIV and FSGLDIV—enter exact MPFR service before operand
+  acquisition. With no other configured root or MIDFUNC caller, `fdiv_rr` and
+  `raw_fdiv_rr` are now **unreachable**, guarded by two-root control-flow,
+  exact edge/lower-chain, and future-caller checks. The **37+3** FDIV-family
+  and **23+1** FSGLDIV matrices pass with exact variable-length service
+  profiles. `FDIV_ddd` remains reachable/audited through two remainder
+  compositions, and `FDIV_sss` through its forced-single composition; neither
+  emitter is retired. This is a bounded MIDFUNC/raw retirement, and `i_FPP`
+  remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_DIVIDE_BATCH.md`.
+
 - **Retire the residual AArch64 native binary64 multiply primitive chain**
   (2026-07-18): configured control-flow proof confirms both `fmul_rr` roots—
   FMUL/FSMUL/FDMUL and FSGLMUL—enter exact MPFR service before operand

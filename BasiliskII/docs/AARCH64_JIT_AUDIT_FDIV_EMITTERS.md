@@ -64,3 +64,9 @@ Promoted rows:
 
 No raw, MIDFUNC, conversion, guest family, Motorola-status, or generator row is
 promoted. `generator,i_FPP` remains **unreviewed**.
+
+A later configured-root audit retired `fdiv_rr` and `raw_fdiv_rr` after proving
+both guest roots service before acquisition. That does not retire these emitter
+rows: `FDIV_ddd` remains reachable at two remainder-composition sites, and
+`FDIV_sss` remains reachable at its forced-single composition. Their audited
+status and exact 3/1 configured-site counts therefore remain current.
