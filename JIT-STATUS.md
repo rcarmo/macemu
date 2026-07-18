@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire lossy native FSIN/FETOX/FTWOTOX/FLOG2 to exact service**
+  (2026-07-18): the four remaining binary64-native transcendental routes now
+  exit before narrowing extended operands and evaluate directly into FPCR-width
+  MPFR results. A fixed **49 service + 4 strict** matrix covers directed
+  single/double results, signed zero, infinity/domain rules, NaN metadata,
+  finite overflow/underflow, aliases and exact FPSR. Minimum-extended `FLOG2`
+  now returns finite `-16445` instead of binary64 collapse to zero and spurious
+  DZ. No closure row is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_NATIVE_TRANSCENDENTAL_BATCH.md`.
+
 - **Repair FPP FTAN/FTENTOX/FLOGN/FLOG10 service precision**
   (2026-07-18): these four configured MPFR selectors now acquire extended
   sources and evaluate directly into separate FPCR-width results, avoiding

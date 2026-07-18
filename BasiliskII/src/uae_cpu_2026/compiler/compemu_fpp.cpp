@@ -1851,6 +1851,13 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* The AArch64 native route evaluates a binary64 shadow with the host
+			 * C library. It cannot preserve an extended source, FPCR precision and
+			 * exponent range, or exact Motorola FPSR status. Retain MPFR service. */
+			FAIL(1);
+			return;
+#endif
 
 			dont_care_fflags();
 			src = get_fp_value(opcode, extra);
@@ -1879,6 +1886,10 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			FAIL(1);
+			return;
+#endif
 
 			dont_care_fflags();
 			src = get_fp_value(opcode, extra);
@@ -1896,6 +1907,10 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			FAIL(1);
+			return;
+#endif
 
 			dont_care_fflags();
 			src = get_fp_value(opcode, extra);
@@ -1946,6 +1961,10 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			FAIL(1);
+			return;
+#endif
 
 			dont_care_fflags();
 			src = get_fp_value(opcode, extra);

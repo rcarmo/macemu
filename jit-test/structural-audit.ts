@@ -497,6 +497,10 @@ const fppTanExp10LogFallbackMatrix = await Bun.file(new URL(
   "./fpp-tan-exp10-log-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppNativeTranscendentalServiceMatrix = await Bun.file(new URL(
+  "./fpp-native-transcendental-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1198,8 +1202,10 @@ for (const [label, disable, name] of servicedMonadicCases) {
 for (const contract of [
   "bool direct_result = operation == 2 || operation == 6",
   "|| operation == 8 || operation == 9 || operation == 10",
-  "|| operation == 12 || operation == 13 || operation == 15",
-  "|| operation == 18 || operation == 20 || operation == 21;",
+  "|| operation == 12 || operation == 13 || operation == 14",
+  "|| operation == 15 || operation == 16 || operation == 17",
+  "|| operation == 18 || operation == 20 || operation == 21",
+  "|| operation == 22;",
   "|| direct_result || operation == 30 || operation == 31;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
@@ -1252,7 +1258,7 @@ for (const [label, disable, name] of [
 }
 for (const contract of [
   "operation == 8 || operation == 9 || operation == 10",
-  "|| operation == 12 || operation == 13 || operation == 15",
+  "|| operation == 12 || operation == 13 || operation == 14",
   "case 10: // FATAN", "mpfr_atan (direct, value.f, rnd)",
   "case 12: // FASIN", "mpfr_asin (direct, value.f, rnd)",
   "case 13: // FATANH", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
@@ -1297,8 +1303,9 @@ for (const [label, disable, name] of [
   tanLogCompilerCursor = next;
 }
 for (const contract of [
-  "operation == 12 || operation == 13 || operation == 15",
-  "|| operation == 18 || operation == 20 || operation == 21;",
+  "operation == 12 || operation == 13 || operation == 14",
+  "|| operation == 15 || operation == 16 || operation == 17",
+  "|| operation == 18 || operation == 20 || operation == 21",
   "case 15: // FTAN", "mpfr_inf_p (value.f)", "mpfr_tan (direct, value.f, rnd)",
   "case 18: // FTENTOX", "mpfr_ui_pow (direct, 10, value.f, rnd)",
   "case 20: // FLOGN", "mpfr_log (direct, value.f, rnd)",
@@ -1326,6 +1333,57 @@ console.log("METRIC structural_fpp_tan_exp10_log_service_vectors=45");
 console.log("METRIC structural_fpp_tan_exp10_log_strict_rejections=4");
 console.log("METRIC structural_fpp_tan_exp10_log_extended_source=1");
 console.log("METRIC structural_fpp_tan_exp10_log_direct_result=1");
+for (const [label, disable, name] of [
+  ["case 0x0e:\t\t\t\t\t\t/* FSIN */", "jit_disable.fsin", "FSIN"],
+  ["case 0x10:\t\t\t\t\t\t/* FETOX */", "jit_disable.fetox", "FETOX"],
+  ["case 0x11:\t\t\t\t\t\t/* FTWOTOX */", "jit_disable.ftwotox", "FTWOTOX"],
+  ["case 0x16:\t\t\t\t\t\t/* FLOG2 */", "jit_disable.flog2", "FLOG2"],
+] as const) {
+  const start = fppCompilerOperation.indexOf(label);
+  const next = fppCompilerOperation.indexOf("case 0x", start + label.length);
+  if (start < 0 || next < 0) fail(`FPP ${name} service boundary is incomplete`);
+  const block = fppCompilerOperation.slice(start, next);
+  for (const contract of [label, disable, "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;"])
+    requireText(block, contract, `FPP ${name} configured AArch64 service boundary`);
+  const guard = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+  const acquire = block.indexOf("get_fp_value(opcode, extra)");
+  if (guard < 0 || acquire < 0 || guard > acquire)
+    fail(`FPP ${name} AArch64 service guard does not precede operand acquisition`);
+}
+for (const contract of [
+  "operation == 12 || operation == 13 || operation == 14",
+  "|| operation == 15 || operation == 16 || operation == 17",
+  "|| operation == 18 || operation == 20 || operation == 21",
+  "|| operation == 22;",
+  "case 14: // FSIN", "mpfr_sin (direct, value.f, rnd)",
+  "case 16: // FETOX", "mpfr_exp (direct, value.f, rnd)",
+  "case 17: // FTWOTOX", "mpfr_exp2 (direct, value.f, rnd)",
+  "case 22: // FLOG2", "mpfr_log2 (direct, value.f, rnd)",
+  "mpfr_zero_p (value.f)", "mpfr_sgn (value.f) < 0",
+]) requireText(ordinaryFppBlock, contract, "MPFR native-transcendental extended-source/direct-result contract");
+for (const contract of [
+  'name:`${a.name}_direct_single_${s}`', 'name:`${a.name}_direct_double_nearest`',
+  'name:`${name}_positive_zero`', 'name:`${name}_negative_zero`',
+  'name:"fsin_positive_infinity_operr"', 'name:"fsin_negative_infinity_operr"',
+  'name:"fetox_positive_infinity"', 'name:"fetox_negative_infinity"',
+  'name:"ftwotox_positive_infinity"', 'name:"ftwotox_negative_infinity"',
+  'name:"flog2_positive_infinity"', 'name:"flog2_negative_domain_operr"',
+  'name:"fsin_negative_qnan_payload"', 'name:"fetox_signalling_nan_quiet"',
+  'name:"ftwotox_quiet_nan_payload"', 'name:"flog2_signalling_nan_quiet"',
+  'name:"fsin_extended_min_single_underflow"', 'name:"fetox_finite_single_overflow"',
+  'name:"fetox_finite_single_underflow"', 'name:"ftwotox_finite_single_overflow"',
+  'name:"ftwotox_finite_single_underflow"', 'name:"flog2_extended_min_exact"',
+  'name:"fsin_fp7_self_alias"', 'name:"ftwotox_fp7_self_alias"', 'name:"flog2_accrued_preserve"',
+  'd0===(a.operationFpsr??a.fpsr)', 'fc===(a.alias?4:3)',
+  'B2_NATIVE_ASSERT_PC:"0x1000"',
+  'fc===(a.alias?4:3)&&o.includes("NATEXEC pc=00001000")&&o.includes("JIT_FALLBACK op=f239 pc=00001000")&&!o.includes("Caught SIGSEGV")',
+  'strict full-JIT: opcode fallback pc=00001000 op=f239',
+  "const es=process.env.CASE?sc.length:49", "et=process.env.CASE?ss.length:4",
+]) requireText(fppNativeTranscendentalServiceMatrix, contract, "FPP native-transcendental service matrix");
+console.log("METRIC structural_fpp_native_transcendental_service_vectors=49");
+console.log("METRIC structural_fpp_native_transcendental_strict_rejections=4");
+console.log("METRIC structural_fpp_native_transcendental_extended_source=1");
+console.log("METRIC structural_fpp_native_transcendental_direct_result=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 
