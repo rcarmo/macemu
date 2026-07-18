@@ -1846,6 +1846,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
        * transcendental operations must evaluate directly into the target-width
        * temporary to avoid double rounding. */
       int operation = extra & 0x3f;
+      bool ordinary_move = operation == 0;
       bool single_extended_result = operation == 36 || operation == 39;
       bool direct_result = operation == 2 || operation == 6
 	|| operation == 8 || operation == 9 || operation == 10
@@ -1855,7 +1856,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 22 || operation == 25 || operation == 28
 	|| operation == 29 || operation == 32 || operation == 34
 	|| operation == 35 || operation == 40;
-      bool extended_source = operation == 1 || operation == 3
+      bool extended_source = ordinary_move || operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31 || operation == 33
 	|| operation == 37 || operation == 38 || single_extended_result;
       if (extended_source)
@@ -2093,14 +2094,25 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	}
       else if (extended_source)
 	{
-	  /* Post-process the exact extended operation result at the selected
-	   * FPCR precision and exponent range before storing it in FPn. */
-	  set_format (prec);
-	  MPFR_DECL_INIT (rounded, prec);
-	  int rounded_t = mpfr_set (rounded, value.f, rnd);
-	  rounded_t = mpfr_check_range (rounded, rounded_t, rnd);
-	  set_fp_register (reg, rounded, value.nan_bits, value.nan_sign,
-			   rounded_t, rnd, true);
+	  if (ordinary_move)
+	    {
+	      /* Ordinary FMOVE is an exact architectural extended copy. FPCR
+	       * precision controls arithmetic results, not register transfers. */
+	      set_format (EXTENDED_PREC);
+	      set_fp_register (reg, value, t, MPFR_RNDN, true);
+	      set_format (prec);
+	    }
+	  else
+	    {
+	      /* Post-process the exact extended operation result at the selected
+	       * FPCR precision and exponent range before storing it in FPn. */
+	      set_format (prec);
+	      MPFR_DECL_INIT (rounded, prec);
+	      int rounded_t = mpfr_set (rounded, value.f, rnd);
+	      rounded_t = mpfr_check_range (rounded, rounded_t, rnd);
+	      set_fp_register (reg, rounded, value.nan_bits, value.nan_sign,
+			       rounded_t, rnd, true);
+	    }
 	}
       else
 	set_fp_register (reg, value, t, rnd, true);

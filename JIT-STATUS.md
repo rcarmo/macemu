@@ -215,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire lossy ordinary register-FMOVE copies to exact MPFR service**
+  (2026-07-18): the AArch64 path copied only the binary64 shadow, losing
+  extended significand/exponent and NaN metadata. Register-source FMOVE now
+  leaves before FP operand acquisition, and MPFR now acquires/stores it at
+  extended precision independently of FPCR. A fixed **66 service + 3 strict**
+  matrix exhausts every FP0-FP7 source/destination pair and self alias, adds
+  single/double-FPCR low-bit witnesses, and proves eight exact 80-bit classes,
+  source preservation, signalling-NaN quieting,
+  FPSR snapshot, integer CCR/state, and exact fallback attribution. No row is
+  promoted: `fmov_rr` remains reachable outside this instruction path and
+  `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_REGISTER_BATCH.md`.
+
 - **Retire lossy ordinary-FMOVE binary64 destinations to exact MPFR service**
   (2026-07-18): the AArch64 path stored an already narrowed binary64 shadow and
   cleared the instruction's conversion status, losing extended significand,

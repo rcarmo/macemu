@@ -433,6 +433,10 @@ const fppFmoveSourceMatrix = await Bun.file(new URL(
   "./fpp-fmove-source-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmoveRegisterServiceMatrix = await Bun.file(new URL(
+  "./fpp-fmove-register-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveMemoryBasicMatrix = await Bun.file(new URL(
   "./fpp-fmove-memory-basic-matrix.ts",
   import.meta.url,
@@ -731,6 +735,51 @@ console.log("METRIC structural_fpp_fmove_source_exact_native_vectors=43");
 console.log("METRIC structural_fpp_fmove_source_formats=6");
 console.log("METRIC structural_fpp_fmove_register_routes=8");
 console.log("METRIC structural_fpp_fmove_integer_ccr_preservation=1");
+const fppCompilerOperationForMove = functionBody(
+  fppCompilerSource,
+  "void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)",
+  "\n\tFAIL(1);\n}\n\n#endif",
+  "FPP operation compiler",
+);
+const ordinaryMoveStartForRegister = fppCompilerOperationForMove.indexOf("case 0x00:\t\t\t\t\t\t/* FMOVE */");
+const ordinaryMoveEndForRegister = fppCompilerOperationForMove.indexOf("case 0x01:", ordinaryMoveStartForRegister);
+if (ordinaryMoveStartForRegister < 0 || ordinaryMoveEndForRegister < 0)
+  fail("FPP ordinary register FMOVE compiler boundary is incomplete");
+const ordinaryRegisterMoveBlock = fppCompilerOperationForMove.slice(ordinaryMoveStartForRegister, ordinaryMoveEndForRegister);
+for (const contract of [
+  "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "(extra & 0x4000) == 0",
+  "Register-source FMOVE", "binary64-shadow copy", "before acquiring either FP operand",
+  "FAIL(1);", "return;",
+]) requireText(ordinaryRegisterMoveBlock, contract, "FPP register FMOVE exact service boundary");
+const registerMoveGate = ordinaryRegisterMoveBlock.indexOf("(extra & 0x4000) == 0");
+const registerMoveAcquire = ordinaryRegisterMoveBlock.indexOf("get_fp_value(opcode, extra)");
+if (registerMoveGate < 0 || registerMoveAcquire < 0 || registerMoveGate >= registerMoveAcquire)
+  fail("FPP register FMOVE service gate does not precede operand acquisition");
+for (const contract of [
+  "case 0: // FMOVE", "bool ordinary_move = operation == 0;",
+  "bool extended_source = ordinary_move ||", "get_fp_value (opcode, extra, value)",
+  "Ordinary FMOVE is an exact architectural extended copy", "set_format (EXTENDED_PREC);",
+  "set_fp_register (reg, value, t, MPFR_RNDN, true);", "set_format (prec);", "update_exceptions ();",
+]) requireText(fpuMpfrSource, contract, "MPFR register FMOVE precision/metadata contract");
+for (const contract of [
+  "for (let source = 0; source < 8; source++) for (let destination = 0; destination < 8; destination++)",
+  'name: "low_significand"', 'name: "maximum_finite"', 'name: "below_binary64_range"',
+  'name: "negative_zero"', 'name: "positive_infinity"', 'name: "quiet_nan_payload"',
+  'name: "signalling_nan_payload"', 'name: "negative_extended"',
+  'name: "fp0_to_fp7_low_significand_fpcr_single"',
+  'name: "fp0_to_fp7_low_significand_fpcr_double"',
+  'B2_TEST_REPLAY_FPCR: item.fpcr ?? "0"', 'B2_TEST_REPLAY_FP${reg}_EXT', 'F206 A800', 'F239 ${sourceStore} 0000 A020',
+  'F239 ${destinationStore} 0000 A030', 'expectedSource(item)',
+  'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_SECOND_PC: "0x1008"',
+  'B2_NATIVE_ASSERT_PC: "0x1008"', 'output.includes("JIT_FALLBACK op=f200 pc=00001008")',
+  'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'const expectedService = process.env.CASE ? selectedCases.length : 66',
+  'const expectedStrict = process.env.CASE ? selectedStrict.length : 3',
+]) requireText(fppFmoveRegisterServiceMatrix, contract, "FPP register FMOVE service matrix");
+console.log("METRIC structural_fpp_fmove_register_service_vectors=66");
+console.log("METRIC structural_fpp_fmove_register_strict_rejections=3");
+console.log("METRIC structural_fpp_fmove_register_pairs=64");
+console.log("METRIC structural_fpp_fmove_register_exact80_classes=8");
 for (const contract of [
   'for (const mode of [', 'name: "aind"', 'name: "postinc"', 'name: "predec"',
   'name: `byte_${mode.name}_a7_geometry`', 'effective: 0xa000, want: 0xa002',
@@ -1223,7 +1272,7 @@ if (ordinaryFppStart < 0 || ordinaryFppEnd < 0)
 const ordinaryFppBlock = fpuMpfrSource.slice(ordinaryFppStart, ordinaryFppEnd);
 for (const contract of [
   "int operation = extra & 0x3f;",
-  "bool extended_source = operation == 1 || operation == 3",
+  "bool extended_source = ordinary_move || operation == 1 || operation == 3",
   "|| operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37 || operation == 38 || single_extended_result;",
   "mpfr_set_prec (value.f, EXTENDED_PREC);", "set_format (EXTENDED_PREC);",
   "if (!get_fp_value (opcode, extra, value))", "set_format (prec);",

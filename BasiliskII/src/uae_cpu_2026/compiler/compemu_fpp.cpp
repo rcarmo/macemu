@@ -1726,6 +1726,16 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Register-source FMOVE is an architectural precision operation, not
+			 * a binary64-shadow copy. Preserve extended significand/exponent and
+			 * NaN metadata through MPFR before acquiring either FP operand. */
+			if ((extra & 0x4000) == 0)
+			{
+				FAIL(1);
+				return;
+			}
+#endif
 
 			dont_care_fflags();
 			src = get_fp_value(opcode, extra);
