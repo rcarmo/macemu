@@ -110,7 +110,7 @@ emitter_api,FCVTAS_wd,audited,FCVTAS_wd,60,1,BasiliskII/src/uae_cpu_2026/compile
 emitter_api,FCVTAS_xd,unreachable,FCVTAS_xd,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,473,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FCVTZS_xd,unreachable,FCVTZS_xd,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,474,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FDIV_ddd,audited,FDIV_ddd,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,486,AARCH64_JIT_AUDIT_FDIV_EMITTERS.md
-emitter_api,FDIV_sss,audited,FDIV_sss,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,487,AARCH64_JIT_AUDIT_FDIV_EMITTERS.md
+emitter_api,FDIV_sss,unreachable,FDIV_sss,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,487,"only retained raw_fsgldiv_rr emits it, and configured AArch64 FSGLDIV services before unreachable fsgldiv_rr"
 emitter_api,FMOV_dd,audited,FMOV_dd,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,458,AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md
 emitter_api,FMOV_di,audited,FMOV_di,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,464,AARCH64_JIT_AUDIT_FMOV_DI_EMITTER.md
 emitter_api,FMOV_dx,audited,FMOV_dx,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,460,AARCH64_JIT_AUDIT_FMOV_DX_XD_EMITTERS.md
@@ -921,7 +921,7 @@ raw_boundary,raw_fpowx_rr,unreviewed,raw_fpowx_rr,60,3,BasiliskII/src/uae_cpu_20
 raw_boundary,raw_frem1_rr,unreviewed,raw_frem1_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1349,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_frndint_rr,unreachable,raw_frndint_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1313,only its LOWFUNC/LENDFUNC definition remains below unreachable frndint_rr; FRINTI_dd remains reachable from integer-destination rounding
 raw_boundary,raw_frndintz_rr,unreachable,raw_frndintz_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1319,only its LOWFUNC/LENDFUNC definition remains below unreachable frndintz_rr; FRINTZ_dd remains reachable from modulus truncation
-raw_boundary,raw_fsgldiv_rr,unreviewed,raw_fsgldiv_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1333,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fsgldiv_rr,unreachable,raw_fsgldiv_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1333,only its LOWFUNC/LENDFUNC definition remains below unreachable fsgldiv_rr after configured AArch64 FSGLDIV service; FCVT_sd and FCVT_ds remain reachable from other compositions
 raw_boundary,raw_fsglmul_rr,unreviewed,raw_fsglmul_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1357,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fsqrt_rr,unreachable,raw_fsqrt_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1210,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 square-root selectors service before unreachable fsqrt_rr
 raw_boundary,raw_fsub_rr,unreachable,raw_fsub_rr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1246,only its LOWFUNC/LENDFUNC definition remains after configured AArch64 subtract selectors service before unreachable fsub_rr

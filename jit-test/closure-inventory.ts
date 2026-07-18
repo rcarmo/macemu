@@ -486,6 +486,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmov_d_ri_100", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_100 and fmov_l_ri; SCVTF_dw remains reachable from other compositions"],
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],
+  ["raw_fsgldiv_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsgldiv_rr after configured AArch64 FSGLDIV service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
 ]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
@@ -535,6 +536,7 @@ const semanticServiceEmitter = new Map<string, string>([
   ["FSQRT_dd", "only retained raw_fsqrt_rr emits it, and configured AArch64 square-root selectors service before unreachable fsqrt_rr"],
   ["FSUB_ddd", "only retained raw_fsub_rr emits it, and configured AArch64 subtract selectors service before unreachable fsub_rr"],
   ["FMUL_ddd", "only retained raw_fmul_rr emits it, and both configured AArch64 multiply roots service before unreachable fmul_rr"],
+  ["FDIV_sss", "only retained raw_fsgldiv_rr emits it, and configured AArch64 FSGLDIV services before unreachable fsgldiv_rr"],
 ]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {

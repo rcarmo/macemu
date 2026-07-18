@@ -2184,6 +2184,37 @@ console.log("METRIC structural_fpp_sgldiv_service_vectors=23");
 console.log("METRIC structural_fpp_sgldiv_strict_rejections=1");
 console.log("METRIC structural_fpp_sgldiv_one_sided_operands=2");
 console.log("METRIC structural_fpp_sgldiv_direct_single_round=1");
+const sgldivMidStart = midfuncSource.indexOf("MIDFUNC(2,fsgldiv_rr,(FRW d, FR s))");
+const sgldivMidEnd = midfuncSource.indexOf("MENDFUNC(2,fsgldiv_rr,(FRW d, FR s))", sgldivMidStart);
+if (sgldivMidStart < 0 || sgldivMidEnd < 0) fail("missing retired FSGLDIV MIDFUNC fsgldiv_rr");
+requireText(midfuncSource.slice(sgldivMidStart, sgldivMidEnd), "raw_fsgldiv_rr(d, s);", "retired FSGLDIV MIDFUNC fsgldiv_rr");
+if ((midfuncSource.match(/\bfsgldiv_rr\b/g) || []).length !== 2)
+  fail("FSGLDIV MIDFUNC fsgldiv_rr gained a configured caller");
+const sgldivRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fsgldiv_rr,(FRW d, FR s))");
+const sgldivRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fsgldiv_rr,(FRW d, FR s))", sgldivRawStart);
+if (sgldivRawStart < 0 || sgldivRawEnd < 0) fail("missing retired FSGLDIV raw boundary raw_fsgldiv_rr");
+const sgldivRawBody = codegenSource.slice(sgldivRawStart, sgldivRawEnd);
+let sgldivPrevious = -1;
+for (const contract of [
+  "FCVT_sd(SCRATCH_F64_1, d);", "FCVT_sd(SCRATCH_F64_2, s);",
+  "FDIV_sss(SCRATCH_F64_1, SCRATCH_F64_1, SCRATCH_F64_2);", "FCVT_ds(d, SCRATCH_F64_1);",
+]) {
+  requireText(sgldivRawBody, contract, "retired FSGLDIV raw boundary raw_fsgldiv_rr");
+  const position = sgldivRawBody.indexOf(contract);
+  if (position <= sgldivPrevious) fail("retired FSGLDIV raw conversion/division order changed");
+  sgldivPrevious = position;
+}
+if ((codegenSource.match(/\braw_fsgldiv_rr\b/g) || []).length !== 2)
+  fail("FSGLDIV raw boundary raw_fsgldiv_rr gained a configured caller");
+const sgldivFdivSingleSites = (codegenSource.match(/\bFDIV_sss\(/g) || []).length;
+const sgldivFdivDoubleSites = (codegenSource.match(/\bFDIV_ddd\(/g) || []).length;
+const sgldivFcvtSdSites = (codegenSource.match(/\bFCVT_sd\(/g) || []).length;
+const sgldivFcvtDsSites = (codegenSource.match(/\bFCVT_ds\(/g) || []).length;
+if (sgldivFdivSingleSites !== 1 || sgldivFdivDoubleSites !== 3 || sgldivFcvtSdSites !== 7 || sgldivFcvtDsSites !== 6)
+  fail(`FSGLDIV residual sites FDIV_s/d FCVT_sd/ds=${sgldivFdivSingleSites}/${sgldivFdivDoubleSites} ${sgldivFcvtSdSites}/${sgldivFcvtDsSites}, expected 1/3 7/6`);
+console.log("METRIC structural_fpp_sgldiv_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fpp_sgldiv_unreachable_single_emitters=1");
+console.log("METRIC structural_fpp_sgldiv_reachable_double_emitters=1");
 const sglmulCompilerStart = fppCompilerOperation.indexOf("case 0x27:\t\t\t\t\t\t/* FSGLMUL */");
 const sglmulCompilerEnd = fppCompilerOperation.indexOf("case 0x28:\t\t\t\t\t\t/* FSUB */", sglmulCompilerStart);
 if (sglmulCompilerStart < 0 || sglmulCompilerEnd < 0) fail("FPP FSGLMUL compiler boundary is incomplete");

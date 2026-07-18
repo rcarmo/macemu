@@ -68,7 +68,14 @@ No closure row is promoted to **audited**. `generator,i_FPP` remains
 A later combined divide-root audit established that this selector and the
 FDIV/FSDIV/FDDIV block are the only configured `fdiv_rr` roots, and both
 service before operand acquisition. With no MIDFUNC caller, `fdiv_rr` and
-`raw_fdiv_rr` are therefore **unreachable**. This matrix remains the 23+1
-runtime-fidelity proof for the FSGLDIV root. `FDIV_ddd` and `FDIV_sss` remain
-reachable and audited through separate remainder/forced-single compositions;
-this checkpoint does not retire either emitter.
+`raw_fdiv_rr` are therefore **unreachable**. This matrix remains the **23+1**
+runtime-fidelity proof for the FSGLDIV root.
+
+A subsequent lower-chain audit established that `fsgldiv_rr` also has no
+configured caller, `raw_fsgldiv_rr` is definition-only, and its `FDIV_sss` call
+is the sole binary32 divide-emitter site. The raw wrapper and `FDIV_sss` are now
+**unreachable**, guarded by exact parent, ordered
+`FCVT_sd`→`FDIV_sss`→`FCVT_ds`, site-count, and future-caller checks.
+`FDIV_ddd` remains audited/reachable at three sites through ordinary and two
+remainder compositions; shared FCVT emitters remain audited/reachable. This is
+retirement, not native acceptance, and `generator,i_FPP` remains unreviewed.

@@ -142,8 +142,9 @@ there is no MIDFUNC caller. Therefore `fdiv_rr` and `raw_fdiv_rr` are
 **unreachable**, guarded by positive ordered control-flow for both roots, exact
 root/edge counts, lower-chain shape, and future-caller checks.
 
-The closure intentionally stops there. `FDIV_ddd` remains reachable and audited
-through two separate remainder compositions in addition to the now-dead
-`raw_fdiv_rr` definition, and `FDIV_sss` remains reachable/audited through its
-forced-single composition. This is MIDFUNC/raw retirement, not emitter
-retirement or native acceptance.
+The original closure stopped there. A later FSGLDIV lower-chain audit retired
+definition-only `raw_fsgldiv_rr` and its sole-site `FDIV_sss` emitter.
+`FDIV_sss` is therefore unreachable, while `FDIV_ddd` remains reachable and
+audited through two separate remainder compositions in addition to the
+now-dead `raw_fdiv_rr` definition. Both decisions are retirement, not native
+acceptance, and `generator,i_FPP` remains unreviewed.

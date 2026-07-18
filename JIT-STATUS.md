@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the serviced AArch64 FSGLDIV lower chain and sole binary32 divide
+  emitter** (2026-07-18): FSGLDIV enters exact MPFR service before operand
+  acquisition; `fsgldiv_rr` has no configured caller and `raw_fsgldiv_rr` is
+  definition-only. Exact ordered conversion/divide/widen checks now classify
+  the raw wrapper and its sole-site `FDIV_sss` emitter **unreachable**. The
+  accepted FSGLDIV **23+1** matrix owns configured runtime fidelity; direct
+  `FDIV_sss` evidence remains historical. Binary64 `FDIV_ddd` stays audited and
+  reachable at three sites, while shared FCVT emitters stay audited at 7/6.
+  This is a two-row lower-chain retirement; `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SGLDIV_BATCH.md`.
+
 - **Retire the definition-only AArch64 distinct-destination single-round raw
   wrapper** (2026-07-18): `fmovs_rr` has no configured production root, and
   exact caller/body checks establish that `raw_fmovs_rr` has only its
