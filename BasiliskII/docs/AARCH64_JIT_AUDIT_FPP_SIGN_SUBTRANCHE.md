@@ -110,7 +110,14 @@ FPP_FMOVE_PACKED_FALLBACK_MATRIX service_pass=9 strict_pass=4 fail=0 total=13
 No pre-existing closure row is promoted. The new
 `compemu_raw_call_preserve_nzcv` boundary expands the deterministic inventory
 to 998 rows and is classified **audited** by this report's focused ABI, NZCV,
-ordering, structural, and replay evidence. Raw native
-`raw_fabs_rr`/`raw_fneg_rr` emitters remain reachable from other unreviewed FPP
-compositions, and `generator,i_FPP` remains **unreviewed** pending the remaining
-subfamilies.
+ordering, structural, and replay evidence.
+
+A later configured-root reachability audit corrected the original conservative
+classification of the retained native sign chain. On AArch64 every
+FABS/FSABS/FDABS and FNEG/FSNEG/FDNEG selector enters semantic service before
+operand acquisition; there is no other configured caller. Therefore
+`fabs_rr`/`fneg_rr`, `raw_fabs_rr`/`raw_fneg_rr`, and `FABS_dd`/`FNEG_dd` are
+**unreachable**, with positive ordered control-flow proofs in
+`closure-inventory.ts` and `structural-audit.ts`. This is retirement, not native
+acceptance: the retained post-return code is not executed. `generator,i_FPP`
+remains **unreviewed** pending the remaining subfamilies.

@@ -262,11 +262,42 @@ for (const def of midDefs) {
 }
 
 /* MV2SR.W is present in generated output but every legal slot is replaced
-   unconditionally after registration. Other unused MIDFUNCs are classified by
-   the actual root/call graph; do not guess from naming conventions. In
-   particular, USE_JIT_FPU makes f* MIDFUNCs reachable when compfpu is enabled. */
-const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w";
+   unconditionally after registration. FABS/FNEG retain dead native source after
+   unconditional configured-AArch64 semantic-service exits; do not let those
+   post-return tokens become reachability roots. Every override below has a
+   positive ordered control-flow proof before graph construction. */
+const semanticServiceMid = new Map<string, string>([
+  ["fabs_rr", "all configured AArch64 FABS/FSABS/FDABS selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
+  ["fneg_rr", "all configured AArch64 FNEG/FSNEG/FDNEG selectors enter semantic service before operand acquisition or the retained native MIDFUNC call"],
+]);
+const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
+const signServiceBlocks: Array<[string, string, string]> = [
+  ["fabs_rr", "case 0x18:", "case 0x19:"],
+  ["fneg_rr", "case 0x1a:", "case 0x1c:"],
+];
+for (const [name, startMarker, endMarker] of signServiceBlocks) {
+  const start = source.fpp.indexOf(startMarker);
+  const end = source.fpp.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end < 0) throw new Error(`configured sign service block disappeared: ${name}`);
+  const block = source.fpp.slice(start, end);
+  const gate = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+  const fail = block.indexOf("FAIL(1);", gate);
+  const ret = block.indexOf("return;", fail);
+  const operand = block.indexOf("get_fp_value");
+  const call = block.indexOf(`${name}(`);
+  if (gate < 0 || fail < gate || ret < fail || operand < ret || call < operand)
+    throw new Error(`configured AArch64 sign service no longer precedes ${name}`);
+}
 const rootMidText = `${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`;
+for (const name of semanticServiceMid.keys()) {
+  const rootReferences = countToken(rootMidText, name);
+  const midReferences = midDefs.reduce((sum, def) =>
+    sum + (def.name === name ? 0 : countToken(def.body, name)), 0);
+  if (rootReferences !== 1)
+    throw new Error(`serviced sign MIDFUNC ${name} configured-root references=${rootReferences}, expected retained selector call only`);
+  if (midReferences !== 0)
+    throw new Error(`serviced sign MIDFUNC ${name} gained ${midReferences} MIDFUNC caller(s)`);
+}
 const rootMid = new Set<string>();
 for (const name of midNames) {
   if (countToken(rootMidText, name) > 0 && !overriddenMidfunc(name)) rootMid.add(name);
@@ -303,6 +334,7 @@ const structuralUnreachableMid = new Map<string, string>([
   ["jnf_DIVS", "i_DIVS unconditionally selects jff_DIVS for divide exception and overflow flag semantics"],
   ["frndint_rr", "its only source call is inside inactive USE_X86_FPUCW code in the configured AArch64 build"],
   ["sub_w_ri", "raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead"],
+  ...semanticServiceMid,
 ]);
 const structuralProofTokens: Array<[string, string, string[]]> = [
   ["jff_BFINS_dd", source.support, ["table68k[opcode].mnemo == i_BFINS", "op_bitfield_comp_ff"]],
@@ -398,6 +430,10 @@ for (const path of rawFiles) for (const match of load(path).matchAll(/\b((?:comp
 if (rawNames.size !== 83)
   throw new Error(`raw-boundary census changed: ${rawNames.size}, expected 83`);
 const auditedRaw = /^(?:compemu_raw_(?:branch|call|call_observer_|cmp_pc|endblock_|jmp|maybe_cachemiss|maybe_recompile|observer_|set_pc_)|raw_(?:flags_to_reg|reg_to_flags|jcc|push_regs_to_preserve|pop_preserved_regs))/;
+const structuralUnreachableRaw = new Map<string, string>([
+  ["raw_fabs_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fabs_rr"],
+  ["raw_fneg_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fneg_rr"],
+]);
 for (const name of [...rawNames].sort()) {
   let file = rawFiles[0]; let text = load(file); let index = text.search(new RegExp(`\\b${esc(name)}\\b`));
   for (const candidate of rawFiles) {
@@ -408,14 +444,17 @@ for (const name of [...rawNames].sort()) {
   const configuredRawText = `${activeGenerated}\n${activeGencomp}\n${activeCodegen}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
   const references = countToken(configuredRawText, name);
   const primitiveAudit = acceptedPrimitiveAudit(name);
-  const status: Status = (auditedRaw.test(name) || primitiveAudit) ? "audited" : references <= 1 ? "unreachable" : "unreviewed";
+  if (structuralUnreachableRaw.has(name) && references !== 2)
+    throw new Error(`serviced sign raw boundary ${name} references=${references}, expected definition-only count 2`);
+  const status: Status = (auditedRaw.test(name) || primitiveAudit) ? "audited"
+    : structuralUnreachableRaw.has(name) || references <= 1 ? "unreachable" : "unreviewed";
   const evidence = status === "audited"
     ? primitiveAudit
       ? `BasiliskII/docs/${primitiveAudit}`
       : name === "compemu_raw_call_preserve_nzcv"
         ? "BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md"
         : "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
-    : status === "unreachable" ? "no production caller"
+    : status === "unreachable" ? (structuralUnreachableRaw.get(name) ?? "no production caller")
     : /^raw_f/.test(name) && name !== "raw_flags_to_reg"
       ? "reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification"
       : "reachable raw boundary; no exact closure classification";
@@ -436,17 +475,29 @@ if (emitterDefinitions.size !== 294)
   throw new Error(`emitter API census changed: ${emitterDefinitions.size}, expected 294`);
 const activeReachableMid = [...reachableMid].map((mid) => activeMidBodies.get(mid) ?? "").join("\n");
 const emitterRootText = `${activeGenerated}\n${activeGencomp}\n${activeCodegen}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
+const semanticServiceEmitter = new Map<string, string>([
+  ["FABS_dd", "only retained raw_fabs_rr emits it, and configured AArch64 sign selectors service before unreachable fabs_rr"],
+  ["FNEG_dd", "only retained raw_fneg_rr emits it, and configured AArch64 sign selectors service before unreachable fneg_rr"],
+]);
+const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
+for (const name of semanticServiceEmitter.keys()) {
+  if (countToken(activeCodegen, name) !== 1 || countToken(emitterNonCodegenRootText, name) !== 0)
+    throw new Error(`serviced sign emitter ${name} gained a configured caller`);
+}
 const reachableEmitter = new Set<string>();
-for (const name of emitterNames) if (countToken(emitterRootText, name) > 0) reachableEmitter.add(name);
+for (const name of emitterNames)
+  if (!semanticServiceEmitter.has(name) && countToken(emitterRootText, name) > 0) reachableEmitter.add(name);
 for (let changed = true; changed;) {
   changed = false;
   for (const name of [...reachableEmitter]) {
     const chunk = emitterDefinitions.get(name)?.chunk ?? "";
-    for (const target of emitterNames) if (!reachableEmitter.has(target) && countToken(chunk, target) > 0) { reachableEmitter.add(target); changed = true; }
+    for (const target of emitterNames)
+      if (!semanticServiceEmitter.has(target) && !reachableEmitter.has(target) && countToken(chunk, target) > 0) { reachableEmitter.add(target); changed = true; }
   }
 }
 const structuralUnreachableEmitter = new Map<string, string>([
   ["SUBS_wwish", "only used by unreachable sub_w_ri; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm"],
+  ...semanticServiceEmitter,
 ]);
 for (const name of structuralUnreachableEmitter.keys()) {
   if (!emitterNames.has(name)) throw new Error(`structural unreachable emitter disappeared: ${name}`);

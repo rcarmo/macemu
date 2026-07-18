@@ -1111,12 +1111,40 @@ for (const contract of [
   "case 0x1a:", "case 0x5a:", "case 0x5e:", "binary64 shadow",
   "forced precision", "FAIL(1);", "return;",
 ]) requireText(fnegBlock, contract, "FPP FNEG family exact service boundary");
-for (const block of [fabsBlock, fnegBlock]) {
+for (const [name, block] of [["fabs_rr", fabsBlock], ["fneg_rr", fnegBlock]] as const) {
   const gate = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+  const service = block.indexOf("FAIL(1);", gate);
+  const ret = block.indexOf("return;", service);
   const operand = block.indexOf("get_fp_value");
-  if (gate < 0 || operand < 0 || gate >= operand)
-    fail("FPP sign-family service gate must precede native operand acquisition");
+  const nativeCall = block.indexOf(`${name}(`);
+  if (gate < 0 || service < gate || ret < service || operand < ret || nativeCall < operand)
+    fail(`FPP sign-family service gate must retire ${name} before native operand acquisition`);
 }
+const signNativeContracts = [
+  ["fabs_rr", "raw_fabs_rr", "FABS_dd"],
+  ["fneg_rr", "raw_fneg_rr", "FNEG_dd"],
+] as const;
+for (const [midName, rawName, emitterName] of signNativeContracts) {
+  const configuredRootSpellings = (fppCompilerSource.match(new RegExp(`\\b${midName}\\(`, "g")) || []).length;
+  if (configuredRootSpellings !== 1)
+    fail(`retired sign MIDFUNC ${midName} configured-root spellings=${configuredRootSpellings} expected=1`);
+  const midfuncCallerSpellings = (midfuncSource.match(new RegExp(`\\b${midName}\\(`, "g")) || []).length;
+  if (midfuncCallerSpellings !== 0)
+    fail(`retired sign MIDFUNC ${midName} gained ${midfuncCallerSpellings} MIDFUNC caller spellings`);
+  const midStart = midfuncSource.indexOf(`MIDFUNC(2,${midName},(FW d, FR s))`);
+  const midEnd = midfuncSource.indexOf(`MENDFUNC(2,${midName}`, midStart);
+  if (midStart < 0 || midEnd < 0) fail(`missing retired sign MIDFUNC ${midName}`);
+  const midBody = midfuncSource.slice(midStart, midEnd);
+  requireText(midBody, `${rawName}(d, s);`, `retired sign MIDFUNC ${midName}`);
+  const rawStart = codegenSource.indexOf(`LOWFUNC(NONE,NONE,2,${rawName},(FW d, FR s))`);
+  const rawEnd = codegenSource.indexOf(`LENDFUNC(NONE,NONE,2,${rawName}`, rawStart);
+  if (rawStart < 0 || rawEnd < 0) fail(`missing retired sign raw boundary ${rawName}`);
+  requireText(codegenSource.slice(rawStart, rawEnd), `${emitterName}(d, s);`, `retired sign raw boundary ${rawName}`);
+  requireText(codegenHeaderSource, `#define ${emitterName}(Dd,Dn)`, `retired sign emitter ${emitterName}`);
+}
+console.log("METRIC structural_fpp_sign_unreachable_midfuncs=2");
+console.log("METRIC structural_fpp_sign_unreachable_raw_boundaries=2");
+console.log("METRIC structural_fpp_sign_unreachable_emitters=2");
 const fpuSyncToShadow = functionBody(
   compatSource,
   'extern "C" void jit_fpu_sync_to_shadow(void)',

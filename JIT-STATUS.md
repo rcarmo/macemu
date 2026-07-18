@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the residual AArch64 native FABS/FNEG primitive chains**
+  (2026-07-18): configured control-flow proof confirms all six sign selectors
+  enter exact MPFR service before operand acquisition and before the retained
+  native MIDFUNC calls. With no other configured caller, `fabs_rr`/`fneg_rr`,
+  `raw_fabs_rr`/`raw_fneg_rr`, and `FABS_dd`/`FNEG_dd` are unreachable rather
+  than unreviewed. Structural and inventory gates fail closed if service order
+  changes or any chain gains a caller. This is source retirement, not native
+  acceptance; `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md`.
+
 - **Audit the reachable AArch64 FMOV binary64 primitive stack**
   (2026-07-18): `FMOV_dd`, `raw_fmov_rr`, and `fmov_rr` now have direct
   closure evidence after architectural 80-bit register FMOVE was removed from
