@@ -2128,17 +2128,10 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				return;
 			}
 
-			// FIXME: the quotient byte must be computed
-			dont_care_fflags();
-			src = get_fp_value(opcode, extra);
-			if (src < 0)
-			{
-				FAIL(1);				/* Illegal instruction */
-				return;
-			}
-			frem_rr(reg, src);
-			MAKE_FPSR(reg);
-			break;
+			/* IEEE remainder does not implement truncating FMOD quotient bits,
+			 * extended operands, NaN ownership, or Motorola exceptions. */
+			FAIL(1);
+			return;
 		case 0x22:						/* FADD */
 		case 0x62:						/* FSADD */
 		case 0x66:						/* FDADD */

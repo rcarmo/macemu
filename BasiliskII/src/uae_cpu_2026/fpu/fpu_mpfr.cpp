@@ -1489,27 +1489,37 @@ mpfr_rem1 (mpfr_t rem, int *quo, mpfr_t x, mpfr_t y, mpfr_rnd_t rnd)
 }
 
 static int
-do_fmod (mpfr_t value, mpfr_t reg, mpfr_rnd_t rnd)
+do_fmod (fpu_register &value, int reg, mpfr_rnd_t rnd)
 {
   int t = 0;
 
-  if (mpfr_nan_p (value) || mpfr_nan_p (reg))
-    mpfr_set_nan (value);
-  else if (mpfr_zero_p (value) || mpfr_inf_p (reg))
+  if (mpfr_nan_p (value.f) || mpfr_nan_p (fpu.registers[reg].f))
     {
-      mpfr_set_nan (value);
+      uae_u64 nan_bits;
+      int nan_sign;
+      select_binary_nan (reg, value, &nan_bits, &nan_sign);
+      mpfr_set_nan (value.f);
+      mpfr_setsign (value.f, value.f, nan_sign, MPFR_RNDN);
+      value.nan_bits = nan_bits;
+      value.nan_sign = nan_sign;
+    }
+  else if (mpfr_zero_p (value.f) || mpfr_inf_p (fpu.registers[reg].f))
+    {
+      mpfr_set_nan (value.f);
       cur_exceptions |= FPSR_EXCEPTION_OPERR;
     }
-  else if (mpfr_zero_p (reg) || mpfr_inf_p (value))
+  else if (mpfr_zero_p (fpu.registers[reg].f) || mpfr_inf_p (value.f))
     {
-      fpu.fpsr.quotient = 0;
-      t = mpfr_set (value, reg, rnd);
+      fpu.fpsr.quotient = (mpfr_signbit (fpu.registers[reg].f)
+                           != mpfr_signbit (value.f))
+        ? FPSR_QUOTIENT_SIGN : 0;
+      t = mpfr_set (value.f, fpu.registers[reg].f, rnd);
     }
   else
     {
       int quo;
 
-      t = mpfr_rem1 (value, &quo, reg, value, rnd);
+      t = mpfr_rem1 (value.f, &quo, fpu.registers[reg].f, value.f, rnd);
       fpu.fpsr.quotient = quo << 16;
     }
   return t;
@@ -1778,7 +1788,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 22 || operation == 25 || operation == 28
 	|| operation == 29 || operation == 32;
       bool extended_source = operation == 1 || operation == 3
-	|| direct_result || operation == 30 || operation == 31;
+	|| direct_result || operation == 30 || operation == 31 || operation == 33;
       if (extended_source)
 	{
 	  mpfr_set_prec (value.f, EXTENDED_PREC);
@@ -1937,7 +1947,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  }
 	  break;
 	case 33: // FMOD
-	  t = do_fmod (value.f, fpu.registers[reg].f, rnd);
+	  t = do_fmod (value, reg, rnd);
 	  break;
 	case 34: // FADD
 	  if (mpfr_inf_p (fpu.registers[reg].f) && mpfr_inf_p (value.f)

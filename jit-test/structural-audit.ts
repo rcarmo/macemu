@@ -509,6 +509,10 @@ const fppDivideServiceMatrix = await Bun.file(new URL(
   "./fpp-divide-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppFmodServiceMatrix = await Bun.file(new URL(
+  "./fpp-fmod-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fpuHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/fpu/fpu.h",
   import.meta.url,
@@ -1113,7 +1117,7 @@ const ordinaryFppBlock = fpuMpfrSource.slice(ordinaryFppStart, ordinaryFppEnd);
 for (const contract of [
   "int operation = extra & 0x3f;",
   "bool extended_source = operation == 1 || operation == 3",
-  "|| operation == 30 || operation == 31;",
+  "|| operation == 30 || operation == 31 || operation == 33;",
   "mpfr_set_prec (value.f, EXTENDED_PREC);", "set_format (EXTENDED_PREC);",
   "if (!get_fp_value (opcode, extra, value))", "set_format (prec);",
   "case 1: // FINT", "mpfr_rint (value.f, value.f, rnd)",
@@ -1219,7 +1223,7 @@ for (const contract of [
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
   "|| operation == 29 || operation == 32;",
-  "|| direct_result || operation == 30 || operation == 31;",
+  "|| direct_result || operation == 30 || operation == 31 || operation == 33;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
   "case 6: // FLOGNP1", "mpfr_log1p (direct, value.f, rnd)",
@@ -1514,6 +1518,47 @@ console.log("METRIC structural_fpp_divide_service_vectors=37");
 console.log("METRIC structural_fpp_divide_strict_rejections=3");
 console.log("METRIC structural_fpp_divide_binary_nan_ownership=1");
 console.log("METRIC structural_fpp_divide_forced_range=1");
+const fmodCompilerStart = fppCompilerOperation.indexOf("case 0x21:\t\t\t\t\t\t/* FMOD */");
+const fmodCompilerEnd = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */", fmodCompilerStart);
+if (fmodCompilerStart < 0 || fmodCompilerEnd < 0) fail("FPP FMOD compiler boundary is incomplete");
+const fmodCompilerBlock = fppCompilerOperation.slice(fmodCompilerStart, fmodCompilerEnd);
+for (const contract of ["case 0x21:", "jit_disable.fmod", "FAIL(1);", "return;"])
+  requireText(fmodCompilerBlock, contract, "FPP FMOD exact service boundary");
+for (const forbidden of ["get_fp_value(opcode, extra)", "frem_rr(", "MAKE_FPSR("])
+  if (fmodCompilerBlock.includes(forbidden)) fail(`FPP FMOD compiler case retains forbidden ${forbidden}`);
+for (const contract of [
+  "do_fmod (fpu_register &value, int reg, mpfr_rnd_t rnd)",
+  "select_binary_nan (reg, value, &nan_bits, &nan_sign)",
+  "mpfr_setsign (value.f, value.f, nan_sign, MPFR_RNDN)",
+  "mpfr_zero_p (value.f) || mpfr_inf_p (fpu.registers[reg].f)",
+  "cur_exceptions |= FPSR_EXCEPTION_OPERR", "FPSR_QUOTIENT_SIGN",
+  "mpfr_rem1 (value.f, &quo, fpu.registers[reg].f, value.f, rnd)",
+  "fpu.fpsr.quotient = quo << 16", "operation == 31 || operation == 33",
+  "case 33: // FMOD", "do_fmod (value, reg, rnd)",
+]) requireText(fpuMpfrSource, contract, "MPFR FMOD truncating quotient/service contract");
+for (const contract of [
+  'name:"fmod_positive_7_by_3"', 'name:"fmod_negative_7_by_3"',
+  'name:"fmod_quotient_low_seven_wrap"', 'name:"fmod_truncates_not_nearest"',
+  'destination:x.p7,source:"40 01 00 00 80 00 00 00 00 00 00 00",output:x.p3',
+  'name:"fmod_extended_destination_low_bit"', 'name:"fmod_extended_source_low_bit"',
+  'name:"fmod_single_nearest"', 'name:"fmod_double_zero"',
+  'name:"fmod_single_overflow"', 'name:"fmod_single_underflow"',
+  'name:"fmod_negative_zero_quotient_sign"', 'name:"fmod_zero_by_negative_source"',
+  'name:"fmod_finite_by_positive_infinity"', 'name:"fmod_finite_by_negative_infinity"',
+  'name:"fmod_source_zero_invalid_preserves_quotient"',
+  'name:"fmod_destination_infinity_invalid_preserves_quotient"',
+  'name:"fmod_destination_qnan_precedence"',
+  'name:"fmod_source_snan_quiet_then_destination_precedence"',
+  'name:"fmod_destination_snan_quiet_then_destination_precedence"',
+  'name:"fmod_source_only_snan"', 'name:"fmod_fp7_self_alias"',
+  'name:"fmod_fp7_destination_reseed"', 'name:"fmod_postincrement_source"',
+  'name:"fmod_predecrement_source"', 'name:"fmod_quotient_replaced_accrued_preserved"',
+  'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'service_pass=${sp} strict_pass=${st}', 'sc.length:31', 'ss.length:1',
+]) requireText(fppFmodServiceMatrix, contract, "FPP FMOD service matrix");
+console.log("METRIC structural_fpp_fmod_service_vectors=31");
+console.log("METRIC structural_fpp_fmod_strict_rejections=1");
+console.log("METRIC structural_fpp_fmod_truncating_quotient=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

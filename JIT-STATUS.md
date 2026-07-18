@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FMOD truncating remainder and quotient service**
+  (2026-07-18): FMOD no longer compiles through IEEE FREM on any host; exact
+  MPFR service retains extended operands, computes the truncating quotient
+  sign/low-seven byte, post-rounds the result at FPCR width, and applies
+  architectural special-value and NaN ownership rules. A fixed **31 service +
+  1 strict** matrix covers the `7 mod 4` discriminator, quotient wrap/sign,
+  low-bit operands, FPCR range, specials, NaNs, aliases, EA effects and FPSR.
+  No closure row is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOD_BATCH.md`.
+
 - **Repair FPP FDIV/FSDIV/FDDIV operand, result and NaN ownership**
   (2026-07-18): ordinary FDIV now preserves full extended operands and rounds
   only the completed FPCR-width result; forced single/double division retains
