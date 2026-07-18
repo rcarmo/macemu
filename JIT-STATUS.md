@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit basic FPP control-register memory transfers** (2026-07-18): the
+  existing MPFR service correctly transfers FPCR/FPSR/FPIAR in architectural
+  order across `(An)`, postincrement, predecrement, displacement, absolute,
+  and PC-relative source forms. A fixed **15 service + 3 strict** matrix proves
+  all/sparse masks, guarded bytes, A7 frame updates, represented FPCR/FPSR,
+  full-width FPIAR, CCR, native fallback attribution, and strict rejection.
+  Indexed forms remain separate; no source repair or closure promotion was
+  justified and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_CONTROL_MEMORY_BASIC_BATCH.md`.
+
 - **Make direct FPP control-register transfers fail closed as one service**
   (2026-07-18): FPCR/FPSR/FPIAR Dn, An, and immediate forms now leave AArch64
   compilation before any partial mutation. A fixed **11 service + 4 strict**

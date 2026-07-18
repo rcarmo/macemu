@@ -537,6 +537,10 @@ const fppControlDirectServiceMatrix = await Bun.file(new URL(
   "./fpp-control-direct-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppControlMemoryBasicMatrix = await Bun.file(new URL(
+  "./fpp-control-memory-basic-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1809,6 +1813,35 @@ console.log("METRIC structural_fpp_control_direct_service_vectors=11");
 console.log("METRIC structural_fpp_control_direct_strict_rejections=4");
 console.log("METRIC structural_fpp_control_direct_registers=3");
 console.log("METRIC structural_fpp_control_direct_ea_classes=3");
+for (const contract of [
+  "if (!get_fp_addr (opcode, &addr, true))", "if (!get_fp_addr (opcode, &addr, false))",
+  "nwords = (list & 1) + ((list >> 1) & 1) + ((list >> 2) & 1)",
+  "if (mode == 4)", "addr -= nwords * 4", "if (list & 4)", "put_long (addr, get_fpcr ())",
+  "if (list & 2)", "put_long (addr, get_fpsr ())", "if (list & 1)",
+  "put_long (addr, fpu.instruction_address)", "set_fpcr (get_long (addr))",
+  "set_fpsr (get_long (addr))", "fpu.instruction_address = get_long (addr)",
+  "else if (mode == 3)", "m68k_areg (regs, reg) = addr",
+]) requireText(fpuMpfrSource, contract, "MPFR basic control-memory ordering and EA contract");
+for (const contract of [
+  'name: "to_aind_all_order"', 'name: "to_aind_sparse_order"', 'name: "to_postinc_a7_all"',
+  'name: "to_predec_a7_all"', 'name: "to_d16_a0_all"', 'name: "to_absw_all"', 'name: "to_absl_all"',
+  'name: "from_aind_all_order"', 'name: "from_aind_sparse_order"', 'name: "from_postinc_a7_all"',
+  'name: "from_predec_a7_all"', 'name: "from_d16_a0_all"', 'name: "from_absw_all"',
+  'name: "from_absl_all"', 'name: "from_pc_d16_all"',
+  'const all = "00 00 ff b0 0b cd ef a8 ca fe ba be"',
+  'const sparse = "00 00 ff b0 ca fe ba be"',
+  'B2_TEST_MEMDUMP:', 'B2_TEST_SECOND_PC: "0x1008"', 'B2_NATIVE_ASSERT_PC: "0x1008"',
+  'output.includes(`JIT_FALLBACK op=${item.opcode} pc=00001008`)',
+  'strict full-JIT: opcode fallback pc=00001000 op=${item.opcode}',
+  "expectedService = process.env.CASE ? selected.length : 15",
+  "expectedStrict = process.env.CASE ? selectedStrict.length : 3",
+]) requireText(fppControlMemoryBasicMatrix, contract, "FPP basic control-memory service matrix");
+for (const forbidden of ["F236", "F237"])
+  if (fppControlMemoryBasicMatrix.includes(forbidden)) fail(`FPP basic control-memory scope leaked indexed opcode ${forbidden}`);
+console.log("METRIC structural_fpp_control_memory_basic_service_vectors=15");
+console.log("METRIC structural_fpp_control_memory_basic_strict_rejections=3");
+console.log("METRIC structural_fpp_control_memory_basic_masks=2");
+console.log("METRIC structural_fpp_control_memory_basic_ea_classes=7");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");
