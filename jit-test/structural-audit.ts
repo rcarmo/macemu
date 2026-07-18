@@ -513,6 +513,10 @@ const fppFmodServiceMatrix = await Bun.file(new URL(
   "./fpp-fmod-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppFremServiceMatrix = await Bun.file(new URL(
+  "./fpp-frem-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1129,7 +1133,7 @@ const ordinaryFppBlock = fpuMpfrSource.slice(ordinaryFppStart, ordinaryFppEnd);
 for (const contract of [
   "int operation = extra & 0x3f;",
   "bool extended_source = operation == 1 || operation == 3",
-  "|| operation == 30 || operation == 31 || operation == 33;",
+  "|| operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37;",
   "mpfr_set_prec (value.f, EXTENDED_PREC);", "set_format (EXTENDED_PREC);",
   "if (!get_fp_value (opcode, extra, value))", "set_format (prec);",
   "case 1: // FINT", "mpfr_rint (value.f, value.f, rnd)",
@@ -1235,7 +1239,7 @@ for (const contract of [
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
   "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;",
-  "|| direct_result || operation == 30 || operation == 31 || operation == 33;",
+  "|| direct_result || operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
   "case 6: // FLOGNP1", "mpfr_log1p (direct, value.f, rnd)",
@@ -1571,6 +1575,44 @@ for (const contract of [
 console.log("METRIC structural_fpp_fmod_service_vectors=31");
 console.log("METRIC structural_fpp_fmod_strict_rejections=1");
 console.log("METRIC structural_fpp_fmod_truncating_quotient=1");
+const fremCompilerStart = fppCompilerOperation.indexOf("case 0x25:\t\t\t\t\t\t/* FREM */");
+const fremCompilerEnd = fppCompilerOperation.indexOf("case 0x26:\t\t\t\t\t\t/* FSCALE */", fremCompilerStart);
+if (fremCompilerStart < 0 || fremCompilerEnd < 0) fail("FPP FREM compiler boundary is incomplete");
+const fremCompilerBlock = fppCompilerOperation.slice(fremCompilerStart, fremCompilerEnd);
+for (const contract of ["case 0x25:", "jit_disable.frem", "exact semantic service", "FAIL(1);", "return;"])
+  requireText(fremCompilerBlock, contract, "FPP FREM service boundary");
+for (const forbidden of ["get_fp_value(opcode, extra)", "frem1_rr(", "MAKE_FPSR("])
+  if (fremCompilerBlock.includes(forbidden)) fail(`FPP FREM compiler case retains forbidden ${forbidden}`);
+for (const contract of [
+  "|| operation == 37;", "case 37: // FREM", "do_remainder (value, reg, rnd)",
+  "do_remainder (fpu_register &value, int reg, mpfr_rnd_t rnd)",
+  "mpfr_remquo (value.f, &quo, fpu.registers[reg].f, value.f, rnd)",
+  "quo = (-quo & 0x7f) | 0x80", "quo &= 0x7f", "fpu.fpsr.quotient = quo << 16",
+  "select_binary_nan (reg, value, &nan_bits, &nan_sign)", "FPSR_EXCEPTION_OPERR",
+  "? FPSR_QUOTIENT_SIGN : 0", "mpfr_set (value.f, fpu.registers[reg].f, rnd)",
+]) requireText(fpuMpfrSource, contract, "MPFR FREM service contract");
+for (const contract of [
+  'name:"frem_nearest_not_truncating",destination:x.p7,source:"40 01 00 00 80 00 00 00 00 00 00 00",output:x.n1,operationFpsr:"08020000",fpsr:"08020000"',
+  'name:"frem_tie_even_2p5"', 'name:"frem_tie_even_3p5"',
+  'name:"frem_quotient_low_seven_wrap",destination:x.p195,source:x.p3,output:x.pz,operationFpsr:"04410000",fpsr:"04410000"',
+  'name:"frem_extended_destination_low_bit"', 'name:"frem_extended_source_low_bit"',
+  'name:"frem_single_nearest"', 'name:"frem_single_zero"', 'name:"frem_single_minus"', 'name:"frem_single_plus"',
+  'name:"frem_double_nearest"', 'name:"frem_double_zero"',
+  'name:"frem_single_overflow",destination:x.max,source:x.hugeModulus,output:x.ninf,fpcr:"40",operationFpsr:"0a041248",fpsr:"0a040048"',
+  'name:"frem_single_underflow"', 'name:"frem_negative_zero_quotient_sign"',
+  'name:"frem_zero_by_negative_source"', 'name:"frem_finite_by_positive_infinity"', 'name:"frem_finite_by_negative_infinity"',
+  'name:"frem_source_zero_invalid_preserves_quotient"', 'name:"frem_destination_infinity_invalid_preserves_quotient"',
+  'name:"frem_destination_qnan_precedence"', 'name:"frem_source_snan_quiet_then_destination_precedence"',
+  'name:"frem_destination_snan_quiet_then_destination_precedence"', 'name:"frem_source_only_snan"',
+  'name:"frem_fp7_self_alias"', 'name:"frem_fp7_destination_reseed"',
+  'name:"frem_postincrement_source"', 'name:"frem_predecrement_source"', 'name:"frem_quotient_replaced_accrued_preserved"',
+  'B2_NATIVE_ASSERT_PC:"0x1008"', 'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'service_pass=${sp} strict_pass=${st}', 'sc.length:33', 'ss.length:1',
+]) requireText(fppFremServiceMatrix, contract, "FPP FREM service matrix");
+console.log("METRIC structural_fpp_frem_service_vectors=33");
+console.log("METRIC structural_fpp_frem_strict_rejections=1");
+console.log("METRIC structural_fpp_frem_nearest_even_quotient=2");
+console.log("METRIC structural_fpp_frem_quotient_bits=7");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

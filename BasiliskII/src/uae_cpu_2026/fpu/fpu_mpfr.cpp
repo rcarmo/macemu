@@ -1383,21 +1383,42 @@ do_scale (mpfr_t value, mpfr_t reg, mpfr_rnd_t rnd)
 }
 
 static int
-do_remainder (mpfr_t value, mpfr_t reg, mpfr_rnd_t rnd)
+do_remainder (fpu_register &value, int reg, mpfr_rnd_t rnd)
 {
-  long quo;
   int t = 0;
 
-  if (mpfr_nan_p (value) || mpfr_nan_p (reg))
-    ;
-  else if (mpfr_zero_p (value) || mpfr_inf_p (reg))
-    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-  t = mpfr_remquo (value, &quo, reg, value, rnd);
-  if (quo < 0)
-    quo = (-quo & 0x7f) | 0x80;
+  if (mpfr_nan_p (value.f) || mpfr_nan_p (fpu.registers[reg].f))
+    {
+      uae_u64 nan_bits;
+      int nan_sign;
+      select_binary_nan (reg, value, &nan_bits, &nan_sign);
+      mpfr_set_nan (value.f);
+      mpfr_setsign (value.f, value.f, nan_sign, MPFR_RNDN);
+      value.nan_bits = nan_bits;
+      value.nan_sign = nan_sign;
+    }
+  else if (mpfr_zero_p (value.f) || mpfr_inf_p (fpu.registers[reg].f))
+    {
+      mpfr_set_nan (value.f);
+      cur_exceptions |= FPSR_EXCEPTION_OPERR;
+    }
+  else if (mpfr_zero_p (fpu.registers[reg].f) || mpfr_inf_p (value.f))
+    {
+      fpu.fpsr.quotient = (mpfr_signbit (fpu.registers[reg].f)
+                           != mpfr_signbit (value.f))
+        ? FPSR_QUOTIENT_SIGN : 0;
+      t = mpfr_set (value.f, fpu.registers[reg].f, rnd);
+    }
   else
-    quo &= 0x7f;
-  fpu.fpsr.quotient = quo << 16;
+    {
+      long quo;
+      t = mpfr_remquo (value.f, &quo, fpu.registers[reg].f, value.f, rnd);
+      if (quo < 0)
+        quo = (-quo & 0x7f) | 0x80;
+      else
+        quo &= 0x7f;
+      fpu.fpsr.quotient = quo << 16;
+    }
   return t;
 }
 
@@ -1792,7 +1813,8 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 29 || operation == 32 || operation == 34
 	|| operation == 35 || operation == 40;
       bool extended_source = operation == 1 || operation == 3
-	|| direct_result || operation == 30 || operation == 31 || operation == 33;
+	|| direct_result || operation == 30 || operation == 31 || operation == 33
+	|| operation == 37;
       if (extended_source)
 	{
 	  mpfr_set_prec (value.f, EXTENDED_PREC);
@@ -1984,7 +2006,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  }
 	  break;
 	case 37: // FREM
-	  t = do_remainder (value.f, fpu.registers[reg].f, rnd);
+	  t = do_remainder (value, reg, rnd);
 	  break;
 	case 38: // FSCALE
 	  t = do_scale (value.f, fpu.registers[reg].f, rnd);

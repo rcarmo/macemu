@@ -2205,20 +2205,10 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 				FAIL(1);
 				return;
 			}
-			// gb-- disabled because the quotient byte must be computed
-			// otherwise, free rotation in ClarisWorks doesn't work.
+			/* The architectural quotient byte and extended operands require
+			 * exact semantic service; no host-native remainder path is valid. */
 			FAIL(1);
 			return;
-			dont_care_fflags();
-			src = get_fp_value(opcode, extra);
-			if (src < 0)
-			{
-				FAIL(1);				/* Illegal instruction */
-				return;
-			}
-			frem1_rr(reg, src);
-			MAKE_FPSR(reg);
-			break;
 		case 0x26:						/* FSCALE */
 			if (jit_disable.fscale)
 			{

@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FREM nearest-even remainder service** (2026-07-18): FREM
+  now uses exact extended operands, nearest-even quotient selection, FPCR result
+  rounding/range, common binary NaN ownership, and complete quotient-byte
+  publication through semantic service. A fixed **33 service + 1 strict**
+  matrix proves both half-way parity directions, quotient bit 6, signed
+  specials, OPERR, NaNs, aliases, EA effects and FPSR. No closure row is
+  promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FREM_BATCH.md`.
+
 - **Repair FPP FSUB/FSSUB/FDSUB operand and result precision**
   (2026-07-18): all three preserve extended operands and destination-minus-
   source order; ordinary FSUB evaluates directly at FPCR width and forced
