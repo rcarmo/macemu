@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FMUL_sss emitter API**
+  (2026-07-18): all **32,768 encodings** plus **608 native binary32 routes**
+  now pin 24-bit halfway rounding, signed overflow/underflow, IXC/UFC/OFC,
+  both zero×infinity IOC orders, left/right qNaN/SNaN, W-lane images,
+  **276 aliases**, full-lane clearing, distinct-value Sn==Sm load ownership,
+  all S fields, and external FP-state restoration. The sole
+  forced-single composition is pinned. Only `FMUL_sss` is audited; guest,
+  raw/MIDFUNC, conversion, and `i_FPP` boundaries remain separate. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMUL_S_EMITTER.md`.
+
 - **Audit the reachable generic AArch64 FMUL_ddd emitter API**
   (2026-07-18): all **32,768 encodings** plus **604 native semantic routes**
   now pin halfway-product and directed rounding, signed overflow/underflow,

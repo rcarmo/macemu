@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 58 | 44 | 0 | 28 |
 | midfunc | 422 | 263 | 0 | 116 | 43 |
-| emitter_api | 294 | 67 | 0 | 94 | 133 |
+| emitter_api | 294 | 68 | 0 | 94 | 132 |
 | raw_boundary | 83 | 26 | 0 | 3 | 54 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 

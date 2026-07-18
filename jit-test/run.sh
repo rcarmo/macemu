@@ -214,6 +214,7 @@ if phase_enabled emitters; then
     timeout -k 5s 300s "$SCRIPT_DIR/emitter-fsqrt-conformance.sh" || emit_failure_metrics 1 "ARM64 FSQRT emitter conformance failed" 0
     timeout -k 5s 300s "$SCRIPT_DIR/emitter-fsub-conformance.sh" || emit_failure_metrics 1 "ARM64 FSUB emitter conformance failed" 0
     timeout -k 5s 300s "$SCRIPT_DIR/emitter-fmul-conformance.sh" || emit_failure_metrics 1 "ARM64 FMUL emitter conformance failed" 0
+    timeout -k 5s 300s "$SCRIPT_DIR/emitter-fmul-s-conformance.sh" || emit_failure_metrics 1 "ARM64 FMUL single emitter conformance failed" 0
 fi
 
 # Runtime phases must never fall through to the shared fixture. Callers may

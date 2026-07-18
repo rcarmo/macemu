@@ -493,6 +493,14 @@ const fmulEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fmul-conformance.sh",
   import.meta.url,
 )).text();
+const fmulSingleEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fmul-s-conformance.cpp",
+  import.meta.url,
+)).text();
+const fmulSingleEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fmul-s-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5350,6 +5358,34 @@ requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fmul-conform
 console.log("METRIC structural_fmul_emitter_exact_words=32768");
 console.log("METRIC structural_fmul_emitter_native_routes=604");
 console.log("METRIC structural_fmul_emitter_callers=1");
+
+/* FMUL_sss is the sole configured scalar-binary32 multiply encoder. */
+const fmulSingleCallers = (codegenSource.match(/\bFMUL_sss\(/g) || []).length;
+if (fmulSingleCallers !== 1) fail(`FMUL_sss emitter callers=${fmulSingleCallers}, expected 1`);
+requireText(codegenHeaderSource, "#define FMUL_sss(Sd,Sn,Sm)", "generic FMUL single declaration");
+const rawFsglmul = functionBody(codegenSource,
+  "LOWFUNC(NONE,NONE,2,raw_fsglmul_rr,(FRW d, FR s))",
+  "LENDFUNC(NONE,NONE,2,raw_fsglmul_rr,(FRW d, FR s))", "generic FMUL single composition");
+for (const contract of [
+  "FCVT_sd(SCRATCH_F64_1, d);", "FCVT_sd(SCRATCH_F64_2, s);",
+  "FMUL_sss(SCRATCH_F64_1, SCRATCH_F64_1, SCRATCH_F64_2);", "FCVT_ds(d, SCRATCH_F64_1);",
+]) requireText(rawFsglmul, contract, "generic FMUL single composition");
+for (const contract of [
+  "0x1e200800u|(m<<16)|(n<<5)|d", "0x3f800200ull", "0x3f802000ull",
+  "positive_midpoint_product", "negative_midpoint_product", "positive_half_min_subnormal",
+  "negative_half_min_subnormal", "zero_times_infinity", "infinity_times_zero",
+  "left_quiet_nan", "right_quiet_nan", "left_signalling_nan", "right_signalling_nan",
+  "FMOV_sw(r.n,1);", "FMOV_xd(12,r.d);", "finite_equal_source_square",
+  "distinct n==m second-load square", "distinct n==m second-load image",
+  "FMUL N source/alias semantics", "FMUL M source/alias semantics",
+  "exact==32768&&native==608&&aliases==276",
+]) requireText(fmulSingleEmitterProbeSource, contract, "generic FMUL single native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fmul-s-conformance.cpp"])
+  requireText(fmulSingleEmitterHarnessSource, contract, "generic FMUL single conformance build");
+requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-fmul-s-conformance.sh"', "generic FMUL single bounded gate");
+console.log("METRIC structural_fmul_single_emitter_exact_words=32768");
+console.log("METRIC structural_fmul_single_emitter_native_routes=608");
+console.log("METRIC structural_fmul_single_emitter_callers=1");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
