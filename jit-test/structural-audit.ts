@@ -850,19 +850,22 @@ for (const contract of [
   "fmov_l_rr(FS1, S2);", "fmov_s_rr(FS1, S2);",
 ]) requireText(getFpValueBody, contract, "native FPP source conversion");
 for (const contract of [
-  "type FmoveCase", "FP${reg}=", "fpRegistersMatch", "initD7",
-  "for (let source = 0; source < 8; source++)",
-  "fp_all_live_fp0_to_fp7", "B2_TEST_DUMP_FP: \"1\"", "B2_JIT_STRICT_FULL: \"1\"",
+  "type FmoveCase", "FP${fpReg}=", "initD7",
+  'name: "imm_double_fraction"', 'name: "imm_double_negative_inf"',
+  "B2_TEST_DUMP_FP: \"1\"", "B2_JIT_STRICT_FULL: \"1\"",
   "B2_NATIVE_ASSERT_PC: anchorHex", "sr === \"271f\"",
-  "cow_clone", "cow_release",
-  'expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 43',
+  "cow_clone", "cow_release", 'group !== undefined && group !== "single"',
+  'throw new Error(`unknown GROUP=${group}`)',
+  'expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 29',
 ]) requireText(fppFmoveSourceMatrix, contract, "native ordinary FMOVE source matrix");
+for (const stale of ["fp1_to_fp0", "fp_all_live_fp0_to_fp7", "fpRegistersMatch"])
+  if (fppFmoveSourceMatrix.includes(stale)) fail(`native ordinary FMOVE source matrix retains superseded register-source case ${stale}`);
 if (/\b(?:FSMOVE|FDMOVE)\b/.test(fppFmoveSourceMatrix)) {
   fail("ordinary FMOVE source matrix: explicit precision subfamily leaked into bounded scope");
 }
-console.log("METRIC structural_fpp_fmove_source_exact_native_vectors=43");
-console.log("METRIC structural_fpp_fmove_source_formats=6");
-console.log("METRIC structural_fpp_fmove_register_routes=8");
+console.log("METRIC structural_fpp_fmove_source_exact_native_vectors=29");
+console.log("METRIC structural_fpp_fmove_source_formats=5");
+console.log("METRIC structural_fpp_fmove_register_routes=0");
 console.log("METRIC structural_fpp_fmove_integer_ccr_preservation=1");
 const fppCompilerOperationForMove = functionBody(
   fppCompilerSource,
@@ -909,6 +912,28 @@ console.log("METRIC structural_fpp_fmove_register_service_vectors=66");
 console.log("METRIC structural_fpp_fmove_register_strict_rejections=3");
 console.log("METRIC structural_fpp_fmove_register_pairs=64");
 console.log("METRIC structural_fpp_fmove_register_exact80_classes=8");
+const fmovDoublePairStart = midfuncSource.indexOf("MIDFUNC(3,fmov_d_rrr,(FW d, RR4 s1, RR4 s2))");
+const fmovDoublePairEnd = midfuncSource.indexOf("MENDFUNC(3,fmov_d_rrr,(FW d, RR4 s1, RR4 s2))", fmovDoublePairStart);
+if (fmovDoublePairStart < 0 || fmovDoublePairEnd < 0) fail("missing retired split-double MIDFUNC fmov_d_rrr");
+requireText(midfuncSource.slice(fmovDoublePairStart, fmovDoublePairEnd), "raw_fmov_d_rrr(d, s1, s2);", "retired split-double MIDFUNC fmov_d_rrr");
+if ((midfuncSource.match(/\bfmov_d_rrr\b/g) || []).length !== 2)
+  fail("split-double MIDFUNC fmov_d_rrr gained a configured caller");
+const fmovDoubleRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmov_d_rrr,(FW d, RR4 s1, RR4 s2))");
+const fmovDoubleRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fmov_d_rrr,(FW d, RR4 s1, RR4 s2))", fmovDoubleRawStart);
+if (fmovDoubleRawStart < 0 || fmovDoubleRawEnd < 0) fail("missing retired split-double raw boundary raw_fmov_d_rrr");
+const fmovDoubleRawBody = codegenSource.slice(fmovDoubleRawStart, fmovDoubleRawEnd);
+const fmovDoubleCombine = fmovDoubleRawBody.indexOf("BFI_xxii(s1, s2, 32, 32);");
+const fmovDoubleTransfer = fmovDoubleRawBody.indexOf("FMOV_dx(d, s1);");
+if (fmovDoubleCombine < 0 || fmovDoubleTransfer <= fmovDoubleCombine)
+  fail("retired split-double raw boundary combine/transfer contract changed");
+if ((codegenSource.match(/\braw_fmov_d_rrr\b/g) || []).length !== 2)
+  fail("split-double raw boundary raw_fmov_d_rrr gained a configured caller");
+const fmovDoubleBfiSites = (codegenSource.match(/\bBFI_xxii\(/g) || []).length;
+const fmovDoubleTransferSites = (codegenSource.match(/\bFMOV_dx\(/g) || []).length;
+if (fmovDoubleBfiSites !== 2 || fmovDoubleTransferSites !== 6)
+  fail(`split-double residual BFI/FMOV_dx sites=${fmovDoubleBfiSites}/${fmovDoubleTransferSites}, expected 2/6`);
+console.log("METRIC structural_fpp_fmove_unreachable_split_double_raw_boundaries=1");
+console.log("METRIC structural_fpp_fmove_reachable_split_double_emitters=2");
 for (const contract of [
   'for (const mode of [', 'name: "aind"', 'name: "postinc"', 'name: "predec"',
   'name: `byte_${mode.name}_a7_geometry`', 'effective: 0xa000, want: 0xa002',
@@ -5365,7 +5390,7 @@ for (const contract of ["-Wall -Wextra -Werror", "emitter-fcvt-conformance.cpp"]
 for (const contract of [
   'process.env.GROUP === "single"',
   'item.anchor === 0x1000 && ((extra >> 10) & 7) === 1',
-  'process.env.GROUP === "single" ? 8 : 43',
+  'process.env.GROUP === "single" ? 8 : 29',
 ]) requireText(fppFmoveSourceMatrix, contract, "FCVT single register/immediate source composition subset");
 for (const contract of [
   'process.env.GROUP === "single"',

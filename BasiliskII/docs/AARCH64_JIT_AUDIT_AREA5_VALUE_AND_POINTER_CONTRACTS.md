@@ -96,7 +96,10 @@ the global were removed. Structural audit now rejects the symbol.
   alias rewrite was made.
 - `fmov_d_rrr()` and `fmov_to_d_rrr()` have declarations and MIDFUNC/raw
   definitions but no generated or support-layer callers. Their suspicious raw
-  ownership details are currently dead and were not changed.
+  ownership details were dead and were not changed by this Area 5 checkpoint.
+  A later configured-root audit promoted only the definition-only
+  `raw_fmov_d_rrr` row to **unreachable**, with exact body/future-caller guards;
+  `fmov_to_d_rrr` and its separate raw boundary remain outside that decision.
 - The `rtarea_bank` ROM guard is under the UAE build branch. BasiliskII's active
   branch uses `ROMBaseHost..ROMBaseHost+ROMSize`; no current-build change was
   justified.

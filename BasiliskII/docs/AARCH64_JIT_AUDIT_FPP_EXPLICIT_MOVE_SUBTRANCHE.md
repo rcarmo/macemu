@@ -53,7 +53,8 @@ Accepted result:
 FPP_EXPLICIT_MOVE_FALLBACK_MATRIX service_pass=13 strict_pass=2 fail=0 total=15
 ```
 
-Composition evidence:
+Historical composition evidence at landing (the former 43-case source aggregate
+was later split into 29 native plus 66+3 serviced register routes):
 
 ```text
 FPP_FMOVE_SOURCE_MATRIX pass=43 fail=0 total=43

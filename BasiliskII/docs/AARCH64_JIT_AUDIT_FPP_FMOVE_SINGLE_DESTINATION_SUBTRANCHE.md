@@ -71,7 +71,8 @@ Accepted result:
 FPP_SINGLE_DEST_MATRIX pass=21 fail=0 total=21
 ```
 
-Composition evidence:
+Historical composition evidence at landing (the former 43-case source aggregate
+was later split into 29 native plus 66+3 serviced register routes):
 
 ```text
 FPP_FMOVE_DEST_BASIC_MATRIX pass=45 fail=0 total=45

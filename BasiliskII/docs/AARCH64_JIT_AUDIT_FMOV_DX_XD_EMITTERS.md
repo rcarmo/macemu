@@ -77,4 +77,11 @@ The directly evidenced rows are promoted:
 - `emitter_api,FMOV_xd` → **audited**.
 
 No raw boundary, MIDFUNC, memory path, compare helper, extended-format path, or
-generator row is promoted. `generator,i_FPP` remains **unreviewed**.
+generator row is promoted by this emitter checkpoint. `generator,i_FPP`
+remains **unreviewed**.
+
+A later configured-root audit retired the definition-only `raw_fmov_d_rrr`
+wrapper beneath already-unreachable `fmov_d_rrr`. That does not retire
+`FMOV_dx`: five other configured sites remain, and the exact six-site inventory
+continues to include the historical wrapper definition. Its adjacent
+`BFI_xxii` emitter remains separately reachable and unreviewed.

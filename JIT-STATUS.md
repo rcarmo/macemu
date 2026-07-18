@@ -215,6 +215,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair current ordinary-FMOVE source acceptance and retire the dead
+  split-double raw wrapper** (2026-07-18): the former 43-case native matrix
+  retained 14 FP-register cases after those routes moved to exact MPFR service.
+  The maintained split now passes **29/29 native Dn/immediate** plus **66+3
+  serviced register** cases. `fmov_d_rrr` has no configured caller and
+  `raw_fmov_d_rrr` has only its definition, so the raw row is now
+  **unreachable**, guarded by exact `BFI_xxii`→`FMOV_dx` order and future-caller
+  checks. Shared `BFI_xxii` stays unreviewed/reachable and `FMOV_dx` stays
+  audited/reachable. This is a one-row graph correction; `i_FPP` remains
+  unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_SOURCE_SUBTRANCHE.md`.
+
 - **Retire the definition-only AArch64 constant-10/100 raw wrappers**
   (2026-07-18): FMOVECR already enters exact MPFR service before selector
   dispatch. The intermediate `fmov_l_ri` has no configured root, and its
@@ -833,10 +845,11 @@ inventory is 92/92, and the accepted register-count
   virtual integer register through the legacy x86 compatibility shim. Dn and
   immediate byte/word/long/single sources now use typed register-to-FP
   conversions directly; double immediates and all FP0-FP7 copy/self-alias
-  routes are value-observed. The strict exact-native matrix passes **43/43**,
-  the active-risky corpus **904/904**, and allocator pressure **31/31**. This
-  remains a bounded no-promotion checkpoint: `i_FPP` is still unreviewed, with
-  explicit precision, memory-EA, store, and other FPP subfamilies outstanding.
+  routes were value-observed. At landing, the combined strict-native matrix
+  passed **43/43**, with active-risky **904/904** and allocator pressure
+  **31/31**. FP-register copies later moved to exact MPFR service; the current
+  maintained split is **29/29 native Dn/immediate** plus **66+3 serviced
+  register** cases. This remains bounded and `i_FPP` is still unreviewed.
   See `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_SOURCE_SUBTRANCHE.md`.
 
 - **Repair the native FPP FCMP/FTST condition-result subfamily**

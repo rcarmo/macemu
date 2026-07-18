@@ -74,3 +74,11 @@ The checkpoint requires the affected AArch64 build, focused 66+3 matrix,
 structural audit, bounded independent review, clean local commit, and temporary
 cleanup. The broad corpus/pressure/strict/clean/hash epoch remains deferred to
 the 32-checkpoint boundary absent a demonstrated shared-seam regression.
+
+## Later closure note
+
+A later configured-root audit retired the definition-only legacy split-word
+`raw_fmov_d_rrr` wrapper beneath already-unreachable `fmov_d_rrr`. That wrapper
+is not the serviced architectural register-copy path: this 66+3 matrix remains
+the current guest runtime owner. Shared `BFI_xxii` and `FMOV_dx` emitters remain
+reachable, and `generator,i_FPP` remains **unreviewed**.

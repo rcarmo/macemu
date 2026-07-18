@@ -22,7 +22,6 @@ type FmoveCase = {
   fpReg?: number;
   initD0?: string;
   initD7?: string;
-  fpExpected?: Record<number, string>;
 };
 
 const cases: FmoveCase[] = [
@@ -39,9 +38,6 @@ const cases: FmoveCase[] = [
   { name: "imm_long_negative", stream: "F23C 4000 8000 0000", anchor: 0x1000, fp: "c1e0000000000000", fpsr: "08000000" },
   { name: "imm_single_fraction", stream: "F23C 4400 3FC0 0000", anchor: 0x1000, fp: "3ff8000000000000", fpsr: "00000000" },
   { name: "imm_double_fraction", stream: "F23C 5400 BFF8 0000 0000 0000", anchor: 0x1000, fp: "bff8000000000000", fpsr: "08000000" },
-  { name: "fp1_to_fp0", stream: "F23C 4480 3FC0 0000 F200 0400", anchor: 0x1008, fp: "3ff8000000000000", fpsr: "00000000" },
-  { name: "fp0_self_alias", stream: "F23C 4400 BFC0 0000 F200 0000", anchor: 0x1008, fp: "bff8000000000000", fpsr: "08000000" },
-  { name: "fp7_self_alias_max", stream: "F23C 4780 3FC0 0000 F200 1F80", anchor: 0x1008, fp: "3ff8000000000000", fpsr: "00000000", fpReg: 7 },
   { name: "dn_byte_min", stream: "F200 5800", initD0: "ffffff80", anchor: 0x1000, fp: "c060000000000000", fpsr: "08000000" },
   { name: "dn_word_min", stream: "F200 5000", initD0: "ffff8000", anchor: 0x1000, fp: "c0e0000000000000", fpsr: "08000000" },
   { name: "dn_long_minus_one", stream: "F200 4000", initD0: "ffffffff", anchor: 0x1000, fp: "bff0000000000000", fpsr: "08000000" },
@@ -53,55 +49,12 @@ const cases: FmoveCase[] = [
   { name: "imm_single_negative_zero", stream: "F23C 4400 8000 0000", anchor: 0x1000, fp: "8000000000000000", fpsr: "0c000000" },
   { name: "imm_single_negative_nan", stream: "F23C 4400 FFC0 0001", anchor: 0x1000, fp: "fff8000020000000", fpsr: "09000000" },
   { name: "imm_double_negative_inf", stream: "F23C 5400 FFF0 0000 0000 0000", anchor: 0x1000, fp: "fff0000000000000", fpsr: "0a000000" },
-  { name: "fp0_to_fp7_max", stream: "F23C 4400 4020 0000 F200 0380", anchor: 0x1008, fp: "4004000000000000", fpsr: "00000000", fpReg: 7 },
-  { name: "fp7_to_fp0_max", stream: "F23C 4780 C020 0000 F200 1C00", anchor: 0x1008, fp: "c004000000000000", fpsr: "08000000" },
   { name: "dn_byte_d7_max_field", stream: "F207 5B80", initD7: "00000080", anchor: 0x1000, fp: "c060000000000000", fpsr: "08000000", fpReg: 7 },
   { name: "dn_word_d7_max_field", stream: "F207 5380", initD7: "00008000", anchor: 0x1000, fp: "c0e0000000000000", fpsr: "08000000", fpReg: 7 },
   { name: "dn_long_d7_max_field", stream: "F207 4380", initD7: "80000000", anchor: 0x1000, fp: "c1e0000000000000", fpsr: "08000000", fpReg: 7 },
   { name: "dn_single_d7_max_field", stream: "F207 4780", initD7: "7F800000", anchor: 0x1000, fp: "7ff0000000000000", fpsr: "02000000", fpReg: 7 },
   { name: "imm_double_fp7_max_field", stream: "F23C 5780 4004 0000 0000 0000", anchor: 0x1000, fp: "4004000000000000", fpsr: "00000000", fpReg: 7 },
 ];
-
-const fpRouteValues = [
-  { words: "3F80 0000", bits: "3ff0000000000000", fpsr: "00000000" },
-  { words: "3FC0 0000", bits: "3ff8000000000000", fpsr: "00000000" },
-  { words: "4000 0000", bits: "4000000000000000", fpsr: "00000000" },
-  { words: "4020 0000", bits: "4004000000000000", fpsr: "00000000" },
-  { words: "BF80 0000", bits: "bff0000000000000", fpsr: "08000000" },
-  { words: "BFC0 0000", bits: "bff8000000000000", fpsr: "08000000" },
-  { words: "7F80 0000", bits: "7ff0000000000000", fpsr: "02000000" },
-  { words: "8000 0000", bits: "8000000000000000", fpsr: "0c000000" },
-];
-for (let source = 0; source < 8; source++) {
-  const destination = (source + 3) & 7;
-  const initExtra = (0x4400 | (source << 7)).toString(16).padStart(4, "0");
-  const moveExtra = ((source << 10) | (destination << 7)).toString(16).padStart(4, "0");
-  const value = fpRouteValues[source];
-  cases.push({
-    name: `fp${source}_to_fp${destination}_field_route`,
-    stream: `F23C ${initExtra} ${value.words} F200 ${moveExtra}`,
-    anchor: 0x1008,
-    fp: value.bits,
-    fpsr: value.fpsr,
-    fpReg: destination,
-    fpExpected: { [source]: value.bits, [destination]: value.bits },
-  });
-}
-
-const allLiveInitializers = fpRouteValues.map((value, reg) =>
-  `F23C ${(0x4400 | (reg << 7)).toString(16).padStart(4, "0")} ${value.words}`,
-).join(" ");
-cases.push({
-  name: "fp_all_live_fp0_to_fp7",
-  stream: `${allLiveInitializers} F200 0380`,
-  anchor: 0x1040,
-  fp: fpRouteValues[0].bits,
-  fpsr: fpRouteValues[0].fpsr,
-  fpReg: 7,
-  fpExpected: Object.fromEntries(fpRouteValues.map((value, reg) =>
-    [reg, reg === 7 ? fpRouteValues[0].bits : value.bits],
-  )),
-});
 
 const diskDir = mkdtempSync(join(tmpdir(), "fpp-fmove-source-disk-"));
 const clone = spawnSync("bash", ["-c", [
@@ -117,14 +70,17 @@ const disk = clone.stdout.trim().split("\n").at(-1)!;
 
 let pass = 0;
 let fail = 0;
+const group = process.env.GROUP;
+if (group !== undefined && group !== "single")
+  throw new Error(`unknown GROUP=${group}`);
 const selectedCases = process.env.CASE
   ? cases.filter((item) => item.name === process.env.CASE)
-  : process.env.GROUP === "single" ? cases.filter((item) => {
+  : group === "single" ? cases.filter((item) => {
       const extra = Number.parseInt(item.stream.trim().split(/\s+/)[1], 16);
       return item.anchor === 0x1000 && ((extra >> 10) & 7) === 1;
     })
   : cases;
-if (selectedCases.length === 0) throw new Error(`unknown CASE=${process.env.CASE} GROUP=${process.env.GROUP}`);
+if (selectedCases.length === 0) throw new Error(`unknown CASE=${process.env.CASE}`);
 try {
   for (const item of selectedCases) {
     const td = mkdtempSync(join(tmpdir(), "fpp-fmove-source-"));
@@ -159,23 +115,19 @@ try {
       const dump = output.match(/^REGDUMP:.*$/m)?.[0];
       const fpReg = item.fpReg ?? 0;
       const fp = dump?.match(new RegExp(` FP${fpReg}=([0-9a-f]+)`, "i"))?.[1].toLowerCase();
-      const fpExpected = item.fpExpected ?? { [fpReg]: item.fp };
-      const fpRegistersMatch = Object.entries(fpExpected).every(([reg, expected]) =>
-        dump?.match(new RegExp(` FP${reg}=([0-9a-f]+)`, "i"))?.[1].toLowerCase() === expected,
-      );
       const fpsr = dump?.match(/ FPSR=([0-9a-f]+)/i)?.[1].toLowerCase();
       const sr = dump?.match(/ SR=([0-9a-f]+)/i)?.[1].toLowerCase();
       const nativePc = item.anchor.toString(16).padStart(8, "0");
       const native = output.includes(`NATEXEC pc=${nativePc}`);
       const strict = output.includes("JIT_STRICT_SUMMARY ") &&
         !output.includes("strict full-JIT:") && !output.includes("JIT_FALLBACK");
-      if (run.status === 0 && fp === item.fp && fpRegistersMatch && fpsr === item.fpsr && sr === "271f" && native && strict) {
+      if (run.status === 0 && fp === item.fp && fpsr === item.fpsr && sr === "271f" && native && strict) {
         pass++;
       } else {
         fail++;
         console.error(
           `FPP_FMOVE_SOURCE_FAIL case=${item.name} rc=${run.status} fp=${fp} want_fp=${item.fp} ` +
-          `fp_regs=${fpRegistersMatch ? 1 : 0} fpsr=${fpsr} want_fpsr=${item.fpsr} ` +
+          `fpsr=${fpsr} want_fpsr=${item.fpsr} ` +
           `sr=${sr} native=${native ? 1 : 0} strict=${strict ? 1 : 0}`,
         );
         const diagnosticLines = process.env.VERBOSE
@@ -194,5 +146,5 @@ try {
 }
 
 console.log(`FPP_FMOVE_SOURCE_MATRIX pass=${pass} fail=${fail} total=${pass + fail}`);
-const expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 43;
+const expectedTotal = process.env.CASE ? 1 : process.env.GROUP === "single" ? 8 : 29;
 process.exit(fail === 0 && pass === expectedTotal && selectedCases.length === expectedTotal ? 0 : 1);
