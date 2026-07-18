@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FSCALE exponent and range service** (2026-07-18): FSCALE
+  now preserves extended operands, chops the source toward zero independently
+  of FPCR direction, post-rounds the result at FPCR width, and publishes
+  destination-relative huge-factor range plus signed invalid NaNs correctly. A
+  fixed **30 service + 1 strict** matrix covers truncation boundaries, low bits,
+  rounding, subnormals, range, specials, NaNs, aliases, EA effects and FPSR.
+  No closure row is promoted and `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SCALE_BATCH.md`.
+
 - **Repair FPP FREM nearest-even remainder service** (2026-07-18): FREM
   now uses exact extended operands, nearest-even quotient selection, FPCR result
   rounding/range, common binary NaN ownership, and complete quotient-byte

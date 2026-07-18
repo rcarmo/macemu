@@ -517,6 +517,10 @@ const fppFremServiceMatrix = await Bun.file(new URL(
   "./fpp-frem-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppScaleServiceMatrix = await Bun.file(new URL(
+  "./fpp-scale-service-matrix.ts",
+  import.meta.url,
+)).text();
 const fppAddServiceMatrix = await Bun.file(new URL(
   "./fpp-add-service-matrix.ts",
   import.meta.url,
@@ -1133,7 +1137,7 @@ const ordinaryFppBlock = fpuMpfrSource.slice(ordinaryFppStart, ordinaryFppEnd);
 for (const contract of [
   "int operation = extra & 0x3f;",
   "bool extended_source = operation == 1 || operation == 3",
-  "|| operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37;",
+  "|| operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37 || operation == 38;",
   "mpfr_set_prec (value.f, EXTENDED_PREC);", "set_format (EXTENDED_PREC);",
   "if (!get_fp_value (opcode, extra, value))", "set_format (prec);",
   "case 1: // FINT", "mpfr_rint (value.f, value.f, rnd)",
@@ -1239,7 +1243,7 @@ for (const contract of [
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
   "|| operation == 29 || operation == 32 || operation == 34\n\t|| operation == 35 || operation == 40;",
-  "|| direct_result || operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37;",
+  "|| direct_result || operation == 30 || operation == 31 || operation == 33\n\t|| operation == 37 || operation == 38;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
   "case 6: // FLOGNP1", "mpfr_log1p (direct, value.f, rnd)",
@@ -1584,7 +1588,7 @@ for (const contract of ["case 0x25:", "jit_disable.frem", "exact semantic servic
 for (const forbidden of ["get_fp_value(opcode, extra)", "frem1_rr(", "MAKE_FPSR("])
   if (fremCompilerBlock.includes(forbidden)) fail(`FPP FREM compiler case retains forbidden ${forbidden}`);
 for (const contract of [
-  "|| operation == 37;", "case 37: // FREM", "do_remainder (value, reg, rnd)",
+  "|| operation == 37 || operation == 38;", "case 37: // FREM", "do_remainder (value, reg, rnd)",
   "do_remainder (fpu_register &value, int reg, mpfr_rnd_t rnd)",
   "mpfr_remquo (value.f, &quo, fpu.registers[reg].f, value.f, rnd)",
   "quo = (-quo & 0x7f) | 0x80", "quo &= 0x7f", "fpu.fpsr.quotient = quo << 16",
@@ -1613,6 +1617,48 @@ console.log("METRIC structural_fpp_frem_service_vectors=33");
 console.log("METRIC structural_fpp_frem_strict_rejections=1");
 console.log("METRIC structural_fpp_frem_nearest_even_quotient=2");
 console.log("METRIC structural_fpp_frem_quotient_bits=7");
+const scaleCompilerStart = fppCompilerOperation.indexOf("case 0x26:\t\t\t\t\t\t/* FSCALE */");
+const scaleCompilerEnd = fppCompilerOperation.indexOf("case 0x27:\t\t\t\t\t\t/* FSGLMUL */", scaleCompilerStart);
+if (scaleCompilerStart < 0 || scaleCompilerEnd < 0) fail("FPP FSCALE compiler boundary is incomplete");
+const scaleCompilerBlock = fppCompilerOperation.slice(scaleCompilerStart, scaleCompilerEnd);
+for (const contract of ["case 0x26:", "jit_disable.fscale", "FAIL(1);", "return;"])
+  requireText(scaleCompilerBlock, contract, "FPP FSCALE service boundary");
+for (const forbidden of ["get_fp_value(opcode, extra)", "fscale_rr(", "MAKE_FPSR("])
+  if (scaleCompilerBlock.includes(forbidden)) fail(`FPP FSCALE compiler case retains forbidden ${forbidden}`);
+for (const contract of [
+  "|| operation == 37 || operation == 38;", "case 38: // FSCALE", "do_scale (value, reg, rnd)",
+  "do_scale (fpu_register &value, int reg, mpfr_rnd_t rnd)", "mpfr_get_si (value.f, MPFR_RNDZ)",
+  "mpfr_mul_2si (value.f, fpu.registers[reg].f, scale, rnd)",
+  "long destination_exp = mpfr_get_exp (fpu.registers[reg].f)",
+  "EXTENDED_MIN_EXP - EXTENDED_PREC - destination_exp", "EXTENDED_MAX_EXP + EXTENDED_PREC - destination_exp",
+  "select_binary_nan (reg, value, &nan_bits, &nan_sign)",
+  "mpfr_inf_p (value.f) || mpfr_inf_p (fpu.registers[reg].f)",
+  "mpfr_setsign (value.f, value.f, nan_sign, MPFR_RNDN)", "value.nan_sign = nan_sign",
+  "mpfr_zero_p (fpu.registers[reg].f) || mpfr_zero_p (value.f)",
+]) requireText(fpuMpfrSource, contract, "MPFR FSCALE service contract");
+for (const contract of [
+  'name:"fscale_positive_fraction_truncates"', 'name:"fscale_negative_fraction_truncates"',
+  'name:"fscale_extended_source_below_one"', 'name:"fscale_extended_source_above_negative_one"',
+  'name:"fscale_extended_destination_low_bit"',
+  'name:"fscale_single_nearest"', 'name:"fscale_single_plus"', 'name:"fscale_double_nearest"', 'name:"fscale_double_plus"',
+  'name:"fscale_single_overflow"', 'name:"fscale_extended_overflow"', 'name:"fscale_extended_underflow"',
+  'name:"fscale_huge_positive_minimum_destination_overflow",destination:x.halfMinNormal,source:x.hugePositive,output:x.pinf,operationFpsr:"02001248",fpsr:"02000048"',
+  'name:"fscale_huge_negative_maximum_destination_underflow",destination:x.max,source:x.hugeNegative,output:x.pz,operationFpsr:"04000a28",fpsr:"04000028"',
+  'name:"fscale_exact_subnormal"', 'name:"fscale_positive_zero_preserved"', 'name:"fscale_negative_zero_preserved"',
+  'name:"fscale_destination_infinity_invalid"',
+  'name:"fscale_negative_destination_infinity_invalid",destination:x.ninf,source:x.p1,output:"ff ff 00 00 ff ff ff ff ff ff ff ff",operationFpsr:"09002080",fpsr:"09000080"',
+  'name:"fscale_source_positive_infinity_invalid"',
+  'name:"fscale_source_negative_infinity_invalid",destination:x.n3,source:x.ninf,output:"ff ff 00 00 ff ff ff ff ff ff ff ff",operationFpsr:"09002080",fpsr:"09000080"',
+  'name:"fscale_source_qnan"', 'name:"fscale_source_snan_quiet"', 'name:"fscale_destination_qnan"', 'name:"fscale_destination_snan_quiet"',
+  'name:"fscale_fp7_self_alias"', 'name:"fscale_fp7_destination_reseed"',
+  'name:"fscale_postincrement_source"', 'name:"fscale_predecrement_source"', 'name:"fscale_accrued_preserve"',
+  'o.includes(`JIT_FALLBACK op=${auditedOpcode} pc=00001008`)', 'B2_NATIVE_ASSERT_PC:"0x1008"',
+  'strict full-JIT: opcode fallback pc=00001000 op=f200', 'service_pass=${sp} strict_pass=${st}', 'sc.length:30', 'ss.length:1',
+]) requireText(fppScaleServiceMatrix, contract, "FPP FSCALE service matrix");
+console.log("METRIC structural_fpp_scale_service_vectors=30");
+console.log("METRIC structural_fpp_scale_strict_rejections=1");
+console.log("METRIC structural_fpp_scale_huge_finite_ranges=2");
+console.log("METRIC structural_fpp_scale_truncation_boundaries=4");
 const addCompilerStart = fppCompilerOperation.indexOf("case 0x22:\t\t\t\t\t\t/* FADD */");
 const addCompilerEnd = fppCompilerOperation.indexOf("case 0x23:\t\t\t\t\t\t/* FMUL */", addCompilerStart);
 if (addCompilerStart < 0 || addCompilerEnd < 0) fail("FPP add compiler boundary is incomplete");

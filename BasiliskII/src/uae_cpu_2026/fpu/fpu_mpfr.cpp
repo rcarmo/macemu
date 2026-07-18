@@ -1359,26 +1359,47 @@ do_getman (fpu_register &value)
 }
 
 static int
-do_scale (mpfr_t value, mpfr_t reg, mpfr_rnd_t rnd)
+do_scale (fpu_register &value, int reg, mpfr_rnd_t rnd)
 {
-  long scale;
   int t = 0;
 
-  if (mpfr_nan_p (value))
-    ;
-  else if (mpfr_inf_p (value))
+  if (mpfr_nan_p (value.f) || mpfr_nan_p (fpu.registers[reg].f))
     {
-      mpfr_set_nan (value);
+      uae_u64 nan_bits;
+      int nan_sign;
+      select_binary_nan (reg, value, &nan_bits, &nan_sign);
+      value.nan_bits = nan_bits;
+      value.nan_sign = nan_sign;
+      mpfr_set_nan (value.f);
+      mpfr_setsign (value.f, value.f, nan_sign, MPFR_RNDN);
+    }
+  else if (mpfr_inf_p (value.f) || mpfr_inf_p (fpu.registers[reg].f))
+    {
+      int nan_sign = mpfr_inf_p (value.f)
+        ? mpfr_signbit (value.f) : mpfr_signbit (fpu.registers[reg].f);
+      mpfr_set_nan (value.f);
+      mpfr_setsign (value.f, value.f, nan_sign, MPFR_RNDN);
+      value.nan_sign = nan_sign;
       cur_exceptions |= FPSR_EXCEPTION_OPERR;
     }
-  else if (mpfr_fits_slong_p (value, rnd))
+  else if (mpfr_zero_p (fpu.registers[reg].f) || mpfr_zero_p (value.f))
+    t = mpfr_set (value.f, fpu.registers[reg].f, rnd);
+  else if (mpfr_fits_slong_p (value.f, MPFR_RNDZ))
     {
-      scale = mpfr_get_si (value, MPFR_RNDZ);
+      long scale = mpfr_get_si (value.f, MPFR_RNDZ);
       mpfr_clear_inexflag ();
-      t = mpfr_mul_2si (value, reg, scale, rnd);
+      t = mpfr_mul_2si (value.f, fpu.registers[reg].f, scale, rnd);
     }
   else
-    mpfr_set_inf (value, -mpfr_signbit (value));
+    {
+      bool negative = mpfr_signbit (value.f);
+      long destination_exp = mpfr_get_exp (fpu.registers[reg].f);
+      long scale = negative
+        ? EXTENDED_MIN_EXP - EXTENDED_PREC - destination_exp
+        : EXTENDED_MAX_EXP + EXTENDED_PREC - destination_exp;
+      t = mpfr_set (value.f, fpu.registers[reg].f, rnd);
+      t = mpfr_mul_2si (value.f, value.f, scale, rnd);
+    }
   return t;
 }
 
@@ -1814,7 +1835,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 35 || operation == 40;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31 || operation == 33
-	|| operation == 37;
+	|| operation == 37 || operation == 38;
       if (extended_source)
 	{
 	  mpfr_set_prec (value.f, EXTENDED_PREC);
@@ -2009,7 +2030,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = do_remainder (value, reg, rnd);
 	  break;
 	case 38: // FSCALE
-	  t = do_scale (value.f, fpu.registers[reg].f, rnd);
+	  t = do_scale (value, reg, rnd);
 	  break;
 	case 39: // FSGLMUL
 	  {
