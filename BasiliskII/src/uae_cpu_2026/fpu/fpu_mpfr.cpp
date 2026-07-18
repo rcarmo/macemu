@@ -635,6 +635,46 @@ set_fp_register (int reg, fpu_register &value, int t, mpfr_rnd_t rnd,
 		   do_flags);
 }
 
+static void
+select_binary_nan (int reg, fpu_register &source, uae_u64 *nan_bits,
+		   int *nan_sign)
+{
+  bool destination_nan = mpfr_nan_p (fpu.registers[reg].f);
+  bool source_nan = mpfr_nan_p (source.f);
+  bool destination_snan = destination_nan
+    && (fpu.registers[reg].nan_bits & (1ULL << 62)) == 0;
+  /* Source acquisition quiets an SNaN payload while recording SNAN status. */
+  bool source_snan = source_nan
+    && (cur_exceptions & FPSR_EXCEPTION_SNAN) != 0;
+  if (destination_snan)
+    cur_exceptions |= FPSR_EXCEPTION_SNAN;
+
+  /* A signalling operand takes precedence over a quiet NaN.  For equal-class
+   * ties, retain 6888x first-operand (destination/dividend) precedence. */
+  if (source_snan && !destination_snan)
+    {
+      *nan_bits = source.nan_bits;
+      *nan_sign = source.nan_sign;
+    }
+  else if (destination_nan)
+    {
+      *nan_bits = fpu.registers[reg].nan_bits;
+      *nan_sign = fpu.registers[reg].nan_sign;
+    }
+  else if (source_nan)
+    {
+      *nan_bits = source.nan_bits;
+      *nan_sign = source.nan_sign;
+    }
+  else
+    {
+      *nan_bits = DEFAULT_NAN_BITS;
+      *nan_sign = 0;
+      return;
+    }
+  *nan_bits |= 1ULL << 62;
+}
+
 static uae_u32
 extract_to_single (fpu_register &value)
 {
@@ -1615,16 +1655,24 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  break;
 	case 32: // FSDIV
 	case 36: // FDDIV
-	  if (mpfr_zero_p (value.f))
-	    {
-	      if (mpfr_regular_p (fpu.registers[reg].f))
-		cur_exceptions |= FPSR_EXCEPTION_DZ;
-	      else if (mpfr_zero_p (fpu.registers[reg].f))
-		cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	    }
-	  else if (mpfr_inf_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
-		cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_div (value2, fpu.registers[reg].f, value.f, rnd);
+	  {
+	    bool destination_nan = mpfr_nan_p (fpu.registers[reg].f);
+	    bool source_nan = mpfr_nan_p (value.f);
+	    if (!destination_nan && !source_nan)
+	      {
+		if (mpfr_zero_p (value.f))
+		  {
+		    if (mpfr_regular_p (fpu.registers[reg].f))
+		      cur_exceptions |= FPSR_EXCEPTION_DZ;
+		    else if (mpfr_zero_p (fpu.registers[reg].f))
+		      cur_exceptions |= FPSR_EXCEPTION_OPERR;
+		  }
+		else if (mpfr_inf_p (value.f)
+			 && mpfr_inf_p (fpu.registers[reg].f))
+		  cur_exceptions |= FPSR_EXCEPTION_OPERR;
+	      }
+	    t = mpfr_div (value2, fpu.registers[reg].f, value.f, rnd);
+	  }
 	  break;
 	case 34: // FSADD
 	case 38: // FDADD
@@ -1648,7 +1696,28 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_sub (value2, fpu.registers[reg].f, value.f, rnd);
 	  break;
 	}
-      set_fp_register (reg, value2, t, rnd, true);
+      if ((extra & 0x3f) == 32 || (extra & 0x3f) == 36)
+	{
+	  /* Forced precision includes its exponent range.  MPFR arithmetic may
+	   * produce an infinity or zero before publishing overflow/underflow;
+	   * classify that rounded result while the forced format is active. */
+	  t = mpfr_check_range (value2, t, rnd);
+	  if (mpfr_regular_p (fpu.registers[reg].f) && mpfr_regular_p (value.f))
+	    {
+	      if (mpfr_inf_p (value2))
+		cur_exceptions |= FPSR_EXCEPTION_OVFL | FPSR_EXCEPTION_INEX2;
+	      else if (mpfr_zero_p (value2))
+		cur_exceptions |= FPSR_EXCEPTION_UNFL | FPSR_EXCEPTION_INEX2;
+	    }
+	  uae_u64 nan_bits;
+	  int nan_sign;
+	  select_binary_nan (reg, value, &nan_bits, &nan_sign);
+	  if (mpfr_nan_p (value2))
+	    mpfr_setsign (value2, value2, nan_sign, MPFR_RNDN);
+	  set_fp_register (reg, value2, nan_bits, nan_sign, t, rnd, true);
+	}
+      else
+	set_fp_register (reg, value2, t, rnd, true);
     }
   else if ((extra & 0x30) == 0x30)
     {
@@ -1712,7 +1781,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	|| operation == 15 || operation == 16 || operation == 17
 	|| operation == 18 || operation == 20 || operation == 21
 	|| operation == 22 || operation == 25 || operation == 28
-	|| operation == 29;
+	|| operation == 29 || operation == 32;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31;
       if (extended_source)
@@ -1727,7 +1796,6 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  ret = false;
 	  goto out;
 	}
-      bool source_nan = mpfr_nan_p (value.f);
       if (direct_result)
 	set_format (prec);
       MPFR_DECL_INIT (direct, prec);
@@ -1854,16 +1922,24 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = do_getman (value);
 	  break;
 	case 32: // FDIV
-	  if (mpfr_zero_p (value.f))
-	    {
-	      if (mpfr_regular_p (fpu.registers[reg].f))
-		cur_exceptions |= FPSR_EXCEPTION_DZ;
-	      else if (mpfr_zero_p (fpu.registers[reg].f))
-		cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	    }
-	  else if (mpfr_inf_p (value.f) && mpfr_inf_p (fpu.registers[reg].f))
-	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_div (value.f, fpu.registers[reg].f, value.f, rnd);
+	  {
+	    bool destination_nan = mpfr_nan_p (fpu.registers[reg].f);
+	    bool source_nan = mpfr_nan_p (value.f);
+	    if (!destination_nan && !source_nan)
+	      {
+		if (mpfr_zero_p (value.f))
+		  {
+		    if (mpfr_regular_p (fpu.registers[reg].f))
+		      cur_exceptions |= FPSR_EXCEPTION_DZ;
+		    else if (mpfr_zero_p (fpu.registers[reg].f))
+		      cur_exceptions |= FPSR_EXCEPTION_OPERR;
+		  }
+		else if (mpfr_inf_p (value.f)
+			 && mpfr_inf_p (fpu.registers[reg].f))
+		  cur_exceptions |= FPSR_EXCEPTION_OPERR;
+	      }
+	    t = mpfr_div (direct, fpu.registers[reg].f, value.f, rnd);
+	  }
 	  break;
 	case 33: // FMOD
 	  t = do_fmod (value.f, fpu.registers[reg].f, rnd);
@@ -1925,14 +2001,15 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	}
       if (direct_result)
 	{
-	  /* MPFR does not retain architectural NaN payload/sign metadata.  A NaN
-	   * source is propagated by these monadic operations, so keep both the
-	   * separate metadata and the MPFR sign coherent for later consumers. */
-	  if (source_nan && mpfr_nan_p (direct))
-	    mpfr_setsign (direct, direct, value.nan_sign, MPFR_RNDN);
+	  /* MPFR does not retain architectural NaN payload/sign metadata. */
+	  uae_u64 nan_bits = value.nan_bits;
+	  int nan_sign = value.nan_sign;
+	  if (operation == 32)
+	    select_binary_nan (reg, value, &nan_bits, &nan_sign);
+	  if (mpfr_nan_p (direct))
+	    mpfr_setsign (direct, direct, nan_sign, MPFR_RNDN);
 	  t = mpfr_check_range (direct, t, rnd);
-	  set_fp_register (reg, direct, value.nan_bits, value.nan_sign,
-			   t, rnd, true);
+	  set_fp_register (reg, direct, nan_bits, nan_sign, t, rnd, true);
 	}
       else if (extended_source)
 	{
@@ -2189,6 +2266,27 @@ void fpu_set_fpcr(uae_u32 new_fpcr)
 uae_u32 fpu_get_fpcr(void)
 {
 	return get_fpcr();
+}
+
+bool fpu_test_set_register_extended(int reg, uae_u32 word0, uae_u32 word1, uae_u32 word2)
+{
+	if (reg < 0 || reg >= 8)
+		return false;
+	uae_u32 words[3] = { word0, word1, word2 };
+	/* Harness-only architectural state restoration: preserve SNaN metadata and
+	 * do not report operand acquisition exceptions before the replayed opcode.
+	 * A prior forced-precision trace may have left MPFR's process-global range
+	 * narrowed, so decode in architectural extended format and then restore the
+	 * selected operation format. */
+	set_format(EXTENDED_PREC);
+	set_from_extended(fpu.registers[reg], words, false);
+	set_format(get_cur_prec());
+#ifdef USE_JIT_FPU
+	/* The replay seed is authoritative architectural state.  A dirty native
+	 * binary64 shadow from the trace pass must not overwrite it at fallback. */
+	regs.jit_fp_dirty_mask &= ~(1u << reg);
+#endif
+	return true;
 }
 
 #endif

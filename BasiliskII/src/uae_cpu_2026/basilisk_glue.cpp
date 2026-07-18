@@ -467,6 +467,23 @@ static bool run_opcode_test_mode_glue()
 				}
 				fpu_set_fpcr((uae_u32)replay_fpcr);
 			}
+#ifdef FPU_MPFR
+			for (int fpreg = 0; fpreg < 8; fpreg++) {
+				char env_name[32];
+				snprintf(env_name, sizeof(env_name), "B2_TEST_REPLAY_FP%d_EXT", fpreg);
+				const char *replay_fp_env = getenv(env_name);
+				if (!replay_fp_env || !*replay_fp_env)
+					continue;
+				uint32 words[3];
+				size_t count = 0;
+				if (!parse_test_hex_longs_glue(replay_fp_env, words, lengthof(words), &count)
+						|| count != 3 || !fpu_test_set_register_extended(fpreg, words[0], words[1], words[2])) {
+					fprintf(stderr, "%s parse failed (need 3 hex words)\n", env_name);
+					quit_program = 1;
+					return true;
+				}
+			}
+#endif
 			regs.stopped = 0;
 			SPCFLAGS_CLEAR(SPCFLAG_STOP | SPCFLAG_BRK | SPCFLAG_DOTRACE | SPCFLAG_TRACE);
 			uaecptr second_addr = test_addr;

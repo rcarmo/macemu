@@ -55,5 +55,8 @@ void fpu_set_fpsr(uae_u32 new_fpsr);
 uae_u32 fpu_get_fpsr(void);
 void fpu_set_fpcr(uae_u32 new_fpcr);
 uae_u32 fpu_get_fpcr(void);
+#ifdef FPU_MPFR
+bool fpu_test_set_register_extended(int reg, uae_u32 word0, uae_u32 word1, uae_u32 word2);
+#endif
 
 #endif /* FPU_PUBLIC_HEADER_H */

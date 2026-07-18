@@ -2099,6 +2099,12 @@ void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)
 		case 0x20:						/* FDIV */
 		case 0x60:						/* FSDIV */
 		case 0x64:						/* FDDIV */
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+			/* Binary64 native operands cannot represent the extended dividend or
+			 * divisor, forced precision, NaN ownership, or Motorola exceptions. */
+			FAIL(1);
+			return;
+#endif
 			if (jit_disable.fdiv)
 			{
 				FAIL(1);

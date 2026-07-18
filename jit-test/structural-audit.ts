@@ -505,6 +505,14 @@ const fppCoshAcosCosServiceMatrix = await Bun.file(new URL(
   "./fpp-cosh-acos-cos-service-matrix.ts",
   import.meta.url,
 )).text();
+const fppDivideServiceMatrix = await Bun.file(new URL(
+  "./fpp-divide-service-matrix.ts",
+  import.meta.url,
+)).text();
+const fpuHeaderSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/fpu/fpu.h",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1210,17 +1218,17 @@ for (const contract of [
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
-  "|| operation == 29;",
+  "|| operation == 29 || operation == 32;",
   "|| direct_result || operation == 30 || operation == 31;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
   "case 6: // FLOGNP1", "mpfr_log1p (direct, value.f, rnd)",
   "case 8: // FETOXM1", "mpfr_expm1 (direct, value.f, rnd)",
   "case 9: // FTANH", "mpfr_tanh (direct, value.f, rnd)",
-  "if (source_nan && mpfr_nan_p (direct))",
-  "mpfr_setsign (direct, direct, value.nan_sign, MPFR_RNDN);",
+  "if (mpfr_nan_p (direct))",
+  "mpfr_setsign (direct, direct, nan_sign, MPFR_RNDN);",
   "mpfr_check_range (direct, t, rnd)",
-  "set_fp_register (reg, direct, value.nan_bits, value.nan_sign",
+  "set_fp_register (reg, direct, nan_bits, nan_sign",
 ]) requireText(ordinaryFppBlock, contract, "MPFR serviced monadic extended-source/direct-result contract");
 for (const contract of [
   'name: `${item.name}_extended_source_single_${suffix}`',
@@ -1360,7 +1368,7 @@ for (const contract of [
   "|| operation == 15 || operation == 16 || operation == 17",
   "|| operation == 18 || operation == 20 || operation == 21",
   "|| operation == 22 || operation == 25 || operation == 28",
-  "|| operation == 29;",
+  "|| operation == 29 || operation == 32;",
   "case 14: // FSIN", "mpfr_sin (direct, value.f, rnd)",
   "case 16: // FETOX", "mpfr_exp (direct, value.f, rnd)",
   "case 17: // FTWOTOX", "mpfr_exp2 (direct, value.f, rnd)",
@@ -1420,7 +1428,7 @@ for (const [label, disable, name] of [
   }
 }
 for (const contract of [
-  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29;",
+  "operation == 22 || operation == 25 || operation == 28", "|| operation == 29 || operation == 32;",
   "case 25: // FCOSH", "mpfr_cosh (direct, value.f, rnd)",
   "case 28: // FACOS", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
   "mpfr_acos (direct, value.f, rnd)", "case 29: // FCOS",
@@ -1445,6 +1453,67 @@ console.log("METRIC structural_fpp_cosh_acos_cos_service_vectors=36");
 console.log("METRIC structural_fpp_cosh_acos_cos_strict_rejections=3");
 console.log("METRIC structural_fpp_cosh_acos_cos_extended_source=1");
 console.log("METRIC structural_fpp_cosh_acos_cos_direct_result=1");
+const divideCompilerStart = fppCompilerOperation.indexOf("case 0x20:\t\t\t\t\t\t/* FDIV */");
+const divideCompilerEnd = fppCompilerOperation.indexOf("case 0x21:\t\t\t\t\t\t/* FMOD */", divideCompilerStart);
+if (divideCompilerStart < 0 || divideCompilerEnd < 0) fail("FPP divide compiler boundary is incomplete");
+const divideCompilerBlock = fppCompilerOperation.slice(divideCompilerStart, divideCompilerEnd);
+for (const contract of [
+  "case 0x20:", "case 0x60:", "case 0x64:",
+  "#if defined(CPU_aarch64) || defined(CPU_AARCH64)", "FAIL(1);", "return;",
+]) requireText(divideCompilerBlock, contract, "FPP divide AArch64 service boundary");
+const divideGuardStart = divideCompilerBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const divideGuardEnd = divideCompilerBlock.indexOf("#endif", divideGuardStart);
+const divideAcquire = divideCompilerBlock.indexOf("get_fp_value(opcode, extra)");
+if (divideGuardStart < 0 || divideGuardEnd < divideGuardStart || divideAcquire < 0 || divideGuardEnd > divideAcquire)
+  fail("FPP divide guarded service exit does not precede operand acquisition");
+for (const contract of [
+  "|| operation == 29 || operation == 32;", "case 32: // FDIV",
+  "mpfr_div (direct, fpu.registers[reg].f, value.f, rnd)",
+  "case 32: // FSDIV", "case 36: // FDDIV",
+  "mpfr_div (value2, fpu.registers[reg].f, value.f, rnd)",
+  "select_binary_nan (reg, value, &nan_bits, &nan_sign)",
+  "source_snan && !destination_snan", "destination/dividend) precedence",
+  "FPSR_EXCEPTION_DZ", "FPSR_EXCEPTION_OPERR",
+  "FPSR_EXCEPTION_OVFL | FPSR_EXCEPTION_INEX2",
+  "FPSR_EXCEPTION_UNFL | FPSR_EXCEPTION_INEX2",
+]) requireText(fpuMpfrSource, contract, "MPFR FDIV/FSDIV/FDDIV service contract");
+for (const contract of [
+  "fpu_test_set_register_extended", "set_format(EXTENDED_PREC)", "set_format(get_cur_prec())",
+  "regs.jit_fp_dirty_mask &= ~(1u << reg)",
+]) requireText(fpuMpfrSource, contract, "FPP replay extended-register ownership contract");
+for (const contract of ["#ifdef FPU_MPFR", "bool fpu_test_set_register_extended"])
+  requireText(fpuHeaderSource, contract, "FPP replay seed declaration");
+for (const contract of [
+  "#ifdef FPU_MPFR",
+  'snprintf(env_name, sizeof(env_name), "B2_TEST_REPLAY_FP%d_EXT", fpreg)',
+  "parse_test_hex_longs_glue", "count != 3",
+  "fpu_test_set_register_extended(fpreg, words[0], words[1], words[2])",
+]) requireText(basiliskGlueSource, contract, "FPP replay extended-register harness boundary");
+for (const contract of [
+  'name: "fdiv_extended_one_third"', 'name: "fdiv_extended_source_low_bit"',
+  'name: "fdiv_single_nearest"', 'name: "fdiv_double_plus"',
+  'name: "fsdiv_forced_single_nearest"', 'name: "fddiv_forced_double_plus"',
+  'name: "fdiv_positive_divide_by_zero"', 'name: "fdiv_zero_by_zero_invalid"',
+  'name: "fsdiv_infinity_by_infinity_invalid"', 'name: "fddiv_zero_by_infinity"',
+  'name: "fsdiv_finite_overflow"', 'name: "fddiv_finite_overflow"',
+  'name: "fsdiv_finite_underflow"', 'name: "fdiv_destination_qnan_suppresses_dz"',
+  'name: "fdiv_equal_qnan_destination_precedence"',
+  'name: "fdiv_source_snan_beats_destination_qnan"',
+  'name: "fdiv_destination_snan_beats_source_qnan"',
+  'name: "fdiv_equal_snan_destination_precedence"',
+  'name: "fdiv_fp7_self_alias"', 'name: "fsdiv_fp7_self_alias"',
+  'name: "fdiv_fp7_destination_reseed"', 'name: "fsdiv_fp7_destination_reseed"',
+  'name: "fdiv_postincrement_source"', 'name: "fddiv_predecrement_source"',
+  'name: "fdiv_accrued_preserve"',
+  '"B2_TEST_REPLAY_FP7_EXT" : "B2_TEST_REPLAY_FP0_EXT"', 'B2_NATIVE_ASSERT_PC: "0x1008"',
+  'output.includes("NATEXEC pc=00001008")',
+  'strict full-JIT: opcode fallback pc=00001000 op=f200',
+  'service_pass=${servicePass} strict_pass=${strictPass}',
+]) requireText(fppDivideServiceMatrix, contract, "FPP divide service matrix");
+console.log("METRIC structural_fpp_divide_service_vectors=37");
+console.log("METRIC structural_fpp_divide_strict_rejections=3");
+console.log("METRIC structural_fpp_divide_binary_nan_ownership=1");
+console.log("METRIC structural_fpp_divide_forced_range=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 

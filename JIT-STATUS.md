@@ -215,6 +215,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FDIV/FSDIV/FDDIV operand, result and NaN ownership**
+  (2026-07-18): ordinary FDIV now preserves full extended operands and rounds
+  only the completed FPCR-width result; forced single/double division retains
+  extended operands, publishes target exponent-range overflow/underflow, and
+  selects source/destination NaN payload, sign and signalling priority
+  explicitly. A fixed **37 service + 3 strict** matrix covers rounding, range,
+  zero/infinity status, both-operand NaNs, FP7 replay ownership, aliases, EA
+  side effects and exact FPSR. No closure row is promoted and `i_FPP` remains
+  unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_DIVIDE_BATCH.md`.
+
 - **Repair FPP FCOSH/FACOS service and retire lossy native FCOS**
   (2026-07-18): all three now acquire extended sources and evaluate directly
   into FPCR-width MPFR results; FCOS exits before AArch64 binary64/native-libm
