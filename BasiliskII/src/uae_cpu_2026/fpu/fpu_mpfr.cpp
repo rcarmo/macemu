@@ -1708,7 +1708,8 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
       int operation = extra & 0x3f;
       bool direct_result = operation == 2 || operation == 6
 	|| operation == 8 || operation == 9 || operation == 10
-	|| operation == 12 || operation == 13;
+	|| operation == 12 || operation == 13 || operation == 15
+	|| operation == 18 || operation == 20 || operation == 21;
       bool extended_source = operation == 1 || operation == 3
 	|| direct_result || operation == 30 || operation == 31;
       if (extended_source)
@@ -1790,7 +1791,7 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	case 15: // FTAN
 	  if (mpfr_inf_p (value.f))
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_tan (value.f, value.f, rnd);
+	  t = mpfr_tan (direct, value.f, rnd);
 	  break;
 	case 16: // FETOX
 	  t = mpfr_exp (value.f, value.f, rnd);
@@ -1799,21 +1800,21 @@ fpuop_general (uae_u32 opcode, uae_u32 extra)
 	  t = mpfr_ui_pow (value.f, 2, value.f, rnd);
 	  break;
 	case 18: // FTENTOX
-	  t = mpfr_ui_pow (value.f, 10, value.f, rnd);
+	  t = mpfr_ui_pow (direct, 10, value.f, rnd);
 	  break;
 	case 20: // FLOGN
 	  if (mpfr_zero_p (value.f))
 	    cur_exceptions |= FPSR_EXCEPTION_DZ;
 	  else if (mpfr_sgn (value.f) < 0)
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_log (value.f, value.f, rnd);
+	  t = mpfr_log (direct, value.f, rnd);
 	  break;
 	case 21: // FLOG10
 	  if (mpfr_zero_p (value.f))
 	    cur_exceptions |= FPSR_EXCEPTION_DZ;
 	  else if (mpfr_sgn (value.f) < 0)
 	    cur_exceptions |= FPSR_EXCEPTION_OPERR;
-	  t = mpfr_log10 (value.f, value.f, rnd);
+	  t = mpfr_log10 (direct, value.f, rnd);
 	  break;
 	case 22: // FLOG2
 	  if (mpfr_zero_p (value.f))

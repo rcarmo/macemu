@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair FPP FTAN/FTENTOX/FLOGN/FLOG10 service precision**
+  (2026-07-18): these four configured MPFR selectors now acquire extended
+  sources and evaluate directly into separate FPCR-width results, avoiding
+  source narrowing and transcendental double rounding. A fixed **45 service +
+  4 strict** matrix covers source-sensitive single/double results, all single
+  rounding modes, signed zero, infinity/domain rules, NaN metadata, finite and
+  extended underflow, aliases and FPSR. No closure row is promoted and
+  `i_FPP` remains unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_TAN_EXP10_LOG_BATCH.md`.
+
 - **Repair FPP FATAN/FASIN/FATANH service precision and DZ status**
   (2026-07-17): these three configured MPFR selectors now acquire sources at
   extended precision/range and evaluate directly into a separate FPCR-width

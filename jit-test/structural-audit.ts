@@ -493,6 +493,10 @@ const fppInverseFallbackMatrix = await Bun.file(new URL(
   "./fpp-inverse-fallback-matrix.ts",
   import.meta.url,
 )).text();
+const fppTanExp10LogFallbackMatrix = await Bun.file(new URL(
+  "./fpp-tan-exp10-log-fallback-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
@@ -1194,7 +1198,8 @@ for (const [label, disable, name] of servicedMonadicCases) {
 for (const contract of [
   "bool direct_result = operation == 2 || operation == 6",
   "|| operation == 8 || operation == 9 || operation == 10",
-  "|| operation == 12 || operation == 13;",
+  "|| operation == 12 || operation == 13 || operation == 15",
+  "|| operation == 18 || operation == 20 || operation == 21;",
   "|| direct_result || operation == 30 || operation == 31;",
   "MPFR_DECL_INIT (direct, prec);",
   "case 2: // FSINH", "mpfr_sinh (direct, value.f, rnd)",
@@ -1247,7 +1252,7 @@ for (const [label, disable, name] of [
 }
 for (const contract of [
   "operation == 8 || operation == 9 || operation == 10",
-  "|| operation == 12 || operation == 13;",
+  "|| operation == 12 || operation == 13 || operation == 15",
   "case 10: // FATAN", "mpfr_atan (direct, value.f, rnd)",
   "case 12: // FASIN", "mpfr_asin (direct, value.f, rnd)",
   "case 13: // FATANH", "mpfr_cmpabs (value.f, FPU_CONSTANT_ONE)",
@@ -1276,6 +1281,51 @@ console.log("METRIC structural_fpp_inverse_strict_rejections=3");
 console.log("METRIC structural_fpp_inverse_extended_source=1");
 console.log("METRIC structural_fpp_inverse_direct_result=1");
 console.log("METRIC structural_fpp_inverse_atanh_dz=1");
+let tanLogCompilerCursor = inverseCompilerCursor;
+for (const [label, disable, name] of [
+  ["case 0x0f:", "jit_disable.ftan", "FTAN"],
+  ["case 0x12:", "jit_disable.ftentox", "FTENTOX"],
+  ["case 0x14:", "jit_disable.flogn", "FLOGN"],
+  ["case 0x15:", "jit_disable.flog10", "FLOG10"],
+] as const) {
+  const start = fppCompilerOperation.indexOf(label, tanLogCompilerCursor);
+  const next = fppCompilerOperation.indexOf("case 0x", start + label.length);
+  if (start < 0 || next < 0) fail(`FPP ${name} service boundary is incomplete`);
+  const block = fppCompilerOperation.slice(start, next);
+  for (const contract of [label, disable, "FAIL(1);", "return;"])
+    requireText(block, contract, `FPP ${name} configured service boundary`);
+  tanLogCompilerCursor = next;
+}
+for (const contract of [
+  "operation == 12 || operation == 13 || operation == 15",
+  "|| operation == 18 || operation == 20 || operation == 21;",
+  "case 15: // FTAN", "mpfr_inf_p (value.f)", "mpfr_tan (direct, value.f, rnd)",
+  "case 18: // FTENTOX", "mpfr_ui_pow (direct, 10, value.f, rnd)",
+  "case 20: // FLOGN", "mpfr_log (direct, value.f, rnd)",
+  "case 21: // FLOG10", "mpfr_log10 (direct, value.f, rnd)",
+  "mpfr_zero_p (value.f)", "mpfr_sgn (value.f) < 0",
+]) requireText(ordinaryFppBlock, contract, "MPFR tangent/exp10/log extended-source/direct-result contract");
+for (const contract of [
+  'name:`${a.name}_extended_source_single_${s}`',
+  'name:`${a.name}_extended_source_double_nearest`',
+  'name:`${name}_positive_zero`', 'name:`${name}_negative_zero`',
+  'name:"ftan_positive_infinity_operr"', 'name:"ftan_negative_infinity_operr"',
+  'name:"ftentox_positive_infinity"', 'name:"ftentox_negative_infinity"',
+  'name:"flogn_positive_infinity"', 'name:"flog10_positive_infinity"',
+  'name:"flogn_negative_domain_operr"', 'name:"flog10_negative_domain_operr"',
+  'name:"ftan_negative_qnan_payload"', 'name:"ftentox_signalling_nan_quiet"',
+  'name:"flogn_quiet_nan_payload"', 'name:"flog10_signalling_nan_quiet"',
+  'name:"ftan_extended_min_single_underflow"', 'name:"ftentox_finite_single_underflow"',
+  'name:"ftan_fp7_self_alias"', 'name:"flogn_fp7_self_alias"',
+  'name:"flog10_accrued_preserve"',
+  'd0===(a.operationFpsr??a.fpsr)', 'fc===(a.alias?4:3)',
+  'strict full-JIT: opcode fallback pc=00001000 op=f239', '!o.includes("NATEXEC pc=00001000")',
+  "const es=process.env.CASE?sc.length:45", "et=process.env.CASE?ss.length:4",
+]) requireText(fppTanExp10LogFallbackMatrix, contract, "FPP tangent/exp10/log fallback matrix");
+console.log("METRIC structural_fpp_tan_exp10_log_service_vectors=45");
+console.log("METRIC structural_fpp_tan_exp10_log_strict_rejections=4");
+console.log("METRIC structural_fpp_tan_exp10_log_extended_source=1");
+console.log("METRIC structural_fpp_tan_exp10_log_direct_result=1");
 console.log("METRIC structural_fpp_shadow_dirty_ownership=1");
 console.log("METRIC structural_fpp_fallback_ccr_rematerialization=1");
 
