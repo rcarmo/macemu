@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 SCVTF_dw emitter API**
+  (2026-07-18): all **1,024 encodings** and **4,096 native field/mode routes**
+  now pin exact signed-int32→binary64 conversion, W31/WZR, poisoned X upper
+  halves, D31, W0/W30, all callee-saved field numbers, **128 same-number
+  cross-bank routes**, FPCR-mode independence, no new FPSR exceptions, and
+  external D8-D15/FP-state restoration. All six configured source sites are
+  pinned. Only `SCVTF_dw` is audited; compound raw/MIDFUNC paths and `i_FPP`
+  remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_SCVTF_EMITTER.md`.
+
 - **Audit the reachable generic AArch64 FMOV_dx/FMOV_xd bit-transfer pair**
   (2026-07-18): all **2,048 encodings** and **2,048 native field routes** now
   pin exact 64-bit X↔D copying, X31 XZR source/discard behavior, D31, X0/X30,

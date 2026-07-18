@@ -208,6 +208,7 @@ if phase_enabled emitters; then
     timeout -k 5s 120s "$SCRIPT_DIR/emitter-fcvt-conformance.sh" || emit_failure_metrics 1 "ARM64 FCVT emitter conformance failed" 0
     timeout -k 5s 180s "$SCRIPT_DIR/emitter-fmov-sw-ws-conformance.sh" || emit_failure_metrics 1 "ARM64 FMOV W/S emitter conformance failed" 0
     timeout -k 5s 180s "$SCRIPT_DIR/emitter-fmov-dx-xd-conformance.sh" || emit_failure_metrics 1 "ARM64 FMOV X/D emitter conformance failed" 0
+    timeout -k 5s 300s "$SCRIPT_DIR/emitter-scvtf-conformance.sh" || emit_failure_metrics 1 "ARM64 SCVTF emitter conformance failed" 0
 fi
 
 # Runtime phases must never fall through to the shared fixture. Callers may

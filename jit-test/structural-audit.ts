@@ -445,6 +445,14 @@ const fmovDxXdEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fmov-dx-xd-conformance.sh",
   import.meta.url,
 )).text();
+const scvtfEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-scvtf-conformance.cpp",
+  import.meta.url,
+)).text();
+const scvtfEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-scvtf-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5130,6 +5138,37 @@ requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/emitter-fmov-dx-xd-c
 console.log("METRIC structural_fmov_dx_xd_emitter_exact_words=2048");
 console.log("METRIC structural_fmov_dx_xd_emitter_native_routes=2048");
 console.log("METRIC structural_fmov_dx_xd_emitter_callers=10");
+
+/* SCVTF_dw converts signed int32 to binary64 exactly. Close only its generic
+   encoding/field/value/state contract; compound source-width, pair-splitting,
+   memory, and Motorola-status ownership remains with raw/MIDFUNC callers. */
+const scvtfDwCallers = (codegenSource.match(/\bSCVTF_dw\(/g) || []).length;
+if (scvtfDwCallers !== 6)
+  fail(`SCVTF_dw emitter callers=${scvtfDwCallers}, expected 6`);
+requireText(codegenHeaderSource, "#define SCVTF_dw(Dd,Wn)", "generic SCVTF emitter declaration");
+for (const contract of [
+  "SCVTF_dw(d, s);", "SCVTF_dw(d, REG_WORK1);",
+  "SCVTF_dw(SCRATCH_F64_2, REG_WORK1);", "SCVTF_dw(r, REG_WORK1);",
+]) requireText(codegenSource, contract, "generic SCVTF configured source sites");
+for (const contract of [
+  "0x1e620000u | (source << 5) | destination",
+  "for (unsigned destination = 0; destination < 32; ++destination)",
+  "for (unsigned source = 0; source < 32; ++source)",
+  "for (unsigned mode = 0; mode < 4; ++mode)",
+  "static_cast<std::int32_t>(bits)", "double_bits(static_cast<double>(input))",
+  "SCVTF exact signed int32 conversion", "SCVTF preserves X source and upper half",
+  "SCVTF preserves NZCV", "SCVTF preserves FPCR", "SCVTF preserves FPSR without exceptions",
+  "SCVTF preserves caller D8-D15", "SCVTF restores caller FPCR", "SCVTF restores caller FPSR",
+  "for (unsigned reg = 19; reg <= 30; ++reg)",
+  "PROT_READ | PROT_WRITE", "PROT_READ | PROT_EXEC", "__builtin___clear_cache",
+  "exact_words == 1024 && native_routes == 4096 && same_number_routes == 128",
+]) requireText(scvtfEmitterProbeSource, contract, "generic SCVTF native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-scvtf-conformance.cpp"])
+  requireText(scvtfEmitterHarnessSource, contract, "generic SCVTF conformance build");
+requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-scvtf-conformance.sh"', "generic SCVTF bounded acceptance gate");
+console.log("METRIC structural_scvtf_emitter_exact_words=1024");
+console.log("METRIC structural_scvtf_emitter_native_routes=4096");
+console.log("METRIC structural_scvtf_emitter_callers=6");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest

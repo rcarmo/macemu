@@ -194,6 +194,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^FCVT_(?:sd|ds)$/, "AARCH64_JIT_AUDIT_FCVT_EMITTERS.md"],
   [/^FMOV_(?:sw|ws)$/, "AARCH64_JIT_AUDIT_FMOV_SW_WS_EMITTERS.md"],
   [/^FMOV_(?:dx|xd)$/, "AARCH64_JIT_AUDIT_FMOV_DX_XD_EMITTERS.md"],
+  [/^SCVTF_dw$/, "AARCH64_JIT_AUDIT_SCVTF_EMITTER.md"],
   [/^(?:B_i|BR_x|CC_B_i|B(?:CC|CS|EQ|GE|GT|HI|LE|LS|LT|MI|NE|PL|VC|VS)_i|CB(?:NZ|Z)_[wx]i|TBNZ_[wx]ii|TBZ_[wx]ii)$/, "AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [

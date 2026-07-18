@@ -225,7 +225,7 @@ emitter_api,SBFM_wwii,unreviewed,SBFM_wwii,60,2,BasiliskII/src/uae_cpu_2026/comp
 emitter_api,SBFM_xxii,unreviewed,SBFM_xxii,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,269,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,SBFX_wwii,unreachable,SBFX_wwii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,363,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBFX_xxii,unreachable,SBFX_xxii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,364,no path from reachable AArch64 compiler/emitter roots
-emitter_api,SCVTF_dw,unreviewed,SCVTF_dw,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,475,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SCVTF_dw,audited,SCVTF_dw,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,475,AARCH64_JIT_AUDIT_SCVTF_EMITTER.md
 emitter_api,SCVTF_dx,unreachable,SCVTF_dx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,477,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SCVTF_sw,unreachable,SCVTF_sw,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,476,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SDIV_www,unreviewed,SDIV_www,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,231,reachable encoder API; requires opcode/width/branch-range contract classification
