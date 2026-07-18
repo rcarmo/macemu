@@ -219,7 +219,7 @@ inventory is 92/92, and the accepted register-count
   (2026-07-18): ordinary FDIV now preserves full extended operands and rounds
   only the completed FPCR-width result; forced single/double division retains
   extended operands, publishes target exponent-range overflow/underflow, and
-  selects source/destination NaN payload, sign and signalling priority
+  quiets signalling NaNs and applies architectural destination precedence
   explicitly. A fixed **37 service + 3 strict** matrix covers rounding, range,
   zero/infinity status, both-operand NaNs, FP7 replay ownership, aliases, EA
   side effects and exact FPSR. No closure row is promoted and `i_FPP` remains

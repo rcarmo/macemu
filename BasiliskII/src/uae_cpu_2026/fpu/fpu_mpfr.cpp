@@ -649,14 +649,9 @@ select_binary_nan (int reg, fpu_register &source, uae_u64 *nan_bits,
   if (destination_snan)
     cur_exceptions |= FPSR_EXCEPTION_SNAN;
 
-  /* A signalling operand takes precedence over a quiet NaN.  For equal-class
-   * ties, retain 6888x first-operand (destination/dividend) precedence. */
-  if (source_snan && !destination_snan)
-    {
-      *nan_bits = source.nan_bits;
-      *nan_sign = source.nan_sign;
-    }
-  else if (destination_nan)
+  /* An untrapped SNaN is quieted before ordinary NaN selection.  If both
+   * operands are then nonsignalling NaNs, 6888x rules return the destination. */
+  if (destination_nan)
     {
       *nan_bits = fpu.registers[reg].nan_bits;
       *nan_sign = fpu.registers[reg].nan_sign;

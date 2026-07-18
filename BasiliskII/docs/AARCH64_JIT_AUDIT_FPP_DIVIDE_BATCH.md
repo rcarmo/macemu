@@ -21,15 +21,16 @@ and standalone MPFR 4.2.2 calculations:
 - finite non-zero divided by zero reports DZ; zero divided by zero and infinity
   divided by infinity report OPERR; a NaN operand suppresses those generated
   arithmetic exceptions;
-- a signalling NaN wins over a quiet NaN, is quieted, and reports SNAN; for
-  equal classes the destination/dividend payload and sign take precedence; and
+- a signalling NaN is quieted and reports SNAN; normal NaN selection then
+  applies, so when both operands are NaNs the destination/dividend payload and
+  sign take precedence; and
 - finite forced overflow/underflow publishes OVFL/UNFL plus INEX2 and the
   corresponding accrued state.
 
-The manual does not explicitly state dual-NaN equal-class priority in the local
-FDIV section. Destination/dividend precedence is retained as the best
-6888x-specific behavior and is isolated in named vectors rather than presented
-as a direct quotation.
+The local FDIV section refers to the manual's common NaN rules. Section 4.5.4
+states that an untrapped SNaN is converted to a nonsignalling NaN and processing
+continues under the nonsignalling rule; if both operands are then NaNs, the
+destination operand is returned.
 
 No downloaded manual or reference artefact is retained.
 
@@ -43,9 +44,9 @@ range/flags are published once.
 FSDIV/FDDIV already acquired the source at full width and divided directly at
 24/53 bits, but MPFR's default NaN metadata discarded architectural payload,
 sign, and signalling ownership. A shared binary-NaN selector now considers both
-operands: signalling beats quiet, equal-class ties retain destination priority,
-and the selected quieted payload/sign is applied to both metadata and MPFR state.
-Destination SNaNs now explicitly contribute SNAN status.
+operands: it records and quiets either SNaN, then applies destination precedence
+whenever both operands are NaNs. The selected quieted payload/sign is applied to
+both metadata and MPFR state. Destination SNaNs explicitly contribute SNAN status.
 
 Forced division also lacked explicit exponent-range classification when MPFR
 returned infinity or zero at the target boundary. Finite operands producing
@@ -74,8 +75,8 @@ The fixed matrix covers:
 - forced single/double precision under multiple rounding modes;
 - signed divide-by-zero, zero/zero, infinity/infinity, zero/infinity;
 - forced finite overflow and underflow;
-- destination/source qNaN suppression, both SNaN-over-qNaN directions,
-  equal-qNaN and equal-SNaN destination precedence, payload and sign;
+- destination/source qNaN suppression, both SNaN/qNaN operand orders after
+  quieting, equal-qNaN and equal-SNaN destination precedence, payload and sign;
 - FP7 self-alias plus non-idempotent FP7 destination replay reseeding;
 - postincrement and predecrement source EA effects;
 - accrued FPSR and integer CCR preservation; and
