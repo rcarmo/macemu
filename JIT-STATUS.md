@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FMOV_dx/FMOV_xd bit-transfer pair**
+  (2026-07-18): all **2,048 encodings** and **2,048 native field routes** now
+  pin exact 64-bit X↔D copying, X31 XZR source/discard behavior, D31, X0/X30,
+  all callee-saved field numbers, **64 same-number cross-bank routes**, exact
+  NaN/special payload images, source and NZCV/FPCR/FPSR preservation, and
+  external D8-D15/FP-state restoration. All six/four configured source sites
+  are pinned. Only `FMOV_dx`/`FMOV_xd` are audited; compound raw/MIDFUNC paths
+  and `i_FPP` remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_DX_XD_EMITTERS.md`.
+
 - **Audit the reachable generic AArch64 FMOV_sw/FMOV_ws bit-transfer pair**
   (2026-07-18): all **2,048 encodings** and **2,048 native field routes** now
   pin exact W↔S low-word copying, S upper-lane zeroing, W zero extension,

@@ -437,6 +437,14 @@ const fmovSwWsEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-fmov-sw-ws-conformance.sh",
   import.meta.url,
 )).text();
+const fmovDxXdEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-fmov-dx-xd-conformance.cpp",
+  import.meta.url,
+)).text();
+const fmovDxXdEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-fmov-dx-xd-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5089,6 +5097,39 @@ requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/emitter-fmov-sw-ws-c
 console.log("METRIC structural_fmov_sw_ws_emitter_exact_words=2048");
 console.log("METRIC structural_fmov_sw_ws_emitter_native_routes=2048");
 console.log("METRIC structural_fmov_sw_ws_emitter_callers=2");
+
+/* FMOV_dx/FMOV_xd are reciprocal 64-bit bit-transfer encoders. Close only
+   their format/field/state contract; raw and MIDFUNC compositions retain
+   separate pair-splitting, compare, extended-memory, and status ownership. */
+const fmovDxCallers = (codegenSource.match(/\bFMOV_dx\(/g) || []).length;
+const fmovXdCallers = (codegenSource.match(/\bFMOV_xd\(/g) || []).length;
+if (fmovDxCallers !== 6 || fmovXdCallers !== 4)
+  fail(`FMOV X/D emitter callers dx=${fmovDxCallers} xd=${fmovXdCallers}, expected 6/4`);
+for (const contract of ["#define FMOV_dx(Dd,Xn)", "#define FMOV_xd(Xd,Dn)"])
+  requireText(codegenHeaderSource, contract, "generic FMOV X/D emitter declaration");
+for (const contract of [
+  "FMOV_dx(d, s1);", "FMOV_xd(REG_WORK3, s);", "FMOV_xd(d1, s);",
+  "FMOV_dx(result, REG_WORK1);", "FMOV_xd(REG_WORK1, d);",
+  "FMOV_xd(REG_WORK1, s);", "FMOV_dx(d, REG_WORK1);",
+]) requireText(codegenSource, contract, "generic FMOV X/D configured source sites");
+for (const contract of [
+  "0x9e670000u | (b << 5) | a", "0x9e660000u | (b << 5) | a",
+  "for (unsigned destination = 0; destination < 32; ++destination)",
+  "for (unsigned source = 0; source < 32; ++source)",
+  "FMOV_dx exact 64-bit transfer", "FMOV_xd X result or XZR discard",
+  "FMOV_dx preserves X source", "FMOV_xd preserves D source lane",
+  "FMOV preserves NZCV", "FMOV preserves FPCR", "FMOV preserves FPSR",
+  "FMOV preserves caller D8-D15", "FMOV restores caller FPCR", "FMOV restores caller FPSR",
+  "for (unsigned reg = 19; reg <= 30; ++reg)",
+  "PROT_READ | PROT_WRITE", "PROT_READ | PROT_EXEC", "__builtin___clear_cache",
+  "exact_words == 2048 && native_routes == 2048 && same_number_routes == 64",
+]) requireText(fmovDxXdEmitterProbeSource, contract, "generic FMOV X/D native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-fmov-dx-xd-conformance.cpp"])
+  requireText(fmovDxXdEmitterHarnessSource, contract, "generic FMOV X/D conformance build");
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/emitter-fmov-dx-xd-conformance.sh"', "generic FMOV X/D bounded acceptance gate");
+console.log("METRIC structural_fmov_dx_xd_emitter_exact_words=2048");
+console.log("METRIC structural_fmov_dx_xd_emitter_native_routes=2048");
+console.log("METRIC structural_fmov_dx_xd_emitter_callers=10");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
