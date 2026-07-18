@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the reachable generic AArch64 FRINTA/FRINTI/FRINTZ emitter cluster**
+  (2026-07-18): all **3,072 encodings** and **12,288 native field/mode
+  routes** now pin nearest-away, raw-FPCR-current, and toward-zero rounding,
+  signed zero, ties and subnormals, qNaN/SNaN quieting and IOC, finite
+  non-`X` IXC silence, **384 aliases**, source/NZCV/FPCR/FPSR preservation,
+  and external D8-D15/FP-state restoration. All 1/2/2 configured source sites
+  are pinned. Only the three FRINT emitter rows are audited; compound
+  raw/MIDFUNC paths and `i_FPP` remain unreviewed. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FRINT_EMITTERS.md`.
+
 - **Audit the reachable generic AArch64 SCVTF_dw emitter API**
   (2026-07-18): all **1,024 encodings** and **4,096 native field/mode routes**
   now pin exact signed-int32→binary64 conversion, W31/WZR, poisoned X upper

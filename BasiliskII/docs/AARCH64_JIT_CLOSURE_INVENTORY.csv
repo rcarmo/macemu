@@ -124,9 +124,9 @@ emitter_api,FMUL_ddd,unreviewed,FMUL_ddd,60,1,BasiliskII/src/uae_cpu_2026/compil
 emitter_api,FMUL_sss,unreviewed,FMUL_sss,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,489,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,FNEG_dd,unreachable,FNEG_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,491,"only retained raw_fneg_rr emits it, and configured AArch64 sign selectors service before unreachable fneg_rr"
 emitter_api,FNEG_ss,unreachable,FNEG_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,492,no path from reachable AArch64 compiler/emitter roots
-emitter_api,FRINTA_dd,unreviewed,FRINTA_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,469,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,FRINTI_dd,unreviewed,FRINTI_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,470,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,FRINTZ_dd,unreviewed,FRINTZ_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,471,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,FRINTA_dd,audited,FRINTA_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,469,AARCH64_JIT_AUDIT_FRINT_EMITTERS.md
+emitter_api,FRINTI_dd,audited,FRINTI_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,470,AARCH64_JIT_AUDIT_FRINT_EMITTERS.md
+emitter_api,FRINTZ_dd,audited,FRINTZ_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,471,AARCH64_JIT_AUDIT_FRINT_EMITTERS.md
 emitter_api,FSQRT_dd,unreviewed,FSQRT_dd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,493,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,FSQRT_ss,unreachable,FSQRT_ss,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,494,no path from reachable AArch64 compiler/emitter roots
 emitter_api,FSUB_ddd,unreviewed,FSUB_ddd,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,495,reachable encoder API; requires opcode/width/branch-range contract classification

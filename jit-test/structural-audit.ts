@@ -453,6 +453,14 @@ const scvtfEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-scvtf-conformance.sh",
   import.meta.url,
 )).text();
+const frintEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-frint-conformance.cpp",
+  import.meta.url,
+)).text();
+const frintEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-frint-conformance.sh",
+  import.meta.url,
+)).text();
 const gencompSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/gencomp.c",
   import.meta.url,
@@ -5169,6 +5177,41 @@ requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/emitter-scvtf-confor
 console.log("METRIC structural_scvtf_emitter_exact_words=1024");
 console.log("METRIC structural_scvtf_emitter_native_routes=4096");
 console.log("METRIC structural_scvtf_emitter_callers=6");
+
+/* FRINTA/FRINTI/FRINTZ are one scalar-binary64 rounding cluster with distinct
+   fixed-away, FPCR-current, and fixed-zero direction contracts. */
+const frintACallers = (codegenSource.match(/\bFRINTA_dd\(/g) || []).length;
+const frintICallers = (codegenSource.match(/\bFRINTI_dd\(/g) || []).length;
+const frintZCallers = (codegenSource.match(/\bFRINTZ_dd\(/g) || []).length;
+if (frintACallers !== 1 || frintICallers !== 2 || frintZCallers !== 2)
+  fail(`FRINT emitter callers A/I/Z=${frintACallers}/${frintICallers}/${frintZCallers}, expected 1/2/2`);
+for (const contract of ["#define FRINTA_dd(Dd,Dn)", "#define FRINTI_dd(Dd,Dn)", "#define FRINTZ_dd(Dd,Dn)"])
+  requireText(codegenHeaderSource, contract, "generic FRINT emitter declaration");
+for (const contract of [
+  "FRINTI_dd(SCRATCH_F64_1, s);", "FRINTI_dd(d, s);", "FRINTZ_dd(d, s);",
+  "FRINTZ_dd(SCRATCH_F64_1, SCRATCH_F64_1);", "FRINTA_dd(SCRATCH_F64_2, SCRATCH_F64_2);",
+]) requireText(codegenSource, contract, "generic FRINT configured source sites");
+for (const contract of [
+  "0x1e664000u", "0x1e67c000u", "0x1e65c000u",
+  "for (unsigned kind = 0; kind < 3; ++kind)",
+  "for (unsigned destination = 0; destination < 32; ++destination)",
+  "for (unsigned source = 0; source < 32; ++source)",
+  "for (unsigned mode = 0; mode < 4; ++mode)",
+  "positive_half", "negative_half", "positive_two_half", "negative_two_half",
+  "positive_subnormal", "negative_subnormal", "negative_zero", "large_integral",
+  "quiet_nan", "signalling_nan", "FRINT source/alias semantics",
+  "FRINT preserves NZCV", "FRINT preserves FPCR", "FRINT FPSR IOC without IXC",
+  "FRINT preserves caller D8-D15", "FRINT restores caller FPCR", "FRINT restores caller FPSR",
+  "for (unsigned reg = 19; reg <= 30; ++reg)",
+  "PROT_READ | PROT_WRITE", "PROT_READ | PROT_EXEC", "__builtin___clear_cache",
+  "exact_words==3072 && native_routes==12288 && alias_routes==384",
+]) requireText(frintEmitterProbeSource, contract, "generic FRINT native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-frint-conformance.cpp"])
+  requireText(frintEmitterHarnessSource, contract, "generic FRINT conformance build");
+requireText(harnessSource, 'timeout -k 5s 600s "$SCRIPT_DIR/emitter-frint-conformance.sh"', "generic FRINT bounded acceptance gate");
+console.log("METRIC structural_frint_emitter_exact_words=3072");
+console.log("METRIC structural_frint_emitter_native_routes=12288");
+console.log("METRIC structural_frint_emitter_callers=5");
 
 // Immediate-to-CCR instructions are decoded while compiling a block. `src`
 // would be a virtual-register identifier after genamode(), not the guest
