@@ -154,6 +154,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:i_|jff_|jnf_)?(?:MVMEL|MVMLE|MOVEM)(?:_|$)/, "AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md"],
   [/^(?:arm_ADD_l(?:_ri(?:_hostptr)?)?|arm_ADD_ptr_ri|disp_ea20_target_.*|lea_l_.*|sign_extend_16_rr)$/, "AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md"],
   [/^dont_care_fflags$/, "AARCH64_JIT_AUDIT_DONT_CARE_FFLAGS.md"],
+  [/^f_forget_about$/, "AARCH64_JIT_AUDIT_F_FORGET_ABOUT.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],
   [/^(?:live_flags|dont_care_flags|preserve_flags_before_nzcv_clobber|discard_flags_in_nzcv|save_and_discard_flags_in_nzcv|make_flags_live)$/, "AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md"],
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],
@@ -354,6 +355,15 @@ for (const [name, blocks] of [
    ordinary memory/immediate FMOVE. The other retained call spellings sit after
    unconditional semantic-service returns. Keep that distinction fail closed so
    accepting the invalidation helper cannot silently accept another FP family. */
+/* The configured `f_forget_about` root must remain exactly the unconditional
+   per-opcode cleanup of FS1. It is not a general floating-register discard. */
+const configuredFForgetCalls = [...configuredSupport.matchAll(/\bf_forget_about\s*\(\s*([^)]*)\)/g)]
+  .map((match) => match[1].trim());
+if (configuredFForgetCalls.length !== 1 || configuredFForgetCalls[0] !== "9")
+  throw new Error(`configured f_forget_about roots=${configuredFForgetCalls.join("|")}, expected sole FS1`);
+if (countToken(`${configuredGenerated}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`, "f_forget_about") !== 0)
+  throw new Error("f_forget_about gained a configured root outside per-opcode support cleanup");
+
 const configuredDontCareFflagsCalls = countToken(configuredFpp, "dont_care_fflags");
 if (configuredDontCareFflagsCalls !== 32)
   throw new Error(`configured dont_care_fflags call census=${configuredDontCareFflagsCalls}, expected 32`);

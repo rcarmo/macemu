@@ -578,6 +578,10 @@ const dontCareFflagsMatrixSource = await Bun.file(new URL(
   "./dont-care-fflags-native-matrix.ts",
   import.meta.url,
 )).text();
+const fScratchLifecycleMatrixSource = await Bun.file(new URL(
+  "./f-scratch-lifecycle-native-matrix.ts",
+  import.meta.url,
+)).text();
 const integerTailMatrixSource = await Bun.file(new URL(
   "./integer-tail-native-matrix.ts",
   import.meta.url,
@@ -7578,6 +7582,80 @@ for (const contract of [
 console.log("METRIC structural_dont_care_fflags_configured_roots=1");
 console.log("METRIC structural_dont_care_fflags_source_calls=33");
 console.log("METRIC structural_dont_care_fflags_exact_native_vectors=6");
+
+/* `f_forget_about` is the per-opcode FS1 scratch retirement helper. Pin its
+ * sole configured root, discard-before-UNDEF transition, non-architectural
+ * mapping, opcode-boundary position, and consecutive native reuse matrix. */
+const fForgetStart = midfuncSource.indexOf("MIDFUNC(1,f_forget_about,(FW r))");
+const fForgetEnd = midfuncSource.indexOf("MENDFUNC(1,f_forget_about,(FW r))", fForgetStart);
+if (fForgetStart < 0 || fForgetEnd < 0) fail("missing f_forget_about MIDFUNC");
+const fForgetBody = midfuncSource.slice(fForgetStart, fForgetEnd);
+for (const contract of ["if (f_isinreg(r))", "f_disassociate(r);", "live.fate[r].status = UNDEF;"])
+  requireText(fForgetBody, contract, "floating scratch retirement");
+requireBefore(fForgetBody, "f_disassociate(r);", "live.fate[r].status = UNDEF;", "floating scratch retirement");
+const freeScratchStartForFp = allocatorSource.indexOf("static void freescratch(void)");
+const freeScratchEndForFp = allocatorSource.indexOf("/********", freeScratchStartForFp);
+if (freeScratchStartForFp < 0 || freeScratchEndForFp < 0) fail("missing opcode-boundary freescratch");
+const freeScratchForFp = allocatorSource.slice(freeScratchStartForFp, freeScratchEndForFp);
+if ((freeScratchForFp.match(/\bf_forget_about\s*\(/g) || []).length !== 1)
+  fail("f_forget_about opcode-boundary root cardinality changed");
+for (const contract of ["#ifdef USE_JIT_FPU", "f_forget_about(FS1);"])
+  requireText(freeScratchForFp, contract, "f_forget_about configured FS1 root");
+if ((allocatorSource.match(/\bf_forget_about\s*\(/g) || []).length !== 1 ||
+    (generatedSource.match(/\bf_forget_about\s*\(/g) || []).length !== 0 ||
+    (compatSource.match(/\bf_forget_about\s*\(/g) || []).length !== 0 ||
+    (fppCompilerSource.match(/\bf_forget_about\s*\(/g) || []).length !== 0)
+  fail("f_forget_about gained a configured non-freescratch root");
+requireText(allocatorSource, "live.fate[i].needflush = NF_SCRATCH;", "floating scratch NF_SCRATCH initialization");
+requireText(allocatorSource, "live.fate[i].mem = (uae_u32*)&regs.jit_scratchfregs[i - 8 - 1];", "floating scratch backing");
+requireText(allocatorSource, "else // FS1\n        bestreg = 7", "floating scratch d7 home");
+const compileFreescratchCall = allocatorSource.indexOf("comptbl[cft_map(opcode)](opcode);");
+const compileFreescratchRetire = allocatorSource.indexOf("freescratch();", compileFreescratchCall);
+const compilePostLoweringEnd = allocatorSource.indexOf("bool flushed_after_native_op", compileFreescratchRetire);
+if (compileFreescratchCall < 0 || compileFreescratchRetire < compileFreescratchCall ||
+    compilePostLoweringEnd < compileFreescratchRetire)
+  fail("ordinary continuing opcode path no longer retires scratch after lowering");
+const compilePostLowering = allocatorSource.slice(compileFreescratchCall, compilePostLoweringEnd);
+for (const contract of [
+  "if (jit_emitted_guest_memory_write &&", "if (jit_force_runtime_pc_endblock)",
+  "if (is_dynamic_return)", "if (is_dbcc_cond)", "freescratch();",
+]) requireText(compilePostLowering, contract, "post-lowering scratch retirement partition");
+for (const barrierStart of [
+  "if (jit_emitted_guest_memory_write &&", "if (is_dynamic_return)", "if (is_dbcc_cond)",
+]) {
+  const start = compilePostLowering.indexOf(barrierStart);
+  const finish = compilePostLowering.indexOf("break;", start);
+  if (start < 0 || finish < 0 || !compilePostLowering.slice(start, finish).includes("flush(1);"))
+    fail(`pre-freescratch barrier lacks flush retirement: ${barrierStart}`);
+}
+const fScratchRuntimeHelperStart = allocatorSource.indexOf("static inline void jit_emit_runtime_helper_barrier");
+const fScratchRuntimeHelperEnd = allocatorSource.indexOf("void jit_emit_ordered_semantic_helper_call", fScratchRuntimeHelperStart);
+const fScratchOrderedHelperEnd = allocatorSource.indexOf("static void op_fullsr_orsr_w_comp_ff", fScratchRuntimeHelperEnd);
+if (fScratchRuntimeHelperStart < 0 || fScratchRuntimeHelperEnd < 0 || fScratchOrderedHelperEnd < 0)
+  fail("runtime-helper scratch-retirement constructors disappeared");
+for (const helperBody of [
+  allocatorSource.slice(fScratchRuntimeHelperStart, fScratchRuntimeHelperEnd),
+  allocatorSource.slice(fScratchRuntimeHelperEnd, fScratchOrderedHelperEnd),
+]) {
+  requireBefore(helperBody, "flush(1);", "jit_force_runtime_pc_endblock = true;", "runtime-helper scratch retirement");
+}
+const fScratchCases = [...fScratchLifecycleMatrixSource.matchAll(/name: \"([a-z0-9_]+)\"/g)].map((match) => match[1]);
+const expectedFScratchCases = [
+  "single_fp0_then_fp1", "byte_fp0_then_fp7", "long_fp0_then_fp3",
+  "double_fp0_then_negative_zero_fp6", "ftst_then_word_fp2", "double_fp7_then_byte_fp0",
+];
+if (fScratchCases.length !== expectedFScratchCases.length ||
+    fScratchCases.some((name, index) => name !== expectedFScratchCases[index]))
+  fail(`f_forget_about exact-native matrix inventory=${fScratchCases.join(",")}`);
+for (const contract of [
+  'B2_TEST_FORCE_L2_RAM: "1"', 'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC: "0x1000"',
+  'B2_TEST_TWO_PASS: "1"', 'B2_TEST_REPLAY_COUNT: "2"', 'output.includes("NATEXEC pc=00001000")',
+  'output.includes("JIT_STRICT_SUMMARY ")', 'replace(/ FP[0-7]=[0-9a-f]+/gi, "")',
+  'sr === "271f"', "F_SCRATCH_LIFECYCLE_NATIVE_MATRIX pass=",
+]) requireText(fScratchLifecycleMatrixSource, contract, "f_forget_about strict-native matrix");
+console.log("METRIC structural_f_forget_about_configured_roots=1");
+console.log("METRIC structural_f_forget_about_exact_native_vectors=6");
+console.log("METRIC structural_f_forget_about_target_fs1=1");
 
 for (const contract of [
   "arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p)",

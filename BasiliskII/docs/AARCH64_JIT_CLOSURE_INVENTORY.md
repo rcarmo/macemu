@@ -18,7 +18,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
-| midfunc | 422 | 277 | 0 | 119 | 26 |
+| midfunc | 422 | 278 | 0 | 119 | 25 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
 | raw_boundary | 83 | 30 | 0 | 18 | 35 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 68 | `f_forget_about` | midfunc:`f_forget_about` |
 | 68 | `fflags_into_flags` | midfunc:`fflags_into_flags` |
 | 68 | `ffunc_rr` | midfunc:`ffunc_rr` |
 | 68 | `fmov_d_ri_0` | midfunc:`fmov_d_ri_0` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 68 | `fp_from_exten_mr` | midfunc:`fp_from_exten_mr` |
 | 68 | `fp_to_double_rm` | midfunc:`fp_to_double_rm` |
 | 68 | `fp_to_exten_rm` | midfunc:`fp_to_exten_rm` |
+| 68 | `fpowx_rr` | midfunc:`fpowx_rr` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`f_forget_about` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`f_forget_about`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`fflags_into_flags` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`fflags_into_flags`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 
