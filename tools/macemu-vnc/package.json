@@ -1,0 +1,15 @@
+{
+  "name": "macemu-vnc",
+  "version": "1.0.0",
+  "description": "VNC client for scripting BasiliskII Mac OS interactions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/bun": "latest"
+  }
+}

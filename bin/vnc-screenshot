@@ -3,8 +3,9 @@
 OUT="${1:-/workspace/tmp/vnc-screenshot.png}"
 PORT="${2:-5999}"
 RAW="/tmp/.vnc_frame_$$.rgba"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 bun -e "
-import { VNCClient } from '/workspace/projects/macemu-vnc/src/index';
+import { VNCClient } from '${REPO_ROOT}/tools/macemu-vnc/src/index';
 const c = new VNCClient({ port: ${PORT}, timeout: 10000 });
 await c.connect();
 const f = await c.screenshot();
