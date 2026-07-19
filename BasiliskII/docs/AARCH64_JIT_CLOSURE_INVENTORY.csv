@@ -436,7 +436,7 @@ midfunc,dbf_dec_test_ne_w,audited,dbf_dec_test_ne,68,2,BasiliskII/src/uae_cpu_20
 midfunc,discard_flags_in_nzcv,audited,discard_flags_in_nzcv,68,33,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,184,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,disp_ea20_target_add,audited,disp_ea20_target_add,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,243,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,disp_ea20_target_mov,audited,disp_ea20_target_mov,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,268,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,dont_care_fflags,unreviewed,dont_care_fflags,68,32,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,863,reachable; no accepted family-level closure report
+midfunc,dont_care_fflags,audited,dont_care_fflags,68,32,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,863,BasiliskII/docs/AARCH64_JIT_AUDIT_DONT_CARE_FFLAGS.md
 midfunc,dont_care_flags,audited,dont_care_flags,68,2112,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,155,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,f_forget_about,unreviewed,f_forget_about,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,855,reachable; no accepted family-level closure report
 midfunc,fabs_rr,unreachable,fabs_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1087,all configured AArch64 FABS/FSABS/FDABS selectors enter semantic service before operand acquisition or the retained native MIDFUNC call

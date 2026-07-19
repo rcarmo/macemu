@@ -153,6 +153,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:i_|jff_|jnf_)?(?:MULL|MULS32|MULS64|MULU32|MULU64)(?:_|$)/, "AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md"],
   [/^(?:i_|jff_|jnf_)?(?:MVMEL|MVMLE|MOVEM)(?:_|$)/, "AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md"],
   [/^(?:arm_ADD_l(?:_ri(?:_hostptr)?)?|arm_ADD_ptr_ri|disp_ea20_target_.*|lea_l_.*|sign_extend_16_rr)$/, "AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md"],
+  [/^dont_care_fflags$/, "AARCH64_JIT_AUDIT_DONT_CARE_FFLAGS.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],
   [/^(?:live_flags|dont_care_flags|preserve_flags_before_nzcv_clobber|discard_flags_in_nzcv|save_and_discard_flags_in_nzcv|make_flags_live)$/, "AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md"],
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],
@@ -349,6 +350,33 @@ for (const [name, blocks] of [
       throw new Error(`configured AArch64 semantic service no longer precedes ${name} in ${startMarker}`);
   }
 }
+/* `dont_care_fflags` has one configured control-flow-reachable AArch64 root:
+   ordinary memory/immediate FMOVE. The other retained call spellings sit after
+   unconditional semantic-service returns. Keep that distinction fail closed so
+   accepting the invalidation helper cannot silently accept another FP family. */
+const configuredDontCareFflagsCalls = countToken(configuredFpp, "dont_care_fflags");
+if (configuredDontCareFflagsCalls !== 32)
+  throw new Error(`configured dont_care_fflags call census=${configuredDontCareFflagsCalls}, expected 32`);
+const configuredFppOperationStart = configuredFpp.search(/void comp_fpp_opp\s*\([^)]*opcode\s*,[^)]*extra\s*\)/);
+if (configuredFppOperationStart < 0)
+  throw new Error("configured FPP operation compiler boundary disappeared");
+const configuredFppOperation = configuredFpp.slice(configuredFppOperationStart);
+const configuredOrdinaryMoveStart = configuredFppOperation.indexOf("case 0x00:");
+const configuredOrdinaryMoveEnd = configuredFppOperation.indexOf("case 0x01:", configuredOrdinaryMoveStart);
+if (configuredOrdinaryMoveStart < 0 || configuredOrdinaryMoveEnd < 0)
+  throw new Error("configured ordinary FMOVE selector disappeared");
+const configuredOrdinaryMove = configuredFppOperation.slice(configuredOrdinaryMoveStart, configuredOrdinaryMoveEnd);
+if (countToken(configuredOrdinaryMove, "dont_care_fflags") !== 1 ||
+    configuredOrdinaryMove.indexOf("dont_care_fflags();") > configuredOrdinaryMove.indexOf("get_fp_value(opcode, extra)"))
+  throw new Error("configured ordinary FMOVE invalidation ordering changed");
+for (const match of configuredFppOperation.matchAll(/\bdont_care_fflags\s*\(\s*\)/g)) {
+  if (match.index! >= configuredOrdinaryMoveStart && match.index! < configuredOrdinaryMoveEnd) continue;
+  const selectorStart = configuredFppOperation.lastIndexOf("case 0x", match.index!);
+  const selectorPrefix = configuredFppOperation.slice(selectorStart, match.index!);
+  if (selectorStart < 0 || selectorPrefix.lastIndexOf("return;") < 0)
+    throw new Error(`dont_care_fflags gained a configured non-FMOVE root near offset ${match.index}`);
+}
+
 const rootMidText = `${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`;
 for (const name of semanticServiceMid.keys()) {
   const rootReferences = countToken(rootMidText, name);

@@ -574,6 +574,10 @@ const armAddLongMatrixSource = await Bun.file(new URL(
   "./arm-add-l-native-matrix.ts",
   import.meta.url,
 )).text();
+const dontCareFflagsMatrixSource = await Bun.file(new URL(
+  "./dont-care-fflags-native-matrix.ts",
+  import.meta.url,
+)).text();
 const integerTailMatrixSource = await Bun.file(new URL(
   "./integer-tail-native-matrix.ts",
   import.meta.url,
@@ -7520,6 +7524,61 @@ for (const contract of [
 console.log("METRIC structural_arm_add_l_configured_roots=2");
 console.log("METRIC structural_arm_add_l_generated_pcp_providers=6");
 console.log("METRIC structural_arm_add_l_exact_native_vectors=7");
+
+/* `dont_care_fflags` must discard a dirty lazy FP_RESULT without serialising
+ * it, then ordinary FMOVE must publish the replacement before any later
+ * condition consumer. Pin the allocator ordering, configured root boundary,
+ * retained source-call census, and exact-native stale-condition matrix. */
+const fTomemDropBody = functionBody(
+  allocatorSource, "static void f_tomem_drop(int r)", "static int f_isinreg(int r)",
+  "floating lazy-result writeback",
+);
+requireText(fTomemDropBody, "if (live.fate[r].status == DIRTY)", "floating lazy-result writeback");
+const fIsCleanBody = functionBody(
+  allocatorSource, "static inline void f_isclean(int r)", "static inline void f_disassociate(int r)",
+  "floating clean-state transition",
+);
+requireText(fIsCleanBody, "live.fate[r].status = CLEAN;", "floating clean-state transition");
+const fDisassociateBody = functionBody(
+  allocatorSource, "static inline void f_disassociate(int r)", "static int f_alloc_reg(int r, int willclobber)",
+  "floating discard ownership",
+);
+requireBefore(fDisassociateBody, "f_isclean(r);", "f_evict(r);", "floating discard ownership");
+const dontCareFflagsStart = midfuncSource.indexOf("MIDFUNC(0,dont_care_fflags,(void))");
+const dontCareFflagsEnd = midfuncSource.indexOf("MENDFUNC(0,dont_care_fflags,(void))", dontCareFflagsStart);
+if (dontCareFflagsStart < 0 || dontCareFflagsEnd < 0) fail("missing dont_care_fflags MIDFUNC");
+const dontCareFflagsBody = midfuncSource.slice(dontCareFflagsStart, dontCareFflagsEnd);
+if ((dontCareFflagsBody.match(/\bf_disassociate\s*\(/g) || []).length !== 1)
+  fail("dont_care_fflags discard cardinality changed");
+requireText(dontCareFflagsBody, "f_disassociate(FP_RESULT);", "dont_care_fflags discard target");
+const dontCareFflagsSourceCalls = (fppCompilerSource.match(/^\s*dont_care_fflags\(\);/gm) || []).length;
+if (dontCareFflagsSourceCalls !== 33)
+  fail(`dont_care_fflags source-call census=${dontCareFflagsSourceCalls}, expected 33`);
+const ordinaryMoveInvalidate = ordinaryRegisterMoveBlock.indexOf("dont_care_fflags();");
+const ordinaryMoveGet = ordinaryRegisterMoveBlock.indexOf("get_fp_value(opcode, extra)");
+const ordinaryMovePublish = ordinaryRegisterMoveBlock.indexOf("MAKE_FPSR(src);");
+if (ordinaryMoveInvalidate < 0 || ordinaryMoveGet < 0 || ordinaryMovePublish < 0 ||
+    !(ordinaryMoveInvalidate < ordinaryMoveGet && ordinaryMoveGet < ordinaryMovePublish))
+  fail("ordinary FMOVE stale-condition invalidation/publication ordering changed");
+const dontCareFflagsCases = [...dontCareFflagsMatrixSource.matchAll(/name:"([a-z0-9_]+)"/g)].map((match) => match[1]);
+const expectedDontCareFflagsCases = [
+  "stale_negative_to_single_positive", "stale_zero_to_single_negative",
+  "stale_positive_to_single_zero", "stale_negative_to_byte_positive",
+  "stale_positive_to_word_negative", "stale_negative_to_fp7_double_positive",
+];
+if (dontCareFflagsCases.length !== expectedDontCareFflagsCases.length ||
+    dontCareFflagsCases.some((name, index) => name !== expectedDontCareFflagsCases[index]))
+  fail(`dont_care_fflags exact-native matrix inventory=${dontCareFflagsCases.join(",")}`);
+for (const contract of [
+  'B2_TEST_FORCE_L2_RAM:"1"', 'B2_JIT_STRICT_FULL:"1"', 'B2_NATIVE_ASSERT_PC:"0x1000"',
+  'B2_TEST_TWO_PASS:"1"', 'B2_TEST_REPLAY_COUNT:"2"', 'out.includes("NATEXEC pc=00001000")',
+  'out.includes("JIT_STRICT_SUMMARY ")', 'replace(/ FP[0-7]=[0-9a-f]+/gi,"")',
+  'i.sr==="271f"&&j.sr==="271f"', 'DONT_CARE_FFLAGS_NATIVE_MATRIX pass=',
+]) requireText(dontCareFflagsMatrixSource, contract, "dont_care_fflags strict-native matrix");
+console.log("METRIC structural_dont_care_fflags_configured_roots=1");
+console.log("METRIC structural_dont_care_fflags_source_calls=33");
+console.log("METRIC structural_dont_care_fflags_exact_native_vectors=6");
+
 for (const contract of [
   "arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p)",
   "arm_ADD_l_ri_hostptr(offs,(uintptr)comp_pc_p)",
