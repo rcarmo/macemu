@@ -698,6 +698,10 @@ const fmovRmNativeMatrix = await Bun.file(new URL(
   "./fmov-rm-native-matrix.sh",
   import.meta.url,
 )).text();
+const fmovSRiRetirementMatrix = await Bun.file(new URL(
+  "./fmov-s-ri-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fppDivideServiceMatrix = await Bun.file(new URL(
   "./fpp-divide-service-matrix.ts",
   import.meta.url,
@@ -1162,6 +1166,39 @@ console.log("METRIC structural_fmov_rm_configured_live_roots=1");
 console.log("METRIC structural_fmov_rm_dead_fmovecr_spellings=4");
 console.log("METRIC structural_fmov_rm_exact_native_vectors=10");
 console.log("METRIC structural_fmov_rm_audited_rows=2");
+
+/* Retire the binary32 FMOVECR constant wrapper while retaining the shared
+ * ordinary-single fmov_s_rr/raw_fmov_s_rr conversion chain. */
+const fmovSRiStart = midfuncSource.indexOf("MIDFUNC(2,fmov_s_ri,(FW d, IM32 i))");
+const fmovSRiEnd = midfuncSource.indexOf("MENDFUNC(2,fmov_s_ri,(FW d, IM32 i))", fmovSRiStart);
+if (fmovSRiStart < 0 || fmovSRiEnd < 0) fail("missing unreachable fmov_s_ri MIDFUNC");
+const fmovSRiBody = midfuncSource.slice(fmovSRiStart, fmovSRiEnd);
+for (const contract of ["compemu_raw_mov_l_ri(REG_WORK1, i);", "raw_fmov_s_rr(d, REG_WORK1);"])
+  requireText(fmovSRiBody, contract, "unreachable fmov_s_ri MIDFUNC");
+if ((midfuncSource.match(/\bfmov_s_ri\b/g) || []).length !== 2)
+  fail("fmov_s_ri MIDFUNC token census is no longer definition/end-marker only");
+for (const contract of [
+  "#define fmov_pi(d)      fmov_s_ri(d, 0x40490FDB)",
+  "#define fmov_log10_2(d) fmov_s_ri(d, 0x3E9A209B)",
+  "#define fmov_log2_e(d)  fmov_s_ri(d, 0x3FB8AA3B)",
+  "#define fmov_loge_2(d)  fmov_s_ri(d, 0x3F317218)",
+]) requireText(fppArm64CompatSource, contract, "fmov_s_ri retained FMOVECR roots");
+const fmovSRrStart = midfuncSource.indexOf("MIDFUNC(2,fmov_s_rr,(FW d, RR4 s))");
+const fmovSRrEnd = midfuncSource.indexOf("MENDFUNC(2,fmov_s_rr,(FW d, RR4 s))", fmovSRrStart);
+if (fmovSRrStart < 0 || fmovSRrEnd < 0) fail("missing live fmov_s_rr MIDFUNC");
+requireText(midfuncSource.slice(fmovSRrStart, fmovSRrEnd), "raw_fmov_s_rr(d, s);", "live fmov_s_rr MIDFUNC");
+const rawFmovSRrStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fmov_s_rr,(FW d, RR4 s))");
+const rawFmovSRrEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,2,raw_fmov_s_rr,(FW d, RR4 s))", rawFmovSRrStart);
+if (rawFmovSRrStart < 0 || rawFmovSRrEnd < 0) fail("missing live raw_fmov_s_rr boundary");
+for (const contract of ["FMOV_sw(SCRATCH_F64_1, s);", "FCVT_ds(d, SCRATCH_F64_1);"])
+  requireText(codegenSource.slice(rawFmovSRrStart, rawFmovSRrEnd), contract, "live raw_fmov_s_rr boundary");
+for (const contract of [
+  "selector_0_pi", "pi_fp7_max_destination", "single_aind_a0",
+  "FMOV_S_RI_RETIREMENT_FOCUSED service=1 strict=1 live_single=1 fail=0 total=3",
+]) requireText(fmovSRiRetirementMatrix, contract, "fmov_s_ri focused retirement wrapper");
+console.log("METRIC structural_fmov_s_ri_unreachable_midfuncs=1");
+console.log("METRIC structural_fmov_s_ri_dead_fmovecr_roots=4");
+console.log("METRIC structural_fmov_s_ri_live_shared_raw_boundaries=1");
 
 for (const contract of [
   'name: `${format.name}_d16_a0_positive`',

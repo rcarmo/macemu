@@ -317,6 +317,7 @@ const semanticServiceMid = new Map<string, string>([
   ["ffunc_rr", "all four configured AArch64 host-libm roots (FSIN/FETOX/FLOG2/FCOS) enter MPFR semantic service before operand acquisition or the retained MIDFUNC calls; AARCH64_JIT_AUDIT_FFUNC_RETIREMENT.md"],
   ["fmov_d_ri_0", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 15 can reach fmov_0/fmov_d_ri_0; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
   ["fmov_d_ri_1", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 50 can reach fmov_1/fmov_d_ri_1; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
+  ["fmov_s_ri", "all four configured AArch64 binary32 constant roots are retained only below the FMOVECR exact-MPFR service return; raw_fmov_s_rr remains live through fmov_s_rr; AARCH64_JIT_AUDIT_FMOV_S_RI_UNREACHABLE.md"],
 ]);
 const configuredUnreachableMid = new Map<string, string>([
   ["fmov_d_rm", "its sole external spelling is a legacy extern declaration; configured double-memory FMOVE uses fmov_rm -> raw_fmov_d_rm; AARCH64_JIT_AUDIT_FMOV_D_RM_UNREACHABLE.md"],
@@ -467,7 +468,7 @@ for (const name of semanticServiceMid.keys()) {
   const rootReferences = countToken(rootMidText, name);
   const midReferences = midDefs.reduce((sum, def) =>
     sum + (def.name === name ? 0 : countToken(def.body, name)), 0);
-  const expectedRootReferences = name === "ffunc_rr" ? 4 : name === "fmul_rr" || name === "fdiv_rr" ? 2 : 1;
+  const expectedRootReferences = name === "ffunc_rr" || name === "fmov_s_ri" ? 4 : name === "fmul_rr" || name === "fdiv_rr" ? 2 : 1;
   const expectedMidReferences = name === "fmov_d_ri_0" || name === "fmov_d_ri_1" ? 1 : 0;
   if (rootReferences !== expectedRootReferences)
     throw new Error(`serviced native MIDFUNC ${name} configured-root references=${rootReferences}, expected ${expectedRootReferences} retained selector call(s)`);
