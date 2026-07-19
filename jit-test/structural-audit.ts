@@ -686,6 +686,10 @@ const ffuncRetirementMatrix = await Bun.file(new URL(
   "./ffunc-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fmovZeroOneRetirementMatrix = await Bun.file(new URL(
+  "./fmov-zero-one-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fppDivideServiceMatrix = await Bun.file(new URL(
   "./fpp-divide-service-matrix.ts",
   import.meta.url,
@@ -1507,6 +1511,49 @@ if (constantFmovDiSites !== 5 || constantScvtfSites !== 6)
   fail(`constant residual emitter sites FMOV_di/SCVTF_dw=${constantFmovDiSites}/${constantScvtfSites}, expected 5/6`);
 console.log("METRIC structural_fpp_fmovecr_unreachable_constant_raw_boundaries=2");
 console.log("METRIC structural_fpp_fmovecr_reachable_constant_emitters=2");
+
+/* FMOVECR zero/one wrappers are retained below the same exact-MPFR service
+ * gate as the already-retired 10/100 chain. Pin selectors 15/50, their sole
+ * unreachable fmov_l_ri parent, definition-only raw boundaries, and the
+ * focused service/strict attribution subset without inheriting primitive API
+ * classifications. */
+for (const [selector, compat, midName, rawName, rawContract] of [
+  ["case 0x0f:", "fmov_0(reg);", "fmov_d_ri_0", "raw_fmov_d_ri_0", "MOVI_di(r, 0);"],
+  ["case 0x32:", "fmov_1(reg);", "fmov_d_ri_1", "raw_fmov_d_ri_1", "FMOV_di(r, 0b01110000);"],
+] as const) {
+  const selectorAt = fppCompilerOperation.indexOf(selector, fmovecrSelector);
+  const callAt = fppCompilerOperation.indexOf(compat, selectorAt);
+  if (selectorAt < fmovecrSelector || callAt < selectorAt)
+    fail(`FMOVECR retained ${compat} selector disappeared`);
+  const midStart = midfuncSource.indexOf(`MIDFUNC(1,${midName},(FW r))`);
+  const midEnd = midfuncSource.indexOf(`MENDFUNC(1,${midName},(FW r))`, midStart);
+  if (midStart < 0 || midEnd < 0) fail(`missing retired FMOVECR MIDFUNC ${midName}`);
+  requireText(midfuncSource.slice(midStart, midEnd), `${rawName}(r);`, `retired FMOVECR MIDFUNC ${midName}`);
+  if ((midfuncSource.match(new RegExp(`\\b${midName}\\b`, "g")) || []).length !== 3)
+    fail(`retired FMOVECR MIDFUNC ${midName} caller graph changed`);
+  const rawStart = codegenSource.indexOf(`LOWFUNC(NONE,NONE,1,${rawName},(FW r))`);
+  const rawEnd = codegenSource.indexOf(`LENDFUNC(NONE,NONE,1,${rawName},(FW r))`, rawStart);
+  if (rawStart < 0 || rawEnd < 0) fail(`missing retired FMOVECR raw boundary ${rawName}`);
+  requireText(codegenSource.slice(rawStart, rawEnd), rawContract, `retired FMOVECR raw boundary ${rawName}`);
+  if ((codegenSource.match(new RegExp(`\\b${rawName}\\b`, "g")) || []).length !== 2)
+    fail(`retired FMOVECR raw boundary ${rawName} gained a configured caller`);
+}
+for (const contract of [
+  'name: `selector_${selector}_${name}`', '[15, "zero"', '[50, "ten_pow_0"',
+  'name: "pi_fp7_max_destination"',
+  'FPP_FMOVECR_FALLBACK_MATRIX service_pass=',
+  'strict full-JIT: opcode fallback', 'cow_clone', 'cow_release',
+]) requireText(fppFmovecrFallbackMatrix, contract, "FMOVECR zero/one retirement runtime evidence");
+for (const contract of [
+  "selector_15_zero", "selector_50_ten_pow_0", "pi_fp7_max_destination",
+  "FPP_FMOVECR_FALLBACK_MATRIX service_pass=1 strict_pass=0 fail=0 total=1",
+  "FPP_FMOVECR_FALLBACK_MATRIX service_pass=0 strict_pass=1 fail=0 total=1",
+  "FMOV_ZERO_ONE_RETIREMENT_FOCUSED service=%d strict=%d fail=0 total=%d",
+  'test "$service" -eq 2', 'test "$strict" -eq 1',
+]) requireText(fmovZeroOneRetirementMatrix, contract, "FMOVECR zero/one retirement focused wrapper");
+console.log("METRIC structural_fpp_fmovecr_unreachable_zero_one_midfuncs=2");
+console.log("METRIC structural_fpp_fmovecr_unreachable_zero_one_raw_boundaries=2");
+console.log("METRIC structural_fpp_fmovecr_zero_one_service_selectors=2");
 
 const fabsStart = fppCompilerOperation.indexOf("case 0x18:");
 const fabsEnd = fppCompilerOperation.indexOf("case 0x19:", fabsStart);

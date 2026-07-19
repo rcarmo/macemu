@@ -313,6 +313,8 @@ const semanticServiceMid = new Map<string, string>([
   ["fmul_rr", "both configured AArch64 roots (FMUL/FSMUL/FDMUL and FSGLMUL) enter semantic service before operand acquisition or the retained native MIDFUNC calls"],
   ["fdiv_rr", "both configured AArch64 roots (FDIV/FSDIV/FDDIV and FSGLDIV) enter semantic service before operand acquisition or the retained native MIDFUNC calls"],
   ["ffunc_rr", "all four configured AArch64 host-libm roots (FSIN/FETOX/FLOG2/FCOS) enter MPFR semantic service before operand acquisition or the retained MIDFUNC calls; AARCH64_JIT_AUDIT_FFUNC_RETIREMENT.md"],
+  ["fmov_d_ri_0", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 15 can reach fmov_0/fmov_d_ri_0; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
+  ["fmov_d_ri_1", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 50 can reach fmov_1/fmov_d_ri_1; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
 ]);
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
 const semanticServiceBlocks: Array<[string, string, string]> = [
@@ -353,6 +355,22 @@ for (const [name, blocks] of [
       throw new Error(`configured AArch64 semantic service no longer precedes ${name} in ${startMarker}`);
   }
 }
+const configuredFmovecrStart = source.fpp.indexOf("if ((extra & 0xfc00) == 0x5c00)");
+const configuredFmovecrSwitch = source.fpp.indexOf("switch (extra & 0x7f)", configuredFmovecrStart);
+if (configuredFmovecrStart < 0 || configuredFmovecrSwitch < 0)
+  throw new Error("configured FMOVECR service boundary disappeared");
+const configuredFmovecrGate = source.fpp.slice(configuredFmovecrStart, configuredFmovecrSwitch);
+const configuredFmovecrFail = configuredFmovecrGate.indexOf("FAIL(1);");
+const configuredFmovecrReturn = configuredFmovecrGate.indexOf("return;", configuredFmovecrFail);
+if (configuredFmovecrFail < 0 || configuredFmovecrReturn < configuredFmovecrFail)
+  throw new Error("configured FMOVECR no longer enters service before selector dispatch");
+for (const [selector, callName] of [["case 0x0f:", "fmov_0"], ["case 0x32:", "fmov_1"]] as const) {
+  const selectorAt = source.fpp.indexOf(selector, configuredFmovecrSwitch);
+  const callAt = source.fpp.indexOf(`${callName}(`, selectorAt);
+  if (selectorAt < configuredFmovecrSwitch || callAt < selectorAt)
+    throw new Error(`retained FMOVECR ${callName} selector disappeared`);
+}
+
 for (const [callName, startMarker, endMarker] of [
   ["fsin_rr", "case 0x0e:\t\t\t\t\t\t/* FSIN */", "case 0x0f:\t\t\t\t\t\t/* FTAN */"],
   ["fetox_rr", "case 0x10:\t\t\t\t\t\t/* FETOX */", "case 0x11:\t\t\t\t\t\t/* FTWOTOX */"],
@@ -435,10 +453,11 @@ for (const name of semanticServiceMid.keys()) {
   const midReferences = midDefs.reduce((sum, def) =>
     sum + (def.name === name ? 0 : countToken(def.body, name)), 0);
   const expectedRootReferences = name === "ffunc_rr" ? 4 : name === "fmul_rr" || name === "fdiv_rr" ? 2 : 1;
+  const expectedMidReferences = name === "fmov_d_ri_0" || name === "fmov_d_ri_1" ? 1 : 0;
   if (rootReferences !== expectedRootReferences)
     throw new Error(`serviced native MIDFUNC ${name} configured-root references=${rootReferences}, expected ${expectedRootReferences} retained selector call(s)`);
-  if (midReferences !== 0)
-    throw new Error(`serviced native MIDFUNC ${name} gained ${midReferences} MIDFUNC caller(s)`);
+  if (midReferences !== expectedMidReferences)
+    throw new Error(`serviced native MIDFUNC ${name} MIDFUNC references=${midReferences}, expected ${expectedMidReferences}`);
 }
 const rootMid = new Set<string>();
 for (const name of midNames) {
@@ -598,6 +617,8 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmul_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 multiply roots service before unreachable fmul_rr"],
   ["raw_fdiv_rr", "only its LOWFUNC/LENDFUNC definition remains after both configured AArch64 divide roots service before unreachable fdiv_rr; later paired remainder retirement also makes FDIV_ddd unreachable"],
   ["raw_ffunc_rr", "only its LOWFUNC/LENDFUNC definition remains after all four configured AArch64 FSIN/FETOX/FLOG2/FCOS roots enter MPFR service before unreachable ffunc_rr; AARCH64_JIT_AUDIT_FFUNC_RETIREMENT.md"],
+  ["raw_fmov_d_ri_0", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_0 after configured FMOVECR selector 15 enters exact MPFR service; MOVI_di remains independently classified; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
+  ["raw_fmov_d_ri_1", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_1 after configured FMOVECR selector 50 enters exact MPFR service; FMOV_di remains audited and reachable elsewhere; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
   ["raw_frndint_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndint_rr; FRINTI_dd remains reachable from integer-destination rounding"],
   ["raw_frndintz_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frndintz_rr; later paired remainder retirement also makes FRINTZ_dd unreachable"],
   ["raw_fcuts_r", "only its LOWFUNC/LENDFUNC definition remains below unreachable fcuts_r after configured AArch64 FSMOVE/FDMOVE service; FCVT_sd/FCVT_ds remain reachable from other compositions"],
