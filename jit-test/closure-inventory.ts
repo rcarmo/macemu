@@ -316,7 +316,10 @@ const semanticServiceMid = new Map<string, string>([
   ["fmov_d_ri_0", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 15 can reach fmov_0/fmov_d_ri_0; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
   ["fmov_d_ri_1", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 50 can reach fmov_1/fmov_d_ri_1; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
 ]);
-const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name);
+const configuredUnreachableMid = new Map<string, string>([
+  ["fmov_d_rm", "its sole external spelling is a legacy extern declaration; configured double-memory FMOVE uses fmov_rm -> raw_fmov_d_rm; AARCH64_JIT_AUDIT_FMOV_D_RM_UNREACHABLE.md"],
+]);
+const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name) || configuredUnreachableMid.has(name);
 const semanticServiceBlocks: Array<[string, string, string]> = [
   ["fabs_rr", "case 0x18:", "case 0x19:"],
   ["fneg_rr", "case 0x1a:", "case 0x1c:"],
@@ -495,6 +498,7 @@ const structuralUnreachableMid = new Map<string, string>([
   ["jnf_DIVS", "i_DIVS unconditionally selects jff_DIVS for divide exception and overflow flag semantics"],
   ["frndint_rr", "its only source call is inside inactive USE_X86_FPUCW code in the configured AArch64 build"],
   ["sub_w_ri", "raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead"],
+  ...configuredUnreachableMid,
   ...semanticServiceMid,
 ]);
 const structuralProofTokens: Array<[string, string, string[]]> = [
@@ -505,6 +509,7 @@ const structuralProofTokens: Array<[string, string, string[]]> = [
   ["jnf_TAS", source.gencomp, ["case i_TAS:", "jff_TAS(src)"]],
   ["jnf_DIVS", source.gencomp, ["case i_DIVS:", "jff_DIVS(dst, src)"]],
   ["sub_w_ri", source.compat, ["void dbcc_dec_w(W2 d) { jnf_SUB_w_imm(d, 1); }"]],
+  ["fmov_d_rm", source.fpp, ["extern void fmov_d_rm(unsigned int r, uintptr m);", "fmov_rm(FS1, (uintptr) (temp_fp));"]],
 ];
 for (const [name, text, tokens] of structuralProofTokens) {
   if (tokens.some((token) => !text.includes(token)))

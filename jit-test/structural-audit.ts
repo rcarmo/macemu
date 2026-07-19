@@ -690,6 +690,10 @@ const fmovZeroOneRetirementMatrix = await Bun.file(new URL(
   "./fmov-zero-one-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fmovDRmRetirementMatrix = await Bun.file(new URL(
+  "./fmov-d-rm-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fppDivideServiceMatrix = await Bun.file(new URL(
   "./fpp-divide-service-matrix.ts",
   import.meta.url,
@@ -1078,6 +1082,40 @@ console.log("METRIC structural_fpp_fmove_memory_basic_exact_native_vectors=18");
 console.log("METRIC structural_fpp_fmove_memory_basic_formats=5");
 console.log("METRIC structural_fpp_fmove_memory_basic_ea_modes=3");
 console.log("METRIC structural_fpp_fmove_memory_a7_geometry=1");
+
+/* Retire only the unused fmov_d_rm synonym. Live double-memory FMOVE must
+ * remain fmov_rm -> raw_fmov_d_rm, with strict exact-native coverage. */
+const fmovDRmStart = midfuncSource.indexOf("MIDFUNC(2,fmov_d_rm,(FW r, MEMR m))");
+const fmovDRmEnd = midfuncSource.indexOf("MENDFUNC(2,fmov_d_rm,(FW r, MEMR m))", fmovDRmStart);
+if (fmovDRmStart < 0 || fmovDRmEnd < 0) fail("missing unreachable fmov_d_rm MIDFUNC");
+requireText(midfuncSource.slice(fmovDRmStart, fmovDRmEnd), "raw_fmov_d_rm(r, m);", "unreachable fmov_d_rm MIDFUNC");
+if ((midfuncSource.match(/\bfmov_d_rm\b/g) || []).length !== 2)
+  fail("fmov_d_rm MIDFUNC token census is no longer definition/end-marker only");
+if ((fppCompilerSource.match(/\bfmov_d_rm\b/g) || []).length !== 1 ||
+    !fppCompilerSource.includes("extern void fmov_d_rm(unsigned int r, uintptr m);"))
+  fail("fmov_d_rm external source census is no longer declaration-only");
+const fmovRmStart = midfuncSource.indexOf("MIDFUNC(2,fmov_rm,(FW r, MEMR m))");
+const fmovRmEnd = midfuncSource.indexOf("MENDFUNC(2,fmov_rm,(FW r, MEMR m))", fmovRmStart);
+if (fmovRmStart < 0 || fmovRmEnd < 0) fail("missing live fmov_rm MIDFUNC");
+requireText(midfuncSource.slice(fmovRmStart, fmovRmEnd), "raw_fmov_d_rm(r, m);", "live fmov_rm MIDFUNC");
+const rawFmovDRmStart = codegenSource.indexOf("LOWFUNC(NONE,READ,2,raw_fmov_d_rm,(FW r, MEMR m))");
+const rawFmovDRmEnd = codegenSource.indexOf("LENDFUNC(NONE,READ,2,raw_fmov_d_rm,(FW r, MEMR m))", rawFmovDRmStart);
+if (rawFmovDRmStart < 0 || rawFmovDRmEnd < 0) fail("missing live raw_fmov_d_rm boundary");
+for (const contract of ["LOAD_U64(REG_WORK1, m);", "LDR_dXi(r, REG_WORK1, 0);"])
+  requireText(codegenSource.slice(rawFmovDRmStart, rawFmovDRmEnd), contract, "live raw_fmov_d_rm boundary");
+for (const contract of [
+  'name: "double"', 'extra: "5400"', 'fp: "3ff8000000000000"',
+  'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC: "0x1000"',
+  'FPP_FMOVE_MEMORY_BASIC_MATRIX pass=',
+]) requireText(fppFmoveMemoryBasicMatrix, contract, "live double-memory FMOVE evidence");
+for (const contract of [
+  "CASE=double_aind_a0", "FPP_FMOVE_MEMORY_BASIC_MATRIX pass=1 fail=0 total=1",
+  "FMOV_D_RM_RETIREMENT_FOCUSED live_double=1 fail=0 total=1",
+]) requireText(fmovDRmRetirementMatrix, contract, "fmov_d_rm focused live-sibling wrapper");
+console.log("METRIC structural_fmov_d_rm_unreachable_midfuncs=1");
+console.log("METRIC structural_fmov_d_rm_live_sibling_midfuncs=1");
+console.log("METRIC structural_fmov_d_rm_live_raw_boundaries=1");
+
 for (const contract of [
   'name: `${format.name}_d16_a0_positive`',
   'name: `${format.name}_indexed_a0_d1_long_scale2_negative_disp`',
