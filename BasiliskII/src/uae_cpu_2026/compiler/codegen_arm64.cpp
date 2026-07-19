@@ -1527,16 +1527,11 @@ STATIC_INLINE void raw_fflags_into_flags(int r)
 LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))
 {
 	switch (cc) {
-		case NATIVE_CC_F_NEVER:
+		case NATIVE_CC_F_F: // Never
 			CLEAR_LOW8_xx(d, d);
 			break;
 
-		case NATIVE_CC_NE: // Set if not equal
-			CSETM_wc(REG_WORK1, NATIVE_CC_NE);
-			BFXIL_xxii(d, REG_WORK1, 0, 8);
-			break;
-
-		case NATIVE_CC_EQ: // Set if equal
+		case NATIVE_CC_F_EQ: // Equal
 			CSETM_wc(REG_WORK1, NATIVE_CC_EQ);
 			BFXIL_xxii(d, REG_WORK1, 0, 8);
 			break;
@@ -1630,6 +1625,18 @@ LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))
 			B_i(2);
 			CLEAR_LOW8_xx(d, d);
 			break;
+
+		case NATIVE_CC_F_NE: // Not equal, including unordered
+			CSETM_wc(REG_WORK1, NATIVE_CC_NE);
+			BFXIL_xxii(d, REG_WORK1, 0, 8);
+			break;
+
+		case NATIVE_CC_F_T: // Always
+			SET_LOW8_xx(d, d);
+			break;
+
+		default:
+			jit_abort("invalid AArch64 FScc condition");
 	}
 }
 LENDFUNC(NONE,NONE,2,raw_fp_fscc_ri,(RW4 d, int cc))

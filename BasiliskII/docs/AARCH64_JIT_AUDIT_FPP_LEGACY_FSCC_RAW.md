@@ -4,6 +4,11 @@ Date: 2026-07-18
 Branch: `jit-audit-next`
 Base: `a613336a`
 
+> Historical graph checkpoint. `AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md`
+> supersedes this classification: runtime fidelity testing found defects in the
+> live CMOV route, so the completed dedicated lower chain is now reachable and
+> audited.
+
 ## Scope
 
 This bounded graph checkpoint covers the legacy AArch64 `fp_fscc_ri` MIDFUNC,

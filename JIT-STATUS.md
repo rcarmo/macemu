@@ -215,6 +215,21 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit and repair the configured AArch64 `i_FScc` lifecycle** (2026-07-18):
+  reproduced two native fidelity defects: FScc published temporary `FCMP` NZCV
+  as integer CCR, and its inherited x86 CMOV table inverted AArch64 ordered
+  relations. The repaired route preserves full `XNZVC`, dispatches through the
+  complete sixteen-entry FP pseudo-condition lowerer, preserves the upper 24
+  destination bits, rejects illegal conditions before native mutation, and
+  services writable-memory forms with exact EA/writeback semantics. The
+  fail-closed matrix passes **326/326**: five FPSR classes × 32 defined
+  encodings × D0/D7 (**320 exact-native**), four memory-service forms, and two
+  strict negative probes. This supersedes the earlier graph-only FScc retirement and
+  promotes exactly `i_FScc`, `fp_fscc_ri`, `raw_fp_fscc_ri`,
+  `CLEAR_LOW8_xx`, and `SET_LOW8_xx`; shared condition/branch APIs remain
+  independent. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md`.
+
 - **Close the configured AArch64 `i_FPP` generator lifecycle** (2026-07-18):
   reconciles every live top-level form and ordinary operation selector against
   the accepted focused FPP evidence graph. The fail-closed executable census
@@ -239,7 +254,8 @@ inventory is 92/92, and the accepted register-count
   `BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md`.
 
 - **Retire the definition-only legacy AArch64 FScc raw chain and residual
-  low-byte emitters** (2026-07-18): configured `i_FScc` uses the distinct
+  low-byte emitters** (2026-07-18; historical, superseded by the complete FScc
+  lifecycle audit above): configured `i_FScc` uses the distinct
   `comp_fscc_opp` CMOV route, while `fp_fscc_ri` has no configured caller and
   `raw_fp_fscc_ri` is definition-only. Exact 15-condition switch and global
   13/10 clear/set partition checks—11/10 in dead FScc plus two clear sites in

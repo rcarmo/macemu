@@ -748,9 +748,27 @@ void comp_fscc_opp(uae_u32 opcode, uae_u16 extra)
 		return;
 	}
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* FScc consumes floating condition codes but does not modify integer CCR.
+	 * Preserve the architectural CCR before FCMP publishes its temporary
+	 * predicate in host NZCV; after selecting the result byte below, discard
+	 * that temporary NZCV so block flush cannot expose it as guest state. */
+	preserve_flags_before_nzcv_clobber();
+#endif
 	fflags_into_flags();
 	reg = (opcode & 7);
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* FCMP's AArch64 NZCV relation is consumed directly by the dedicated FScc
+	 * lowerer. The AArch64 pseudo-condition namespace begins at 16 (F/FALSE);
+	 * bit 0x10 selects the architecturally equivalent signalling form and
+	 * therefore does not alter the truth table. */
+	const int native_fp_cc_base = 16;
+	fp_fscc_ri(reg, native_fp_cc_base + (extra & 0x0f));
+	/* The predicate NZCV is temporary; architectural integer CCR was saved
+	 * before FCMP and remains authoritative in regflags.nzcv. */
+	discard_flags_in_nzcv();
+#else
 	mov_l_ri(S1, 255);
 	mov_l_ri(S4, 0);
 	switch (extra & 0x0f)
@@ -832,6 +850,7 @@ void comp_fscc_opp(uae_u32 opcode, uae_u16 extra)
 		}
 #endif
 	}
+#endif
 }
 
 

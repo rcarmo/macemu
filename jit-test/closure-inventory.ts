@@ -119,6 +119,7 @@ const activeCodegen = configuredExpandedSource(paths.codegen, true);
 
 const auditFamilyRules: Array<[RegExp, string]> = [
   [/^i_FPP$/, "AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md"],
+  [/^(?:i_FScc|fp_fscc_ri)$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^i_FBcc$/, "AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md"],
   [/^i_EXT$/, "AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md"],
@@ -197,6 +198,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^FMOV_(?:sw|ws)$/, "AARCH64_JIT_AUDIT_FMOV_SW_WS_EMITTERS.md"],
   [/^FMOV_(?:dx|xd)$/, "AARCH64_JIT_AUDIT_FMOV_DX_XD_EMITTERS.md"],
   [/^SCVTF_dw$/, "AARCH64_JIT_AUDIT_SCVTF_EMITTER.md"],
+  [/^(?:CLEAR_LOW8_xx|SET_LOW8_xx)$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
   [/^FRINT(?:A|I|Z)_dd$/, "AARCH64_JIT_AUDIT_FRINT_EMITTERS.md"],
   [/^FMOV_di$/, "AARCH64_JIT_AUDIT_FMOV_DI_EMITTER.md"],
   [/^FSQRT_dd$/, "AARCH64_JIT_AUDIT_FSQRT_EMITTER.md"],
@@ -210,6 +212,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
 const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
+  [/^raw_fp_fscc_ri$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
 ];
 const familyOf = (name: string) => name
   .replace(/^i_/, "")
@@ -490,7 +493,6 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
   ["raw_fmod_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],
-  ["raw_fp_fscc_ri", "only its LOWFUNC/LENDFUNC definition remains below unreachable fp_fscc_ri; configured i_FScc uses the distinct comp_fscc_opp CMOV route and remains unreviewed"],
   ["raw_frem1_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frem1_rr after configured FREM service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FMOD lower chain"],
   ["raw_fsgldiv_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsgldiv_rr after configured AArch64 FSGLDIV service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
   ["raw_fsglmul_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fsglmul_rr after configured AArch64 FSGLMUL service; FCVT_sd and FCVT_ds remain reachable from other compositions"],
@@ -547,12 +549,10 @@ const semanticServiceEmitter = new Map<string, string>([
   ["FDIV_ddd", "all three retained sites are below unreachable raw_fdiv_rr plus paired definition-only raw_fmod_rr/raw_frem1_rr after configured divide/FMOD/FREM service"],
   ["FDIV_sss", "only retained raw_fsgldiv_rr emits it, and configured AArch64 FSGLDIV services before unreachable fsgldiv_rr"],
   ["FMSUB_dddd", "both retained sites are below paired definition-only raw_fmod_rr/raw_frem1_rr after configured FMOD/FREM service"],
-  ["CLEAR_LOW8_xx", "eleven sites are inside definition-only raw_fp_fscc_ri and two more are inside unreachable jnf_CLR_b/jff_CLR_b namesakes; no reachable configured caller remains"],
-  ["SET_LOW8_xx", "all ten retained sites are inside definition-only raw_fp_fscc_ri below unreachable fp_fscc_ri; configured i_FScc uses a distinct CMOV route"],
   ["FRINTA_dd", "its sole retained site is below definition-only raw_frem1_rr after configured FREM service"],
   ["FRINTZ_dd", "both retained sites are below definition-only raw_frndintz_rr/raw_fmod_rr after configured FINT/FINTRZ and FMOD service"],
 ]);
-const semanticServiceEmitterSites = new Map<string, number>([["FDIV_ddd", 3], ["FMSUB_dddd", 2], ["CLEAR_LOW8_xx", 11], ["SET_LOW8_xx", 10], ["FRINTZ_dd", 2]]);
+const semanticServiceEmitterSites = new Map<string, number>([["FDIV_ddd", 3], ["FMSUB_dddd", 2], ["FRINTZ_dd", 2]]);
 const emitterNonCodegenRootText = `${activeGenerated}\n${activeGencomp}\n${activeSupport}\n${activeCompat}\n${activeFpp}\n${activeFppCompat}\n${activeReachableMid}`;
 for (const name of semanticServiceEmitter.keys()) {
   const expectedSites = semanticServiceEmitterSites.get(name) ?? 1;

@@ -17,10 +17,10 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 59 | 44 | 0 | 27 |
-| midfunc | 422 | 266 | 0 | 120 | 36 |
-| emitter_api | 294 | 62 | 0 | 105 | 127 |
-| raw_boundary | 83 | 29 | 0 | 19 | 35 |
+| generator | 130 | 60 | 44 | 0 | 26 |
+| midfunc | 422 | 267 | 0 | 119 | 36 |
+| emitter_api | 294 | 64 | 0 | 103 | 127 |
+| raw_boundary | 83 | 30 | 0 | 18 | 35 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 72 | `FScc` | generator:`i_FScc` |
 | 72 | `JMP` | generator:`i_JMP` |
 | 72 | `JSR` | generator:`i_JSR` |
 | 72 | `LEA` | generator:`i_LEA` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 72 | `PLPAR` | generator:`i_PLPAR` |
 | 72 | `PLPAW` | generator:`i_PLPAW` |
 | 72 | `PTESTR` | generator:`i_PTESTR` |
+| 72 | `PTESTW` | generator:`i_PTESTW` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`FScc` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_FScc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`JMP` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_JMP`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 
