@@ -561,6 +561,10 @@ const fsccMatrixSource = await Bun.file(new URL(
   "./fscc-native-matrix.ts",
   import.meta.url,
 )).text();
+const controlAddressMatrixSource = await Bun.file(new URL(
+  "./control-address-native-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSourceMatrix = await Bun.file(new URL(
   "./fpp-fmove-source-matrix.ts",
   import.meta.url,
@@ -3378,6 +3382,119 @@ for (const name of addaMemoryVectors) {
 }
 for (const name of ["adda_core_w_index_source_special_native", "adda_core_w_absl_source_special_native"])
   requireText(harnessSource, `SPECIAL_MEMORY_TESTS[${name}]=1`, `ADDA special-memory route ${name}`);
+
+/* NOP, RTD, LINK/UNLK, RTR, JSR/JMP, and LEA/PEA share the configured
+ * control/address lifecycle. Pin the three repaired aliases, dynamic block
+ * edges, exact generated providers, and the fail-closed strict-native matrix
+ * without promoting their shared allocator, memory, or emitter primitives. */
+const linkGenerator = functionBody(gencompSource, "     case i_LINK:", "     case i_UNLK:", "LINK generator");
+for (const contract of [
+  'comprintf("\\tsub_l_ri(SP_REG,4);\\n"',
+  '"\\tint frame = scratchie++;\\n"',
+  '"\\tmov_l_rr(frame,src);\\n"',
+  '"\\twritelong_clobber(SP_REG,frame,scratchie);\\n"',
+  '"\\tmov_l_rr(src,SP_REG);\\n");',
+  'comprintf("\\tadd_l(SP_REG,offs);\\n");',
+  'genastore ("src", curi->smode, "srcreg", sz_long, "src");',
+]) requireText(linkGenerator, contract, "LINK alias lifecycle");
+requireBefore(linkGenerator, "sub_l_ri(SP_REG,4)", "mov_l_rr(frame,src)", "LINK predecrement before A7 snapshot");
+requireBefore(linkGenerator, "mov_l_rr(frame,src)", "writelong_clobber(SP_REG,frame", "LINK snapshot before frame store");
+requireBefore(linkGenerator, "writelong_clobber(SP_REG,frame", "mov_l_rr(src,SP_REG)", "LINK store before frame-pointer result");
+if (linkGenerator.includes("writelong_clobber(SP_REG,src")) fail("LINK reintroduced aliased SP address/data store");
+
+const unlkGenerator = functionBody(gencompSource, "     case i_UNLK:", "\t case i_RTS:", "UNLK generator");
+for (const contract of [
+  'comprintf("\\tint restored = scratchie++;\\n"',
+  '"\\tmov_l_rr(SP_REG,src);\\n"',
+  '"\\treadlong(SP_REG,restored,scratchie);\\n"',
+  '"\\tadd_l_ri(SP_REG,4);\\n");',
+  'genastore ("restored", curi->smode, "srcreg", curi->size, "src");',
+]) requireText(unlkGenerator, contract, "UNLK alias lifecycle");
+requireBefore(unlkGenerator, "readlong(SP_REG,restored", "add_l_ri(SP_REG,4)", "UNLK pop before postincrement");
+requireBefore(unlkGenerator, "add_l_ri(SP_REG,4)", 'genastore ("restored"', "UNLK postincrement before aliased An write");
+if (unlkGenerator.includes("readlong(SP_REG,src")) fail("UNLK reintroduced popped-value/SP alias");
+
+const jsrGenerator = functionBody(gencompSource, "     case i_JSR:", "     case i_JMP:", "JSR generator");
+for (const contract of [
+  "isjump;",
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tpreserve_flags_before_nzcv_clobber();\\n");',
+  'comprintf("\\tint target=scratchie++;\\n"',
+  '"\\tmov_l_rr(target,srca);\\n"',
+  '"\\tint target_lock=jit_value_lock(target);\\n");',
+  '"\\tsub_l_ri(SP_REG,4);\\n"',
+  '"\\twritelong_clobber(SP_REG,ret,scratchie);\\n");',
+  'comprintf("\\tmov_l_mr((uintptr)&regs.pc,target);\\n"',
+  '"\\tget_n_addr_jmp(target,PC_P,scratchie);\\n"',
+  '"\\tmov_l_mr((uintptr)&regs.pc_oldp,PC_P);\\n"',
+  '"\\tjit_value_unlock(target_lock);\\n"',
+]) requireText(jsrGenerator, contract, "JSR target/stack lifecycle");
+requireBefore(jsrGenerator, "mov_l_rr(target,srca)", "sub_l_ri(SP_REG,4)", "JSR target snapshot before return push");
+requireBefore(jsrGenerator, "jit_value_lock(target)", "writelong_clobber(SP_REG,ret", "JSR target lock before store allocation");
+requireBefore(jsrGenerator, "mov_l_mr((uintptr)&regs.pc_oldp,PC_P)", "jit_value_unlock(target_lock)", "JSR target unlock after PC publication");
+for (const forbidden of ["regs.pc,srca", "get_n_addr_jmp(srca"])
+  if (jsrGenerator.includes(forbidden)) fail(`JSR reintroduced mutable source target through ${forbidden}`);
+
+const jmpGenerator = functionBody(gencompSource, "     case i_JMP:", "     case i_BSR:", "JMP generator");
+for (const contract of [
+  "isjump;", 'comprintf("\\tpreserve_flags_before_nzcv_clobber();\\n");',
+  'comprintf("\\tmov_l_mr((uintptr)&regs.pc,srca);\\n"',
+  '"\\tget_n_addr_jmp(srca,PC_P,scratchie);\\n"',
+  '"\\tmov_l_mr((uintptr)&regs.pc_oldp,PC_P);\\n"',
+]) requireText(jmpGenerator, contract, "JMP dynamic edge lifecycle");
+const rtdGenerator = functionBody(gencompSource, "     case i_RTD:", "     case i_LINK:", "RTD generator");
+for (const contract of [
+  "isjump;", 'comprintf("\\tadd_l_ri(offs,4);\\n");',
+  '"\\treadlong(SP_REG,newad,scratchie);\\n"',
+  '"\\tmov_l_mr((uintptr)&regs.pc,newad);\\n"',
+  '"\\tadd_l(SP_REG,offs);\\n");',
+]) requireText(rtdGenerator, contract, "RTD return lifecycle");
+const rtrGenerator = functionBody(gencompSource, "     case i_RTR:", "     case i_JSR:", "RTR generator");
+for (const contract of [
+  "isjump;", "readword(SP_REG, ccr_scratch, scratchie);", "lea_l_brr(SP_REG, SP_REG, 2);",
+  "readlong(SP_REG, pc_scratch, scratchie);", "lea_l_brr(SP_REG, SP_REG, 4);",
+  "jff_MV2SCCR(ccr_scratch);", "mov_l_mr((uintptr)&regs.pc, pc_scratch);",
+]) requireText(rtrGenerator, contract, "RTR CCR/PC lifecycle");
+const leaGenerator = functionBody(gencompSource, "     case i_LEA:", "     case i_PEA:", "LEA generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);',
+  'genastore ("srca", curi->dmode, "dstreg", curi->size, "dst");',
+]) requireText(leaGenerator, contract, "LEA address-only lifecycle");
+const peaGenerator = functionBody(gencompSource, "     case i_PEA:", "     case i_DBcc:", "PEA generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);',
+  'genamode (Apdi, "7", sz_long, "dst", GENA_GETV_FETCH_ALIGN, GENA_MOVEM_DO_INC);',
+  'genastore ("srca", Apdi, "7", sz_long, "dst");',
+]) requireText(peaGenerator, contract, "PEA stack/address lifecycle");
+
+for (const [family, total, ff, nf] of [
+  ["NOP", 2, 1, 1], ["RTD", 2, 1, 1], ["LINK", 4, 2, 2], ["UNLK", 2, 1, 1], ["RTR", 2, 1, 1],
+  ["JSR", 14, 7, 7], ["JMP", 14, 7, 7], ["LEA", 14, 7, 7], ["PEA", 14, 7, 7],
+] as const) {
+  const bodies = matchingFunctionBodies(generatedSource, new RegExp(`^void REGPARAM2 op_[0-9a-f]+_0_comp_(?:ff|nf)[^\\n]*\\/\\* ${family} \\*\\/`, "gm"), `generated ${family} handlers`);
+  const flagLive = bodies.filter((body) => body.includes("_comp_ff")).length;
+  const noFlags = bodies.filter((body) => body.includes("_comp_nf")).length;
+  if (bodies.length !== total || flagLive !== ff || noFlags !== nf)
+    fail(`generated ${family} provider census=${bodies.length} split=${flagLive}/${noFlags}, expected ${total} ${ff}/${nf}`);
+}
+const controlAddressCases = [...controlAddressMatrixSource.matchAll(/\{ name: "([a-z0-9_]+)"/g)].map((match) => match[1]);
+const expectedControlAddressCases = [
+  "nop_preserve", "lea_aind_a5", "lea_pc_index_a5", "pea_a7_snapshot",
+  "link_w_a7_snapshot", "link_l_a7_snapshot", "unlk_a7_alias", "unlk_a5",
+  "rtd_positive", "rtd_negative", "rtr_ccr_pc", "jsr_a7_target_snapshot",
+  "jsr_d16_a7", "jmp_a7", "jmp_pc_index",
+];
+if (controlAddressCases.length !== expectedControlAddressCases.length ||
+    controlAddressCases.some((name, index) => name !== expectedControlAddressCases[index]))
+  fail(`control/address matrix inventory=${controlAddressCases.join(",")}`);
+for (const contract of [
+  'B2_TEST_TWO_PASS: "1"', 'B2_TEST_SECOND_PC: "0x1000"', 'B2_TEST_REPLAY_COUNT: "2"',
+  'B2_TEST_FORCE_L2_RAM: "1"', 'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC: "0x1000"',
+  'jit.output.includes("NATEXEC pc=00001000")', 'jit.output.includes("JIT_STRICT_SUMMARY ")',
+  "interp.dump === jit.dump", "CONTROL_ADDRESS_NATIVE_MATRIX pass=",
+]) requireText(controlAddressMatrixSource, contract, "control/address strict-native matrix");
+console.log("METRIC structural_control_address_generators=9");
+console.log("METRIC structural_control_address_exact_native_vectors=15");
 
 /* Bcc is a flags-consuming, flags-preserving dynamic block edge. Every
  * generated target is compile-time pointer arithmetic: byte/word explicit sign

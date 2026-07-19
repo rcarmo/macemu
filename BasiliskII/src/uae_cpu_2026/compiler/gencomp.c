@@ -2238,8 +2238,13 @@ gen_opcode (unsigned int opcode)
 #endif
 	genamode (curi->smode, "srcreg", sz_long, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	genamode (curi->dmode, "dstreg", curi->size, "offs", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* LINK A7 aliases the predecremented stack address and pushed value.  Copy
+	 * the value only after SP changes, and never pass writelong_clobber the same
+	 * virtual register as both its address and data operand. */
 	comprintf("\tsub_l_ri(SP_REG,4);\n"
-		  "\twritelong_clobber(SP_REG,src,scratchie);\n"
+		  "\tint frame = scratchie++;\n"
+		  "\tmov_l_rr(frame,src);\n"
+		  "\twritelong_clobber(SP_REG,frame,scratchie);\n"
 		  "\tmov_l_rr(src,SP_REG);\n");
 	if (curi->size==sz_word)
 	    comprintf("\tsign_extend_16_rr(offs,offs);\n");
@@ -2252,10 +2257,13 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
-	comprintf("\tmov_l_rr(SP_REG,src);\n"
-		  "\treadlong(SP_REG,src,scratchie);\n"
+	/* UNLK A7 performs the postincrement before the final An write, so the
+	 * popped longword wins the architectural alias.  Keep it out of SP_REG. */
+	comprintf("\tint restored = scratchie++;\n"
+		  "\tmov_l_rr(SP_REG,src);\n"
+		  "\treadlong(SP_REG,restored,scratchie);\n"
 		  "\tadd_l_ri(SP_REG,4);\n");
-	genastore ("src", curi->smode, "srcreg", curi->size, "src");
+	genastore ("restored", curi->smode, "srcreg", curi->size, "src");
 	break;
 
 	 case i_RTS:
@@ -2319,14 +2327,19 @@ gen_opcode (unsigned int opcode)
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_NO_FETCH, GENA_MOVEM_DO_INC);
 	comprintf("\tpreserve_flags_before_nzcv_clobber();\n");
 	start_brace();
+	/* JSR (A7) must snapshot its target before pushing the return address. */
+	comprintf("\tint target=scratchie++;\n"
+		  "\tmov_l_rr(target,srca);\n"
+		  "\tint target_lock=jit_value_lock(target);\n");
 	comprintf("\tuae_u32 retadd=start_pc+((char *)comp_pc_p-(char *)start_pc_p)+m68k_pc_offset;\n");
 	comprintf("\tint ret=scratchie++;\n"
 		  "\tmov_l_ri(ret,retadd);\n"
 		  "\tsub_l_ri(SP_REG,4);\n"
 		  "\twritelong_clobber(SP_REG,ret,scratchie);\n");
-	comprintf("\tmov_l_mr((uintptr)&regs.pc,srca);\n"
-		  "\tget_n_addr_jmp(srca,PC_P,scratchie);\n"
+	comprintf("\tmov_l_mr((uintptr)&regs.pc,target);\n"
+		  "\tget_n_addr_jmp(target,PC_P,scratchie);\n"
 		  "\tmov_l_mr((uintptr)&regs.pc_oldp,PC_P);\n"
+		  "\tjit_value_unlock(target_lock);\n"
 		  "\tm68k_pc_offset=0;\n");
 	gen_update_next_handler();
 	break;

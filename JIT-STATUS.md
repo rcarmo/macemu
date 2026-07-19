@@ -215,6 +215,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit and repair the configured AArch64 control/address generator lifecycle**
+  (2026-07-19): closes `NOP`, `RTD`, `LINK`, `UNLK`, `RTR`, `JSR`, `JMP`,
+  `LEA`, and `PEA` through a **15/15 exact-native** strict replay matrix. Three
+  reproduced alias defects are repaired: `LINK A7` now separates its stack
+  address and pushed frame value, `UNLK A7` lets the popped longword win after
+  postincrement, and `JSR (A7)` snapshots and locks its target before the return
+  push. Both generated flag tables and every legal control EA are pinned; shared
+  memory/allocator/branch APIs and serviced `RTS`/`BSR` remain independent. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md`.
+
 - **Audit and repair the configured AArch64 `i_FScc` lifecycle** (2026-07-18):
   reproduced two native fidelity defects: FScc published temporary `FCMP` NZCV
   as integer CCR, and its inherited x86 CMOV table inverted AArch64 ordered
