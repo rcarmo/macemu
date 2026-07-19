@@ -155,6 +155,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:arm_ADD_l(?:_ri(?:_hostptr)?)?|arm_ADD_ptr_ri|disp_ea20_target_.*|lea_l_.*|sign_extend_16_rr)$/, "AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md"],
   [/^dont_care_fflags$/, "AARCH64_JIT_AUDIT_DONT_CARE_FFLAGS.md"],
   [/^f_forget_about$/, "AARCH64_JIT_AUDIT_F_FORGET_ABOUT.md"],
+  [/^fflags_into_flags$/, "AARCH64_JIT_AUDIT_FFLAGS_INTO_FLAGS.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],
   [/^(?:live_flags|dont_care_flags|preserve_flags_before_nzcv_clobber|discard_flags_in_nzcv|save_and_discard_flags_in_nzcv|make_flags_live)$/, "AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md"],
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],
@@ -363,6 +364,28 @@ if (configuredFForgetCalls.length !== 1 || configuredFForgetCalls[0] !== "9")
   throw new Error(`configured f_forget_about roots=${configuredFForgetCalls.join("|")}, expected sole FS1`);
 if (countToken(`${configuredGenerated}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`, "f_forget_about") !== 0)
   throw new Error("f_forget_about gained a configured root outside per-opcode support cleanup");
+
+/* `fflags_into_flags` has exactly two configured compiler roots: FScc and
+   FBcc. Its raw compare boundary remains a separate closure row. */
+const configuredFflagsIntoFlagsCalls = countToken(configuredFpp, "fflags_into_flags");
+if (configuredFflagsIntoFlagsCalls !== 2)
+  throw new Error(`configured fflags_into_flags roots=${configuredFflagsIntoFlagsCalls}, expected FScc and FBcc`);
+if (countToken(`${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFppCompat}`, "fflags_into_flags") !== 0)
+  throw new Error("fflags_into_flags gained a configured root outside the FPU compiler");
+for (const [startMarker, endMarker, consumer] of [
+  ["void comp_fscc_opp", "void comp_ftrapcc_opp", "fp_fscc_ri"],
+  ["void comp_fbcc_opp", "void comp_fsave_opp", "register_branch"],
+] as const) {
+  const start = configuredFpp.indexOf(startMarker);
+  const end = configuredFpp.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end < 0) throw new Error(`configured fflags_into_flags ${startMarker} boundary disappeared`);
+  const body = configuredFpp.slice(start, end);
+  const preserve = body.indexOf("preserve_flags_before_nzcv_clobber");
+  const materialise = body.indexOf("fflags_into_flags");
+  const consume = body.indexOf(consumer, materialise);
+  if (countToken(body, "fflags_into_flags") !== 1 || preserve < 0 || materialise <= preserve || consume <= materialise)
+    throw new Error(`configured fflags_into_flags ${startMarker} ordering changed`);
+}
 
 const configuredDontCareFflagsCalls = countToken(configuredFpp, "dont_care_fflags");
 if (configuredDontCareFflagsCalls !== 32)

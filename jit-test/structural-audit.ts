@@ -582,6 +582,10 @@ const fScratchLifecycleMatrixSource = await Bun.file(new URL(
   "./f-scratch-lifecycle-native-matrix.ts",
   import.meta.url,
 )).text();
+const fflagsIntoFlagsMatrixSource = await Bun.file(new URL(
+  "./fflags-into-flags-native-matrix.ts",
+  import.meta.url,
+)).text();
 const integerTailMatrixSource = await Bun.file(new URL(
   "./integer-tail-native-matrix.ts",
   import.meta.url,
@@ -7656,6 +7660,74 @@ for (const contract of [
 console.log("METRIC structural_f_forget_about_configured_roots=1");
 console.log("METRIC structural_f_forget_about_exact_native_vectors=6");
 console.log("METRIC structural_f_forget_about_target_fs1=1");
+
+/* `fflags_into_flags` composes lazy FP_RESULT materialisation, an independently
+ * audited FCMP_d0 primitive, and the temporary host-NZCV state consumed by
+ * FScc/FBcc. The raw wrapper remains a separate closure row. */
+const fflagsMidStart = midfuncSource.indexOf("MIDFUNC(1,fflags_into_flags,())");
+const fflagsMidEnd = midfuncSource.indexOf("MENDFUNC(1,fflags_into_flags,())", fflagsMidStart);
+if (fflagsMidStart < 0 || fflagsMidEnd < 0) fail("missing fflags_into_flags MIDFUNC");
+const fflagsMidBody = midfuncSource.slice(fflagsMidStart, fflagsMidEnd);
+for (const contract of ["clobber_flags();", "fflags_into_flags_internal();"])
+  requireText(fflagsMidBody, contract, "fflags_into_flags MIDFUNC composition");
+requireBefore(fflagsMidBody, "clobber_flags();", "fflags_into_flags_internal();", "fflags_into_flags MIDFUNC composition");
+const fflagsInternalBody = functionBody(
+  allocatorSource, "static void fflags_into_flags_internal(void)", "/********************************************************************\n * Support functions, internal",
+  "fflags_into_flags allocator composition",
+);
+for (const contract of [
+  "int r = f_readreg(FP_RESULT);", "raw_fflags_into_flags(r);", "f_unlock(r);", "live_flags();",
+]) requireText(fflagsInternalBody, contract, "fflags_into_flags allocator composition");
+requireBefore(fflagsInternalBody, "int r = f_readreg(FP_RESULT);", "raw_fflags_into_flags(r);", "fflags_into_flags read-before-compare");
+requireBefore(fflagsInternalBody, "raw_fflags_into_flags(r);", "f_unlock(r);", "fflags_into_flags compare-before-release");
+requireBefore(fflagsInternalBody, "f_unlock(r);", "live_flags();", "fflags_into_flags release-before-state-publication");
+const fReadregBody = functionBody(
+  allocatorSource, "static inline int f_readreg(int r)", "static inline void f_mark_runtime_dirty(int r)",
+  "floating read-only allocator acquisition",
+);
+for (const contract of ["if (f_isinreg(r))", "answer = live.fate[r].realreg;", "answer = f_alloc_reg(r, 0);", "return answer;"])
+  requireText(fReadregBody, contract, "floating read-only allocator acquisition");
+for (const forbidden of ["f_mark_runtime_dirty", "status = DIRTY", "f_writereg", "f_rmw"])
+  if (fReadregBody.includes(forbidden)) fail(`floating read-only acquisition gained ${forbidden}`);
+const fUnlockBody = functionBody(
+  allocatorSource, "static void f_unlock(int r)", "static inline int f_readreg(int r)",
+  "fixed-home floating unlock",
+);
+if (!/^static void f_unlock\(int r\)\s*\{\s*\}$/s.test(fUnlockBody.trim()))
+  fail("fixed-home floating unlock is no longer an intentional no-op");
+const rawFflagsStart = codegenSource.indexOf("STATIC_INLINE void raw_fflags_into_flags(int r)");
+const rawFflagsEnd = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri", rawFflagsStart);
+if (rawFflagsStart < 0 || rawFflagsEnd < 0) fail("missing raw_fflags_into_flags boundary");
+const rawFflagsBody = codegenSource.slice(rawFflagsStart, rawFflagsEnd);
+if ((rawFflagsBody.match(/\bFCMP_d0\(/g) || []).length !== 1)
+  fail("raw_fflags_into_flags no longer emits exactly one FCMP_d0");
+const fflagsSourceCalls = (fppCompilerSource.match(/^\s*fflags_into_flags\(\);/gm) || []).length;
+if (fflagsSourceCalls !== 2) fail(`fflags_into_flags source-call census=${fflagsSourceCalls}, expected=2`);
+for (const [body, consumer, label] of [
+  [liveFsccBody, "fp_fscc_ri(reg, native_fp_cc_base + (extra & 0x0f));", "FScc"],
+  [fbccCompilerBody, "register_branch(v1, v2, 16 + cc);", "FBcc"],
+] as const) {
+  requireBefore(body, "preserve_flags_before_nzcv_clobber();", "fflags_into_flags();", `${label} CCR preservation`);
+  requireBefore(body, "fflags_into_flags();", consumer, `${label} predicate consumption`);
+}
+const fflagsCases = [...fflagsIntoFlagsMatrixSource.matchAll(/name: "([a-z0-9_]+)"/g)].map((match) => match[1]);
+const expectedFflagsCases = [
+  "fscc_positive_ogt_d0", "fscc_zero_eq_d7", "fscc_negative_olt_d0", "fscc_nan_ordered_d7_false",
+  "fbcc_ftst_positive_ogt_word", "fbcc_ftst_nan_un_long", "fbcc_fcmp_less_olt_word", "fbcc_fcmp_equal_eq_long",
+];
+if (fflagsCases.length !== expectedFflagsCases.length ||
+    fflagsCases.some((name, index) => name !== expectedFflagsCases[index]))
+  fail(`fflags_into_flags exact-native matrix inventory=${fflagsCases.join(",")}`);
+for (const contract of [
+  'B2_TEST_FORCE_L2_RAM: "1"', 'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC: anchor',
+  'B2_TEST_TWO_PASS: "1"', 'B2_TEST_REPLAY_COUNT: "2"', 'output.includes(`NATEXEC pc=${item.anchor.toString(16).padStart(8, "0")}`)',
+  'output.includes("JIT_STRICT_SUMMARY ")', 'sr === "271f"', 'fpsr === item.fpsr',
+  "FFLAGS_INTO_FLAGS_NATIVE_MATRIX pass=", "cow_clone", "cow_release",
+]) requireText(fflagsIntoFlagsMatrixSource, contract, "fflags_into_flags strict-native matrix");
+console.log("METRIC structural_fflags_into_flags_configured_roots=2");
+console.log("METRIC structural_fflags_into_flags_exact_native_vectors=8");
+console.log("METRIC structural_fflags_into_flags_fp_relations=4");
+console.log("METRIC structural_fflags_into_flags_consumers=2");
 
 for (const contract of [
   "arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p)",
