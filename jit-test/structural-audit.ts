@@ -570,6 +570,10 @@ const controlAddressMatrixSource = await Bun.file(new URL(
   "./control-address-native-matrix.ts",
   import.meta.url,
 )).text();
+const armAddLongMatrixSource = await Bun.file(new URL(
+  "./arm-add-l-native-matrix.ts",
+  import.meta.url,
+)).text();
 const integerTailMatrixSource = await Bun.file(new URL(
   "./integer-tail-native-matrix.ts",
   import.meta.url,
@@ -7491,6 +7495,31 @@ requireText(
   "constant PC_P plus signed guest displacement contract",
 );
 requireText(registerAddBody, "ADD_xxwEX(d, d, s", "runtime PC_P plus signed guest displacement contract");
+requireText(registerAddBody, "ADD_www(d, d, s);", "runtime guest modulo-32 register addition");
+const directArmAddLongCalls = [...allocatorSource.matchAll(/\barm_ADD_l\(([^\n;]+)\);/g)].map((match) => match[1]);
+if (directArmAddLongCalls.length !== 1 || directArmAddLongCalls[0] !== "target, base")
+  fail(`arm_ADD_l direct configured callers changed: ${directArmAddLongCalls.join(" | ")}`);
+requireText(compatSource, "if (d == PC_P) { arm_ADD_l(d, s); return; }", "arm_ADD_l PC_P compatibility root");
+const generatedArmAddLongPcpCalls = generatedSource.split("add_l(PC_P,src);").length - 1;
+if (generatedArmAddLongPcpCalls !== 6)
+  fail(`arm_ADD_l generated PC_P provider count=${generatedArmAddLongPcpCalls}, expected 6`);
+const armAddLongCases = [...armAddLongMatrixSource.matchAll(/C\("([a-z0-9_]+)"/g)].map((match) => match[1]);
+const expectedArmAddLongCases = [
+  "bsr_b_const_pcp", "bsr_w_const_pcp", "bsr_l_const_pcp",
+  "indexed_long_dynamic_guest", "indexed_word_dynamic_guest",
+  "indexed_wrap_dynamic_guest", "indexed_base_target_pressure",
+];
+if (armAddLongCases.length !== expectedArmAddLongCases.length ||
+    armAddLongCases.some((name, index) => name !== expectedArmAddLongCases[index]))
+  fail(`arm_ADD_l exact-native matrix inventory=${armAddLongCases.join(",")}`);
+for (const contract of [
+  'B2_TEST_FORCE_L2_RAM:"1"', 'B2_JIT_STRICT_FULL:"1"', "B2_NATIVE_ASSERT_PC:c.pc",
+  "B2_TEST_REPLAY_BYTES", 'j.out.includes("JIT_STRICT_SUMMARY ")',
+  "i.dump===j.dump", "REGPRESSURE_PIN_SKIP", "ARM_ADD_L_NATIVE_MATRIX pass=",
+]) requireText(armAddLongMatrixSource, contract, "arm_ADD_l strict-native matrix");
+console.log("METRIC structural_arm_add_l_configured_roots=2");
+console.log("METRIC structural_arm_add_l_generated_pcp_providers=6");
+console.log("METRIC structural_arm_add_l_exact_native_vectors=7");
 for (const contract of [
   "arm_ADD_l_ri_hostptr(src,(uintptr)comp_pc_p)",
   "arm_ADD_l_ri_hostptr(offs,(uintptr)comp_pc_p)",

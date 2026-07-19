@@ -134,6 +134,56 @@ is part of the active risky gate.
   improper-shutdown dialog and Return revealed the populated desktop;
 - frozen-clock patch removed and production timer rebuilt before commit.
 
+## `arm_ADD_l` closure supplement — 2026-07-19
+
+A later source-derived inventory correctly kept the register-sourced wrapper
+`arm_ADD_l` unreviewed because the original report named only its three typed
+immediate callees. Configured-root reconciliation now closes that one row.
+
+The wrapper has exactly two configured ownership classes:
+
+- `calc_disp_ea_020()` calls `arm_ADD_l(target, base)` when a full-format
+  indexed guest EA includes its base. This must use modulo-2^32 W arithmetic;
+- the ARM64 compatibility `add_l()` wrapper calls `arm_ADD_l(PC_P, src)` only
+  for six generated BSR providers (byte/word/long in both compiler tables).
+  This must add a signed 32-bit displacement to the full host PC pointer.
+
+Ordinary generated `add_l(dst,src)` arithmetic does not reach `arm_ADD_l`; it
+routes through the independently audited `jff_/jnf_ADD_l` lifecycle. The source
+contract keeps constant `PC_P` through `arm_ADD_ptr_ri`, dynamic `PC_P` through
+`ADD Xd,Xd,Ws,SXTW`, constant guest destinations through `arm_ADD_l_ri`, and
+dynamic guest destinations through `ADD Wd,Wd,Ws`.
+
+`jit-test/arm-add-l-native-matrix.ts` adds seven strict exact-native cases:
+
+- all three constant BSR displacement providers;
+- dynamic full-index guest EA addition with long and sign-extended word index;
+- guest modulo-2^32 wrap; and
+- a forced full-index base/target allocation collision.
+
+Every case uses forced RAM L2, two-pass replay, exact `NATEXEC` attribution,
+strict no-fallback checks, complete interpreter/JIT dump equality, and CoW disk
+isolation. Result: `ARM_ADD_L_NATIVE_MATRIX pass=7 fail=0 total=7`.
+
+This supplement promotes only MIDFUNC `arm_ADD_l`. No generic ADD emitter,
+ordinary ADD lifecycle row, allocator helper, or neighbouring value MIDFUNC is
+promoted.
+
+Acceptance evidence:
+
+- focused matrix: **7/7 exact-native**;
+- structural audit and Bun/shell/source hygiene: pass;
+- deterministic inventory: **998 rows**, exactly `arm_ADD_l`
+  unreviewed→audited; MIDFUNC totals become 276 audited / 119 unreachable / 27
+  unreviewed; all other layers are unchanged;
+- closure CSV: `962856ecf2fcced7d54436feaa3dd0c979da17716fbfa3e2db21694929ae6dff`;
+- closure Markdown: `3d7e9667b73a1a2ec2774bfb099e4804f419b00d1fb140dcc810321cd5b50abd`;
+- independent bounded review: **APPROVE** after anchoring the Area 5 closure
+  regex so `arm_ADD_l_ri8` and `arm_ADD_ldiv8` remain unreachable;
+- unchanged executable baseline from immediately preceding canonical commit
+  `696a9e46`: active corpus **904/904**, allocator pressure **33/33**, strict
+  policy pass, clean AArch64 build, and stable generated sources.
+
 ## Contributor rule
 
 Do not infer whether a virtual-register value is a guest integer or a host
