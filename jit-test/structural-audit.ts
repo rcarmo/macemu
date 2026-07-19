@@ -702,6 +702,10 @@ const fmovSRiRetirementMatrix = await Bun.file(new URL(
   "./fmov-s-ri-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fmovSRrNativeMatrix = await Bun.file(new URL(
+  "./fmov-s-rr-native-matrix.sh",
+  import.meta.url,
+)).text();
 const fppDivideServiceMatrix = await Bun.file(new URL(
   "./fpp-divide-service-matrix.ts",
   import.meta.url,
@@ -1199,6 +1203,62 @@ for (const contract of [
 console.log("METRIC structural_fmov_s_ri_unreachable_midfuncs=1");
 console.log("METRIC structural_fmov_s_ri_dead_fmovecr_roots=4");
 console.log("METRIC structural_fmov_s_ri_live_shared_raw_boundaries=1");
+
+/* Close the live ordinary binary32 import unit. Keep the two configured roots,
+ * integer/FP ownership, exact bit-transfer/conversion order, scratch dirty-mask
+ * boundary, architectural publication, and opcode-boundary retirement pinned. */
+const fmovSRrCalls = (fppCompilerSource.match(/^\s*fmov_s_rr\(/gm) || []).length;
+if (fmovSRrCalls !== 2) fail(`fmov_s_rr configured call census=${fmovSRrCalls}, expected=2`);
+const getFpValueSingle = functionBody(
+  fppCompilerSource,
+  "STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)",
+  "STATIC_INLINE int put_fp_value",
+  "fmov_s_rr configured roots",
+);
+const directSingleCall = getFpValueSingle.indexOf("fmov_s_rr(FS1, reg);");
+const fetchedSingleCall = getFpValueSingle.indexOf("fmov_s_rr(FS1, S2);");
+const fetchedSingleCase = getFpValueSingle.lastIndexOf("case 1: /* single precision */", fetchedSingleCall);
+const fetchedSingleRead = getFpValueSingle.lastIndexOf("readlong(ad, S2, S3);", fetchedSingleCall);
+if ([directSingleCall, fetchedSingleCall, fetchedSingleCase, fetchedSingleRead].some((position) => position < 0) ||
+    !(fetchedSingleCase < fetchedSingleRead && fetchedSingleRead < fetchedSingleCall))
+  fail("fmov_s_rr configured direct/fetched roots or load ordering changed");
+const fmovSRrBody = midfuncSource.slice(fmovSRrStart, fmovSRrEnd);
+for (const contract of [
+  "s = readreg(s);", "d = f_writereg(d);", "raw_fmov_s_rr(d, s);",
+  "f_unlock(d);", "unlock2(s);",
+]) requireText(fmovSRrBody, contract, "fmov_s_rr ownership composition");
+requireBefore(fmovSRrBody, "s = readreg(s);", "d = f_writereg(d);", "fmov_s_rr source-before-destination ownership");
+requireBefore(fmovSRrBody, "d = f_writereg(d);", "raw_fmov_s_rr(d, s);", "fmov_s_rr allocation-before-conversion");
+requireBefore(fmovSRrBody, "raw_fmov_s_rr(d, s);", "f_unlock(d);", "fmov_s_rr conversion-before-destination-release");
+requireBefore(fmovSRrBody, "f_unlock(d);", "unlock2(s);", "fmov_s_rr destination-before-source release");
+const rawFmovSRrBody = codegenSource.slice(rawFmovSRrStart, rawFmovSRrEnd);
+requireBefore(rawFmovSRrBody, "FMOV_sw(SCRATCH_F64_1, s);", "FCVT_ds(d, SCRATCH_F64_1);", "fmov_s_rr bit-transfer-before-widening");
+for (const contract of [
+  "bestreg = r + 8", "bestreg = 6", "bestreg = 7",
+  "if (r >= 0 && r <= FP_RESULT)", "f_mark_runtime_dirty(r);",
+  "live.fate[r].status = DIRTY;", "static void freescratch(void)", "f_forget_about(FS1);",
+]) requireText(allocatorSource, contract, "fmov_s_rr fixed-home lifecycle");
+requireText(compemuHeaderSource, "#define FP_RESULT 8", "fmov_s_rr scratch dirty-mask boundary");
+requireText(compemuHeaderSource, "#define FS1 9", "fmov_s_rr scratch dirty-mask boundary");
+const ordinaryFmoveStart = fppCompilerSource.indexOf("case 0x00:\t\t\t\t\t\t/* FMOVE */");
+const ordinaryFmoveEnd = fppCompilerSource.indexOf("case 0x01:\t\t\t\t\t\t/* FINT */", ordinaryFmoveStart);
+if (ordinaryFmoveStart < 0 || ordinaryFmoveEnd < 0) fail("ordinary FMOVE publication block disappeared");
+const ordinaryFmove = fppCompilerSource.slice(ordinaryFmoveStart, ordinaryFmoveEnd);
+for (const contract of ["src = get_fp_value(opcode, extra);", "fmov_rr(reg, src);", "MAKE_FPSR(src);"])
+  requireText(ordinaryFmove, contract, "fmov_s_rr ordinary FMOVE publication");
+requireBefore(ordinaryFmove, "src = get_fp_value(opcode, extra);", "fmov_rr(reg, src);", "fmov_s_rr source-before-destination publication");
+requireBefore(ordinaryFmove, "fmov_rr(reg, src);", "MAKE_FPSR(src);", "fmov_s_rr destination-before-FP_RESULT publication");
+for (const contract of [
+  "GROUP=single bun jit-test/fpp-fmove-source-matrix.ts",
+  "GROUP=single bun jit-test/fpp-fmove-memory-basic-matrix.ts",
+  "single_d16_a0_positive", "single_indexed_a0_d1_long_scale2_negative_disp",
+  "single_absolute_short", "single_absolute_long", "single_pc_d16_forward",
+  "single_pc_d16_backward", "single_pc_indexed_brief_d1_long",
+  "FMOV_S_RR_NATIVE_MATRIX pass=%d fail=0 total=%d", 'test "$pass" -eq 18',
+]) requireText(fmovSRrNativeMatrix, contract, "fmov_s_rr native matrix wrapper");
+console.log("METRIC structural_fmov_s_rr_configured_live_roots=2");
+console.log("METRIC structural_fmov_s_rr_exact_native_vectors=18");
+console.log("METRIC structural_fmov_s_rr_audited_rows=2");
 
 for (const contract of [
   'name: `${format.name}_d16_a0_positive`',
