@@ -694,6 +694,10 @@ const fmovDRmRetirementMatrix = await Bun.file(new URL(
   "./fmov-d-rm-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fmovRmNativeMatrix = await Bun.file(new URL(
+  "./fmov-rm-native-matrix.sh",
+  import.meta.url,
+)).text();
 const fppDivideServiceMatrix = await Bun.file(new URL(
   "./fpp-divide-service-matrix.ts",
   import.meta.url,
@@ -1115,6 +1119,49 @@ for (const contract of [
 console.log("METRIC structural_fmov_d_rm_unreachable_midfuncs=1");
 console.log("METRIC structural_fmov_d_rm_live_sibling_midfuncs=1");
 console.log("METRIC structural_fmov_d_rm_live_raw_boundaries=1");
+
+/* Complete the live fmov_rm/raw_fmov_d_rm composition without inheriting dead
+ * FMOVECR spellings or broad allocator/emitter status. */
+const getFpStart = fppCompilerSource.indexOf("STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)");
+const getFpEnd = fppCompilerSource.indexOf("STATIC_INLINE void clear_fp_exception_status", getFpStart);
+if (getFpStart < 0 || getFpEnd < 0) fail("get_fp_value source boundary disappeared");
+const getFpBody = fppCompilerSource.slice(getFpStart, getFpEnd);
+const doubleCase = getFpBody.indexOf("case 5: /* double precision */");
+const firstRead = getFpBody.indexOf("readlong(ad, S2, S3);", doubleCase);
+const highStore = getFpBody.indexOf("mov_l_mr(((uintptr) temp_fp) + 4, S2);", firstRead);
+const advance = getFpBody.indexOf("add_l_ri(ad, 4);", highStore);
+const secondRead = getFpBody.indexOf("readlong(ad, S2, S3);", advance);
+const lowStore = getFpBody.indexOf("mov_l_mr((uintptr) (temp_fp), S2);", secondRead);
+const load = getFpBody.indexOf("fmov_rm(FS1, (uintptr) (temp_fp));", lowStore);
+if ([doubleCase, firstRead, highStore, advance, secondRead, lowStore, load].some((position) => position < 0) ||
+    !(doubleCase < firstRead && firstRead < highStore && highStore < advance && advance < secondRead && secondRead < lowStore && lowStore < load))
+  fail("fmov_rm double-memory assembly/load ordering changed");
+const fmovRmSourceCalls = (fppCompilerSource.match(/^\s*fmov_rm\(/gm) || []).length;
+if (fmovRmSourceCalls !== 5) fail(`fmov_rm source-call census=${fmovRmSourceCalls}, expected=5`);
+const fmovecrBoundary = fppCompilerSource.indexOf("if ((extra & 0xfc00) == 0x5c00)");
+if (load >= fmovecrBoundary) fail("live fmov_rm root moved behind FMOVECR service boundary");
+const fmovRmBody = midfuncSource.slice(fmovRmStart, fmovRmEnd);
+for (const contract of ["r = f_writereg(r);", "raw_fmov_d_rm(r, m);", "f_unlock(r);"])
+  requireText(fmovRmBody, contract, "live fmov_rm ownership composition");
+requireBefore(fmovRmBody, "r = f_writereg(r);", "raw_fmov_d_rm(r, m);", "fmov_rm allocation-before-load");
+requireBefore(fmovRmBody, "raw_fmov_d_rm(r, m);", "f_unlock(r);", "fmov_rm load-before-release");
+for (const contract of [
+  "bestreg = 7", "if (r >= 0 && r <= FP_RESULT)", "f_mark_runtime_dirty(r);",
+  "live.fate[r].status = DIRTY;", "f_forget_about(FS1);",
+]) requireText(allocatorSource, contract, "fmov_rm FS1 fixed-home lifecycle");
+requireText(compemuHeaderSource, "#define FP_RESULT 8", "fmov_rm scratch dirty-mask boundary");
+requireText(compemuHeaderSource, "#define FS1 9", "fmov_rm scratch dirty-mask boundary");
+for (const contract of [
+  "double_aind_a0", "double_postinc_a0", "double_predec_a0",
+  "double_d16_a0_positive", "double_indexed_a0_d1_long_scale2_negative_disp",
+  "double_absolute_short", "double_absolute_long", "double_pc_d16_forward",
+  "double_absolute_long_to_fp7_max_field", "double_pc_indexed_brief_d1_long",
+  "FMOV_RM_NATIVE_MATRIX pass=%d fail=0 total=%d", 'test "$pass" -eq 10',
+]) requireText(fmovRmNativeMatrix, contract, "fmov_rm native matrix wrapper");
+console.log("METRIC structural_fmov_rm_configured_live_roots=1");
+console.log("METRIC structural_fmov_rm_dead_fmovecr_spellings=4");
+console.log("METRIC structural_fmov_rm_exact_native_vectors=10");
+console.log("METRIC structural_fmov_rm_audited_rows=2");
 
 for (const contract of [
   'name: `${format.name}_d16_a0_positive`',

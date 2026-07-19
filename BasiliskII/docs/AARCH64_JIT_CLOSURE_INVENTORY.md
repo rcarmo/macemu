@@ -18,9 +18,9 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
-| midfunc | 422 | 279 | 0 | 123 | 20 |
+| midfunc | 422 | 280 | 0 | 123 | 19 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
-| raw_boundary | 83 | 30 | 0 | 21 | 32 |
+| raw_boundary | 83 | 31 | 0 | 21 | 31 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 68 | `fmov_rm` | midfunc:`fmov_rm` |
 | 68 | `fmov_s_ri` | midfunc:`fmov_s_ri` |
 | 68 | `fmov_s_rr` | midfunc:`fmov_s_rr` |
 | 68 | `fmov_to_b_rr` | midfunc:`fmov_to_b_rr` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 68 | `mov_l_rr` | midfunc:`mov_l_rr` |
 | 68 | `MV2SCCR` | midfunc:`jff_MV2SCCR` |
 | 68 | `sub_l_ri` | midfunc:`sub_l_ri` |
+| 60 | `_W` | emitter_api:`_W` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`fmov_rm` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`fmov_rm`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`fmov_s_ri` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`fmov_s_ri`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

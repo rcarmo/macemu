@@ -156,6 +156,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^dont_care_fflags$/, "AARCH64_JIT_AUDIT_DONT_CARE_FFLAGS.md"],
   [/^f_forget_about$/, "AARCH64_JIT_AUDIT_F_FORGET_ABOUT.md"],
   [/^fflags_into_flags$/, "AARCH64_JIT_AUDIT_FFLAGS_INTO_FLAGS.md"],
+  [/^fmov_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],
   [/^(?:live_flags|dont_care_flags|preserve_flags_before_nzcv_clobber|discard_flags_in_nzcv|save_and_discard_flags_in_nzcv|make_flags_live)$/, "AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md"],
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],
@@ -229,6 +230,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
+  [/^raw_fmov_d_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
   [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
   [/^raw_fp_fscc_ri$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
 ];
@@ -367,6 +369,16 @@ const configuredFmovecrFail = configuredFmovecrGate.indexOf("FAIL(1);");
 const configuredFmovecrReturn = configuredFmovecrGate.indexOf("return;", configuredFmovecrFail);
 if (configuredFmovecrFail < 0 || configuredFmovecrReturn < configuredFmovecrFail)
   throw new Error("configured FMOVECR no longer enters service before selector dispatch");
+const configuredFmovRmCalls = [...source.fpp.matchAll(/^\s*fmov_rm\s*\(/gm)].map((match) => match.index!);
+if (configuredFmovRmCalls.length !== 5)
+  throw new Error(`fmov_rm raw source-call census=${configuredFmovRmCalls.length}, expected one live plus four FMOVECR residue`);
+const liveDoubleFmovRm = source.fpp.indexOf("fmov_rm(FS1, (uintptr) (temp_fp));");
+if (liveDoubleFmovRm < 0 || liveDoubleFmovRm >= configuredFmovecrStart)
+  throw new Error("live fmov_rm double-memory root disappeared or moved behind FMOVECR service");
+const fmovRmBeforeService = configuredFmovRmCalls.filter((call) => call < configuredFmovecrStart);
+const fmovRmAfterDispatch = configuredFmovRmCalls.filter((call) => call > configuredFmovecrSwitch);
+if (fmovRmBeforeService.length !== 1 || fmovRmAfterDispatch.length !== 4)
+  throw new Error(`fmov_rm control-flow roots before/after FMOVECR=${fmovRmBeforeService.length}/${fmovRmAfterDispatch.length}, expected 1/4`);
 for (const [selector, callName] of [["case 0x0f:", "fmov_0"], ["case 0x32:", "fmov_1"]] as const) {
   const selectorAt = source.fpp.indexOf(selector, configuredFmovecrSwitch);
   const callAt = source.fpp.indexOf(`${callName}(`, selectorAt);
