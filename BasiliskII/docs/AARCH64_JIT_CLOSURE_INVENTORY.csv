@@ -354,13 +354,13 @@ generator,i_JMP,audited,JMP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,
 generator,i_JSR,audited,JSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2321,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
 generator,i_LEA,audited,LEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2466,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
 generator,i_LINK,audited,LINK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2234,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_LPSTOP,unreviewed,LPSTOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3853,native generator case; no accepted family-level closure report
+generator,i_LPSTOP,unreachable,LPSTOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3853,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
 generator,i_LSL,audited,LSL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3079,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 generator,i_LSLW,audited,LSLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3394,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 generator,i_LSR,audited,LSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2991,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 generator,i_LSRW,audited,LSRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3377,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_MMUOP,unreviewed,MMUOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3873,native generator case; no accepted family-level closure report
-generator,i_MMUOP030,unreviewed,MMUOP030,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3844,native generator case; no accepted family-level closure report
+generator,i_MMUOP,unreachable,MMUOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3873,historical ARAnyM generator label; no configured BasiliskII opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_MMUOP030,unreachable,MMUOP030,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3844,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
 generator,i_MOVE,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2034,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 generator,i_MOVE16,audited,MOVE16,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3835,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 generator,i_MOVE2C,serviced,MOVE2C,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3473,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
@@ -387,14 +387,14 @@ generator,i_OR,audited,OR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,15
 generator,i_ORSR,audited,ORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1550,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 generator,i_PACK,serviced,PACK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3696,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_PEA,audited,PEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2475,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_PFLUSH,unreviewed,PFLUSH,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3846,native generator case; no accepted family-level closure report
-generator,i_PFLUSHA,unreviewed,PFLUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3848,native generator case; no accepted family-level closure report
-generator,i_PFLUSHAN,unreviewed,PFLUSHAN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3847,native generator case; no accepted family-level closure report
-generator,i_PFLUSHN,unreviewed,PFLUSHN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3845,native generator case; no accepted family-level closure report
-generator,i_PLPAR,unreviewed,PLPAR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3849,native generator case; no accepted family-level closure report
-generator,i_PLPAW,unreviewed,PLPAW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3850,native generator case; no accepted family-level closure report
-generator,i_PTESTR,unreviewed,PTESTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3851,native generator case; no accepted family-level closure report
-generator,i_PTESTW,unreviewed,PTESTW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3852,native generator case; no accepted family-level closure report
+generator,i_PFLUSH,unreachable,PFLUSH,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3846,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PFLUSHA,unreachable,PFLUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3848,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PFLUSHAN,unreachable,PFLUSHAN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3847,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PFLUSHN,unreachable,PFLUSHN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3845,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PLPAR,unreachable,PLPAR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3849,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PLPAW,unreachable,PLPAW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3850,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PTESTR,unreachable,PTESTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3851,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PTESTW,unreachable,PTESTW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3852,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
 generator,i_RESET,serviced,RESET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2202,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_ROL,audited,ROL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3168,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
 generator,i_ROLW,audited,ROLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3411,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md

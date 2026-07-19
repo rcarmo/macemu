@@ -69,6 +69,11 @@ for (const layoutDependency of [
 }
 const harnessSource = await Bun.file(new URL("./run.sh", import.meta.url)).text();
 const activeRiskySource = await Bun.file(new URL("./active-risky-tests.txt", import.meta.url)).text();
+const closureInventorySource = await Bun.file(new URL("./closure-inventory.ts", import.meta.url)).text();
+const closureInventoryCsv = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv",
+  import.meta.url,
+)).text();
 const shiftSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp",
   import.meta.url,
@@ -3495,6 +3500,26 @@ for (const contract of [
 ]) requireText(controlAddressMatrixSource, contract, "control/address strict-native matrix");
 console.log("METRIC structural_control_address_generators=9");
 console.log("METRIC structural_control_address_exact_native_vectors=15");
+
+/* BasiliskII's configured Unix build has no opcode/provider for the retained
+ * UAE/ARAnyM MMU switch labels. Pin both the fail-closed classifier and its
+ * exact eleven-row output without treating absent FULLMMU code as audit debt. */
+const configuredUnreachableMmuGenerators = [
+  "i_MMUOP030", "i_PFLUSHN", "i_PFLUSH", "i_PFLUSHAN", "i_PFLUSHA",
+  "i_PLPAR", "i_PLPAW", "i_PTESTR", "i_PTESTW", "i_LPSTOP", "i_MMUOP",
+];
+for (const name of configuredUnreachableMmuGenerators) {
+  requireText(closureInventorySource, `["${name}",`, `configured-unreachable generator classifier ${name}`);
+  if (!new RegExp(`^generator,${name},unreachable,`, "m").test(closureInventoryCsv))
+    fail(`configured-unreachable generator row missing: ${name}`);
+}
+for (const contract of [
+  'load("BasiliskII/src/Unix/cpudefs.cpp")', 'load("BasiliskII/src/Unix/compstbl.cpp")',
+  "source.generated", "configuredUnreachableUaeOnly", "countToken(configuredGencomp, name)",
+  "configured-unreachable generator gained an opcode/provider",
+  "AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md",
+]) requireText(closureInventorySource, contract, "configured MMU reachability gate");
+console.log("METRIC structural_configured_unreachable_mmu_generators=11");
 
 /* Bcc is a flags-consuming, flags-preserving dynamic block edge. Every
  * generated target is compile-time pointer arithmetic: byte/word explicit sign

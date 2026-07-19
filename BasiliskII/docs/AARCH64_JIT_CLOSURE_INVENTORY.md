@@ -17,7 +17,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 69 | 44 | 0 | 17 |
+| generator | 130 | 69 | 44 | 11 | 6 |
 | midfunc | 422 | 267 | 0 | 119 | 36 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
 | raw_boundary | 83 | 30 | 0 | 18 | 35 |
@@ -42,26 +42,26 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 72 | `LPSTOP` | generator:`i_LPSTOP` |
-| 72 | `MMUOP` | generator:`i_MMUOP` |
-| 72 | `MMUOP030` | generator:`i_MMUOP030` |
 | 72 | `MULS` | generator:`i_MULS`, midfunc:`jnf_MULS` |
 | 72 | `MULU` | generator:`i_MULU`, midfunc:`jnf_MULU` |
 | 72 | `NOT` | generator:`i_NOT` |
-| 72 | `PFLUSH` | generator:`i_PFLUSH` |
-| 72 | `PFLUSHA` | generator:`i_PFLUSHA` |
-| 72 | `PFLUSHAN` | generator:`i_PFLUSHAN` |
-| 72 | `PFLUSHN` | generator:`i_PFLUSHN` |
-| 72 | `PLPAR` | generator:`i_PLPAR` |
-| 72 | `PLPAW` | generator:`i_PLPAW` |
-| 72 | `PTESTR` | generator:`i_PTESTR` |
-| 72 | `PTESTW` | generator:`i_PTESTW` |
 | 72 | `SUBA` | generator:`i_SUBA` |
 | 72 | `SWAP` | generator:`i_SWAP` |
 | 72 | `TST` | generator:`i_TST`, midfunc:`jff_TST_b`, midfunc:`jff_TST_l`, midfunc:`jff_TST_w` |
 | 68 | `arm_ADD` | midfunc:`arm_ADD_l` |
 | 68 | `dont_care_fflags` | midfunc:`dont_care_fflags` |
 | 68 | `f_forget_about` | midfunc:`f_forget_about` |
+| 68 | `fflags_into_flags` | midfunc:`fflags_into_flags` |
+| 68 | `ffunc_rr` | midfunc:`ffunc_rr` |
+| 68 | `fmov_d_ri_0` | midfunc:`fmov_d_ri_0` |
+| 68 | `fmov_d_ri_1` | midfunc:`fmov_d_ri_1` |
+| 68 | `fmov_d_rm` | midfunc:`fmov_d_rm` |
+| 68 | `fmov_rm` | midfunc:`fmov_rm` |
+| 68 | `fmov_s_ri` | midfunc:`fmov_s_ri` |
+| 68 | `fmov_s_rr` | midfunc:`fmov_s_rr` |
+| 68 | `fmov_to_b_rr` | midfunc:`fmov_to_b_rr` |
+| 68 | `fmov_to_d_rrr` | midfunc:`fmov_to_d_rrr` |
+| 68 | `fmov_to_l_rr` | midfunc:`fmov_to_l_rr` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`LPSTOP` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_LPSTOP`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`MULS` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_MULS`, midfunc:`jnf_MULS`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

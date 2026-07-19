@@ -215,6 +215,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire configured-unreachable MMU generator labels** (2026-07-19): the
+  BasiliskII Unix AArch64 build has no opcode definition, generated compiler
+  body, or registration slot for `MMUOP030`, `PFLUSH*`, `PLP*`, `PTEST*`,
+  `LPSTOP`, or historical ARAnyM `MMUOP`. Fail-closed configured-root checks
+  classify exactly eleven generator rows as unreachable. This does not
+  implement FULLMMU/MMU or promote any semantic/lower-layer contract; NeXT MMU
+  work remains with Previous. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md`.
+
 - **Audit and repair the configured AArch64 control/address generator lifecycle**
   (2026-07-19): closes `NOP`, `RTD`, `LINK`, `UNLK`, `RTR`, `JSR`, `JMP`,
   `LEA`, and `PEA` through a **15/15 exact-native** strict replay matrix. Three

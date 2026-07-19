@@ -157,6 +157,19 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],
 ];
 
+const configuredUnreachableGenerator = new Map([
+  ["i_MMUOP030", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PFLUSHN", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PFLUSH", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PFLUSHAN", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PFLUSHA", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PLPAR", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PLPAW", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PTESTR", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_PTESTW", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_LPSTOP", "inactive UAE-only generator label; no configured Unix opcode/provider"],
+  ["i_MMUOP", "historical ARAnyM generator label; no configured BasiliskII opcode/provider"],
+]);
 const serviceGenerator = new Set([
   "i_MVPRM", "i_MVPMR", "i_CHK2", "i_PACK", "i_UNPK",
   "i_BFTST", "i_BFEXTU", "i_BFCHG", "i_BFEXTS", "i_BFCLR", "i_BFFFO", "i_BFSET", "i_BFINS",
@@ -436,13 +449,30 @@ for (const name of serviceGenerator) {
   if (countToken(configuredSupport, evidenceToken) === 0)
     throw new Error(`semantic-service row has no configured post-registration/coverage-map evidence: ${name}`);
 }
+const configuredOpcodeSources = [
+  load("BasiliskII/src/Unix/cpudefs.cpp"),
+  load("BasiliskII/src/Unix/compstbl.cpp"),
+  source.generated,
+];
+const configuredUnreachableUaeOnly = new Set([...configuredUnreachableGenerator.keys()].filter((name) => name !== "i_MMUOP"));
+for (const [name] of configuredUnreachableGenerator) {
+  if (!uniqueGen.has(name)) throw new Error(`configured-unreachable generator label disappeared: ${name}`);
+  const mnemonic = name.slice(2);
+  if (configuredOpcodeSources.some((text) => countToken(text, mnemonic) !== 0))
+    throw new Error(`configured-unreachable generator gained an opcode/provider: ${name}`);
+  const configuredReferences = countToken(configuredGencomp, name);
+  if (configuredUnreachableUaeOnly.has(name) ? configuredReferences !== 0 : configuredReferences !== 1)
+    throw new Error(`configured generator preprocessing changed for ${name}: references=${configuredReferences}`);
+}
 for (const [name, found] of uniqueGen) {
   const audit = acceptedAudit(name);
   const serviced = serviceGenerator.has(name);
-  const status: Status = serviced ? "serviced" : audit ? "audited" : "unreviewed";
+  const unreachable = configuredUnreachableGenerator.get(name);
+  const status: Status = serviced ? "serviced" : audit ? "audited" : unreachable ? "unreachable" : "unreviewed";
   const evidence = serviced
     ? "post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md"
     : audit ? `BasiliskII/docs/${audit}`
+    : unreachable ? `${unreachable}; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md`
     : conditionalFpuServiceGenerator.has(name)
       ? "native when compfpu is enabled; semantic service when disabled; native FPU path has no accepted closure report"
       : "native generator case; no accepted family-level closure report";
