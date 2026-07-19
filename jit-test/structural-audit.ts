@@ -322,6 +322,10 @@ const compatSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
   import.meta.url,
 )).text();
+const fppArm64CompatSource = await Bun.file(new URL(
+  "../BasiliskII/src/uae_cpu_2026/compiler/compemu_fpp_arm64_compat.h",
+  import.meta.url,
+)).text();
 const compemuHeaderSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu.h",
   import.meta.url,
@@ -676,6 +680,10 @@ const fppNativeTranscendentalServiceMatrix = await Bun.file(new URL(
 )).text();
 const fppCoshAcosCosServiceMatrix = await Bun.file(new URL(
   "./fpp-cosh-acos-cos-service-matrix.ts",
+  import.meta.url,
+)).text();
+const ffuncRetirementMatrix = await Bun.file(new URL(
+  "./ffunc-retirement-matrix.sh",
   import.meta.url,
 )).text();
 const fppDivideServiceMatrix = await Bun.file(new URL(
@@ -2103,6 +2111,63 @@ console.log("METRIC structural_fpp_cosh_acos_cos_service_vectors=36");
 console.log("METRIC structural_fpp_cosh_acos_cos_strict_rejections=3");
 console.log("METRIC structural_fpp_cosh_acos_cos_extended_source=1");
 console.log("METRIC structural_fpp_cosh_acos_cos_direct_result=1");
+
+/* The legacy host-libm ffunc_rr chain is retained source but unreachable in
+ * configured AArch64 control flow. Every compatibility root services through
+ * MPFR before operand acquisition; pin both the positive barriers and the
+ * definition-only MIDFUNC/raw chain rather than relying on token absence. */
+const ffuncCompatibilityRoots = [
+  ["fsin_rr", "sin", "case 0x0e:\t\t\t\t\t\t/* FSIN */", "case 0x0f:\t\t\t\t\t\t/* FTAN */"],
+  ["fetox_rr", "exp", "case 0x10:\t\t\t\t\t\t/* FETOX */", "case 0x11:\t\t\t\t\t\t/* FTWOTOX */"],
+  ["flog2_rr", "log2", "case 0x16:\t\t\t\t\t\t/* FLOG2 */", "case 0x18:\t\t\t\t\t\t/* FABS */"],
+  ["fcos_rr", "cos", "case 0x1d:\t\t\t\t\t\t/* FCOS */", "case 0x1e:\t\t\t\t\t\t/* FGETEXP */"],
+] as const;
+for (const [macro, host, startMarker, endMarker] of ffuncCompatibilityRoots) {
+  requireText(fppArm64CompatSource, `#define ${macro}(d, s)`, `ffunc_rr compatibility root ${macro}`);
+  requireText(fppArm64CompatSource, `ffunc_rr(${host}, d, s)`, `ffunc_rr compatibility root ${macro}`);
+  const start = fppCompilerOperation.indexOf(startMarker);
+  const end = fppCompilerOperation.indexOf(endMarker, start + startMarker.length);
+  if (start < 0 || end < 0) fail(`ffunc_rr ${macro} selector boundary disappeared`);
+  const block = fppCompilerOperation.slice(start, end);
+  const guard = block.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+  const stop = block.indexOf("FAIL(1);", guard);
+  const ret = block.indexOf("return;", stop);
+  const acquire = block.indexOf("get_fp_value(opcode, extra)");
+  const retained = block.indexOf(`${macro}(`, acquire);
+  if (guard < 0 || stop < guard || ret < stop || acquire < ret || retained < acquire)
+    fail(`ffunc_rr ${macro} MPFR service no longer precedes operand acquisition and retained call`);
+}
+const ffuncMidStart = midfuncSource.indexOf("MIDFUNC(3,ffunc_rr,(double (*func)(double), FW d, FR s))");
+const ffuncMidEnd = midfuncSource.indexOf("MENDFUNC(3,ffunc_rr,(double (*func)(double), FW d, FR s))", ffuncMidStart);
+if (ffuncMidStart < 0 || ffuncMidEnd < 0) fail("missing retained ffunc_rr MIDFUNC");
+const ffuncMidBody = midfuncSource.slice(ffuncMidStart, ffuncMidEnd);
+for (const contract of ["prepare_for_call_1();", "prepare_for_call_2();", "raw_ffunc_rr(func, reald, s);"])
+  requireText(ffuncMidBody, contract, "retained unreachable ffunc_rr MIDFUNC");
+if ((midfuncSource.match(/\bffunc_rr\b/g) || []).length !== 2)
+  fail("ffunc_rr MIDFUNC token census is no longer definition/end-marker only");
+const ffuncRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,3,raw_ffunc_rr,(double (*func)(double), FW d, FR s))");
+const ffuncRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,3,raw_ffunc_rr,(double (*func)(double), FW d, FR s))", ffuncRawStart);
+if (ffuncRawStart < 0 || ffuncRawEnd < 0) fail("missing retained raw_ffunc_rr boundary");
+for (const contract of ["FMOV_dd(0, s);", "BLR_x(REG_WORK1);", "FMOV_dd(d, 0);"])
+  requireText(codegenSource.slice(ffuncRawStart, ffuncRawEnd), contract, "retained unreachable raw_ffunc_rr boundary");
+if ((codegenSource.match(/\braw_ffunc_rr\b/g) || []).length !== 2)
+  fail("raw_ffunc_rr token census is no longer definition/end-marker only");
+for (const contract of [
+  "fsin_direct_double_nearest", "fsin_fp7_strict",
+  "fetox_direct_double_nearest", "fetox_fp7_strict",
+  "flog2_direct_double_nearest", "flog2_fp7_strict",
+  "fcos_extended_source_double_nearest", "fcos_fp7_strict",
+  "FPP_NATIVE_TRANS_MATRIX service_pass=1 strict_pass=0 fail=0 total=1",
+  "FPP_NATIVE_TRANS_MATRIX service_pass=0 strict_pass=1 fail=0 total=1",
+  "FPP_COSH_ACOS_COS_MATRIX service_pass=1 strict_pass=0 fail=0 total=1",
+  "FPP_COSH_ACOS_COS_MATRIX service_pass=0 strict_pass=1 fail=0 total=1",
+  "FFUNC_RETIREMENT_FOCUSED service=%d strict=%d fail=0 total=%d",
+  'test "$service" -eq 4', 'test "$strict" -eq 4',
+]) requireText(ffuncRetirementMatrix, contract, "ffunc_rr retirement runtime matrix");
+console.log("METRIC structural_ffunc_rr_service_barriers=4");
+console.log("METRIC structural_ffunc_rr_unreachable_rows=2");
+console.log("METRIC structural_ffunc_rr_retained_libm_roots=4");
+
 const divideCompilerStart = fppCompilerOperation.indexOf("case 0x20:\t\t\t\t\t\t/* FDIV */");
 const divideCompilerEnd = fppCompilerOperation.indexOf("case 0x21:\t\t\t\t\t\t/* FMOD */", divideCompilerStart);
 if (divideCompilerStart < 0 || divideCompilerEnd < 0) fail("FPP divide compiler boundary is incomplete");
