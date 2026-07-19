@@ -122,6 +122,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^i_FPP$/, "AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md"],
   [/^(?:i_FScc|fp_fscc_ri)$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
+  [/^(?:i_(?:MULS|MULU|NOT|SUBA|SWAP|TST)|jnf_MUL[SU]|jff_TST_[bwl](?:_imm)?)$/, "AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md"],
   [/^i_FBcc$/, "AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md"],
   [/^i_EXT$/, "AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md"],
   [/^i_EXG$/, "AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md"],

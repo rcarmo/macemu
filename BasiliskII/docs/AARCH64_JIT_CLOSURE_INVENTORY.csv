@@ -293,136 +293,136 @@ emitter_api,UXTB_ww,unreviewed,UXTB_ww,60,1,BasiliskII/src/uae_cpu_2026/compiler
 emitter_api,UXTB_xx,unreviewed,UXTB_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,280,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UXTH_ww,unreviewed,UXTH_ww,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,281,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UXTH_xx,unreviewed,UXTH_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,282,reachable encoder API; requires opcode/width/branch-range contract classification
-generator,i_ABCD,audited,ABCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1742,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
-generator,i_ADD,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1689,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
-generator,i_ADDA,audited,ADDA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1706,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDA_LIFECYCLE.md
-generator,i_ADDX,audited,ADDX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1730,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
+generator,i_ABCD,audited,ABCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1747,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
+generator,i_ADD,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1694,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
+generator,i_ADDA,audited,ADDA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1711,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDA_LIFECYCLE.md
+generator,i_ADDX,audited,ADDX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1735,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 generator,i_AND,audited,AND,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1528,BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md
 generator,i_ANDSR,audited,ANDSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1593,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_ASL,audited,ASL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2886,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ASLW,audited,ASLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3360,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ASR,audited,ASR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2780,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ASRW,audited,ASRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3343,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_Bcc,audited,Bcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2389,BasiliskII/docs/AARCH64_JIT_AUDIT_BCC_LIFECYCLE.md
-generator,i_BCHG,audited,BCHG,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1875,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
-generator,i_BCLR,audited,BCLR,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1876,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
-generator,i_BFCHG,serviced,BFCHG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3685,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFCLR,serviced,BFCLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3687,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFEXTS,serviced,BFEXTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3686,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFEXTU,serviced,BFEXTU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3684,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFFFO,serviced,BFFFO,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3688,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFINS,serviced,BFINS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3690,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFSET,serviced,BFSET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3689,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BFTST,serviced,BFTST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3682,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BKPT,serviced,BKPT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3492,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BSET,audited,BSET,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1877,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
-generator,i_BSR,serviced,BSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2360,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_BTST,audited,BTST,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1878,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
-generator,i_CALLM,serviced,CALLM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3497,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CAS,serviced,CAS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3478,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CAS2,serviced,CAS2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3482,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CHK,audited,CHK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2738,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
-generator,i_CHK2,serviced,CHK2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2757,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CINVA,serviced,CINVA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3819,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CINVL,serviced,CINVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3816,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CINVP,serviced,CINVP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3818,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CLR,audited,CLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1839,BasiliskII/docs/AARCH64_JIT_AUDIT_CLR_LIFECYCLE.md
-generator,i_CMP,audited,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1960,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
-generator,i_CMPA,audited,CMPA,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1975,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
-generator,i_CMPM,audited,CMPM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1958,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
-generator,i_CPUSHA,serviced,CPUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3830,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CPUSHL,serviced,CPUSHL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3827,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_CPUSHP,serviced,CPUSHP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3829,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_DBcc,audited,DBcc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2492,BasiliskII/docs/AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md
-generator,i_DIVL,audited,DIVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3512,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_DIVS,audited,DIVS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2694,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_DIVU,audited,DIVU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2678,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_EMULOP,serviced,EMULOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3864,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_EMULOP_RETURN,serviced,EMULOP_RETURN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3860,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_ASL,audited,ASL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2898,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ASLW,audited,ASLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3372,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ASR,audited,ASR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2792,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ASRW,audited,ASRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3355,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_Bcc,audited,Bcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2401,BasiliskII/docs/AARCH64_JIT_AUDIT_BCC_LIFECYCLE.md
+generator,i_BCHG,audited,BCHG,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1887,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
+generator,i_BCLR,audited,BCLR,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1888,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
+generator,i_BFCHG,serviced,BFCHG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3697,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFCLR,serviced,BFCLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3699,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFEXTS,serviced,BFEXTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3698,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFEXTU,serviced,BFEXTU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3696,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFFFO,serviced,BFFFO,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3700,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFINS,serviced,BFINS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3702,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFSET,serviced,BFSET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3701,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BFTST,serviced,BFTST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3694,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BKPT,serviced,BKPT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3504,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BSET,audited,BSET,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1889,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
+generator,i_BSR,serviced,BSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2372,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_BTST,audited,BTST,90,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1890,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
+generator,i_CALLM,serviced,CALLM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3509,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CAS,serviced,CAS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3490,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CAS2,serviced,CAS2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3494,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CHK,audited,CHK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2750,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
+generator,i_CHK2,serviced,CHK2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2769,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CINVA,serviced,CINVA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3831,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CINVL,serviced,CINVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3828,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CINVP,serviced,CINVP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3830,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CLR,audited,CLR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1844,BasiliskII/docs/AARCH64_JIT_AUDIT_CLR_LIFECYCLE.md
+generator,i_CMP,audited,CMP,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1972,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
+generator,i_CMPA,audited,CMPA,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1987,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
+generator,i_CMPM,audited,CMPM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1970,BasiliskII/docs/AARCH64_JIT_AUDIT_COMPARE_LIFECYCLE.md
+generator,i_CPUSHA,serviced,CPUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3842,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CPUSHL,serviced,CPUSHL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3839,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_CPUSHP,serviced,CPUSHP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3841,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_DBcc,audited,DBcc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2504,BasiliskII/docs/AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md
+generator,i_DIVL,audited,DIVL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3524,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_DIVS,audited,DIVS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2706,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_DIVU,audited,DIVU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2690,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_EMULOP,serviced,EMULOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3876,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_EMULOP_RETURN,serviced,EMULOP_RETURN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3872,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_EOR,audited,EOR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1529,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
 generator,i_EORSR,audited,EORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1573,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_EXG,audited,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2113,BasiliskII/docs/AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md
-generator,i_EXT,audited,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2126,BasiliskII/docs/AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md
-generator,i_FBcc,audited,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3762,BasiliskII/docs/AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md
-generator,i_FDBcc,serviced,FDBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3778,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FPP,audited,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3747,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md
-generator,i_FRESTORE,serviced,FRESTORE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3811,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FSAVE,serviced,FSAVE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3806,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_FScc,audited,FScc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3784,BasiliskII/docs/AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md
-generator,i_FTRAPcc,serviced,FTRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3800,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_JMP,audited,JMP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2346,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_JSR,audited,JSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2321,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_LEA,audited,LEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2466,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_LINK,audited,LINK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2234,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_LPSTOP,unreachable,LPSTOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3853,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_LSL,audited,LSL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3079,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_LSLW,audited,LSLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3394,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_LSR,audited,LSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2991,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_LSRW,audited,LSRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3377,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_MMUOP,unreachable,MMUOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3873,historical ARAnyM generator label; no configured BasiliskII opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_MMUOP030,unreachable,MMUOP030,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3844,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_MOVE,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2034,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
-generator,i_MOVE16,audited,MOVE16,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3835,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
-generator,i_MOVE2C,serviced,MOVE2C,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3473,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MOVEA,audited,MOVEA,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2062,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
-generator,i_MOVEC2,serviced,MOVEC2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3471,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MOVES,serviced,MOVES,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3486,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MULL,audited,MULL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3580,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-generator,i_MULS,unreviewed,MULS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2725,native generator case; no accepted family-level closure report
-generator,i_MULU,unreviewed,MULU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2710,native generator case; no accepted family-level closure report
-generator,i_MV2SR,serviced,MV2SR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2084,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVMEL,audited,MVMEL,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2156,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
-generator,i_MVMLE,audited,MVMLE,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2163,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
-generator,i_MVPMR,serviced,MVPMR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2017,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVPRM,serviced,MVPRM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1999,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVR2USP,serviced,MVR2USP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2199,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVSR2,serviced,MVSR2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2078,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_MVUSP2R,serviced,MVUSP2R,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2201,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_NBCD,audited,NBCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1812,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
-generator,i_NEG,audited,NEG,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1773,BasiliskII/docs/AARCH64_JIT_AUDIT_NEG_LIFECYCLE.md
-generator,i_NEGX,audited,NEGX,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1793,BasiliskII/docs/AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md
-generator,i_NOP,audited,NOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2212,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_NOT,unreviewed,NOT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1855,native generator case; no accepted family-level closure report
+generator,i_EXG,audited,EXG,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2125,BasiliskII/docs/AARCH64_JIT_AUDIT_EXG_LIFECYCLE.md
+generator,i_EXT,audited,EXT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2138,BasiliskII/docs/AARCH64_JIT_AUDIT_EXT_LIFECYCLE.md
+generator,i_FBcc,audited,FBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3774,BasiliskII/docs/AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md
+generator,i_FDBcc,serviced,FDBcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3790,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_FPP,audited,FPP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3759,BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md
+generator,i_FRESTORE,serviced,FRESTORE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3823,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_FSAVE,serviced,FSAVE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3818,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_FScc,audited,FScc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3796,BasiliskII/docs/AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md
+generator,i_FTRAPcc,serviced,FTRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3812,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_JMP,audited,JMP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2358,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_JSR,audited,JSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2333,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_LEA,audited,LEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2478,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_LINK,audited,LINK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2246,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_LPSTOP,unreachable,LPSTOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3865,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_LSL,audited,LSL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3091,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_LSLW,audited,LSLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3406,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_LSR,audited,LSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3003,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_LSRW,audited,LSRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3389,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_MMUOP,unreachable,MMUOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3885,historical ARAnyM generator label; no configured BasiliskII opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_MMUOP030,unreachable,MMUOP030,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3856,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_MOVE,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2046,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+generator,i_MOVE16,audited,MOVE16,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3847,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+generator,i_MOVE2C,serviced,MOVE2C,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3485,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MOVEA,audited,MOVEA,94,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2074,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
+generator,i_MOVEC2,serviced,MOVEC2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3483,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MOVES,serviced,MOVES,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3498,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MULL,audited,MULL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3592,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
+generator,i_MULS,audited,MULS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2737,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+generator,i_MULU,audited,MULU,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2722,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+generator,i_MV2SR,serviced,MV2SR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2096,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVMEL,audited,MVMEL,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2168,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
+generator,i_MVMLE,audited,MVMLE,100,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2175,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVEM_LIFECYCLE.md
+generator,i_MVPMR,serviced,MVPMR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2029,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVPRM,serviced,MVPRM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2011,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVR2USP,serviced,MVR2USP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2211,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVSR2,serviced,MVSR2,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2090,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_MVUSP2R,serviced,MVUSP2R,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2213,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_NBCD,audited,NBCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1817,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
+generator,i_NEG,audited,NEG,88,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1778,BasiliskII/docs/AARCH64_JIT_AUDIT_NEG_LIFECYCLE.md
+generator,i_NEGX,audited,NEGX,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1798,BasiliskII/docs/AARCH64_JIT_AUDIT_NEGX_LIFECYCLE.md
+generator,i_NOP,audited,NOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2224,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_NOT,audited,NOT,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1860,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
 generator,i_OR,audited,OR,80,2,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1527,BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md
 generator,i_ORSR,audited,ORSR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1550,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_PACK,serviced,PACK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3696,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_PEA,audited,PEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2475,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_PFLUSH,unreachable,PFLUSH,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3846,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PFLUSHA,unreachable,PFLUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3848,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PFLUSHAN,unreachable,PFLUSHAN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3847,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PFLUSHN,unreachable,PFLUSHN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3845,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PLPAR,unreachable,PLPAR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3849,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PLPAW,unreachable,PLPAW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3850,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PTESTR,unreachable,PTESTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3851,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_PTESTW,unreachable,PTESTW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3852,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
-generator,i_RESET,serviced,RESET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2202,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_ROL,audited,ROL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3168,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_ROLW,audited,ROLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3411,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_ROR,audited,ROR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3227,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_RORW,audited,RORW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3428,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-generator,i_ROXL,audited,ROXL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3290,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ROXLW,audited,ROXLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3445,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ROXR,audited,ROXR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3309,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_ROXRW,audited,ROXRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3458,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-generator,i_RTD,audited,RTD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2215,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_RTE,serviced,RTE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2204,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_RTM,serviced,RTM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3502,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_RTR,audited,RTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2296,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_RTS,serviced,RTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2268,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_SBCD,audited,SBCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1659,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
-generator,i_Scc,audited,Scc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2653,BasiliskII/docs/AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md
-generator,i_STOP,serviced,STOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2203,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_PACK,serviced,PACK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3708,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_PEA,audited,PEA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2487,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_PFLUSH,unreachable,PFLUSH,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3858,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PFLUSHA,unreachable,PFLUSHA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3860,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PFLUSHAN,unreachable,PFLUSHAN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3859,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PFLUSHN,unreachable,PFLUSHN,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3857,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PLPAR,unreachable,PLPAR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3861,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PLPAW,unreachable,PLPAW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3862,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PTESTR,unreachable,PTESTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3863,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_PTESTW,unreachable,PTESTW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3864,inactive UAE-only generator label; no configured Unix opcode/provider; AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md
+generator,i_RESET,serviced,RESET,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2214,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_ROL,audited,ROL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3180,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_ROLW,audited,ROLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3423,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_ROR,audited,ROR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3239,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_RORW,audited,RORW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3440,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+generator,i_ROXL,audited,ROXL,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3302,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ROXLW,audited,ROXLW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3457,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ROXR,audited,ROXR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3321,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_ROXRW,audited,ROXRW,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3470,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+generator,i_RTD,audited,RTD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2227,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_RTE,serviced,RTE,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2216,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_RTM,serviced,RTM,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3514,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_RTR,audited,RTR,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2308,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_RTS,serviced,RTS,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2280,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_SBCD,audited,SBCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1664,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
+generator,i_Scc,audited,Scc,92,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2665,BasiliskII/docs/AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md
+generator,i_STOP,serviced,STOP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2215,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 generator,i_SUB,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1613,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-generator,i_SUBA,unreviewed,SUBA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1630,native generator case; no accepted family-level closure report
-generator,i_SUBX,audited,SUBX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1648,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-generator,i_SWAP,unreviewed,SWAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2102,native generator case; no accepted family-level closure report
-generator,i_TAS,audited,TAS,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3727,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
-generator,i_TRAP,serviced,TRAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2170,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_TRAPcc,serviced,TRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3507,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
-generator,i_TRAPV,audited,TRAPV,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2284,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
-generator,i_TST,unreviewed,TST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1867,native generator case; no accepted family-level closure report
-generator,i_UNLK,audited,UNLK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2254,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
-generator,i_UNPK,serviced,UNPK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3713,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_SUBA,audited,SUBA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1630,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+generator,i_SUBX,audited,SUBX,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1653,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
+generator,i_SWAP,audited,SWAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2114,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+generator,i_TAS,audited,TAS,97,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3739,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
+generator,i_TRAP,serviced,TRAP,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2182,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_TRAPcc,serviced,TRAPcc,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3519,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
+generator,i_TRAPV,audited,TRAPV,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2296,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+generator,i_TST,audited,TST,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1879,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+generator,i_UNLK,audited,UNLK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,2266,BasiliskII/docs/AARCH64_JIT_AUDIT_CONTROL_ADDRESS_LIFECYCLE.md
+generator,i_UNPK,serviced,UNPK,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,3725,post-registration or generated ordered semantic-service table; AARCH64_JIT_AUDIT_ORDERED_SEMANTIC_SERVICES.md
 midfunc,arm_ADD_l,unreviewed,arm_ADD,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,594,reachable; no accepted family-level closure report
 midfunc,arm_ADD_l_ri,audited,arm_ADD_l_ri,68,5,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,690,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,arm_ADD_l_ri_hostptr,audited,arm_ADD_l_ri_hostptr,68,122,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,651,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
@@ -646,12 +646,12 @@ midfunc,jff_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/co
 midfunc,jff_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7891,no path from configured generated/support/FPU compiler roots
 midfunc,jff_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8252,no path from configured generated/support/FPU compiler roots
 midfunc,jff_TAS,audited,TAS,97,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8795,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
-midfunc,jff_TST_b,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8298,reachable; no accepted family-level closure report
-midfunc,jff_TST_b_imm,unreviewed,TST_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8290,reachable; no accepted family-level closure report
-midfunc,jff_TST_l,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8346,reachable; no accepted family-level closure report
-midfunc,jff_TST_l_imm,unreviewed,TST_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8338,reachable; no accepted family-level closure report
-midfunc,jff_TST_w,unreviewed,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8322,reachable; no accepted family-level closure report
-midfunc,jff_TST_w_imm,unreviewed,TST_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8314,reachable; no accepted family-level closure report
+midfunc,jff_TST_b,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8298,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_b_imm,audited,TST_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8290,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_l,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8346,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_l_imm,audited,TST_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8338,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_w,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8322,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_w_imm,audited,TST_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8314,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
 midfunc,jnf_ADD_b,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,135,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jnf_ADD_b_imm,audited,ADD_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,115,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jnf_ADD_im8,unreachable,ADD_im8,80,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,99,no path from configured generated/support/FPU compiler roots
@@ -762,10 +762,10 @@ midfunc,jnf_MOVE16,unreachable,MOVE16,94,0,BasiliskII/src/uae_cpu_2026/compiler/
 midfunc,jnf_MOVEA_l,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5274,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_MOVEA_w,unreachable,MOVEA,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5259,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_MOVEA_w_imm,unreachable,MOVEA_w_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5253,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_MULS,unreviewed,MULS,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5293,reachable; no accepted family-level closure report
+midfunc,jnf_MULS,audited,MULS,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5293,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
 midfunc,jnf_MULS32,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5332,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5393,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-midfunc,jnf_MULU,unreviewed,MULU,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5428,reachable; no accepted family-level closure report
+midfunc,jnf_MULU,audited,MULU,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5428,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
 midfunc,jnf_MULU32,audited,MULU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5480,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MULU64,audited,MULU,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5516,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MV2SR_w,unreachable,MV2SR,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9049,post-registration AArch64 semantic-service override

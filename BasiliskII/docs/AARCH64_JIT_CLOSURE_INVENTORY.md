@@ -17,8 +17,8 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
-| generator | 130 | 69 | 44 | 11 | 6 |
-| midfunc | 422 | 267 | 0 | 119 | 36 |
+| generator | 130 | 75 | 44 | 11 | 0 |
+| midfunc | 422 | 275 | 0 | 119 | 28 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
 | raw_boundary | 83 | 30 | 0 | 18 | 35 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,12 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 72 | `MULS` | generator:`i_MULS`, midfunc:`jnf_MULS` |
-| 72 | `MULU` | generator:`i_MULU`, midfunc:`jnf_MULU` |
-| 72 | `NOT` | generator:`i_NOT` |
-| 72 | `SUBA` | generator:`i_SUBA` |
-| 72 | `SWAP` | generator:`i_SWAP` |
-| 72 | `TST` | generator:`i_TST`, midfunc:`jff_TST_b`, midfunc:`jff_TST_l`, midfunc:`jff_TST_w` |
 | 68 | `arm_ADD` | midfunc:`arm_ADD_l` |
 | 68 | `dont_care_fflags` | midfunc:`dont_care_fflags` |
 | 68 | `f_forget_about` | midfunc:`f_forget_about` |
@@ -62,6 +56,12 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 68 | `fmov_to_b_rr` | midfunc:`fmov_to_b_rr` |
 | 68 | `fmov_to_d_rrr` | midfunc:`fmov_to_d_rrr` |
 | 68 | `fmov_to_l_rr` | midfunc:`fmov_to_l_rr` |
+| 68 | `fmov_to_s_rr` | midfunc:`fmov_to_s_rr` |
+| 68 | `fmov_to_w_rr` | midfunc:`fmov_to_w_rr` |
+| 68 | `fmovs_rm` | midfunc:`fmovs_rm` |
+| 68 | `forget_about` | midfunc:`forget_about` |
+| 68 | `fp_from_double_mr` | midfunc:`fp_from_double_mr` |
+| 68 | `fp_from_exten_mr` | midfunc:`fp_from_exten_mr` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`MULS` is the highest-risk family still classified as unreviewed. Its current rows are generator:`i_MULS`, midfunc:`jnf_MULS`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`arm_ADD` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`arm_ADD_l`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

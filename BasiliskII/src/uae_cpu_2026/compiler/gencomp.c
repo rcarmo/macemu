@@ -1641,8 +1641,13 @@ gen_opcode (unsigned int opcode)
 	 case sz_long: comprintf("\ttmp=src;\n"); break;
 	 default: assert(0);
 	}
+	/* Preserve the widened source while an aliased postincrement destination
+	 * is acquired.  Otherwise destination RMW may reuse tmp's host lane and
+	 * turn SUBA (An)+,An into a subtraction from a clobbered value. */
+	comprintf("\tint __subasrclock=jit_value_lock(tmp);\n");
 	genamode (curi->dmode, "dstreg", sz_long, "dst", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
 	comprintf("\tsub_l(dst,tmp);\n");
+	comprintf("\tjit_value_unlock(__subasrclock);\n");
 	genastore ("dst", curi->dmode, "dstreg", sz_long, "dst");
 	break;
 
@@ -1858,11 +1863,18 @@ gen_opcode (unsigned int opcode)
     failure;
 #endif
 	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	/* Memory NOT retains its pre-write EA through result allocation, flag
+	 * publication, and final store.  A private result scratch must not evict
+	 * the computed address and silently suppress or redirect writeback. */
+	if (curi->smode != Dreg)
+	    comprintf("\tint __notealock=jit_value_lock(srca);\n");
 	start_brace ();
 	comprintf("\tint dst=scratchie++;\n");
 	comprintf("\tmov_l_ri(dst,0xffffffff);\n");
 	genflags (flag_eor, curi->size, "", "src", "dst");
 	genastore ("dst", curi->smode, "srcreg", curi->size, "src");
+	if (curi->smode != Dreg)
+	    comprintf("\tjit_value_unlock(__notealock);\n");
 	break;
 
      case i_TST:

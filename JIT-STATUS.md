@@ -171,9 +171,10 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 ## BasiliskII 68K JIT
 
-**Current structural-audit gate (2026-07-16):** ✅
-**Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `17e9d3510ceb4e479d6e64520b90433278f6a15cfcf1c7d5daf1d3f36a4d12e0`
-**JIT harness:** ✅ 798/798 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Current structural-audit gate (2026-07-19):** ✅
+**Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `90b3064253b7d2894cd9ecaed738687ba6b2ff7aec5ec75586afa212db7dd1ee`
+**JIT harness:** ✅ 904/904 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100
+**Allocator pressure:** ✅ 33/33 complete cells, including permanent NOT and SUBA collision witnesses
 **Strict L2 policy:** ✅ fail-closed negative probes pass; runtime reports `opt0=0 fallback=0 exec_nostats=0`
 **Opcode registration:** ✅ all 48,282 legal 68040 encodings classified, with zero null/interpreter fallback in byte-identical ordinary and strict tables: 46,087 native-generated, 2,127 semantic services, and 68 architectural traps.
 **Finder retirement gate:** ✅ ordinary and strict runs each reached 21 `DiskStatus 43` events and captured 24,120,000 scheduled guest retirements. Their retained 16,777,216-PC windows are byte-identical (`SHA-256 1a05d539dc51f4fa39cd2cc02e5e7c90faeedcab054ab6b4d156d8022db06b73`), with no host signal.
@@ -205,7 +206,7 @@ The shared VNC runner currently defaults to the `noop` driver so both BasiliskII
 
 ### Test Harness (68K)
 
-**761 active-risky vectors, score=100**
+**904 active-risky vectors and 33 allocator-pressure cells, score=100**
 
 The larger exact-native family inventories remain available as focused gates;
 the current `OR` inventory is 37/37, the `EOR` inventory is 28/28, the `AND`
@@ -214,6 +215,19 @@ inventory is 92/92, and the accepted register-count
 `ASL`/`ASR`/`LSL`/`LSR` inventory is 138/138.
 
 ### Recent bug fixes (2026-07)
+
+- **Close the final reachable ordinary integer generator tail** (2026-07-19):
+  closes `MULS`, `MULU`, `NOT`, `SUBA`, `SWAP`, and `TST` plus eight directly
+  connected reachable MIDFUNC rows with a **32/32 exact-native** strict replay
+  matrix. Forced allocator collisions reproduced and repaired two lifecycle
+  defects: memory NOT now owns its computed pre-write EA through result flags
+  and storage, and SUBA owns its widened source through destination acquisition
+  and subtraction. Two permanent pressure cells pass with exact native and
+  interpreter parity. Fail-closed structure pins the complete generated
+  provider census and keeps twelve namesake NOT/SUBA/SWAP MIDFUNCs unreachable.
+  The 998-row inventory promotes exactly six generators and eight MIDFUNCs;
+  generic/shared lower layers remain independent. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md`.
 
 - **Retire configured-unreachable MMU generator labels** (2026-07-19): the
   BasiliskII Unix AArch64 build has no opcode definition, generated compiler

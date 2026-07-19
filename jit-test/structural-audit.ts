@@ -570,6 +570,10 @@ const controlAddressMatrixSource = await Bun.file(new URL(
   "./control-address-native-matrix.ts",
   import.meta.url,
 )).text();
+const integerTailMatrixSource = await Bun.file(new URL(
+  "./integer-tail-native-matrix.ts",
+  import.meta.url,
+)).text();
 const fppFmoveSourceMatrix = await Bun.file(new URL(
   "./fpp-fmove-source-matrix.ts",
   import.meta.url,
@@ -3520,6 +3524,110 @@ for (const contract of [
   "AARCH64_JIT_AUDIT_MMU_UNREACHABLE.md",
 ]) requireText(closureInventorySource, contract, "configured MMU reachability gate");
 console.log("METRIC structural_configured_unreachable_mmu_generators=11");
+
+/* The final reachable ordinary integer generators form one bounded source
+ * checkpoint, but only MULS/MULU and TST own reachable namesake MIDFUNC rows.
+ * NOT/SUBA/SWAP compose existing primitives directly; their namesake MIDFUNCs
+ * remain unreachable and must not inherit this audit status. */
+const integerTailGenerators = ["MULS", "MULU", "NOT", "SUBA", "SWAP", "TST"] as const;
+const integerTailExpectedProviders: Record<string, [number, number, number]> = {
+  MULS: [22, 11, 11], MULU: [22, 11, 11], NOT: [48, 24, 24],
+  SUBA: [52, 26, 26], SWAP: [2, 1, 1], TST: [70, 35, 35],
+};
+for (const family of integerTailGenerators) {
+  const bodies = matchingFunctionBodies(
+    generatedSource,
+    new RegExp(`void REGPARAM2 op_[^\\n]+_comp_(?:ff|nf)\\(uae_u32 opcode\\) /\\* ${family} \\*/`, "g"),
+    `generated integer-tail ${family}`,
+  );
+  const [total, ff, nf] = integerTailExpectedProviders[family];
+  const flagLive = bodies.filter((body) => body.includes("_comp_ff")).length;
+  const noFlags = bodies.filter((body) => body.includes("_comp_nf")).length;
+  if (bodies.length !== total || flagLive !== ff || noFlags !== nf)
+    fail(`generated integer-tail ${family} provider census=${bodies.length} split=${flagLive}/${noFlags}, expected ${total} ${ff}/${nf}`);
+}
+const subaGenerator = functionBody(gencompSource, "     case i_SUBA:", "     case i_SUBX:", "SUBA generator");
+for (const contract of [
+  'genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);',
+  'comprintf("\\tint tmp=scratchie++;\\n");',
+  'comprintf("\\tint __subasrclock=jit_value_lock(tmp);\\n");',
+  'comprintf("\\tsub_l(dst,tmp);\\n");',
+  'comprintf("\\tjit_value_unlock(__subasrclock);\\n");',
+]) requireText(subaGenerator, contract, "SUBA widened-source ownership");
+requireBefore(subaGenerator, "jit_value_lock(tmp)", 'genamode (curi->dmode', "SUBA source-before-destination ownership");
+requireBefore(subaGenerator, "sub_l(dst,tmp)", "jit_value_unlock(__subasrclock)", "SUBA source unlock after arithmetic");
+const notGenerator = functionBody(gencompSource, "     case i_NOT:", "     case i_TST:", "NOT generator");
+for (const contract of [
+  'if (curi->smode != Dreg)',
+  'comprintf("\\tint __notealock=jit_value_lock(srca);\\n");',
+  'genflags (flag_eor, curi->size, "", "src", "dst");',
+  'genastore ("dst", curi->smode, "srcreg", curi->size, "src");',
+  'comprintf("\\tjit_value_unlock(__notealock);\\n");',
+]) requireText(notGenerator, contract, "NOT pre-write EA ownership");
+requireBefore(notGenerator, "jit_value_lock(srca)", 'comprintf("\\tint dst=scratchie++;\\n")', "NOT EA before result allocation");
+requireBefore(notGenerator, 'genastore ("dst"', "jit_value_unlock(__notealock)", "NOT EA unlock after store");
+for (const [token, expected] of [
+  ["__notealock=jit_value_lock(srca)", 42], ["jit_value_unlock(__notealock)", 42],
+  ["__subasrclock=jit_value_lock(tmp)", 52], ["jit_value_unlock(__subasrclock)", 52],
+] as const) {
+  const count = generatedSource.split(token).length - 1;
+  if (count !== expected) fail(`generated integer-tail ownership ${token}: expected ${expected}, got ${count}`);
+}
+for (const [name, signed] of [["jnf_MULS", true], ["jnf_MULU", false]] as const) {
+  const body = functionBody(midfunc2Source, `MIDFUNC(2,${name},`, `MENDFUNC(2,${name},`, `${name} word multiply`);
+  requireText(body, signed ? "SMULL_xww" : "UMULL_xww", `${name} signedness`);
+  requireText(body, signed ? "SIGNED16_REG_2_REG" : "UNSIGNED16_REG_2_REG", `${name} 16-bit operands`);
+  requireText(body, "MOV_ww(d, d)", `${name} low-32 result`);
+  if (body.includes("TST_ww") || body.includes("flags_carry_inverted")) fail(`${name} unexpectedly publishes flags`);
+}
+for (const width of ["b", "w", "l"] as const) {
+  const dyn = functionBody(midfunc2Source, `MIDFUNC(1,jff_TST_${width},`, `MENDFUNC(1,jff_TST_${width},`, `TST.${width} dynamic`);
+  const imm = functionBody(midfunc2Source, `MIDFUNC(1,jff_TST_${width}_imm,`, `MENDFUNC(1,jff_TST_${width}_imm,`, `TST.${width} immediate`);
+  requireText(dyn, `COMPCALL(jff_TST_${width}_imm)`, `TST.${width} constant route`);
+  requireText(dyn, "TST_ww", `TST.${width} dynamic flags`);
+  requireText(imm, "TST_ww", `TST.${width} immediate flags`);
+  requireText(dyn, "flags_carry_inverted = false;", `TST.${width} dynamic carry clear`);
+  requireText(imm, "flags_carry_inverted = false;", `TST.${width} immediate carry clear`);
+}
+for (const [helper, route] of [["test_b_rr", "jff_TST_b(d)"], ["test_w_rr", "jff_TST_w(d)"], ["test_l_rr", "jff_TST_l(d)"]] as const) {
+  const body = functionBody(compatSource, `void ${helper}(`, helper === "test_b_rr" ? "void test_w_rr(" : helper === "test_w_rr" ? "void test_l_rr(" : "void test_l_ri(", `${helper} configured route`);
+  requireText(body, route, `${helper} namesake TST route`);
+}
+const deadIntegerTailNamesakes = [
+  "jnf_NOT_b", "jnf_NOT_w", "jnf_NOT_l", "jff_NOT_b", "jff_NOT_w", "jff_NOT_l",
+  "jnf_SUBA_w", "jnf_SUBA_l", "jnf_SUBA_w_imm", "jnf_SUBA_l_imm",
+  "jnf_SWAP", "jff_SWAP",
+] as const;
+for (const name of deadIntegerTailNamesakes) {
+  requireText(midfunc2Source, name, `retained dead integer-tail MIDFUNC ${name}`);
+  for (const [root, label] of [[gencompSource, "generator"], [generatedSource, "generated"], [compatSource, "compatibility"]] as const) {
+    if (root.includes(name)) fail(`dead integer-tail MIDFUNC ${name} gained a ${label} root`);
+  }
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`midfunc,${name},`));
+  if (!row?.startsWith(`midfunc,${name},unreachable,`)) fail(`dead integer-tail MIDFUNC ${name} is not unreachable in closure inventory`);
+}
+const integerTailCases = [...integerTailMatrixSource.matchAll(/C\("([a-z0-9_]+)"/g)].map((match) => match[1]);
+if (integerTailCases.length !== 32 || new Set(integerTailCases).size !== 32)
+  fail(`integer-tail exact-native matrix case inventory=${integerTailCases.length}/${new Set(integerTailCases).size}, expected 32/32`);
+for (const required of [
+  "muls_neg_neg", "muls_min_times_minus1", "muls_same_reg", "muls_d16",
+  "mulu_max", "mulu_same_reg", "mulu_zero", "mulu_d16",
+  "not_l_zero", "not_b_d16_pressure", "suba_w_postinc_alias", "suba_l_postinc_alias",
+  "swap_zero", "swap_noflags", "tst_b_immediate_negative", "tst_w_immediate_zero",
+  "tst_l_immediate_negative", "tst_l_noflags", "tst_b_postinc_noflags",
+]) if (!integerTailCases.includes(required)) fail(`integer-tail matrix missing ${required}`);
+for (const contract of [
+  'B2_TEST_FORCE_L2_RAM:"1"', 'B2_JIT_STRICT_FULL:"1"', 'B2_NATIVE_ASSERT_PC:"0x1000"',
+  'j.out.includes("NATEXEC pc=00001000")', 'j.out.includes("JIT_STRICT_SUMMARY ")',
+  "i.dump===j.dump", "B2_TEST_REPLAY_BYTES", "REGPRESSURE_PIN_SKIP",
+  "INTEGER_TAIL_NATIVE_MATRIX pass=",
+]) requireText(integerTailMatrixSource, contract, "integer-tail strict-native matrix");
+for (const cell of ["not_b_d16_result_ea_collision", "suba_w_postinc_source_dst_collision"])
+  requireText(regallocPressureSource, cell, `integer-tail allocator cell ${cell}`);
+console.log("METRIC structural_integer_tail_generators=6");
+console.log("METRIC structural_integer_tail_midfuncs=8");
+console.log("METRIC structural_integer_tail_exact_native_vectors=32");
+console.log("METRIC structural_integer_tail_allocator_cells=2");
 
 /* Bcc is a flags-consuming, flags-preserving dynamic block edge. Every
  * generated target is compile-time pointer arithmetic: byte/word explicit sign
