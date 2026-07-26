@@ -328,6 +328,7 @@ const semanticServiceMid = new Map<string, string>([
 ]);
 const configuredUnreachableMid = new Map<string, string>([
   ["fmov_d_rm", "its sole external spelling is a legacy extern declaration; configured double-memory FMOVE uses fmov_rm -> raw_fmov_d_rm; AARCH64_JIT_AUDIT_FMOV_D_RM_UNREACHABLE.md"],
+  ["fmovs_rm", "its sole configured spelling is a legacy extern declaration; both raw source sites select fmov_s_rr in the configured AArch64 arms and retain fmovs_rm only in inactive #else arms; AARCH64_JIT_AUDIT_FMOVS_RM_UNREACHABLE.md"],
 ]);
 const overriddenMidfunc = (name: string) => name === "jnf_MV2SR_w" || semanticServiceMid.has(name) || configuredUnreachableMid.has(name);
 const semanticServiceBlocks: Array<[string, string, string]> = [
@@ -545,6 +546,7 @@ const structuralProofTokens: Array<[string, string, string[]]> = [
   ["jnf_DIVS", source.gencomp, ["case i_DIVS:", "jff_DIVS(dst, src)"]],
   ["sub_w_ri", source.compat, ["void dbcc_dec_w(W2 d) { jnf_SUB_w_imm(d, 1); }"]],
   ["fmov_d_rm", source.fpp, ["extern void fmov_d_rm(unsigned int r, uintptr m);", "fmov_rm(FS1, (uintptr) (temp_fp));"]],
+  ["fmovs_rm", source.fpp, ["extern void fmovs_rm(unsigned int r, uintptr m);", "fmov_s_rr(FS1, reg);", "fmov_s_rr(FS1, S2);", "fmovs_rm(FS1, (uintptr) temp_fp);"]],
 ];
 for (const [name, text, tokens] of structuralProofTokens) {
   if (tokens.some((token) => !text.includes(token)))
@@ -665,6 +667,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmov_d_ri_10", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_10 and fmov_l_ri; FMOV_di remains reachable from other compositions"],
   ["raw_fmov_d_ri_100", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_100 and fmov_l_ri; SCVTF_dw remains reachable from other compositions"],
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
+  ["raw_fmovs_rm", "only its LOWFUNC/LENDFUNC definition remains below configured-unreachable fmovs_rm; active AArch64 single sources use fmov_s_rr -> raw_fmov_s_rr; LDR_sXi and FCVT_ds remain independently classified; AARCH64_JIT_AUDIT_FMOVS_RM_UNREACHABLE.md"],
   ["raw_fmov_to_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_to_d_rrr after configured double destinations enter exact MPFR service before put_fp_value; FMOV_xd and LSR_xxi remain independently classified; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md"],
   ["raw_fmod_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],

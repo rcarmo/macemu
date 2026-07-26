@@ -18,9 +18,9 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
-| midfunc | 422 | 285 | 0 | 125 | 12 |
+| midfunc | 422 | 285 | 0 | 126 | 11 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
-| raw_boundary | 83 | 36 | 0 | 22 | 25 |
+| raw_boundary | 83 | 36 | 0 | 23 | 24 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 68 | `fmovs_rm` | midfunc:`fmovs_rm` |
 | 68 | `forget_about` | midfunc:`forget_about` |
 | 68 | `fp_from_double_mr` | midfunc:`fp_from_double_mr` |
 | 68 | `fp_from_exten_mr` | midfunc:`fp_from_exten_mr` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `ANDS_ww3f` | emitter_api:`ANDS_ww3f` |
 | 60 | `ANDS_www` | emitter_api:`ANDS_www` |
 | 60 | `ANDS_xx7fff` | emitter_api:`ANDS_xx7fff` |
+| 60 | `ASR_wwi` | emitter_api:`ASR_wwi` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`fmovs_rm` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`fmovs_rm`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`forget_about` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`forget_about`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

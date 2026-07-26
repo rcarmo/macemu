@@ -702,6 +702,10 @@ const fmovDRmRetirementMatrix = await Bun.file(new URL(
   "./fmov-d-rm-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fmovsRmRetirementMatrix = await Bun.file(new URL(
+  "./fmovs-rm-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fmovRmNativeMatrix = await Bun.file(new URL(
   "./fmov-rm-native-matrix.sh",
   import.meta.url,
@@ -1139,6 +1143,52 @@ for (const contract of [
 console.log("METRIC structural_fmov_d_rm_unreachable_midfuncs=1");
 console.log("METRIC structural_fmov_d_rm_live_sibling_midfuncs=1");
 console.log("METRIC structural_fmov_d_rm_live_raw_boundaries=1");
+
+/* Retire the single-memory compatibility wrapper. Both retained source calls
+ * are in inactive non-AArch64 arms; configured AArch64 uses fmov_s_rr for the
+ * direct-Dn and fetched-memory roots. */
+const fmovsRmStart = midfuncSource.indexOf("MIDFUNC(2,fmovs_rm,(FW r, MEMR m))");
+const fmovsRmEnd = midfuncSource.indexOf("MENDFUNC(2,fmovs_rm,(FW r, MEMR m))", fmovsRmStart);
+if (fmovsRmStart < 0 || fmovsRmEnd < 0) fail("missing unreachable fmovs_rm MIDFUNC");
+const fmovsRmBody = midfuncSource.slice(fmovsRmStart, fmovsRmEnd);
+for (const contract of ["r = f_writereg(r);", "raw_fmovs_rm(r, m);", "f_unlock(r);"])
+  requireText(fmovsRmBody, contract, "unreachable fmovs_rm MIDFUNC");
+if ((midfuncSource.match(/\bfmovs_rm\b/g) || []).length !== 2)
+  fail("fmovs_rm MIDFUNC token census is no longer definition/end-marker only");
+if ((fppCompilerSource.match(/\bfmovs_rm\b/g) || []).length !== 3 ||
+    !fppCompilerSource.includes("extern void fmovs_rm(unsigned int r, uintptr m);"))
+  fail("fmovs_rm raw source census changed");
+const fmovsRmDeadCalls = [...fppCompilerSource.matchAll(/fmovs_rm\(FS1, \(uintptr\) temp_fp\);/g)]
+  .map((match) => match.index!);
+const fmovSRrLiveCalls = [
+  fppCompilerSource.indexOf("fmov_s_rr(FS1, reg);"),
+  fppCompilerSource.indexOf("fmov_s_rr(FS1, S2);"),
+];
+if (fmovsRmDeadCalls.length !== 2 || fmovSRrLiveCalls.some((position) => position < 0))
+  fail("fmovs_rm active/dead source branch census changed");
+for (let i = 0; i < 2; i++) {
+  const live = fmovSRrLiveCalls[i];
+  const dead = fmovsRmDeadCalls[i];
+  const gate = fppCompilerSource.lastIndexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)", live);
+  const alternate = fppCompilerSource.indexOf("#else", live);
+  const end = fppCompilerSource.indexOf("#endif", dead);
+  if (gate < 0 || !(gate < live && live < alternate && alternate < dead && dead < end))
+    fail(`fmovs_rm source site ${i} is no longer confined to inactive non-AArch64 arm`);
+}
+const rawFmovsRm = functionBody(
+  codegenSource, "LOWFUNC(NONE,READ,2,raw_fmovs_rm,(FW r, MEMR m))",
+  "LENDFUNC(NONE,READ,2,raw_fmovs_rm,(FW r, MEMR m))", "unreachable raw_fmovs_rm",
+);
+for (const contract of ["LOAD_U64(REG_WORK1, m);", "LDR_sXi(r, REG_WORK1, 0);", "FCVT_ds(r, r);"])
+  requireText(rawFmovsRm, contract, "unreachable raw_fmovs_rm body");
+for (const contract of [
+  "bash jit-test/fmov-s-rr-native-matrix.sh",
+  "FMOV_S_RR_NATIVE_MATRIX pass=18 fail=0 total=18",
+  "FMOVS_RM_RETIREMENT live_replacement=18 fail=0 total=18",
+]) requireText(fmovsRmRetirementMatrix, contract, "fmovs_rm retirement wrapper");
+console.log("METRIC structural_fmovs_rm_unreachable_midfuncs=1");
+console.log("METRIC structural_fmovs_rm_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fmovs_rm_live_replacement_vectors=18");
 
 /* Complete the live fmov_rm/raw_fmov_d_rm composition without inheriting dead
  * FMOVECR spellings or broad allocator/emitter status. */

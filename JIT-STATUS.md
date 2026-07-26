@@ -216,6 +216,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the legacy `fmovs_rm` single-memory chain on AArch64** (2026-07-26):
+  both retained source calls are in inactive non-AArch64 `#else` arms; the
+  configured direct and fetched single-source paths use the accepted
+  `fmov_s_rr` / `raw_fmov_s_rr` chain. The old raw boundary is definition-only.
+  An **18/18 strict exact-native** live-replacement control covers both roots and
+  all maintained EA classes. The 998-row inventory moves exactly `fmovs_rm` and
+  `raw_fmovs_rm` to unreachable without reclassifying `LDR_sXi` or `FCVT_ds`.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOVS_RM_UNREACHABLE.md`.
+
 - **Audit the live binary32 destination lifecycle** (2026-07-26): closes
   `fmov_to_s_rr` and `raw_fmov_to_s_rr` across exactly two configured roots:
   direct Dn and writable-memory scratch. A **30/30 strict exact-native** gate
