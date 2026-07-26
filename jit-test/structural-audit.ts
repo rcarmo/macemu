@@ -782,6 +782,10 @@ const fppFmoveSingleDestinationMatrix = await Bun.file(new URL(
   "./fpp-fmove-single-destination-matrix.ts",
   import.meta.url,
 )).text();
+const fmovToSingleNativeMatrix = await Bun.file(new URL(
+  "./fmov-to-s-rr-native-matrix.sh",
+  import.meta.url,
+)).text();
 for (const contract of [
   'echo "$reason" >&2\n    exit 1',
   'if [ "$TOTAL" -eq 0 ] || [ "$FAIL" -ne 0 ] || [ "$INFRA_FAIL" -ne 0 ]',
@@ -1347,8 +1351,9 @@ for (const contract of [
   'name: "double_aind_exact_clears_prior_status"', 'name: `byte_${mode.name}_a7_geometry`',
   'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_REPLAY_FPCR: item.replayFpcr ?? "0"',
   'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC:', 'sr === "271f"',
-  'cow_clone', 'cow_release',
-  'const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 36 : 45',
+  'cow_clone', 'cow_release', 'const formatGroups = new Map([',
+  '["integer", new Set([0, 4, 6])]', '["single", new Set([1])]',
+  'const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 36 : process.env.GROUP === "single" ? 5 : 45',
 ]) requireText(fppFmoveDestinationBasicMatrix, contract, "native ordinary FMOVE basic-destination matrix");
 if (/\b(?:FSMOVE|FDMOVE)\b/.test(fppFmoveDestinationBasicMatrix))
   fail("ordinary FMOVE destination matrix: explicit precision subfamily leaked into bounded scope");
@@ -1505,9 +1510,10 @@ for (const contract of [
   'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_REPLAY_FPCR: "0"',
   'B2_TEST_MEMDUMP:', 'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC:',
   'sr === "271f"', 'regsPreserved', 'addressRegsPreserved',
-  'cow_clone', 'cow_release', 'const knownGroups = new Set(["integer"])',
-  '!process.env.GROUP || /^(?:byte|word|long)_/.test(item.name)',
-  'const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 18 : 26',
+  'cow_clone', 'cow_release', 'const groupPattern = new Map([',
+  '["integer", /^(?:byte|word|long)_/]', '["single", /^single_/]',
+  '!process.env.GROUP || groupPattern.get(process.env.GROUP)!.test(item.name)',
+  'const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 18 : process.env.GROUP === "single" ? 4 : 26',
 ]) requireText(fppFmoveDestinationExtendedEaMatrix, contract, "native ordinary FMOVE extended-destination matrix");
 if (/stream:\s*[`"]F23[ABC]\b/.test(fppFmoveDestinationExtendedEaMatrix))
   fail("ordinary FMOVE extended destination matrix: non-writable PC-relative/immediate destination leaked into scope");
@@ -3363,6 +3369,32 @@ console.log("METRIC structural_fpp_fmove_single_destination_fpcr_modes=4");
 console.log("METRIC structural_fpp_fmove_single_destination_range_classes=4");
 console.log("METRIC structural_fpp_fmove_single_destination_nan_payloads=2");
 console.log("METRIC structural_fpp_fmove_single_destination_fpsr_contracts=4");
+
+/* Close the live binary64-to-binary32 destination MIDFUNC/raw unit. Its two
+   roots are direct Dn and writable-memory scratch; the semantic matrix and
+   grouped EA matrices jointly cover both ownership paths. */
+if ((putFpValueBody.match(/\bfmov_to_s_rr\(/g) || []).length !== 2)
+  fail("fmov_to_s_rr configured roots changed");
+const fmovToSingleMidfunc = functionBody(
+  midfuncSource, "MIDFUNC(2,fmov_to_s_rr,(W4 d, FR s))",
+  "MENDFUNC(2,fmov_to_s_rr,(W4 d, FR s))", "fmov_to_s_rr lifecycle",
+);
+requireBefore(fmovToSingleMidfunc, "s = f_readreg(s);", "d = writereg(d);", "fmov_to_s_rr acquisition");
+requireBefore(fmovToSingleMidfunc, "d = writereg(d);", "raw_fmov_to_s_rr(d, s);", "fmov_to_s_rr raw dispatch");
+requireBefore(fmovToSingleMidfunc, "raw_fmov_to_s_rr(d, s);", "unlock2(d);", "fmov_to_s_rr destination lifetime");
+requireBefore(fmovToSingleMidfunc, "unlock2(d);", "f_unlock(s);", "fmov_to_s_rr source lifetime");
+for (const contract of [
+  "bun jit-test/fpp-fmove-single-destination-matrix.ts",
+  "GROUP=single bun jit-test/fpp-fmove-destination-basic-matrix.ts",
+  "GROUP=single bun jit-test/fpp-fmove-destination-extended-ea-matrix.ts",
+  "FPP_SINGLE_DEST_MATRIX pass=21 fail=0 total=21",
+  "FPP_FMOVE_DEST_BASIC_MATRIX pass=5 fail=0 total=5",
+  "FPP_FMOVE_DEST_EXTENDED_EA_MATRIX pass=4 fail=0 total=4",
+  "FMOV_TO_S_RR_NATIVE_MATRIX semantic=21 basic=5 extended=4 fail=0 total=30",
+]) requireText(fmovToSingleNativeMatrix, contract, "fmov_to_s_rr focused wrapper");
+console.log("METRIC structural_fmov_to_s_rr_configured_live_roots=2");
+console.log("METRIC structural_fmov_to_s_rr_exact_native_vectors=30");
+console.log("METRIC structural_fmov_to_s_rr_audited_rows=2");
 
 /* Generator-level ownership remains deliberately singular. Two-operand ADD
  * ownership belongs to INIT_REGS/EXIT_REGS inside the MIDFUNC; only the private
@@ -6262,7 +6294,7 @@ for (const contract of [
 for (const contract of [
   'process.env.GROUP === "integer"', 'new Set([0, 4, 6])',
   '(Number.parseInt(item.extra, 16) >> 10) & 7',
-  'process.env.GROUP === "integer" ? 36 : 45',
+  'process.env.GROUP === "integer" ? 36 : process.env.GROUP === "single" ? 5 : 45',
 ]) requireText(fppFmoveDestinationBasicMatrix, contract, "FCVTAS guest integer composition subset");
 for (const contract of ["-Wall -Wextra -Werror", "emitter-fcvtas-conformance.cpp"])
   requireText(fcvtasEmitterHarnessSource, contract, "generic FCVTAS conformance build");

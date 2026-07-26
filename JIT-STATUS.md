@@ -216,6 +216,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the live binary32 destination lifecycle** (2026-07-26): closes
+  `fmov_to_s_rr` and `raw_fmov_to_s_rr` across exactly two configured roots:
+  direct Dn and writable-memory scratch. A **30/30 strict exact-native** gate
+  covers all FPCR modes, normal/subnormal/range edges, signed specials and NaN
+  payloads, FPSR replacement/accrual, NZCV and host FP state, Dn, basic
+  writeback, d16/indexed, and absolute EAs. The 998-row inventory promotes
+  exactly these two rows; generic `FCVT_sd` and `FMOV_ws` remain separately
+  audited. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_S_RR_LIFECYCLE.md`.
+
 - **Retire the dead split-double destination chain** (2026-07-26): the sole
   retained `fmov_to_d_rrr` call is inside `put_fp_value(size=5)`, but every
   configured AArch64 ordinary-double destination enters exact MPFR service and

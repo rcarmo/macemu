@@ -127,12 +127,15 @@ if (clone.status !== 0) {
   process.exit(1);
 }
 const disk = clone.stdout.trim().split("\n").at(-1)!;
-const knownGroups = new Set(["integer"]);
-if (process.env.GROUP && !knownGroups.has(process.env.GROUP))
+const groupPattern = new Map([
+  ["integer", /^(?:byte|word|long)_/],
+  ["single", /^single_/],
+]);
+if (process.env.GROUP && !groupPattern.has(process.env.GROUP))
   throw new Error(`unknown GROUP=${process.env.GROUP}`);
 const selected = cases.filter((item) =>
   (!process.env.CASE || item.name === process.env.CASE) &&
-  (!process.env.GROUP || /^(?:byte|word|long)_/.test(item.name))
+  (!process.env.GROUP || groupPattern.get(process.env.GROUP)!.test(item.name))
 );
 if (selected.length === 0)
   throw new Error(`unknown CASE=${process.env.CASE} GROUP=${process.env.GROUP}`);
@@ -201,5 +204,5 @@ try {
   rmSync(diskDir, { recursive: true, force: true });
 }
 console.log(`FPP_FMOVE_DEST_EXTENDED_EA_MATRIX pass=${pass} fail=${fail} total=${pass + fail}`);
-const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 18 : 26;
+const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 18 : process.env.GROUP === "single" ? 4 : 26;
 process.exit(fail === 0 && pass === expected && selected.length === expected ? 0 : 1);
