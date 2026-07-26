@@ -642,6 +642,10 @@ const fpFromDoubleMrRetirementMatrix = await Bun.file(new URL(
   "./fp-from-double-mr-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fpToDoubleRmRetirementMatrix = await Bun.file(new URL(
+  "./fp-to-double-rm-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fpExtendedMemoryRetirementMatrix = await Bun.file(new URL(
   "./fp-extended-memory-retirement-matrix.sh",
   import.meta.url,
@@ -1245,6 +1249,35 @@ console.log("METRIC structural_fp_from_double_mr_unreachable_midfuncs=1");
 console.log("METRIC structural_fp_from_double_mr_unreachable_raw_boundaries=1");
 console.log("METRIC structural_fp_from_double_mr_service_vectors=28");
 console.log("METRIC structural_fp_from_double_mr_strict_vectors=3");
+
+/* Retire the unused guest-address binary64 load chain. Configured ordinary
+ * double-memory imports instead use ordered guest reads, temp_fp assembly, and
+ * the accepted fmov_rm -> raw_fmov_d_rm host-pointer chain. */
+const fpToDoubleStart = midfuncSource.indexOf("MIDFUNC(2,fp_to_double_rm,(FW d, RR4 adr))");
+const fpToDoubleEnd = midfuncSource.indexOf("MENDFUNC(2,fp_to_double_rm,(FW d, RR4 adr))", fpToDoubleStart);
+if (fpToDoubleStart < 0 || fpToDoubleEnd < 0) fail("missing retired fp_to_double_rm MIDFUNC");
+const fpToDoubleBody = midfuncSource.slice(fpToDoubleStart, fpToDoubleEnd);
+for (const contract of [
+  "adr = readreg(adr);", "d = f_writereg(d);", "raw_fp_to_double_rm(d, adr);",
+  "unlock2(adr);", "f_unlock(d);",
+]) requireText(fpToDoubleBody, contract, "retired fp_to_double_rm body");
+if ((fppCompilerSource.match(/\bfp_to_double_rm\b/g) || []).length !== 1 ||
+    !fppCompilerSource.includes("extern void fp_to_double_rm(unsigned int d, unsigned int adr);"))
+  fail("fp_to_double_rm configured external census is no longer declaration-only");
+const rawFpToDouble = functionBody(
+  codegenSource, "LOWFUNC(NONE,READ,2,raw_fp_to_double_rm,(FW d, RR4 adr))",
+  "LENDFUNC(NONE,READ,2,raw_fp_to_double_rm,(FW d, RR4 adr))", "retired raw_fp_to_double_rm",
+);
+for (const contract of ["LDR_dXx(d, adr, R_MEMSTART);", "REV64_dd(d, d);"])
+  requireText(rawFpToDouble, contract, "retired raw_fp_to_double_rm body");
+for (const contract of [
+  "bash jit-test/fmov-rm-native-matrix.sh",
+  "FMOV_RM_NATIVE_MATRIX pass=10 fail=0 total=10",
+  "FP_TO_DOUBLE_RM_RETIREMENT live_sibling=10 fail=0 total=10",
+]) requireText(fpToDoubleRmRetirementMatrix, contract, "fp_to_double_rm retirement control");
+console.log("METRIC structural_fp_to_double_rm_unreachable_midfuncs=1");
+console.log("METRIC structural_fp_to_double_rm_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fp_to_double_rm_live_sibling_vectors=10");
 
 /* Retire both binary64-shadow extended-memory chains. Configured source keeps
  * one ordinary and two static-FMOVEM compositions per direction, but ordinary

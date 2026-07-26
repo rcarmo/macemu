@@ -216,6 +216,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the legacy binary64 guest-address load chain on AArch64**
+  (2026-07-26): configured preprocessing retains only the
+  `fp_to_double_rm` extern; no generated, support, compatibility, FPP, or
+  reachable MIDFUNC caller exists, so `raw_fp_to_double_rm` is definition-only.
+  The live ordinary binary64 import remains the already audited ordered guest
+  read and `fmov_rm -> raw_fmov_d_rm` path. A **10/10 strict exact-native**
+  sibling control covers all maintained double-source EAs. The 998-row
+  inventory moves exactly these two rows to unreachable. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FP_TO_DOUBLE_RM_UNREACHABLE.md`.
+
 - **Retire the legacy extended-memory conversion chains on AArch64**
   (2026-07-26): configured preprocessing retains one ordinary and two static
   FMOVEM compositions in each direction beneath exact MPFR service gates.
