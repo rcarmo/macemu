@@ -913,7 +913,7 @@ Added `--enable-aarch64-jit-experimental` to the autoconf build system, enabling
 | `B2_JIT_PCTRACE=N` | Log first N block entry PCs with register state |
 | `B2_JIT_VERIFY_LIMIT=N` | Historical/legacy per-instruction verification knob |
 | `B2_JIT_VERIFY_PCS=pc[-pc],...` | Targeted native-vs-interpreter verification for selected compiled instruction PCs |
-| `B2_JIT_SYNC_TICKS=1` | Experimental synchronous tick model driven from JIT dispatch returns |
+| `B2_JIT_SYNC_TICKS=1` | Experimental synchronous tick model driven from safe JIT dispatch returns; the dispatcher samples host time once per 256 returns and still delivers due 60 Hz ticks only after guest state is materialised |
 | `B2_JIT_L2_ONLY=1` | Force all blocks to optlev=2 |
 | `B2_JIT_MAX_OPTLEV=N` | Cap maximum optimization level |
 | `B2_JIT_FLUSH_EACH_OP=1` | Diagnostic: canonicalize guest state after every compiled opcode |

@@ -8275,6 +8275,20 @@ requireText(
   "if (use_sync_ticks && !use_retirement_ticks)",
   "retirement ticks suppress dispatcher wall-clock ticks",
 );
+for (const contract of [
+  "static unsigned clock_sample_countdown = 0;",
+  "if (clock_sample_countdown-- == 0)",
+  "clock_sample_countdown = 255;",
+]) {
+  requireText(supportSource, contract, "dispatcher wall-clock sampling interval");
+}
+const wallClockSampleStart = supportSource.indexOf("if (clock_sample_countdown-- == 0)");
+const wallClockSampleEnd = supportSource.indexOf("\n\t\t}", wallClockSampleStart);
+if (wallClockSampleStart < 0 || wallClockSampleEnd < 0)
+  fail("missing bounded dispatcher wall-clock sample block");
+const wallClockSampleBody = supportSource.slice(wallClockSampleStart, wallClockSampleEnd);
+requireText(wallClockSampleBody, "GetTicks_usec();", "sampled dispatcher host-clock read");
+requireText(wallClockSampleBody, "jit_one_tick();", "sampled dispatcher 60 Hz delivery");
 if (supportSource.includes("jit_guest_path_is_armed")) {
   fail("retirement tick ownership is still coupled to path-capture arming");
 }
