@@ -122,6 +122,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^i_FPP$/, "AARCH64_JIT_AUDIT_FPP_LIFECYCLE.md"],
   [/^(?:i_FScc|fp_fscc_ri)$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
+  [/^fmov_to_[bwl]_rr$/, "AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md"],
   [/^fmov_s_rr$/, "AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md"],
   [/^(?:i_(?:MULS|MULU|NOT|SUBA|SWAP|TST)|jnf_MUL[SU]|jff_TST_[bwl](?:_imm)?)$/, "AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md"],
   [/^i_FBcc$/, "AARCH64_JIT_AUDIT_FBCC_LIFECYCLE.md"],
@@ -231,6 +232,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
+  [/^raw_fmov_to_[bwl]_rr$/, "AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md"],
   [/^raw_fmov_s_rr$/, "AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md"],
   [/^raw_fmov_d_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
   [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],

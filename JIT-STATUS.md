@@ -216,6 +216,20 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit the live FP-to-signed-integer destination lifecycle** (2026-07-26):
+  closes `fmov_to_{b,w,l}_rr` and `raw_fmov_to_{b,w,l}_rr` as one shared
+  implementation unit. Exactly two configured roots per width cover Dn and
+  writable-memory destinations. The **54/54 exact-native** matrix proves all
+  three widths, byte/word upper-lane preservation, four FPCR rounding modes,
+  signed limits and saturation, NaN/infinity sign policy, FPSR replacement and
+  accrual, NZCV preservation, basic and extended EA/writeback classes, guarded
+  stores, maximum fields, and the all-integer-registers-live pressure route.
+  No production repair was required beyond the accepted ordinary-FMOVE
+  destination implementation. The deterministic 998-row inventory promotes
+  exactly three MIDFUNC and three raw-boundary rows; binary32, double-split, and
+  generic emitter contracts remain separately classified. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md`.
+
 - **Close the final reachable ordinary integer generator tail** (2026-07-19):
   closes `MULS`, `MULU`, `NOT`, `SUBA`, `SWAP`, and `TST` plus eight directly
   connected reachable MIDFUNC rows with a **32/32 exact-native** strict replay

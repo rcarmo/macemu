@@ -18,9 +18,9 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
-| midfunc | 422 | 281 | 0 | 124 | 17 |
+| midfunc | 422 | 284 | 0 | 124 | 14 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
-| raw_boundary | 83 | 32 | 0 | 21 | 30 |
+| raw_boundary | 83 | 35 | 0 | 21 | 27 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,11 +42,8 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 68 | `fmov_to_b_rr` | midfunc:`fmov_to_b_rr` |
 | 68 | `fmov_to_d_rrr` | midfunc:`fmov_to_d_rrr` |
-| 68 | `fmov_to_l_rr` | midfunc:`fmov_to_l_rr` |
 | 68 | `fmov_to_s_rr` | midfunc:`fmov_to_s_rr` |
-| 68 | `fmov_to_w_rr` | midfunc:`fmov_to_w_rr` |
 | 68 | `fmovs_rm` | midfunc:`fmovs_rm` |
 | 68 | `forget_about` | midfunc:`forget_about` |
 | 68 | `fp_from_double_mr` | midfunc:`fp_from_double_mr` |
@@ -62,6 +59,9 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `_W` | emitter_api:`_W` |
 | 60 | `ADCS_www` | emitter_api:`ADCS_www` |
 | 60 | `ADDS_wwi` | emitter_api:`ADDS_wwi` |
+| 60 | `ADDS_www` | emitter_api:`ADDS_www` |
+| 60 | `ADDS_wwwLSLi` | emitter_api:`ADDS_wwwLSLi` |
+| 60 | `ANDS_ww3f` | emitter_api:`ANDS_ww3f` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`fmov_to_b_rr` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`fmov_to_b_rr`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`fmov_to_d_rrr` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`fmov_to_d_rrr`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

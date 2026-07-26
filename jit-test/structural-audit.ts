@@ -626,6 +626,10 @@ const fppFmoveDestinationExtendedEaMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-extended-ea-matrix.ts",
   import.meta.url,
 )).text();
+const fmovToIntNativeMatrix = await Bun.file(new URL(
+  "./fmov-to-int-native-matrix.sh",
+  import.meta.url,
+)).text();
 const fppFmoveDestinationInvalidMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-invalid-matrix.ts",
   import.meta.url,
@@ -1351,6 +1355,55 @@ console.log("METRIC structural_fpp_fmove_destination_basic_ea_modes=3");
 console.log("METRIC structural_fpp_fmove_destination_exception_contracts=2");
 console.log("METRIC structural_fpp_fmove_destination_nan_sign_boundary=1");
 
+/* Close the source-coherent byte/word/long FP-to-integer unit. Each MIDFUNC
+   must retain its two configured roots, width-specific destination ownership,
+   shared emitter width, and balanced integer/FP allocator lifetime. */
+for (const name of ["fmov_to_b_rr", "fmov_to_w_rr", "fmov_to_l_rr"]) {
+  const roots = (putFpValueBody.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (roots !== 2) fail(`${name} configured roots=${roots} expected=2`);
+}
+const fmovToLongMidfunc = functionBody(
+  midfuncSource, "MIDFUNC(2,fmov_to_l_rr,(W4 d, FR s))",
+  "MENDFUNC(2,fmov_to_l_rr,(W4 d, FR s))", "fmov_to_l_rr lifecycle",
+);
+const fmovToWordMidfunc = functionBody(
+  midfuncSource, "MIDFUNC(2,fmov_to_w_rr,(W4 d, FR s))",
+  "MENDFUNC(2,fmov_to_w_rr,(W4 d, FR s))", "fmov_to_w_rr lifecycle",
+);
+const fmovToByteMidfunc = functionBody(
+  midfuncSource, "MIDFUNC(2,fmov_to_b_rr,(W4 d, FR s))",
+  "MENDFUNC(2,fmov_to_b_rr,(W4 d, FR s))", "fmov_to_b_rr lifecycle",
+);
+for (const [body, init, raw] of [
+  [fmovToLongMidfunc, "d = writereg(d);", "raw_fmov_to_l_rr(d, s);"],
+  [fmovToWordMidfunc, "INIT_WREG_w(d);", "raw_fmov_to_w_rr(d, s, targetIsReg);"],
+  [fmovToByteMidfunc, "INIT_WREG_b(d);", "raw_fmov_to_b_rr(d, s, targetIsReg);"],
+] as const) {
+  requireBefore(body, "s = f_readreg(s);", init, "FP-to-integer source/destination acquisition");
+  requireBefore(body, init, raw, "FP-to-integer destination initialization");
+  requireBefore(body, raw, "unlock2(d);", "FP-to-integer destination lifetime");
+  requireBefore(body, "unlock2(d);", "f_unlock(s);", "FP-to-integer source lifetime");
+}
+for (const [name, width] of [["l", 32], ["w", 16], ["b", 8]] as const) {
+  const raw = functionBody(
+    codegenSource, `LOWFUNC(NONE,NONE,${name === "b" ? 3 : 2},raw_fmov_to_${name}_rr`,
+    `LENDFUNC(NONE,NONE,${name === "b" ? 3 : 2},raw_fmov_to_${name}_rr`,
+    `raw_fmov_to_${name}_rr lifecycle`,
+  );
+  requireText(raw, `fmov_to_int_emit(d, s, ${width});`, `raw_fmov_to_${name}_rr width`);
+}
+for (const contract of [
+  "GROUP=integer bun jit-test/fpp-fmove-destination-basic-matrix.ts",
+  "GROUP=integer bun jit-test/fpp-fmove-destination-extended-ea-matrix.ts",
+  "FPP_FMOVE_DEST_BASIC_MATRIX pass=36 fail=0 total=36",
+  "FPP_FMOVE_DEST_EXTENDED_EA_MATRIX pass=18 fail=0 total=18",
+  "FMOV_TO_INT_NATIVE_MATRIX pass=%d fail=0 total=%d",
+]) requireText(fmovToIntNativeMatrix, contract, "FP-to-integer focused wrapper");
+console.log("METRIC structural_fmov_to_int_configured_live_roots=6");
+console.log("METRIC structural_fmov_to_int_midfuncs=3");
+console.log("METRIC structural_fmov_to_int_raw_boundaries=3");
+console.log("METRIC structural_fmov_to_int_exact_native_vectors=54");
+
 const fmoveMemoryCompilerStart = fppCompilerSource.indexOf("case 3:\t\t\t\t\t\t\t/* FMOVE Fpn,<ea> */");
 const fmoveMemoryCompilerEnd = fppCompilerSource.indexOf("case 6:", fmoveMemoryCompilerStart);
 if (fmoveMemoryCompilerStart < 0 || fmoveMemoryCompilerEnd < 0)
@@ -1420,7 +1473,9 @@ for (const contract of [
   'B2_TEST_REPLAY_FPSR: "0c55ff08"', 'B2_TEST_REPLAY_FPCR: "0"',
   'B2_TEST_MEMDUMP:', 'B2_JIT_STRICT_FULL: "1"', 'B2_NATIVE_ASSERT_PC:',
   'sr === "271f"', 'regsPreserved', 'addressRegsPreserved',
-  'cow_clone', 'cow_release', 'const expected = process.env.CASE ? 1 : 26',
+  'cow_clone', 'cow_release', 'const knownGroups = new Set(["integer"])',
+  '!process.env.GROUP || /^(?:byte|word|long)_/.test(item.name)',
+  'const expected = process.env.CASE ? 1 : process.env.GROUP === "integer" ? 18 : 26',
 ]) requireText(fppFmoveDestinationExtendedEaMatrix, contract, "native ordinary FMOVE extended-destination matrix");
 if (/stream:\s*[`"]F23[ABC]\b/.test(fppFmoveDestinationExtendedEaMatrix))
   fail("ordinary FMOVE extended destination matrix: non-writable PC-relative/immediate destination leaked into scope");
