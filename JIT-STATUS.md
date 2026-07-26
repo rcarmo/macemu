@@ -216,6 +216,17 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the dead split-double destination chain** (2026-07-26): the sole
+  retained `fmov_to_d_rrr` call is inside `put_fp_value(size=5)`, but every
+  configured AArch64 ordinary-double destination enters exact MPFR service and
+  returns before `put_fp_value()`, EA acquisition, or native dispatch. The
+  shared `raw_fmov_to_d_rrr` boundary is therefore definition-only. A **28
+  service + 3 strict** control proves the exact conversion boundary and
+  pre-native rejection. The 998-row inventory moves exactly these two rows to
+  unreachable; live `FMOV_xd` and `LSR_xxi` emitters remain independently
+  classified. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md`.
+
 - **Audit the live FP-to-signed-integer destination lifecycle** (2026-07-26):
   closes `fmov_to_{b,w,l}_rr` and `raw_fmov_to_{b,w,l}_rr` as one shared
   implementation unit. Exactly two configured roots per width cover Dn and

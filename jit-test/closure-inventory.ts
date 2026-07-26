@@ -322,6 +322,7 @@ const semanticServiceMid = new Map<string, string>([
   ["fmov_d_ri_0", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 15 can reach fmov_0/fmov_d_ri_0; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
   ["fmov_d_ri_1", "the configured AArch64 FMOVECR gate enters exact MPFR service before selector 50 can reach fmov_1/fmov_d_ri_1; the only other parent fmov_l_ri is unreachable; AARCH64_JIT_AUDIT_FMOV_ZERO_ONE_RETIREMENT.md"],
   ["fmov_s_ri", "all four configured AArch64 binary32 constant roots are retained only below the FMOVECR exact-MPFR service return; raw_fmov_s_rr remains live through fmov_s_rr; AARCH64_JIT_AUDIT_FMOV_S_RI_UNREACHABLE.md"],
+  ["fmov_to_d_rrr", "the sole retained put_fp_value(size=5) root is dominated by the configured AArch64 exact-MPFR double-destination service return; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md"],
 ]);
 const configuredUnreachableMid = new Map<string, string>([
   ["fmov_d_rm", "its sole external spelling is a legacy extern declaration; configured double-memory FMOVE uses fmov_rm -> raw_fmov_d_rm; AARCH64_JIT_AUDIT_FMOV_D_RM_UNREACHABLE.md"],
@@ -347,6 +348,21 @@ for (const [name, startMarker, endMarker] of semanticServiceBlocks) {
   if (gate < 0 || fail < gate || ret < fail || operand < ret || call < operand)
     throw new Error(`configured AArch64 semantic service no longer precedes ${name}`);
 }
+const configuredFmoveDestinationStart = source.fpp.indexOf("case 3:\t\t\t\t\t\t\t/* FMOVE Fpn,<ea> */");
+const configuredFmoveDestinationEnd = source.fpp.indexOf("case 6:", configuredFmoveDestinationStart);
+if (configuredFmoveDestinationStart < 0 || configuredFmoveDestinationEnd < 0)
+  throw new Error("configured ordinary FMOVE destination block disappeared");
+const configuredFmoveDestination = source.fpp.slice(configuredFmoveDestinationStart, configuredFmoveDestinationEnd);
+const configuredDoubleGate = configuredFmoveDestination.indexOf("((extra >> 10) & 7) == 5");
+const configuredDoubleFail = configuredFmoveDestination.indexOf("FAIL(1);", configuredDoubleGate);
+const configuredDoubleReturn = configuredFmoveDestination.indexOf("return;", configuredDoubleFail);
+const configuredPutFpValue = configuredFmoveDestination.indexOf("put_fp_value(", configuredDoubleReturn);
+if (configuredDoubleGate < 0 || configuredDoubleFail < configuredDoubleGate ||
+    configuredDoubleReturn < configuredDoubleFail || configuredPutFpValue < configuredDoubleReturn)
+  throw new Error("configured double-destination service no longer dominates put_fp_value/fmov_to_d_rrr");
+if (countToken(source.fpp, "fmov_to_d_rrr") !== 1)
+  throw new Error(`fmov_to_d_rrr raw source-call census=${countToken(source.fpp, "fmov_to_d_rrr")}, expected sole retained put_fp_value root`);
+
 for (const [name, blocks] of [
   ["fmul_rr", [["case 0x23:", "case 0x24:"], ["case 0x27:", "case 0x28:"]]],
   ["fdiv_rr", [["case 0x20:", "case 0x21:"], ["case 0x24:", "case 0x25:"]]],
@@ -647,6 +663,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmov_d_ri_10", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_10 and fmov_l_ri; FMOV_di remains reachable from other compositions"],
   ["raw_fmov_d_ri_100", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_ri_100 and fmov_l_ri; SCVTF_dw remains reachable from other compositions"],
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
+  ["raw_fmov_to_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_to_d_rrr after configured double destinations enter exact MPFR service before put_fp_value; FMOV_xd and LSR_xxi remain independently classified; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md"],
   ["raw_fmod_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],
   ["raw_frem1_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frem1_rr after configured FREM service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FMOD lower chain"],

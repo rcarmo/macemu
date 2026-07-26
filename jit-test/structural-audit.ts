@@ -630,6 +630,10 @@ const fmovToIntNativeMatrix = await Bun.file(new URL(
   "./fmov-to-int-native-matrix.sh",
   import.meta.url,
 )).text();
+const fmovToDRrrRetirementMatrix = await Bun.file(new URL(
+  "./fmov-to-d-rrr-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fppFmoveDestinationInvalidMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-invalid-matrix.ts",
   import.meta.url,
@@ -1454,6 +1458,34 @@ console.log("METRIC structural_fpp_fmove_double_destination_strict_rejections=3"
 console.log("METRIC structural_fpp_fmove_double_destination_fpcr_modes=4");
 console.log("METRIC structural_fpp_fmove_double_destination_ea_classes=10");
 console.log("METRIC structural_fpp_fmove_double_destination_special_classes=3");
+
+/* The old native split-double destination chain is retained only below the
+   configured exact-MPFR gate. Retire both rows while keeping the service and
+   strict attribution matrix as a positive runtime control. */
+const fmovToDoubleMidfunc = functionBody(
+  midfuncSource, "MIDFUNC(3,fmov_to_d_rrr,(W4 d1, W4 d2, FR s))",
+  "MENDFUNC(3,fmov_to_d_rrr,(W4 d1, W4 d2, FR s))", "retired fmov_to_d_rrr",
+);
+for (const contract of [
+  "s = f_readreg(s);", "d1 = writereg(d1);", "d2 = writereg(d2);",
+  "raw_fmov_to_d_rrr(d1, d2, s);", "unlock2(d2);", "unlock2(d1);", "f_unlock(s);",
+]) requireText(fmovToDoubleMidfunc, contract, "retired fmov_to_d_rrr body");
+const rawFmovToDouble = functionBody(
+  codegenSource, "LOWFUNC(NONE,NONE,3,raw_fmov_to_d_rrr,(W4 d1, W4 d2, FR s))",
+  "LENDFUNC(NONE,NONE,3,raw_fmov_to_d_rrr,(W4 d1, W4 d2, FR s))", "retired raw_fmov_to_d_rrr",
+);
+requireBefore(rawFmovToDouble, "FMOV_xd(d1, s);", "LSR_xxi(d2, d1, 32);", "retired split-double raw order");
+if ((fppCompilerSource.match(/\bfmov_to_d_rrr\(/g) || []).length !== 1)
+  fail("retired fmov_to_d_rrr source roots changed");
+for (const contract of [
+  "bun jit-test/fpp-fmove-double-destination-matrix.ts",
+  "FPP_DOUBLE_DEST_MATRIX service_pass=28 strict_pass=3 fail=0 total=31",
+  "FMOV_TO_D_RRR_RETIREMENT service=28 strict=3 fail=0 total=31",
+]) requireText(fmovToDRrrRetirementMatrix, contract, "fmov_to_d_rrr retirement wrapper");
+console.log("METRIC structural_fmov_to_d_rrr_unreachable_midfuncs=1");
+console.log("METRIC structural_fmov_to_d_rrr_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fmov_to_d_rrr_service_vectors=28");
+console.log("METRIC structural_fmov_to_d_rrr_strict_rejections=3");
 
 for (const contract of [
   "case 5: /* d16(An) */", "case 6: /* d8(An,Xn) */",

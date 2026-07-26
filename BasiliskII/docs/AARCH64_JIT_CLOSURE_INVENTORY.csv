@@ -460,7 +460,7 @@ midfunc,fmov_rr,audited,fmov_rr,68,21,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,fmov_s_ri,unreachable,fmov_s_ri,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,958,all four configured AArch64 binary32 constant roots are retained only below the FMOVECR exact-MPFR service return; raw_fmov_s_rr remains live through fmov_s_rr; AARCH64_JIT_AUDIT_FMOV_S_RI_UNREACHABLE.md
 midfunc,fmov_s_rr,audited,fmov_s_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,892,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md
 midfunc,fmov_to_b_rr,audited,fmov_to_b_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,998,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md
-midfunc,fmov_to_d_rrr,unreviewed,fmov_to_d_rrr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1065,reachable; no accepted family-level closure report
+midfunc,fmov_to_d_rrr,unreachable,fmov_to_d_rrr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1065,the sole retained put_fp_value(size=5) root is dominated by the configured AArch64 exact-MPFR double-destination service return; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md
 midfunc,fmov_to_l_rr,audited,fmov_to_l_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,967,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md
 midfunc,fmov_to_s_rr,unreviewed,fmov_to_s_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,977,reachable; no accepted family-level closure report
 midfunc,fmov_to_w_rr,audited,fmov_to_w_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,987,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md
@@ -903,7 +903,7 @@ raw_boundary,raw_fmov_l_rr,audited,raw_fmov_l_rr,60,3,BasiliskII/src/uae_cpu_202
 raw_boundary,raw_fmov_rr,audited,raw_fmov_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,886,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md
 raw_boundary,raw_fmov_s_rr,audited,raw_fmov_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,920,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md
 raw_boundary,raw_fmov_to_b_rr,audited,raw_fmov_to_b_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1157,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md
-raw_boundary,raw_fmov_to_d_rrr,unreviewed,raw_fmov_to_d_rrr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1203,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
+raw_boundary,raw_fmov_to_d_rrr,unreachable,raw_fmov_to_d_rrr,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1203,only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_to_d_rrr after configured double destinations enter exact MPFR service before put_fp_value; FMOV_xd and LSR_xxi remain independently classified; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md
 raw_boundary,raw_fmov_to_l_rr,audited,raw_fmov_to_l_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1073,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md
 raw_boundary,raw_fmov_to_s_rr,unreviewed,raw_fmov_to_s_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1079,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification
 raw_boundary,raw_fmov_to_w_rr,audited,raw_fmov_to_w_rr,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1151,BasiliskII/docs/AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md
