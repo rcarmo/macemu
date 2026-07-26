@@ -642,6 +642,10 @@ const fpFromDoubleMrRetirementMatrix = await Bun.file(new URL(
   "./fp-from-double-mr-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fpExtendedMemoryRetirementMatrix = await Bun.file(new URL(
+  "./fp-extended-memory-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fppFmoveDestinationInvalidMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-invalid-matrix.ts",
   import.meta.url,
@@ -1241,6 +1245,84 @@ console.log("METRIC structural_fp_from_double_mr_unreachable_midfuncs=1");
 console.log("METRIC structural_fp_from_double_mr_unreachable_raw_boundaries=1");
 console.log("METRIC structural_fp_from_double_mr_service_vectors=28");
 console.log("METRIC structural_fp_from_double_mr_strict_vectors=3");
+
+/* Retire both binary64-shadow extended-memory chains. Configured source keeps
+ * one ordinary and two static-FMOVEM compositions per direction, but ordinary
+ * size-2 FMOVE and every static/dynamic FMOVEM form enter exact MPFR service
+ * before any retained conversion call can execute. */
+for (const [mid, raw, barrier] of [
+  ["fp_from_exten_mr", "raw_fp_from_exten_mr", "emit_strict_cache_disabled_write_barrier(adr, 12);"],
+  ["fp_to_exten_rm", "raw_fp_to_exten_rm", ""],
+] as const) {
+  const start = midfuncSource.indexOf(`MIDFUNC(2,${mid},`);
+  const end = midfuncSource.indexOf(`MENDFUNC(2,${mid},`, start);
+  if (start < 0 || end < 0) fail(`missing retired ${mid} MIDFUNC`);
+  const body = midfuncSource.slice(start, end);
+  for (const contract of ["adr = readreg(adr);", `${raw}(`, "unlock2(adr);", "f_unlock("])
+    requireText(body, contract, `retired ${mid} body`);
+  if (barrier) requireText(body, barrier, `retired ${mid} body`);
+}
+const extendedFromCalls = (fppCompilerSource.match(/^\s*fmov_ext_mr\(/gm) || []).length;
+const extendedToCalls = (fppCompilerSource.match(/^\s*fmov_ext_rm\(/gm) || []).length;
+if (extendedFromCalls !== 3 || extendedToCalls !== 7)
+  fail(`legacy extended conversion raw-source calls from/to=${extendedFromCalls}/${extendedToCalls}, expected 3/7`);
+const fmovecrRawStart = fppCompilerSource.indexOf("if ((extra & 0xfc00) == 0x5c00)");
+const inactiveLongDoubleLoads = (fppCompilerSource.slice(fmovecrRawStart).match(/^\s*fmov_ext_rm\(/gm) || []).length;
+if (fmovecrRawStart < 0 || inactiveLongDoubleLoads !== 4)
+  fail(`legacy extended inactive FMOVECR loads=${inactiveLongDoubleLoads}, expected 4`);
+const retiredGetFpValue = functionBody(
+  fppCompilerSource, "STATIC_INLINE int get_fp_value(uae_u32 opcode, uae_u16 extra)",
+  "STATIC_INLINE void clear_fp_exception_status", "extended retirement get_fp_value",
+);
+const retiredPutFpValue = functionBody(
+  fppCompilerSource, "STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)",
+  "STATIC_INLINE int get_fp_ad", "extended retirement put_fp_value",
+);
+for (const body of [retiredGetFpValue, retiredPutFpValue]) {
+  const extendedCase = body.indexOf("case 2: /* extended precision */");
+  const reject = body.indexOf("return -1;", extendedCase);
+  const retainedCall = body.indexOf("fmov_ext_", reject);
+  if (extendedCase < 0 || reject < extendedCase || retainedCall < reject)
+    fail("ordinary extended conversion residue is no longer dominated by service rejection");
+}
+const retiredFppStart = fppCompilerSource.indexOf("void comp_fpp_opp(uae_u32 opcode, uae_u16 extra)");
+if (retiredFppStart < 0) fail("extended retirement FPP operation compiler disappeared");
+const retiredFppOperation = fppCompilerSource.slice(retiredFppStart);
+const retiredFmovemStart = retiredFppOperation.indexOf("case 6:\t\t\t\t\t\t\t/* FMOVEM <ea>,<reglist> */");
+const retiredFmovemEnd = retiredFppOperation.indexOf("case 4:", retiredFmovemStart);
+const retiredFmovem = retiredFppOperation.slice(retiredFmovemStart, retiredFmovemEnd);
+const staticGate = retiredFmovem.indexOf("if ((extra & 0x0800) == 0)");
+const staticReturn = retiredFmovem.indexOf("return;", staticGate);
+const firstEa = retiredFmovem.indexOf("get_fp_ad(opcode)");
+const firstFrom = retiredFmovem.indexOf("fmov_ext_mr(");
+const firstTo = retiredFmovem.indexOf("fmov_ext_rm(");
+if (retiredFmovemStart < 0 || retiredFmovemEnd < 0 || staticGate < 0 ||
+    staticReturn < staticGate || firstEa < staticReturn || firstFrom < firstEa || firstTo < firstEa)
+  fail("static FMOVEM exact service no longer dominates retained extended conversions");
+const dynamicFails = [...retiredFmovem.matchAll(/case 1:\s*\/\* dynamic pred \*\//g)].length;
+if (dynamicFails !== 4) fail(`dynamic FMOVEM early-fail census=${dynamicFails}, expected 4`);
+const rawFpFromExten = functionBody(
+  codegenSource, "LOWFUNC(NONE,WRITE,2,raw_fp_from_exten_mr,(RR4 adr, FR s))",
+  "LENDFUNC(NONE,WRITE,2,raw_fp_from_exten_mr,(RR4 adr, FR s))", "retired raw_fp_from_exten_mr",
+);
+for (const contract of ["FMOV_xd(REG_WORK1, s);", "FCMP_d0(s);", "STRH_wXi(", "STR_xXi(", "STP_wwXi("])
+  requireText(rawFpFromExten, contract, "retired raw_fp_from_exten_mr body");
+const rawFpToExten = functionBody(
+  codegenSource, "LOWFUNC(NONE,READ,2,raw_fp_to_exten_rm,(FW d, RR4 adr))",
+  "LENDFUNC(NONE,READ,2,raw_fp_to_exten_rm,(FW d, RR4 adr))", "retired raw_fp_to_exten_rm",
+);
+for (const contract of ["LDRH_wXi(", "LDR_xXi(", "FMOV_dx(d, REG_WORK1);", "ORR_xxx("])
+  requireText(rawFpToExten, contract, "retired raw_fp_to_exten_rm body");
+for (const contract of [
+  "bun jit-test/fpp-fmove-extended-fallback-matrix.ts",
+  "bun jit-test/fpp-fmovem-static-service-matrix.ts",
+  "bun jit-test/fpp-fmovem-dynamic-service-matrix.ts",
+  "FP_EXTENDED_MEMORY_RETIREMENT service=30 strict=10 fail=0 total=40",
+]) requireText(fpExtendedMemoryRetirementMatrix, contract, "extended-memory retirement control");
+console.log("METRIC structural_fp_extended_memory_unreachable_midfuncs=2");
+console.log("METRIC structural_fp_extended_memory_unreachable_raw_boundaries=2");
+console.log("METRIC structural_fp_extended_memory_service_vectors=30");
+console.log("METRIC structural_fp_extended_memory_strict_vectors=10");
 
 /* Complete the live fmov_rm/raw_fmov_d_rm composition without inheriting dead
  * FMOVECR spellings or broad allocator/emitter status. */

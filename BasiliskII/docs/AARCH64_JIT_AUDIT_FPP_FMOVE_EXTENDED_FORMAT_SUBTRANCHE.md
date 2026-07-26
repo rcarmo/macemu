@@ -90,9 +90,14 @@ allocator pressure (isolated): pass=31 fail=0
 
 ## Closure decision
 
-No closure row is promoted. The deterministic inventory remains 997 rows with
-zero classification changes. `generator,i_FPP`, `fp_to_exten_rm`,
-`fp_from_exten_mr`, and their raw boundaries remain **unreviewed** because
-FMOVEM/FMOVECR and other generated compositions still reach them. This
-checkpoint closes only ordinary FMOVE.X by making its exact MPFR service
+This checkpoint originally promoted no closure row: `generator,i_FPP`,
+`fp_to_exten_rm`, `fp_from_exten_mr`, and their raw boundaries remained
+**unreviewed** while FMOVEM/FMOVECR and the other generated compositions were
+still open. It closes only ordinary FMOVE.X by making its exact MPFR service
 boundary explicit and fail-closed.
+
+The later complete FPP lifecycle and FMOVEM/FMOVECR audits established that all
+remaining configured compositions also enter exact service before these legacy
+binary64-shadow helpers. Their final four-row **unreachable** classification is
+recorded in `AARCH64_JIT_AUDIT_FP_EXTENDED_MEMORY_UNREACHABLE.md`; that later
+report supersedes only this provisional lower-layer decision.

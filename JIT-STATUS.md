@@ -216,6 +216,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the legacy extended-memory conversion chains on AArch64**
+  (2026-07-26): configured preprocessing retains one ordinary and two static
+  FMOVEM compositions in each direction beneath exact MPFR service gates.
+  Ordinary FMOVE.X rejects before EA acquisition, static FMOVEM returns before
+  `get_fp_ad`, dynamic FMOVEM exits still earlier, and the four FMOVECR
+  long-double spellings are absent from the configured build and dominated by
+  selector-level service in raw source. `fp_from_exten_mr`, `fp_to_exten_rm`,
+  and both raw boundaries are therefore unreachable. A **30 service + 10
+  strict** composite control covers ordinary extended FMOVE and static/dynamic
+  FMOVEM. The 998-row inventory moves exactly these four rows to unreachable.
+  See `BasiliskII/docs/AARCH64_JIT_AUDIT_FP_EXTENDED_MEMORY_UNREACHABLE.md`.
+
 - **Retire the legacy binary64 host-memory store chain on AArch64**
   (2026-07-26): configured preprocessing retains only the
   `fp_from_double_mr` extern. Its sole raw `fmov_mr` source call is confined to
