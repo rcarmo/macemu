@@ -328,6 +328,7 @@ const semanticServiceMid = new Map<string, string>([
   ["fmov_to_d_rrr", "the sole retained put_fp_value(size=5) root is dominated by the configured AArch64 exact-MPFR double-destination service return; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md"],
 ]);
 const configuredUnreachableMid = new Map<string, string>([
+  ["fp_from_double_mr", "its sole configured spelling is a legacy extern declaration; the retained fmov_mr call is confined to the inactive non-AArch64 arm below exact double-destination service; AARCH64_JIT_AUDIT_FP_FROM_DOUBLE_MR_UNREACHABLE.md"],
   ["fmov_d_rm", "its sole external spelling is a legacy extern declaration; configured double-memory FMOVE uses fmov_rm -> raw_fmov_d_rm; AARCH64_JIT_AUDIT_FMOV_D_RM_UNREACHABLE.md"],
   ["fmovs_rm", "its sole configured spelling is a legacy extern declaration; both raw source sites select fmov_s_rr in the configured AArch64 arms and retain fmovs_rm only in inactive #else arms; AARCH64_JIT_AUDIT_FMOVS_RM_UNREACHABLE.md"],
 ]);
@@ -670,6 +671,7 @@ const structuralUnreachableRaw = new Map<string, string>([
   ["raw_fmov_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_d_rrr; BFI_xxii and FMOV_dx remain reachable from other compositions"],
   ["raw_fmovs_rm", "only its LOWFUNC/LENDFUNC definition remains below configured-unreachable fmovs_rm; active AArch64 single sources use fmov_s_rr -> raw_fmov_s_rr; LDR_sXi and FCVT_ds remain independently classified; AARCH64_JIT_AUDIT_FMOVS_RM_UNREACHABLE.md"],
   ["raw_fmov_to_d_rrr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmov_to_d_rrr after configured double destinations enter exact MPFR service before put_fp_value; FMOV_xd and LSR_xxi remain independently classified; AARCH64_JIT_AUDIT_FMOV_TO_D_RRR_UNREACHABLE.md"],
+  ["raw_fp_from_double_mr", "only its LOWFUNC/LENDFUNC definition remains below configured-unreachable fp_from_double_mr; the retained fmov_mr source call is in the inactive non-AArch64 ordinary-double destination arm; REV64_dd and STR_dXx remain independently classified; AARCH64_JIT_AUDIT_FP_FROM_DOUBLE_MR_UNREACHABLE.md"],
   ["raw_fmod_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmod_rr after configured FMOD service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FREM lower chain"],
   ["raw_fmovs_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable fmovs_rr; FCVT_sd and FCVT_ds remain reachable from other compositions"],
   ["raw_frem1_rr", "only its LOWFUNC/LENDFUNC definition remains below unreachable frem1_rr after configured FREM service; its retained FDIV_ddd and FMSUB_dddd sites are retired with the paired FMOD lower chain"],

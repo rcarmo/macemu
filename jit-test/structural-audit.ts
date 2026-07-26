@@ -638,6 +638,10 @@ const fmovToDRrrRetirementMatrix = await Bun.file(new URL(
   "./fmov-to-d-rrr-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fpFromDoubleMrRetirementMatrix = await Bun.file(new URL(
+  "./fp-from-double-mr-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fppFmoveDestinationInvalidMatrix = await Bun.file(new URL(
   "./fpp-fmove-destination-invalid-matrix.ts",
   import.meta.url,
@@ -1193,6 +1197,50 @@ for (const contract of [
 console.log("METRIC structural_fmovs_rm_unreachable_midfuncs=1");
 console.log("METRIC structural_fmovs_rm_unreachable_raw_boundaries=1");
 console.log("METRIC structural_fmovs_rm_live_replacement_vectors=18");
+
+/* Retire the legacy host-memory binary64 store chain. Its sole raw fmov_mr
+ * call is in the inactive non-AArch64 arm of put_fp_value(size=5), while every
+ * configured AArch64 double destination services and returns before that
+ * helper. Configured preprocessing retains only the extern declaration. */
+const fpFromDoubleStart = midfuncSource.indexOf("MIDFUNC(2,fp_from_double_mr,(RR4 adr, FR s))");
+const fpFromDoubleEnd = midfuncSource.indexOf("MENDFUNC(2,fp_from_double_mr,(RR4 adr, FR s))", fpFromDoubleStart);
+if (fpFromDoubleStart < 0 || fpFromDoubleEnd < 0) fail("missing retired fp_from_double_mr MIDFUNC");
+const fpFromDoubleBody = midfuncSource.slice(fpFromDoubleStart, fpFromDoubleEnd);
+for (const contract of [
+  "adr = readreg(adr);", "s = f_readreg(s);", "raw_fp_from_double_mr(adr, s);",
+  "emit_strict_cache_disabled_write_barrier(adr, 8);", "f_unlock(s);", "unlock2(adr);",
+]) requireText(fpFromDoubleBody, contract, "retired fp_from_double_mr body");
+if ((fppCompilerSource.match(/\bfp_from_double_mr\b/g) || []).length !== 1 ||
+    !fppCompilerSource.includes("extern void fp_from_double_mr(unsigned int adr, unsigned int s);"))
+  fail("fp_from_double_mr configured external census is no longer declaration-only");
+const putFpForLegacyDoubleStart = fppCompilerSource.indexOf("STATIC_INLINE int put_fp_value(int val, uae_u32 opcode, uae_u16 extra)");
+const putFpForLegacyDoubleEnd = fppCompilerSource.indexOf("STATIC_INLINE int get_fp_ad", putFpForLegacyDoubleStart);
+if (putFpForLegacyDoubleStart < 0 || putFpForLegacyDoubleEnd < 0) fail("missing put_fp_value source boundary");
+const putFpForLegacyDouble = fppCompilerSource.slice(putFpForLegacyDoubleStart, putFpForLegacyDoubleEnd);
+const legacyDoubleCase = putFpForLegacyDouble.indexOf("case 5: /* double precision */");
+const legacyDoubleGate = putFpForLegacyDouble.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)", legacyDoubleCase);
+const liveSplit = putFpForLegacyDouble.indexOf("fmov_to_d_rrr(S2, S3, val);", legacyDoubleGate);
+const alternate = putFpForLegacyDouble.indexOf("#else", liveSplit);
+const deadLegacyCall = putFpForLegacyDouble.indexOf("fmov_mr((uintptr) temp_fp, val);", alternate);
+const branchEnd = putFpForLegacyDouble.indexOf("#endif", deadLegacyCall);
+if (legacyDoubleCase < 0 || !(legacyDoubleCase < legacyDoubleGate && legacyDoubleGate < liveSplit &&
+    liveSplit < alternate && alternate < deadLegacyCall && deadLegacyCall < branchEnd))
+  fail("fp_from_double_mr raw root is no longer confined to inactive non-AArch64 arm");
+const rawFpFromDouble = functionBody(
+  codegenSource, "LOWFUNC(NONE,WRITE,2,raw_fp_from_double_mr,(RR4 adr, FR s))",
+  "LENDFUNC(NONE,WRITE,2,raw_fp_from_double_mr,(RR4 adr, FR s))", "retired raw_fp_from_double_mr",
+);
+for (const contract of ["REV64_dd(SCRATCH_F64_1, s);", "STR_dXx(SCRATCH_F64_1, adr, R_MEMSTART);"])
+  requireText(rawFpFromDouble, contract, "retired raw_fp_from_double_mr body");
+for (const contract of [
+  "bun jit-test/fpp-fmove-double-destination-matrix.ts",
+  "FPP_DOUBLE_DEST_MATRIX service_pass=28 strict_pass=3 fail=0 total=31",
+  "FP_FROM_DOUBLE_MR_RETIREMENT service=28 strict=3 fail=0 total=31",
+]) requireText(fpFromDoubleMrRetirementMatrix, contract, "fp_from_double_mr retirement control");
+console.log("METRIC structural_fp_from_double_mr_unreachable_midfuncs=1");
+console.log("METRIC structural_fp_from_double_mr_unreachable_raw_boundaries=1");
+console.log("METRIC structural_fp_from_double_mr_service_vectors=28");
+console.log("METRIC structural_fp_from_double_mr_strict_vectors=3");
 
 /* Complete the live fmov_rm/raw_fmov_d_rm composition without inheriting dead
  * FMOVECR spellings or broad allocator/emitter status. */

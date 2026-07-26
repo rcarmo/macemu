@@ -216,6 +216,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the legacy binary64 host-memory store chain on AArch64**
+  (2026-07-26): configured preprocessing retains only the
+  `fp_from_double_mr` extern. Its sole raw `fmov_mr` source call is confined to
+  the inactive non-AArch64 arm of `put_fp_value(size=5)`, while configured
+  ordinary-double destinations enter exact MPFR service before that helper.
+  `raw_fp_from_double_mr` is consequently definition-only. A **28 service + 3
+  strict** control proves the live configured boundary. The 998-row inventory
+  moves exactly these two rows to unreachable. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FP_FROM_DOUBLE_MR_UNREACHABLE.md`.
+
 - **Audit integer allocator discard lifecycle** (2026-07-26): closes the
   `forget_about` MIDFUNC by classifying all **304 source references** rather
   than relying on token reachability. The caller set is exactly 299 generated
