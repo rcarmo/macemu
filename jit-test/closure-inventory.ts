@@ -158,6 +158,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^(?:arm_ADD_l(?:_ri(?:_hostptr)?)?|arm_ADD_ptr_ri|disp_ea20_target_.*|lea_l_.*|sign_extend_16_rr)$/, "AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md"],
   [/^dont_care_fflags$/, "AARCH64_JIT_AUDIT_DONT_CARE_FFLAGS.md"],
   [/^f_forget_about$/, "AARCH64_JIT_AUDIT_F_FORGET_ABOUT.md"],
+  [/^forget_about$/, "AARCH64_JIT_AUDIT_FORGET_ABOUT.md"],
   [/^fflags_into_flags$/, "AARCH64_JIT_AUDIT_FFLAGS_INTO_FLAGS.md"],
   [/^fmov_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],

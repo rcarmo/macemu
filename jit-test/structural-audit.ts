@@ -586,6 +586,10 @@ const fScratchLifecycleMatrixSource = await Bun.file(new URL(
   "./f-scratch-lifecycle-native-matrix.ts",
   import.meta.url,
 )).text();
+const forgetAboutLifecycleMatrixSource = await Bun.file(new URL(
+  "./forget-about-lifecycle-matrix.sh",
+  import.meta.url,
+)).text();
 const fflagsIntoFlagsMatrixSource = await Bun.file(new URL(
   "./fflags-into-flags-native-matrix.ts",
   import.meta.url,
@@ -8123,6 +8127,97 @@ for (const contract of [
 console.log("METRIC structural_f_forget_about_configured_roots=1");
 console.log("METRIC structural_f_forget_about_exact_native_vectors=6");
 console.log("METRIC structural_f_forget_about_target_fs1=1");
+
+/* Integer `forget_about` is a discard primitive, so its complete safety
+ * boundary is its caller set. Pin the implementation's clean-before-evict
+ * transition and mechanically classify every configured call by generated
+ * family and private operand spelling. The four support calls are separately
+ * constrained to scratch release/sweep and clobber-after-store helpers. */
+const forgetStart = midfuncSource.indexOf("MIDFUNC(1,forget_about,(W4 r))");
+const forgetEnd = midfuncSource.indexOf("MENDFUNC(1,forget_about,(W4 r))", forgetStart);
+if (forgetStart < 0 || forgetEnd < 0) fail("missing forget_about MIDFUNC");
+const forgetBody = midfuncSource.slice(forgetStart, forgetEnd);
+for (const contract of ["if (isinreg(r))", "disassociate(r);", "live.state[r].val = 0;", "set_status(r, UNDEF);"])
+  requireText(forgetBody, contract, "integer discard primitive");
+requireBefore(forgetBody, "disassociate(r);", "set_status(r, UNDEF);", "integer discard primitive");
+const disassociateStart = allocatorSource.indexOf("static inline void disassociate(int r)");
+const disassociateEnd = allocatorSource.indexOf("static inline void set_const", disassociateStart);
+if (disassociateStart < 0 || disassociateEnd < 0) fail("missing allocator disassociate");
+const disassociateBody = allocatorSource.slice(disassociateStart, disassociateEnd);
+requireBefore(disassociateBody, "isclean(r);", "evict(r);", "discard without writeback");
+const iscleanStart = allocatorSource.indexOf("static inline void isclean(int r)");
+const iscleanEnd = allocatorSource.indexOf("static inline void disassociate", iscleanStart);
+if (iscleanStart < 0 || iscleanEnd < 0) fail("missing allocator isclean");
+requireText(allocatorSource.slice(iscleanStart, iscleanEnd), "set_status(r, CLEAN);", "discard without writeback");
+
+const generatedForgetCalls = [...generatedSource.matchAll(/\bforget_about\s*\(\s*([^)]*)\)/g)];
+if (generatedForgetCalls.length !== 299)
+  fail(`forget_about generated caller census=${generatedForgetCalls.length}, expected 299`);
+const generatedForgetArgs = new Map<string, number>();
+for (const call of generatedForgetCalls) {
+  const arg = call[1].trim();
+  generatedForgetArgs.set(arg, (generatedForgetArgs.get(arg) ?? 0) + 1);
+}
+for (const [arg, expected] of [["src", 84], ["scratchie", 175], ["tmp", 40]] as const) {
+  if (generatedForgetArgs.get(arg) !== expected)
+    fail(`forget_about generated operand ${arg}=${generatedForgetArgs.get(arg) ?? 0}, expected ${expected}`);
+}
+if (generatedForgetArgs.size !== 3)
+  fail(`forget_about gained generated operand classes: ${[...generatedForgetArgs.keys()].join(",")}`);
+const killRodentStart = compatSource.indexOf("int kill_rodent(int r)");
+const killRodentEnd = compatSource.indexOf("}", killRodentStart);
+if (killRodentStart < 0 || killRodentEnd < 0) fail("missing configured AArch64 kill_rodent");
+const killRodentBody = compatSource.slice(killRodentStart, killRodentEnd + 1);
+for (const contract of ["(void)r;", "return 0;"])
+  requireText(killRodentBody, contract, "configured-false kill_rodent branch");
+const killRodentForgetCalls = [...gencompSource.matchAll(/if \(kill_rodent\(dst\)\) \{[\s\S]*?forget_about\(scratchie\);/g)].length;
+if (killRodentForgetCalls !== 6)
+  fail(`forget_about kill_rodent source templates=${killRodentForgetCalls}, expected 6`);
+const generatedForgetFamilies = new Map<string, number>();
+let generatedForgetFamily = "";
+for (const line of generatedSource.split("\n")) {
+  const description = line.match(/^\/\* ([A-Z0-9]+)(?:\.|\s)/);
+  if (description) generatedForgetFamily = description[1];
+  if (/\bforget_about\s*\(/.test(line))
+    generatedForgetFamilies.set(generatedForgetFamily, (generatedForgetFamilies.get(generatedForgetFamily) ?? 0) + 1);
+}
+for (const [family, expected] of [
+  ["MOVEA", 40], ["ADDA", 40], ["ADDAQ", 4], ["MOVE16", 40],
+  ["OR", 52], ["AND", 52], ["EOR", 32], ["MOVE", 23], ["NOT", 16],
+] as const) {
+  if (generatedForgetFamilies.get(family) !== expected)
+    fail(`forget_about generated family ${family}=${generatedForgetFamilies.get(family) ?? 0}, expected ${expected}`);
+}
+if (generatedForgetFamilies.size !== 9)
+  fail(`forget_about gained generated families: ${[...generatedForgetFamilies.keys()].join(",")}`);
+const supportForgetCalls = [...allocatorSource.matchAll(/\bforget_about\s*\(\s*([^)]*)\)/g)]
+  .map((match) => match[1].trim());
+if (supportForgetCalls.length !== 4 || supportForgetCalls.filter((arg) => arg === "i").length !== 2 ||
+    supportForgetCalls.filter((arg) => arg === "source").length !== 2)
+  fail(`forget_about support callers=${supportForgetCalls.join(",")}, expected i,i,source,source`);
+for (const contract of [
+  "if (i < S1 || i >= S1 + SCRATCH_REGS)", "forget_about(i);",
+  "for (i = S1; i < VREGS; i++)\n        forget_about(i);",
+  "writemem_real(address, source, 2);", "writemem_real(address, source, 4);",
+]) requireText(allocatorSource, contract, "forget_about support caller ownership");
+requireText(fppCompilerSource, "writelong_clobber(ad, S2, S3);", "forget_about clobber-store configured root");
+const nonDefinitionSupport = `${generatedSource}\n${fppCompilerSource}\n${compatSource}\n${midfunc2Source}`;
+if (/\brelease_scratch\s*\(/.test(nonDefinitionSupport))
+  fail("release_scratch gained a configured caller");
+for (const contract of [
+  "movea_core_w_postinc_alias_native", "adda_core_w_postinc_alias_native",
+  "move16_core_postpost_same_native", "and_core_b_aind_source_special_native",
+  "GROUP=integer bun jit-test/fpp-fmove-destination-basic-matrix.ts",
+  "FORGET_ABOUT_LIFECYCLE_MATRIX active=39 dormant_control=1 pass=40 fail=0 total=40",
+]) requireText(forgetAboutLifecycleMatrixSource, contract, "forget_about exact-native controls");
+console.log("METRIC structural_forget_about_configured_references=304");
+console.log("METRIC structural_forget_about_generated_calls=299");
+console.log("METRIC structural_forget_about_active_generated_calls=124");
+console.log("METRIC structural_forget_about_dormant_generated_calls=175");
+console.log("METRIC structural_forget_about_support_calls=4");
+console.log("METRIC structural_forget_about_active_call_sites=127");
+console.log("METRIC structural_forget_about_dormant_call_sites=176");
+console.log("METRIC structural_forget_about_exact_native_vectors=40");
 
 /* `fflags_into_flags` composes lazy FP_RESULT materialisation, an independently
  * audited FCMP_d0 primitive, and the temporary host-NZCV state consumed by

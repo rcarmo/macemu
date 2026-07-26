@@ -469,7 +469,7 @@ midfunc,fmovs_rm,unreachable,fmovs_rm,68,1,BasiliskII/src/uae_cpu_2026/compiler/
 midfunc,fmovs_rr,unreachable,fmovs_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1215,no path from configured generated/support/FPU compiler roots
 midfunc,fmul_rr,unreachable,fmul_rr,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1127,both configured AArch64 roots (FMUL/FSMUL/FDMUL and FSGLMUL) enter semantic service before operand acquisition or the retained native MIDFUNC calls
 midfunc,fneg_rr,unreachable,fneg_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1097,all configured AArch64 FNEG/FSNEG/FDNEG selectors enter semantic service before operand acquisition or the retained native MIDFUNC call
-midfunc,forget_about,unreviewed,forget_about,68,304,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,584,reachable; no accepted family-level closure report
+midfunc,forget_about,audited,forget_about,68,304,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,584,BasiliskII/docs/AARCH64_JIT_AUDIT_FORGET_ABOUT.md
 midfunc,fp_from_double_mr,unreviewed,fp_from_double_mr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1305,reachable; no accepted family-level closure report
 midfunc,fp_from_exten_mr,unreviewed,fp_from_exten_mr,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1280,reachable; no accepted family-level closure report
 midfunc,fp_fscc_ri,audited,fp_fscc_ri,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1326,BasiliskII/docs/AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md

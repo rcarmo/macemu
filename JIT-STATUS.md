@@ -216,6 +216,22 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit integer allocator discard lifecycle** (2026-07-26): closes the
+  `forget_about` MIDFUNC by classifying all **304 source references** rather
+  than relying on token reachability. The caller set is exactly 299 generated
+  private-vreg calls: 124 active MOVEA/ADDA/MOVE16 discards and 175 dormant
+  OR/AND/EOR/MOVE/NOT lane-helper calls behind AArch64's hard-false
+  `kill_rodent()` policy. Of four support source calls, three active sites own
+  opcode-boundary sweep or post-store clobber and dormant `release_scratch()`
+  owns only validated S1-S5 IDs; the final reference is the definition. The
+  complete split is **127 active / 176 dormant / one definition**. Structural checks
+  pin clean-before-evict, `UNDEF`, locked-hold failure, the active/dormant
+  policy, exact family/operand counts, and absence of architectural operands. A
+  **39 active + 1 dormant-policy** strict-native composite control covers every
+  caller class. The 998-row inventory promotes
+  only `forget_about`. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FORGET_ABOUT.md`.
+
 - **Retire the legacy `fmovs_rm` single-memory chain on AArch64** (2026-07-26):
   both retained source calls are in inactive non-AArch64 `#else` arms; the
   configured direct and fetched single-source paths use the accepted
