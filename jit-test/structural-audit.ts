@@ -89,6 +89,8 @@ const bitfieldEmitterProbeSource = await Bun.file(new URL("./emitter-bitfield-co
 const bitfieldEmitterHarnessSource = await Bun.file(new URL("./emitter-bitfield-conformance.sh", import.meta.url)).text();
 const logicalEmitterProbeSource = await Bun.file(new URL("./emitter-logical-conformance.cpp", import.meta.url)).text();
 const logicalEmitterHarnessSource = await Bun.file(new URL("./emitter-logical-conformance.sh", import.meta.url)).text();
+const blrEmitterProbeSource = await Bun.file(new URL("./emitter-blr-conformance.cpp", import.meta.url)).text();
+const blrEmitterHarnessSource = await Bun.file(new URL("./emitter-blr-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4081,6 +4083,48 @@ console.log("METRIC structural_logical_emitter_raw_callers=250");
 console.log("METRIC structural_logical_emitter_anchor_words=14");
 console.log("METRIC structural_logical_emitter_native_vectors=104");
 console.log("METRIC structural_logical_emitter_alias_vectors=57");
+
+/* BLR is the helper/host-function indirect-call encoder. Three calls are in
+ * reachable raw boundaries; two remain in configured-unreachable FP bodies.
+ * Each boundary owns its LR and, where required, NZCV scaffolding. */
+requireText(codegenHeaderSource,"#define BLR_x(Xn)         _W((0b11010110001 << 21) | (0b11111 << 16) | (0 << 10) | ((Xn) << 5) | 0)","BLR encoding");
+const blrInventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith("emitter_api,BLR_x,"));
+if(!blrInventory?.includes(",5,")) fail("BLR configured-source reference census changed");
+if((codegenSource.match(/\bBLR_x\(/g)||[]).length!==5) fail("BLR raw source-site census changed");
+const blrBodies = [
+  ["compemu_raw_call", bodyBetween("STATIC_INLINE void compemu_raw_call(uintptr t)\n{", "STATIC_INLINE void compemu_raw_call_r"), "STR_xXpre(RLR_INDEX, RSP_INDEX, -16);", "LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);"],
+  ["compemu_raw_call_r", bodyBetween("STATIC_INLINE void compemu_raw_call_r(RR4 r)\n{", "STATIC_INLINE void compemu_raw_call_preserve_nzcv"), "STR_xXpre(RLR_INDEX, RSP_INDEX, -16);", "LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);"],
+  ["compemu_raw_call_preserve_nzcv", bodyBetween("STATIC_INLINE void compemu_raw_call_preserve_nzcv(uintptr t)\n{", "STATIC_INLINE void compemu_raw_jcc_l_oponly"), "STP_xxXpre(RLR_INDEX, REG_WORK4, RSP_INDEX, -16);", "LDP_xxXpost(RLR_INDEX, REG_WORK4, RSP_INDEX, 16);"],
+  ["raw_ffunc_rr", bodyBetween("LOWFUNC(NONE,NONE,3,raw_ffunc_rr", "LENDFUNC(NONE,NONE,3,raw_ffunc_rr"), "STR_xXpre(RLR_INDEX, RSP_INDEX, -16);", "LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);"],
+  ["raw_fpowx_rr", bodyBetween("LOWFUNC(NONE,NONE,3,raw_fpowx_rr", "LENDFUNC(NONE,NONE,3,raw_fpowx_rr"), "STR_xXpre(RLR_INDEX, RSP_INDEX, -16);", "LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);"],
+] as const;
+for (const [name, body, save, restore] of blrBodies) {
+  if ((body.match(/\bBLR_x\(/g) || []).length !== 1) fail(`${name}: expected exactly one BLR`);
+  requireBefore(body, save, "BLR_x(", `${name} LR save`);
+  requireBefore(body, "BLR_x(", restore, `${name} LR restore`);
+}
+for(const contract of ["LOAD_U64(R18_INDEX, t);", "BLR_x(R18_INDEX);"])
+  requireText(blrBodies[0][1],contract,"BLR generic helper x18 contract");
+for(const contract of ["MRS_NZCV_x(REG_WORK4);", "BLR_x(R18_INDEX);", "MSR_NZCV_x(REG_WORK4);"])
+  requireText(blrBodies[2][1],contract,"BLR preserving helper NZCV contract");
+for(const contract of [
+  "emitter_blr_api=1", "emitter_blr_exact_words=%u", "emitter_blr_native_vectors=%u",
+  "emitter_blr_target_decoys=%u", "emitter_blr_link_semantics=1", "emitter_blr_preserves_nzcv=1",
+  "for (unsigned reg = 0; reg < 32; ++reg)", "target : {9u, 16u, 17u, 18u}",
+  "0xd63f0000u | (reg << 5)", "const unsigned decoy = target == 16 ? 9u : 16u",
+  "adr(target, 28)", "adr(decoy, 32)", "exact == 32 && native == 4",
+]) requireText(blrEmitterProbeSource,contract,"BLR native conformance");
+for(const contract of ["-Wall -Wextra -Werror","emitter-blr-conformance.cpp"])
+  requireText(blrEmitterHarnessSource,contract,"BLR conformance build");
+requireText(harnessSource,'timeout -k 5s 60s "$SCRIPT_DIR/emitter-blr-conformance.sh"',"BLR bounded acceptance gate");
+console.log("METRIC structural_blr_emitter_apis=1");
+console.log("METRIC structural_blr_configured_source_references=5");
+console.log("METRIC structural_blr_reachable_boundaries=3");
+console.log("METRIC structural_blr_definition_only_boundaries=2");
+console.log("METRIC structural_blr_emitter_exact_words=32");
+console.log("METRIC structural_blr_emitter_native_vectors=4");
+console.log("METRIC structural_blr_emitter_target_decoys=4");
+console.log("METRIC structural_blr_emitter_x18_abi=1");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private
