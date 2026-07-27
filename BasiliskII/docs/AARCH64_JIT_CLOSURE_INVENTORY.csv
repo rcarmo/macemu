@@ -594,7 +594,7 @@ midfunc,jff_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jff_MULU,unreachable,MULU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5452,no path from configured generated/support/FPU compiler roots
 midfunc,jff_MULU32,audited,MULU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5491,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jff_MULU64,audited,MULU,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5525,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-midfunc,jff_MV2SCCR,unreviewed,MV2SCCR,68,24,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8906,reachable; no accepted family-level closure report
+midfunc,jff_MV2SCCR,audited,MV2SCCR,68,24,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8906,BasiliskII/docs/AARCH64_JIT_AUDIT_MV2SCCR_LIFECYCLE.md
 midfunc,jff_NBCD_b,audited,NBCD,68,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8131,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
 midfunc,jff_NEG_b,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5588,no path from configured generated/support/FPU compiler roots
 midfunc,jff_NEG_l,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5618,no path from configured generated/support/FPU compiler roots

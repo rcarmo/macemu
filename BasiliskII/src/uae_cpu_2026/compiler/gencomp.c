@@ -2096,7 +2096,7 @@ gen_opcode (unsigned int opcode)
 
      case i_MV2SR:
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
-	genamode (curi->smode, "srcreg", curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC);
+	genamode (curi->smode, "srcreg", curi->size == sz_byte ? sz_word : curi->size, "src", GENA_GETV_FETCH, GENA_MOVEM_DO_INC); /* CCR performs a word source access. */
 	if (curi->size == sz_byte) {
 	    /* MOVE to CCR: native flag manipulation */
 	    comprintf("\tstart_needflags();\n");

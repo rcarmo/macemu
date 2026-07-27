@@ -579,6 +579,10 @@ const controlAddressMatrixSource = await Bun.file(new URL(
   "./control-address-native-matrix.ts",
   import.meta.url,
 )).text();
+const mv2sccrMatrixSource = await Bun.file(new URL(
+  "./mv2sccr-native-matrix.ts",
+  import.meta.url,
+)).text();
 const armAddLongMatrixSource = await Bun.file(new URL(
   "./arm-add-l-native-matrix.ts",
   import.meta.url,
@@ -9730,6 +9734,52 @@ console.log("METRIC structural_mov_l_rr_pointer_destinations=6");
 console.log("METRIC structural_mov_l_rr_raw_references=6");
 console.log("METRIC structural_mov_l_rr_exact_words=4");
 console.log("METRIC structural_mov_l_rr_native_vectors=15");
+
+/* MOVE <ea>,CCR has a byte-sized semantic result but a word-sized architectural
+ * source access. Audit word geometry separately from the low-five-bit mapper. */
+const mv2sccrStart = midfunc2Source.indexOf("MIDFUNC(1,jff_MV2SCCR,(RR4 s))");
+const mv2sccrEnd = midfunc2Source.indexOf("MENDFUNC(1,jff_MV2SCCR,(RR4 s))", mv2sccrStart);
+if (mv2sccrStart < 0 || mv2sccrEnd < 0) fail("missing jff_MV2SCCR MIDFUNC");
+const mv2sccrBody = midfunc2Source.slice(mv2sccrStart, mv2sccrEnd);
+for (const contract of [
+  "s = readreg(s);", "int x = writereg(FLAGX);", "UBFX_wwii(x, s, 4, 1);",
+  "UBFX_wwii(REG_WORK2, s, 3, 1);", "LSL_xxi(REG_WORK2, REG_WORK2, 31);",
+  "UBFX_wwii(REG_WORK2, s, 2, 1);", "LSL_xxi(REG_WORK2, REG_WORK2, 30);",
+  "UBFX_wwii(REG_WORK2, s, 0, 1);", "LSL_xxi(REG_WORK2, REG_WORK2, 29);",
+  "UBFX_wwii(REG_WORK2, s, 1, 1);", "LSL_xxi(REG_WORK2, REG_WORK2, 28);",
+  "MSR_NZCV_x(REG_WORK1);", "flags_carry_inverted = false;", "unlock2(x);", "unlock2(s);",
+]) requireText(mv2sccrBody, contract, "MV2SCCR XNZVC mapper");
+requireBefore(mv2sccrBody, "s = readreg(s);", "int x = writereg(FLAGX);", "MV2SCCR source ownership");
+requireBefore(mv2sccrBody, "MSR_NZCV_x(REG_WORK1);", "unlock2(s);", "MV2SCCR source ownership");
+for (const contract of [
+  "curi->size == sz_byte ? sz_word : curi->size",
+  "CCR performs a word source access",
+]) requireText(gencompSource, contract, "MV2SCCR word-source generation");
+const mv2sccrHandlers = [...generatedSource.matchAll(/void REGPARAM2 op_(44(?:c0|d0|d8|e0|e8|f0|f8|f9|fa|fb|fc))_0_comp_(ff|nf)[\s\S]*?(?=\nvoid REGPARAM2|$)/g)];
+if (mv2sccrHandlers.length !== 22) fail(`MV2SCCR generated handlers=${mv2sccrHandlers.length}, expected 22`);
+const mv2sccrMemoryHandlers = mv2sccrHandlers.filter((match) => !/44(?:c0|fc)/.test(match[1]));
+if (mv2sccrMemoryHandlers.length !== 18 || mv2sccrMemoryHandlers.some((match) =>
+    !match[0].includes("readword(") || match[0].includes("readbyte(")))
+  fail("MV2SCCR memory handlers lost word fetch geometry");
+const mv2sccrPost = mv2sccrHandlers.filter((match) => match[1] === "44d8");
+const mv2sccrPre = mv2sccrHandlers.filter((match) => match[1] === "44e0");
+if (mv2sccrPost.length !== 2 || mv2sccrPost.some((match) => !match[0].includes("srcreg + 8, 2")) ||
+    mv2sccrPre.length !== 2 || mv2sccrPre.some((match) => !match[0].includes("srcreg + 8, -2")))
+  fail("MV2SCCR update-mode word stride changed");
+const mv2sccrCalls = [...generatedSource.matchAll(/\bjff_MV2SCCR\s*\(/g)];
+if (mv2sccrCalls.length !== 24) fail(`MV2SCCR generated calls=${mv2sccrCalls.length}, expected 24`);
+if (!closureInventoryCsv.split("\n").find((line) => line.startsWith("midfunc,jff_MV2SCCR,"))?.includes(",24,"))
+  fail("MV2SCCR inventory reference census changed");
+for (const contract of [
+  "for (let ccr = 0; ccr < 32; ccr++)", "0xa5a50000 | ccr", "aind_special",
+  'special: true', 'stream: "44fc a51b', "rtr_ccr_pc",
+  "B2_JIT_ALL_SPECIAL_MEM", "MV2SCCR_NATIVE_MATRIX pass=${pass} fail=${fail} total=${pass + fail}",
+]) requireText(mv2sccrMatrixSource, contract, "MV2SCCR strict-native matrix");
+console.log("METRIC structural_mv2sccr_generated_calls=24");
+console.log("METRIC structural_mv2sccr_word_memory_handlers=18");
+console.log("METRIC structural_mv2sccr_flag_combinations=32");
+console.log("METRIC structural_mv2sccr_exact_native_vectors=44");
+console.log("METRIC structural_mv2sccr_special_memory_vectors=1");
 
 console.log("METRIC structural_move_complete_source_ownership=1");
 console.log("METRIC structural_move_exact_native_vectors=31");

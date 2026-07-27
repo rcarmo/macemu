@@ -22168,7 +22168,7 @@ void REGPARAM2 op_44d0_0_comp_ff(uae_u32 opcode) /* MV2SR */
 	if (dodgy)
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22192,8 +22192,8 @@ void REGPARAM2 op_44d8_0_comp_ff(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
-	lea_l_brr(srcreg + 8,srcreg + 8, areg_byteinc[srcreg]);
+	readword(srca,src,scratchie);
+	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22215,11 +22215,11 @@ void REGPARAM2 op_44e0_0_comp_ff(uae_u32 opcode) /* MV2SR */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {{	int srca = dodgy ? scratchie++ : srcreg + 8;
-	lea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);
+	lea_l_brr(srcreg + 8, srcreg + 8, -2);
 	if (dodgy)
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22244,7 +22244,7 @@ void REGPARAM2 op_44e8_0_comp_ff(uae_u32 opcode) /* MV2SR */
 	mov_l_rr(srca, 8 + srcreg);
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22268,7 +22268,7 @@ void REGPARAM2 op_44f0_0_comp_ff(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22287,7 +22287,7 @@ void REGPARAM2 op_44f8_0_comp_ff(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22306,7 +22306,7 @@ void REGPARAM2 op_44f9_0_comp_ff(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22327,7 +22327,7 @@ void REGPARAM2 op_44fa_0_comp_ff(uae_u32 opcode) /* MV2SR */
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22349,7 +22349,7 @@ void REGPARAM2 op_44fb_0_comp_ff(uae_u32 opcode) /* MV2SR */
 {	mov_l_ri(pctmp,address);
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -22366,7 +22366,7 @@ void REGPARAM2 op_44fc_0_comp_ff(uae_u32 opcode) /* MV2SR */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s8)comp_get_ibyte((m68k_pc_offset+=2)-2));
+	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70716,7 +70716,7 @@ void REGPARAM2 op_44d0_0_comp_nf(uae_u32 opcode) /* MV2SR */
 	if (dodgy)
 		mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70740,8 +70740,8 @@ void REGPARAM2 op_44d8_0_comp_nf(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	mov_l_rr(srca, srcreg + 8);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
-	lea_l_brr(srcreg + 8,srcreg + 8, areg_byteinc[srcreg]);
+	readword(srca,src,scratchie);
+	lea_l_brr(srcreg + 8, srcreg + 8, 2);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70763,11 +70763,11 @@ void REGPARAM2 op_44e0_0_comp_nf(uae_u32 opcode) /* MV2SR */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {{	int srca = dodgy ? scratchie++ : srcreg + 8;
-	lea_l_brr(srcreg + 8, srcreg + 8, (uae_s32)-areg_byteinc[srcreg]);
+	lea_l_brr(srcreg + 8, srcreg + 8, -2);
 	if (dodgy)
 		mov_l_rr(srca, 8 + srcreg);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70792,7 +70792,7 @@ void REGPARAM2 op_44e8_0_comp_nf(uae_u32 opcode) /* MV2SR */
 	mov_l_rr(srca, 8 + srcreg);
 	lea_l_brr(srca, srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70816,7 +70816,7 @@ void REGPARAM2 op_44f0_0_comp_nf(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	calc_disp_ea_020(srcreg + 8, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70835,7 +70835,7 @@ void REGPARAM2 op_44f8_0_comp_nf(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	mov_l_ri(srca, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70854,7 +70854,7 @@ void REGPARAM2 op_44f9_0_comp_nf(uae_u32 opcode) /* MV2SR */
 {	int srca = scratchie++;
 	mov_l_ri(srca, comp_get_ilong((m68k_pc_offset+=4)-4)); /* absl */
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70875,7 +70875,7 @@ void REGPARAM2 op_44fa_0_comp_nf(uae_u32 opcode) /* MV2SR */
 	uae_s32 PC16off = (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2);
 	mov_l_ri(srca, address + PC16off);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70897,7 +70897,7 @@ void REGPARAM2 op_44fb_0_comp_nf(uae_u32 opcode) /* MV2SR */
 {	mov_l_ri(pctmp,address);
 	calc_disp_ea_020(pctmp, comp_get_iword((m68k_pc_offset+=2)-2), srca, scratchie);
 {	int src = scratchie++;
-	readbyte(srca, src, scratchie);
+	readword(srca,src,scratchie);
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();
@@ -70914,7 +70914,7 @@ void REGPARAM2 op_44fc_0_comp_nf(uae_u32 opcode) /* MV2SR */
 	m68k_pc_offset+=2;
 {	uae_u8 scratchie=S1;
 {	int src = scratchie++;
-	mov_l_ri(src, (uae_s32)(uae_s8)comp_get_ibyte((m68k_pc_offset+=2)-2));
+	mov_l_ri(src, (uae_s32)(uae_s16)comp_get_iword((m68k_pc_offset+=2)-2));
 	start_needflags();
 	jff_MV2SCCR(src);
 	live_flags();

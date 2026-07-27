@@ -18,7 +18,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
-| midfunc | 422 | 289 | 0 | 131 | 2 |
+| midfunc | 422 | 290 | 0 | 131 | 1 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 68 | `MV2SCCR` | midfunc:`jff_MV2SCCR` |
 | 68 | `sub_l_ri` | midfunc:`sub_l_ri` |
 | 60 | `_W` | emitter_api:`_W` |
 | 60 | `ADCS_www` | emitter_api:`ADCS_www` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `BIC_www` | emitter_api:`BIC_www` |
 | 60 | `BLR_x` | emitter_api:`BLR_x` |
 | 60 | `CLEAR_xxbit` | emitter_api:`CLEAR_xxbit` |
+| 60 | `CLEAR_xxCflag` | emitter_api:`CLEAR_xxCflag` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`MV2SCCR` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`jff_MV2SCCR`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`sub_l_ri` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`sub_l_ri`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

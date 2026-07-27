@@ -216,6 +216,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Repair and audit native MOVE-to-CCR / `jff_MV2SCCR` lifecycle on AArch64** (2026-07-27):
+  the byte-coded CCR form previously fetched memory as a byte, selecting the
+  wrong big-endian lane and advancing postincrement/predecrement by one. The
+  generator now performs the architectural word source access while the mapper
+  consumes low XNZVC. All 32 low-five-bit combinations, ten non-register EAs,
+  forced special memory, and RTR pass strict exact-native (**44/44**); the full
+  active corpus passes **904/904**, allocator pressure **33/33**, clean build
+  and deterministic regeneration pass. Closure promotes exactly
+  `jff_MV2SCCR`; word/full-SR `i_MV2SR` remains serviced. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_MV2SCCR_LIFECYCLE.md`.
 - **Audit `mov_l_rr` value/pointer copy and raw X-register lifecycle on AArch64** (2026-07-27):
   configured preprocessing reproduces all 2,359 references as 2,342 generated,
   14 FPU, two lower-MIDFUNC, and one support call. The MIDFUNC's self-copy,
