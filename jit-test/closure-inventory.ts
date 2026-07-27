@@ -222,6 +222,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^(?:BIC_www|ORR_(?:www|wwwLSRi|xxx|xxxLSLi)|TST_(?:ww|xx))$/, "AARCH64_JIT_AUDIT_LOGICAL_EMITTERS.md"],
   [/^BLR_x$/, "AARCH64_JIT_AUDIT_BLR_EMITTER.md"],
   [/^(?:immEncode|immOP_(?:AND|ORR)|CLEAR_xx(?:Zflag|Cflag|Vflag|bit)|SET_xx(?:Zflag|Vflag|bit))$/, "AARCH64_JIT_AUDIT_LOGICAL_IMMEDIATE_EMITTERS.md"],
+  [/^(?:SBFM_(?:wwii|xxii)|SXTB_(?:ww|xx)|SXTH_(?:ww|xx)|SXTW_xw|UBFM_(?:wwii|xxii)|UXTB_(?:ww|xx)|UXTH_(?:ww|xx)|REV_(?:ww|xx)|REV16_(?:ww|xx)|REV32_xx|CLS_ww)$/, "AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md"],
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
   [/^ADD_(?:wwi|xxi|wwwEX|xxwEX|www|xxx|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
   [/^(?:SUB_(?:wwi|xxi|www|xxx)|SUBS_(?:wwi|www|wwwLSLi))$/, "AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],

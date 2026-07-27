@@ -74,7 +74,7 @@ emitter_api,CLEAR_xxbit,audited,CLEAR_xxbit,60,5,BasiliskII/src/uae_cpu_2026/com
 emitter_api,CLEAR_xxCflag,audited,CLEAR_xxCflag,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,433,AARCH64_JIT_AUDIT_LOGICAL_IMMEDIATE_EMITTERS.md
 emitter_api,CLEAR_xxVflag,audited,CLEAR_xxVflag,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,434,AARCH64_JIT_AUDIT_LOGICAL_IMMEDIATE_EMITTERS.md
 emitter_api,CLEAR_xxZflag,audited,CLEAR_xxZflag,60,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,432,AARCH64_JIT_AUDIT_LOGICAL_IMMEDIATE_EMITTERS.md
-emitter_api,CLS_ww,unreviewed,CLS_ww,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,378,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,CLS_ww,audited,CLS_ww,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,378,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
 emitter_api,CLZ_ww,unreachable,CLZ_ww,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,379,no path from reachable AArch64 compiler/emitter roots
 emitter_api,CMP_wi,audited,CMP_wi,88,28,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,206,AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md
 emitter_api,CMP_ww,audited,CMP_ww,88,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,208,AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md
@@ -205,11 +205,11 @@ emitter_api,ORR_wwwLSRi,audited,ORR_wwwLSRi,60,16,BasiliskII/src/uae_cpu_2026/co
 emitter_api,ORR_xxx,audited,ORR_xxx,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,310,AARCH64_JIT_AUDIT_LOGICAL_EMITTERS.md
 emitter_api,ORR_xxxLSLi,audited,ORR_xxxLSLi,60,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,312,AARCH64_JIT_AUDIT_LOGICAL_EMITTERS.md
 emitter_api,ORR_xxxLSRi,unreachable,ORR_xxxLSRi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,314,no path from reachable AArch64 compiler/emitter roots
-emitter_api,REV_ww,unreviewed,REV_ww,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,372,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,REV_xx,unreviewed,REV_xx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,373,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,REV16_ww,unreviewed,REV16_ww,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,374,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,REV16_xx,unreviewed,REV16_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,375,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,REV32_xx,unreviewed,REV32_xx,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,376,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,REV_ww,audited,REV_ww,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,372,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,REV_xx,audited,REV_xx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,373,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,REV16_ww,audited,REV16_ww,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,374,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,REV16_xx,audited,REV16_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,375,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,REV32_xx,audited,REV32_xx,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,376,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
 emitter_api,REV64_dd,unreviewed,REV64_dd,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,498,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,ROR_wwi,unreviewed,ROR_wwi,60,16,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,336,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,ROR_www,unreviewed,ROR_www,60,12,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,338,reachable encoder API; requires opcode/width/branch-range contract classification
@@ -221,8 +221,8 @@ emitter_api,SBCS_www,audited,SBCS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/
 emitter_api,SBCS_xxx,unreachable,SBCS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,251,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBFIZ_wwii,unreachable,SBFIZ_wwii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,355,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBFIZ_xxii,unreachable,SBFIZ_xxii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,356,no path from reachable AArch64 compiler/emitter roots
-emitter_api,SBFM_wwii,unreviewed,SBFM_wwii,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,268,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SBFM_xxii,unreviewed,SBFM_xxii,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,269,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SBFM_wwii,audited,SBFM_wwii,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,268,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,SBFM_xxii,audited,SBFM_xxii,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,269,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
 emitter_api,SBFX_wwii,unreachable,SBFX_wwii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,363,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBFX_xxii,unreachable,SBFX_xxii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,364,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SCVTF_dw,audited,SCVTF_dw,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,475,AARCH64_JIT_AUDIT_SCVTF_EMITTER.md
@@ -268,11 +268,11 @@ emitter_api,SUBS_xxi,unreachable,SUBS_xxi,60,0,BasiliskII/src/uae_cpu_2026/compi
 emitter_api,SUBS_xxish,unreachable,SUBS_xxish,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,261,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SUBS_xxx,unreachable,SUBS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,263,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SUBS_xxxLSLi,unreachable,SUBS_xxxLSLi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,265,no path from reachable AArch64 compiler/emitter roots
-emitter_api,SXTB_ww,unreviewed,SXTB_ww,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,270,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SXTB_xx,unreviewed,SXTB_xx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,271,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SXTH_ww,unreviewed,SXTH_ww,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,272,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SXTH_xx,unreviewed,SXTH_xx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,273,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,SXTW_xw,unreviewed,SXTW_xw,60,18,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,274,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SXTB_ww,audited,SXTB_ww,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,270,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,SXTB_xx,audited,SXTB_xx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,271,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,SXTH_ww,audited,SXTH_ww,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,272,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,SXTH_xx,audited,SXTH_xx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,273,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,SXTW_xw,audited,SXTW_xw,60,18,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,274,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
 emitter_api,TBNZ_wii,audited,TBNZ_wii,87,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,110,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
 emitter_api,TBNZ_xii,unreachable,TBNZ_xii,87,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,109,no path from reachable AArch64 compiler/emitter roots
 emitter_api,TBZ_wii,audited,TBZ_wii,87,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,112,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md
@@ -281,18 +281,18 @@ emitter_api,TST_ww,audited,TST_ww,60,136,BasiliskII/src/uae_cpu_2026/compiler/co
 emitter_api,TST_xx,audited,TST_xx,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,318,AARCH64_JIT_AUDIT_LOGICAL_EMITTERS.md
 emitter_api,UBFIZ_wwii,audited,UBFIZ_wwii,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,357,AARCH64_JIT_AUDIT_BITFIELD_EMITTERS.md
 emitter_api,UBFIZ_xxii,audited,UBFIZ_xxii,60,26,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,358,AARCH64_JIT_AUDIT_BITFIELD_EMITTERS.md
-emitter_api,UBFM_wwii,unreviewed,UBFM_wwii,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,277,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,UBFM_xxii,unreviewed,UBFM_xxii,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,278,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,UBFM_wwii,audited,UBFM_wwii,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,277,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,UBFM_xxii,audited,UBFM_xxii,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,278,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
 emitter_api,UBFX_wwii,audited,UBFX_wwii,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,365,AARCH64_JIT_AUDIT_BITFIELD_EMITTERS.md
 emitter_api,UBFX_xxii,audited,UBFX_xxii,60,25,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,366,AARCH64_JIT_AUDIT_BITFIELD_EMITTERS.md
 emitter_api,UDIV_www,unreviewed,UDIV_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,233,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UDIV_xxx,unreviewed,UDIV_xxx,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,234,reachable encoder API; requires opcode/width/branch-range contract classification
 emitter_api,UMULH_xxx,unreachable,UMULH_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,219,no path from reachable AArch64 compiler/emitter roots
 emitter_api,UMULL_xww,unreviewed,UMULL_xww,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,222,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,UXTB_ww,unreviewed,UXTB_ww,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,279,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,UXTB_xx,unreviewed,UXTB_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,280,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,UXTH_ww,unreviewed,UXTH_ww,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,281,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,UXTH_xx,unreviewed,UXTH_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,282,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,UXTB_ww,audited,UXTB_ww,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,279,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,UXTB_xx,audited,UXTB_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,280,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,UXTH_ww,audited,UXTH_ww,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,281,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
+emitter_api,UXTH_xx,audited,UXTH_xx,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,282,AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md
 generator,i_ABCD,audited,ABCD,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1747,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
 generator,i_ADD,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1694,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 generator,i_ADDA,audited,ADDA,72,1,BasiliskII/src/uae_cpu_2026/compiler/gencomp.c,1711,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDA_LIFECYCLE.md

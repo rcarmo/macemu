@@ -93,6 +93,8 @@ const blrEmitterProbeSource = await Bun.file(new URL("./emitter-blr-conformance.
 const blrEmitterHarnessSource = await Bun.file(new URL("./emitter-blr-conformance.sh", import.meta.url)).text();
 const logimmEmitterProbeSource = await Bun.file(new URL("./emitter-logical-immediate-conformance.cpp", import.meta.url)).text();
 const logimmEmitterHarnessSource = await Bun.file(new URL("./emitter-logical-immediate-conformance.sh", import.meta.url)).text();
+const transformEmitterProbeSource = await Bun.file(new URL("./emitter-transform-conformance.cpp", import.meta.url)).text();
+const transformEmitterHarnessSource = await Bun.file(new URL("./emitter-transform-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4180,6 +4182,57 @@ console.log("METRIC structural_logimm_configured_references=83");
 console.log("METRIC structural_logimm_encode_checks=8192");
 console.log("METRIC structural_logimm_exact_words=147");
 console.log("METRIC structural_logimm_native_vectors=288");
+
+/* Scalar count/reverse/extend cluster: generic SBFM/UBFM field encoders,
+ * their reachable aliases, byte permutations, and CLS. */
+const transformNames = [
+  "SBFM_wwii", "SBFM_xxii", "SXTB_ww", "SXTB_xx", "SXTH_ww", "SXTH_xx", "SXTW_xw",
+  "UBFM_wwii", "UBFM_xxii", "UXTB_ww", "UXTB_xx", "UXTH_ww", "UXTH_xx",
+  "REV_ww", "REV_xx", "REV16_ww", "REV16_xx", "REV32_xx", "CLS_ww",
+];
+const transformInventoryCounts = [2,3,1,2,3,2,18,2,2,1,1,4,1,4,2,5,1,3,6];
+const transformCppRawCounts = [-1,-1,1,0,4,0,18,-1,-1,1,1,4,1,8,2,7,1,3,6];
+for (let index = 0; index < transformNames.length; ++index) {
+  const name = transformNames[index];
+  const inventory = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!inventory?.includes(`,${transformInventoryCounts[index]},`))
+    fail(`${name} configured reference census changed`);
+  if (transformCppRawCounts[index] >= 0) {
+    const raw = (logimmRawText.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+    if (raw !== transformCppRawCounts[index]) fail(`${name} raw source-site census=${raw}, expected ${transformCppRawCounts[index]}`);
+  }
+}
+for (const [name, expected] of [["SBFM_wwii",3],["SBFM_xxii",4],["UBFM_wwii",3],["UBFM_xxii",3]] as const) {
+  const found = (codegenHeaderSource.match(new RegExp(`\\b${name}\\b`, "g")) || []).length;
+  if (found !== expected) fail(`${name} header composition census=${found}, expected ${expected}`);
+}
+for (const contract of [
+  "#define SBFM_wwii", "#define SBFM_xxii", "#define SXTB_ww", "#define SXTB_xx",
+  "#define SXTH_ww", "#define SXTH_xx", "#define SXTW_xw", "#define UBFM_wwii",
+  "#define UBFM_xxii", "#define UXTB_ww", "#define UXTB_xx", "#define UXTH_ww",
+  "#define UXTH_xx", "#define REV_ww", "#define REV_xx", "#define REV16_ww",
+  "#define REV16_xx", "#define REV32_xx", "#define CLS_ww",
+]) requireText(codegenHeaderSource, contract, "scalar-transform emitter definition");
+for (const contract of [
+  "emitter_transform_apis=19", "emitter_transform_field_encodings=%zu",
+  "emitter_transform_anchor_words=%u", "emitter_transform_field_native=%u",
+  "emitter_transform_alias_native=%u", "emitter_transform_operation_native=%u",
+  "emitter_transform_native_vectors=%u", "emitter_transform_preserves_nzcv=1",
+  "cases.size() == 10240", "anchors == 30", "field_native == 10240",
+  "alias_native == 27", "transform_native == 18", "alias NZCV", "transform NZCV",
+  "for (unsigned immr = 0; immr < bits; ++immr)", "for (unsigned imms = 0; imms < bits; ++imms)",
+  "0xd3401d49u", "0xd3403d49u", "PROT_READ | PROT_WRITE", "PROT_READ | PROT_EXEC",
+]) requireText(transformEmitterProbeSource, contract, "scalar-transform native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-transform-conformance.cpp"])
+  requireText(transformEmitterHarnessSource, contract, "scalar-transform conformance build");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-transform-conformance.sh"', "scalar-transform bounded acceptance gate");
+for (const unreachable of ["CLZ_ww", "EXTR_wwwi", "EXTR_xxxi"])
+  if (!closureInventoryCsv.includes(`emitter_api,${unreachable},unreachable,`)) fail(`${unreachable} reachability changed`);
+console.log("METRIC structural_transform_emitter_apis=19");
+console.log("METRIC structural_transform_configured_references=63");
+console.log("METRIC structural_transform_field_encodings=10240");
+console.log("METRIC structural_transform_anchor_words=30");
+console.log("METRIC structural_transform_native_vectors=10285");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private
