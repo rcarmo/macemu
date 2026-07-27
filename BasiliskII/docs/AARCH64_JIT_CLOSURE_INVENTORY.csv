@@ -2,7 +2,7 @@ layer,name,status,family,risk,references,file,line,evidence
 emitter_api,_W,audited,_W,60,269,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,45,AARCH64_JIT_AUDIT_WORD_EMITTER.md
 emitter_api,ADC_www,unreachable,ADC_www,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,186,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADC_xxx,unreachable,ADC_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,187,no path from reachable AArch64 compiler/emitter roots
-emitter_api,ADCS_www,unreviewed,ADCS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,188,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,ADCS_www,audited,ADCS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,188,AARCH64_JIT_AUDIT_CARRY_EMITTERS.md
 emitter_api,ADCS_xxx,unreachable,ADCS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,189,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADD_wwi,audited,ADD_wwi,80,12,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,192,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
 emitter_api,ADD_www,audited,ADD_www,80,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,194,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
@@ -217,7 +217,7 @@ emitter_api,ROR_xxi,unreachable,ROR_xxi,60,0,BasiliskII/src/uae_cpu_2026/compile
 emitter_api,ROR_xxx,unreachable,ROR_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,339,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBC_www,unreachable,SBC_www,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,248,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBC_xxx,unreachable,SBC_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,249,no path from reachable AArch64 compiler/emitter roots
-emitter_api,SBCS_www,unreviewed,SBCS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,250,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,SBCS_www,audited,SBCS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,250,AARCH64_JIT_AUDIT_CARRY_EMITTERS.md
 emitter_api,SBCS_xxx,unreachable,SBCS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,251,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBFIZ_wwii,unreachable,SBFIZ_wwii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,355,no path from reachable AArch64 compiler/emitter roots
 emitter_api,SBFIZ_xxii,unreachable,SBFIZ_xxii,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,356,no path from reachable AArch64 compiler/emitter roots

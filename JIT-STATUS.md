@@ -1576,3 +1576,19 @@ fix, it achieves **100% reliability without external wrappers** like
   closure, and independent APPROVE.
 - Closure promotes only `_W`; 126 emitter APIs and 17 raw boundaries remain.
   `ADCS_www` is mechanically selected next.
+
+### AArch64 ADCS/SBCS carry-emitter closure (2026-07-27)
+
+- The two reachable W-width flag-setting carry encoders, `ADCS_www` and
+  `SBCS_www`, are audited together; ten non-flag/X-width/NGC forms remain
+  configured-unreachable.
+- Direct conformance proves four exact words and 48 native result/NZCV vectors
+  across both physical C inputs, boundary/overflow pairs, and destination-
+  distinct/lhs-alias/rhs-alias forms.
+- The accepted ADDX/SUBX lifecycle remains the guest-level proof for 68K X,
+  borrow inversion, narrow-lane carry propagation, and sticky Z.
+- Acceptance passes all 25 emitter suites, 904/904 active-risky, 33/33
+  allocator pressure, clean build, deterministic closure, and independent
+  APPROVE.
+- Closure leaves 124 emitter APIs and 17 raw boundaries; `ADDS_wwi` is selected
+  next.

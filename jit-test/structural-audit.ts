@@ -77,6 +77,8 @@ const movLRrLifecycleMatrix = await Bun.file(new URL("./mov-l-rr-lifecycle-matri
 const movLRrConformance = await Bun.file(new URL("./mov-l-rr-conformance.cpp", import.meta.url)).text();
 const wordEmitterProbeSource = await Bun.file(new URL("./emitter-word-conformance.cpp", import.meta.url)).text();
 const wordEmitterHarnessSource = await Bun.file(new URL("./emitter-word-conformance.sh", import.meta.url)).text();
+const carryEmitterProbeSource = await Bun.file(new URL("./emitter-carry-conformance.cpp", import.meta.url)).text();
+const carryEmitterHarnessSource = await Bun.file(new URL("./emitter-carry-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -3849,6 +3851,40 @@ if (legacySetZeroBody.includes("flags_carry_inverted = false")) {
 for (const generatedCall of ["adc_b(dst,src);", "adc_w(dst,src);", "sbb_b(dst,src);", "sbb_w(dst,src);"]) {
   requireText(generatedSource, generatedCall, "generated ADDX/SUBX legacy-helper reachability");
 }
+
+/* Only the W-width flag-setting carry encoders are reachable. Three configured
+ * ADDX/SUBX callers per API mirror three raw compatibility implementations. */
+for (const contract of [
+  "#define ADCS_www(Wd,Wn,Wm)        _W((0b00111010000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define SBCS_www(Wd,Wn,Wm)        _W((0b01111010000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+]) requireText(codegenHeaderSource, contract, "carry-arithmetic emitter encoding");
+for (const [name, expected] of [["ADCS_www",6],["SBCS_www",6]] as const) {
+  const raw = (`${midfunc2Source}\n${compatSource}`.match(new RegExp(`\\b${name}\\(`,"g")) || []).length;
+  if (raw !== expected) fail(`${name} raw caller census=${raw}, expected ${expected}`);
+  const configured = (midfunc2Source.match(new RegExp(`\\b${name}\\(`,"g")) || []).length;
+  if (configured !== 3) fail(`${name} configured caller census=${configured}, expected 3`);
+  const inventory = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!inventory?.includes(",3,")) fail(`${name} inventory reference census changed`);
+}
+for (const contract of [
+  "ADCS_www(REG_WORK1, REG_WORK1, REG_WORK3);", "ADCS_www(d, d, s);",
+  "SBCS_www(REG_WORK1, REG_WORK1, REG_WORK3);", "SBCS_www(d, d, s);",
+]) requireText(midfunc2Source, contract, "configured carry-arithmetic caller class");
+for (const contract of [
+  "emitter_carry_apis=2", "emitter_carry_exact_words=%u",
+  "emitter_adcs_native_vectors=%u", "emitter_sbcs_native_vectors=%u",
+  "emitter_carry_alias_vectors=%u", "emitter_carry_native_vectors=%u",
+  "0x3a0b0149u", "0x3a1f03ffu", "0x7a0b0149u", "0x7a1f03ffu",
+  "expected_add", "expected_sub", "index%3", "adcs_vectors==24 && sbcs_vectors==24 && alias_vectors==48",
+]) requireText(carryEmitterProbeSource, contract, "carry-arithmetic native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-carry-conformance.cpp"])
+  requireText(carryEmitterHarnessSource, contract, "carry-arithmetic conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-carry-conformance.sh"', "carry-arithmetic bounded acceptance gate");
+console.log("METRIC structural_carry_emitter_apis=2");
+console.log("METRIC structural_carry_emitter_configured_callers=6");
+console.log("METRIC structural_carry_emitter_raw_callers=12");
+console.log("METRIC structural_carry_emitter_exact_words=4");
+console.log("METRIC structural_carry_emitter_native_vectors=48");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private
