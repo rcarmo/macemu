@@ -71,6 +71,8 @@ const harnessSource = await Bun.file(new URL("./run.sh", import.meta.url)).text(
 const activeRiskySource = await Bun.file(new URL("./active-risky-tests.txt", import.meta.url)).text();
 const closureInventorySource = await Bun.file(new URL("./closure-inventory.ts", import.meta.url)).text();
 const movBRiLifecycleMatrix = await Bun.file(new URL("./mov-b-ri-lifecycle-matrix.sh", import.meta.url)).text();
+const movLRiLifecycleMatrix = await Bun.file(new URL("./mov-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
+const movLRiConformance = await Bun.file(new URL("./mov-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv",
   import.meta.url,
@@ -9584,6 +9586,85 @@ console.log("METRIC structural_mov_b_ri_generated_roots=11");
 console.log("METRIC structural_mov_b_ri_constant_branches=2");
 console.log("METRIC structural_mov_b_ri_runtime_vectors=14");
 console.log("METRIC structural_mov_b_ri_pressure_cells=1");
+
+/* mov_l_ri is the constant-state boundary for both 32-bit guest values and the
+ * one pointer-width virtual register, PC_P. Raw U32 materialisation is valid
+ * only after set_const has truncated every non-PC_P value. */
+const movLRiStart = midfuncSource.indexOf("MIDFUNC(2,mov_l_ri,(W4 d, IMPTR s))");
+const movLRiEnd = midfuncSource.indexOf("MENDFUNC(2,mov_l_ri,(W4 d, IMPTR s))", movLRiStart);
+if (movLRiStart < 0 || movLRiEnd < 0) fail("missing mov_l_ri MIDFUNC");
+const movLRiBody = midfuncSource.slice(movLRiStart, movLRiEnd);
+requireText(movLRiBody, "set_const(d, s);", "mov_l_ri constant-state contract");
+const setConstStart = allocatorSource.indexOf("static inline void set_const(int r, uintptr val)");
+const setConstEnd = allocatorSource.indexOf("static inline uae_u32 get_offset", setConstStart);
+if (setConstStart < 0 || setConstEnd < 0) fail("missing set_const allocator boundary");
+const setConstBody = allocatorSource.slice(setConstStart, setConstEnd);
+for (const contract of ["if (r != PC_P)", "val = (uae_u32)val;", "live.state[r].val = val;", "set_status(r, ISCONST);"])
+  requireText(setConstBody, contract, "mov_l_ri guest/pointer width contract");
+const allocRegStart = allocatorSource.indexOf("static int alloc_reg_hinted(int r, int willclobber, int hint)");
+const allocRegEnd = allocatorSource.indexOf("static void unlock2", allocRegStart);
+if (allocRegStart < 0 || allocRegEnd < 0) fail("missing alloc_reg_hinted materialisation boundary");
+const allocRegBody = allocatorSource.slice(allocRegStart, allocRegEnd);
+for (const contract of [
+  "if (r == PC_P)", "LOAD_U64(bestreg, live.state[r].val);",
+  "compemu_raw_mov_l_ri(bestreg, live.state[r].val);",
+]) requireText(allocRegBody, contract, "mov_l_ri materialisation split");
+const rawMovLRi = bodyBetween(
+  "LOWFUNC(NONE,NONE,2,compemu_raw_mov_l_ri,(W4 d, IM32 s))",
+  "LENDFUNC(NONE,NONE,2,compemu_raw_mov_l_ri,(W4 d, IM32 s))",
+);
+requireText(rawMovLRi, "LOAD_U32(d, s);", "mov_l_ri raw U32 boundary");
+if (rawMovLRi.includes("LOAD_U64")) fail("mov_l_ri raw U32 boundary widened to host pointer");
+const movLRiInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("midfunc,mov_l_ri,"));
+const rawMovLRiInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_mov_l_ri,"));
+if (!movLRiInventory?.includes(",2396,") || !rawMovLRiInventory?.includes(",8,"))
+  fail("mov_l_ri inventory reference census changed");
+const generatedMovLRiCalls = [...generatedSource.matchAll(/\bmov_l_ri\s*\(\s*([A-Za-z0-9_]+)\s*,/g)];
+if (generatedMovLRiCalls.length !== 2379) fail(`mov_l_ri generated calls=${generatedMovLRiCalls.length}, expected 2379`);
+const generatedDestinations = new Map<string, number>();
+for (const match of generatedMovLRiCalls)
+  generatedDestinations.set(match[1], (generatedDestinations.get(match[1]) ?? 0) + 1);
+const expectedDestinations = new Map(Object.entries({
+  src: 710, srca: 560, dsta: 372, dst: 209, pctmp: 160, PC_P: 90, cnt: 48,
+  extra: 42, chk2_size: 42, offs: 38, zero: 36, one: 36, ret: 20,
+  pack_enc: 8, movep_enc: 8,
+}));
+if (generatedDestinations.size !== expectedDestinations.size ||
+    [...expectedDestinations].some(([name, count]) => generatedDestinations.get(name) !== count))
+  fail(`mov_l_ri generated destination classes changed: ${JSON.stringify(Object.fromEntries(generatedDestinations))}`);
+const supportRawCallSites = [...allocatorSource.matchAll(/\bcompemu_raw_mov_l_ri\s*\(([^\n;]*)/g)];
+const midfuncRawCallSites = [...midfuncSource.matchAll(/\bcompemu_raw_mov_l_ri\s*\(([^\n;]*)/g)];
+if (supportRawCallSites.length !== 5)
+  fail(`compemu_raw_mov_l_ri live support callers=${supportRawCallSites.length}, expected 5`);
+if (midfuncRawCallSites.length !== 2)
+  fail(`compemu_raw_mov_l_ri unreachable MIDFUNC callers=${midfuncRawCallSites.length}, expected 2`);
+if ((allocatorSource.match(/compemu_raw_mov_l_ri uses LOAD_U32 which truncates/g) || []).length !== 1)
+  fail("compemu_raw_mov_l_ri configured comment-token census changed");
+for (const contract of [
+  "compemu_raw_mov_l_ri(REG_PAR1, arg1);", "compemu_raw_mov_l_ri(REG_PAR2, arg2);",
+  "compemu_raw_mov_l_ri(REG_PAR1, next_m68k_pc);", "compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)cft_map(opcode));",
+  "compemu_raw_mov_l_ri(bestreg, live.state[r].val);",
+]) requireText(allocatorSource, contract, "mov_l_ri live raw caller class");
+for (const unreachable of ["MIDFUNC(2,fmov_l_ri", "MIDFUNC(2,fmov_s_ri"])
+  requireText(midfuncSource, unreachable, "mov_l_ri unreachable raw parent");
+for (const contract of [
+  "NATIVE_REPLAY_TESTS[move_b_preserve_flags]=1", "NATIVE_REPLAY_TESTS[indexed_full_neg_base]=1",
+  "NATIVE_REPLAY_PC[indexed_full_neg_base]=0x1000", "NATIVE_REPLAY_COUNT[indexed_full_neg_base]=1",
+]) requireText(harnessSource, contract, "mov_l_ri strict guest/pointer witnesses");
+for (const contract of [
+  "mov_l_ri_exact_words=%u", "mov_l_ri_native_vectors=%u", "mov_l_ri_guest_width32=1",
+  "mov_l_ri_pc_p_width64=1", "exact_words == 12 && native_vectors == 7",
+]) requireText(movLRiConformance, contract, "mov_l_ri native conformance");
+for (const contract of [
+  "move_b_preserve_flags,indexed_full_neg_base", "move_core_l_reg_negative_native",
+  "move_core_l_memmem_postinc_alias_native", "MOV_L_RI_LIFECYCLE conformance=7 focused=2 move_l=10 fail=0 total=19",
+]) requireText(movLRiLifecycleMatrix, contract, "mov_l_ri lifecycle matrix");
+console.log("METRIC structural_mov_l_ri_inventory_references=2396");
+console.log("METRIC structural_mov_l_ri_generated_calls=2379");
+console.log("METRIC structural_mov_l_ri_destination_classes=15");
+console.log("METRIC structural_mov_l_ri_raw_references=8");
+console.log("METRIC structural_mov_l_ri_exact_words=12");
+console.log("METRIC structural_mov_l_ri_native_vectors=19");
 
 console.log("METRIC structural_move_complete_source_ownership=1");
 console.log("METRIC structural_move_exact_native_vectors=31");

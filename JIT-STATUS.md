@@ -216,6 +216,19 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit `mov_l_ri` constant-state and raw U32 materialisation lifecycle on AArch64** (2026-07-27):
+  the 2,396-reference MIDFUNC is now classified by value domain rather than by
+  sampled opcode: 2,379 generated calls occupy exactly fifteen destination
+  classes, `set_const` truncates every non-`PC_P` value to 32 bits, and only
+  `PC_P` retains/materialises a full host pointer through `LOAD_U64`. The paired
+  raw boundary has eight inventory references: definition markers, five live
+  32-bit support callers, and one retained comment token; two additional raw
+  source spellings sit below unreachable FP parents. No host-pointer root exists. A native
+  conformance gate proves 12 exact MOV-wide words and seven results; two strict
+  guest/pointer chains plus ten accepted MOVE.L controls make the focused gate
+  19/19. The deterministic inventory promotes exactly `mov_l_ri` and
+  `compemu_raw_mov_l_ri`; production/generated source is unchanged. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_L_RI_LIFECYCLE.md`.
 - **Audit `mov_b_ri` byte-lane constant lifecycle on AArch64** (2026-07-27):
   all eleven configured calls are zero staging in flag-live MOVE.B-to-Dn
   lowering, one per readable source EA. Architectural registers preserve upper

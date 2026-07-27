@@ -18,9 +18,9 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | Layer | Total | Audited | Serviced | Unreachable | Unreviewed |
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
-| midfunc | 422 | 287 | 0 | 131 | 4 |
+| midfunc | 422 | 288 | 0 | 131 | 3 |
 | emitter_api | 294 | 64 | 0 | 103 | 127 |
-| raw_boundary | 83 | 36 | 0 | 28 | 19 |
+| raw_boundary | 83 | 37 | 0 | 28 | 18 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 68 | `mov_l_ri` | midfunc:`mov_l_ri` |
 | 68 | `mov_l_rr` | midfunc:`mov_l_rr` |
 | 68 | `MV2SCCR` | midfunc:`jff_MV2SCCR` |
 | 68 | `sub_l_ri` | midfunc:`sub_l_ri` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `BFXIL_wwii` | emitter_api:`BFXIL_wwii` |
 | 60 | `BFXIL_xxii` | emitter_api:`BFXIL_xxii` |
 | 60 | `BIC_www` | emitter_api:`BIC_www` |
+| 60 | `BLR_x` | emitter_api:`BLR_x` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`mov_l_ri` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`mov_l_ri`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`mov_l_rr` is the highest-risk family still classified as unreviewed. Its current rows are midfunc:`mov_l_rr`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 
