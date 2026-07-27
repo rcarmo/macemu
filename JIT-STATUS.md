@@ -216,6 +216,15 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Retire the host-`pow` FTWOTOX chain on AArch64** (2026-07-27): the sole
+  retained `ftwotox_rr -> fpowx_rr(2,...)` source root lies after selector
+  `0x11`'s unconditional exact-MPFR service return and cannot acquire an
+  operand. `raw_fpowx_rr` is consequently definition-only. An **8 service + 1
+  strict** focused control covers precision, infinity, NaN, range, and alias
+  cases from the accepted 49+4 transcendental matrix. The 998-row inventory
+  moves exactly the MIDFUNC/raw pair to unreachable. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_FPOWX_UNREACHABLE.md`.
+
 - **Retire the legacy binary64 guest-address load chain on AArch64**
   (2026-07-26): configured preprocessing retains only the
   `fp_to_double_rm` extern; no generated, support, compatibility, FPP, or

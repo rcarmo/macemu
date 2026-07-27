@@ -710,6 +710,10 @@ const ffuncRetirementMatrix = await Bun.file(new URL(
   "./ffunc-retirement-matrix.sh",
   import.meta.url,
 )).text();
+const fpowxRetirementMatrix = await Bun.file(new URL(
+  "./fpowx-retirement-matrix.sh",
+  import.meta.url,
+)).text();
 const fmovZeroOneRetirementMatrix = await Bun.file(new URL(
   "./fmov-zero-one-retirement-matrix.sh",
   import.meta.url,
@@ -2706,6 +2710,48 @@ for (const contract of [
 console.log("METRIC structural_ffunc_rr_service_barriers=4");
 console.log("METRIC structural_ffunc_rr_unreachable_rows=2");
 console.log("METRIC structural_ffunc_rr_retained_libm_roots=4");
+
+/* The retained FTWOTOX fpowx_rr host-pow chain is likewise unreachable:
+ * selector 0x11 services through MPFR exp2 before operand acquisition. */
+requireText(fppArm64CompatSource, "#define ftwotox_rr(d, s)  fpowx_rr(2, d, s)", "fpowx_rr compatibility root");
+const fpowxStart = fppCompilerOperation.indexOf("case 0x11:\t\t\t\t\t\t/* FTWOTOX */");
+const fpowxEnd = fppCompilerOperation.indexOf("case 0x12:\t\t\t\t\t\t/* FTENTOX */", fpowxStart);
+if (fpowxStart < 0 || fpowxEnd < 0) fail("fpowx_rr FTWOTOX selector boundary disappeared");
+const fpowxBlock = fppCompilerOperation.slice(fpowxStart, fpowxEnd);
+const fpowxGuard = fpowxBlock.indexOf("#if defined(CPU_aarch64) || defined(CPU_AARCH64)");
+const fpowxStop = fpowxBlock.indexOf("FAIL(1);", fpowxGuard);
+const fpowxReturn = fpowxBlock.indexOf("return;", fpowxStop);
+const fpowxAcquire = fpowxBlock.indexOf("get_fp_value(opcode, extra)");
+const fpowxCall = fpowxBlock.indexOf("ftwotox_rr(reg, src);", fpowxAcquire);
+if (fpowxGuard < 0 || fpowxStop < fpowxGuard || fpowxReturn < fpowxStop ||
+    fpowxAcquire < fpowxReturn || fpowxCall < fpowxAcquire)
+  fail("fpowx_rr FTWOTOX exact service no longer precedes operand acquisition and retained call");
+const fpowxMidStart = midfuncSource.indexOf("MIDFUNC(3,fpowx_rr,(uae_u32 x, FW d, FR s))");
+const fpowxMidEnd = midfuncSource.indexOf("MENDFUNC(3,fpowx_rr,(uae_u32 x, FW d, FR s))", fpowxMidStart);
+if (fpowxMidStart < 0 || fpowxMidEnd < 0) fail("missing retained fpowx_rr MIDFUNC");
+const fpowxMidBody = midfuncSource.slice(fpowxMidStart, fpowxMidEnd);
+for (const contract of ["prepare_for_call_1();", "prepare_for_call_2();", "raw_fpowx_rr(x, reald, s);"])
+  requireText(fpowxMidBody, contract, "retained unreachable fpowx_rr MIDFUNC");
+if ((midfuncSource.match(/\bfpowx_rr\b/g) || []).length !== 2)
+  fail("fpowx_rr MIDFUNC token census is no longer definition/end-marker only");
+const fpowxRawStart = codegenSource.indexOf("LOWFUNC(NONE,NONE,3,raw_fpowx_rr,(uae_u32 x, FW d, FR s))");
+const fpowxRawEnd = codegenSource.indexOf("LENDFUNC(NONE,NONE,3,raw_fpowx_rr,(uae_u32 x, FW d, FR s))", fpowxRawStart);
+if (fpowxRawStart < 0 || fpowxRawEnd < 0) fail("missing retained raw_fpowx_rr boundary");
+for (const contract of ["FMOV_di(0, 0b00000000);", "FMOV_dd(1, s);", "BLR_x(REG_WORK1);", "FMOV_dd(d, 0);"])
+  requireText(codegenSource.slice(fpowxRawStart, fpowxRawEnd), contract, "retained unreachable raw_fpowx_rr boundary");
+if ((codegenSource.match(/\braw_fpowx_rr\b/g) || []).length !== 2)
+  fail("raw_fpowx_rr token census is no longer definition/end-marker only");
+for (const contract of [
+  "ftwotox_direct_single_nearest", "ftwotox_direct_double_nearest",
+  "ftwotox_positive_infinity", "ftwotox_negative_infinity", "ftwotox_quiet_nan_payload",
+  "ftwotox_finite_single_overflow", "ftwotox_finite_single_underflow", "ftwotox_fp7_self_alias",
+  "ftwotox_fp7_strict", "FPOWX_RETIREMENT service=%d strict=%d fail=0 total=%d",
+  'test "$service" -eq 8', 'test "$strict" -eq 1',
+]) requireText(fpowxRetirementMatrix, contract, "fpowx_rr retirement runtime matrix");
+console.log("METRIC structural_fpowx_rr_service_barriers=1");
+console.log("METRIC structural_fpowx_rr_unreachable_rows=2");
+console.log("METRIC structural_fpowx_rr_focused_service_vectors=8");
+console.log("METRIC structural_fpowx_rr_focused_strict_vectors=1");
 
 const divideCompilerStart = fppCompilerOperation.indexOf("case 0x20:\t\t\t\t\t\t/* FDIV */");
 const divideCompilerEnd = fppCompilerOperation.indexOf("case 0x21:\t\t\t\t\t\t/* FMOD */", divideCompilerStart);
