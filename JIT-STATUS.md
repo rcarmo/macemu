@@ -216,6 +216,18 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit `mov_l_rr` value/pointer copy and raw X-register lifecycle on AArch64** (2026-07-27):
+  configured preprocessing reproduces all 2,359 references as 2,342 generated,
+  14 FPU, two lower-MIDFUNC, and one support call. The MIDFUNC's self-copy,
+  constant-source, and materialised-source states preserve source ownership and
+  route pointer width explicitly; six live BRA providers publish `PC_P <- src`,
+  with no configured `PC_P -> guest` copy. The paired raw boundary has exactly
+  four production callers plus markers and emits one 64-bit `MOV_xx`, required
+  by PC/private-scratch and R_REGSTRUCT pointer state. Four exact words, seven
+  native raw vectors, and eight strict runtime controls pass (15/15). Closure
+  promotes exactly `mov_l_rr` and `compemu_raw_mov_l_rr`; production/generated
+  source is unchanged. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_L_RR_LIFECYCLE.md`.
 - **Audit `mov_l_ri` constant-state and raw U32 materialisation lifecycle on AArch64** (2026-07-27):
   the 2,396-reference MIDFUNC is now classified by value domain rather than by
   sampled opcode: 2,379 generated calls occupy exactly fifteen destination

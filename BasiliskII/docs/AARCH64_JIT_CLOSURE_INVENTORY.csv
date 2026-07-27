@@ -838,7 +838,7 @@ midfunc,mov_l_mi,audited,mov_l_mi,68,2,BasiliskII/src/uae_cpu_2026/compiler/comp
 midfunc,mov_l_mr,audited,mov_l_mr,68,221,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,464,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
 midfunc,mov_l_ri,audited,mov_l_ri,68,2396,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,511,BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_L_RI_LIFECYCLE.md
 midfunc,mov_l_rm,audited,mov_l_rm,68,9,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,490,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md
-midfunc,mov_l_rr,unreviewed,mov_l_rr,68,2359,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,441,reachable; no accepted family-level closure report
+midfunc,mov_l_rr,audited,mov_l_rr,68,2359,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,441,BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_L_RR_LIFECYCLE.md
 midfunc,preserve_flags_before_nzcv_clobber,audited,preserve_flags_before_nzcv_clobber,68,108,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,166,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,roxr_b_ri,unreachable,roxr_b_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1341,no path from configured generated/support/FPU compiler roots
 midfunc,save_and_discard_flags_in_nzcv,audited,save_and_discard_flags_in_nzcv,68,28,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,199,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
@@ -876,7 +876,7 @@ raw_boundary,compemu_raw_mov_l_mi,unreviewed,compemu_raw_mov_l_mi,60,9,BasiliskI
 raw_boundary,compemu_raw_mov_l_mr,unreviewed,compemu_raw_mov_l_mr,60,17,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,420,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_mov_l_ri,audited,compemu_raw_mov_l_ri,60,8,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,437,BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_L_RI_LIFECYCLE.md
 raw_boundary,compemu_raw_mov_l_rm,unreviewed,compemu_raw_mov_l_rm,60,26,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,443,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_mov_l_rr,unreviewed,compemu_raw_mov_l_rr,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,459,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_mov_l_rr,audited,compemu_raw_mov_l_rr,60,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,459,BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_L_RR_LIFECYCLE.md
 raw_boundary,compemu_raw_observer_restore,audited,compemu_raw_observer_restore,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,260,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_observer_save,audited,compemu_raw_observer_save,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,244,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_set_pc_from_reg,audited,compemu_raw_set_pc_from_reg,86,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,373,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md

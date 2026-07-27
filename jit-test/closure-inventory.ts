@@ -163,6 +163,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^fmov_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
   [/^mov_b_ri$/, "AARCH64_JIT_AUDIT_MOV_B_RI_LIFECYCLE.md"],
   [/^mov_l_ri$/, "AARCH64_JIT_AUDIT_MOV_L_RI_LIFECYCLE.md"],
+  [/^mov_l_rr$/, "AARCH64_JIT_AUDIT_MOV_L_RR_LIFECYCLE.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],
   [/^(?:live_flags|dont_care_flags|preserve_flags_before_nzcv_clobber|discard_flags_in_nzcv|save_and_discard_flags_in_nzcv|make_flags_live)$/, "AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md"],
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],
@@ -243,6 +244,7 @@ const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
   [/^raw_fp_fscc_ri$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
   [/^compemu_raw_mov_l_ri$/, "AARCH64_JIT_AUDIT_MOV_L_RI_LIFECYCLE.md"],
+  [/^compemu_raw_mov_l_rr$/, "AARCH64_JIT_AUDIT_MOV_L_RR_LIFECYCLE.md"],
 ];
 const familyOf = (name: string) => name
   .replace(/^i_/, "")
@@ -496,6 +498,24 @@ for (const match of configuredFppOperation.matchAll(/\bdont_care_fflags\s*\(\s*\
 }
 
 const rootMidText = `${configuredGenerated}\n${configuredSupport}\n${configuredCompat}\n${configuredFpp}\n${configuredFppCompat}`;
+/* mov_l_rr is a high-fanout value-transfer primitive. Keep its configured
+   component census explicit so inactive generated-table/FPU branches cannot
+   silently become closure evidence. Two additional calls are reachable through
+   lower MIDFUNC wrappers in mid2. */
+const movLRrRootCounts = {
+  generated: countToken(configuredGenerated, "mov_l_rr"),
+  support: countToken(configuredSupport, "mov_l_rr"),
+  fpp: countToken(configuredFpp, "mov_l_rr"),
+  fppCompat: countToken(configuredFppCompat, "mov_l_rr"),
+  compat: countToken(configuredCompat, "mov_l_rr"),
+};
+if (movLRrRootCounts.generated !== 2342 || movLRrRootCounts.support !== 1 ||
+    movLRrRootCounts.fpp !== 14 || movLRrRootCounts.fppCompat !== 0 ||
+    movLRrRootCounts.compat !== 0)
+  throw new Error(`mov_l_rr configured root census changed: ${JSON.stringify(movLRrRootCounts)}`);
+const movLRrMid2Calls = countToken(configuredMid2, "mov_l_rr");
+if (movLRrMid2Calls !== 2)
+  throw new Error(`mov_l_rr lower-MIDFUNC caller census=${movLRrMid2Calls}, expected 2`);
 for (const name of semanticServiceMid.keys()) {
   const rootReferences = countToken(rootMidText, name);
   const midReferences = midDefs.reduce((sum, def) =>

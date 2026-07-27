@@ -73,6 +73,8 @@ const closureInventorySource = await Bun.file(new URL("./closure-inventory.ts", 
 const movBRiLifecycleMatrix = await Bun.file(new URL("./mov-b-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const movLRiLifecycleMatrix = await Bun.file(new URL("./mov-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const movLRiConformance = await Bun.file(new URL("./mov-l-ri-conformance.cpp", import.meta.url)).text();
+const movLRrLifecycleMatrix = await Bun.file(new URL("./mov-l-rr-lifecycle-matrix.sh", import.meta.url)).text();
+const movLRrConformance = await Bun.file(new URL("./mov-l-rr-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv",
   import.meta.url,
@@ -9665,6 +9667,69 @@ console.log("METRIC structural_mov_l_ri_destination_classes=15");
 console.log("METRIC structural_mov_l_ri_raw_references=8");
 console.log("METRIC structural_mov_l_ri_exact_words=12");
 console.log("METRIC structural_mov_l_ri_native_vectors=19");
+
+/* mov_l_rr preserves self-copy, constant-state, and materialised ownership as
+ * three distinct states. Its raw boundary must remain X-width because live
+ * callers include PC_P/private pointer state and R_REGSTRUCT. */
+const movLRrStart = midfuncSource.indexOf("MIDFUNC(2,mov_l_rr,(W4 d, RR4 s))");
+const movLRrEnd = midfuncSource.indexOf("MENDFUNC(2,mov_l_rr,(W4 d, RR4 s))", movLRrStart);
+if (movLRrStart < 0 || movLRrEnd < 0) fail("missing mov_l_rr MIDFUNC");
+const movLRrBody = midfuncSource.slice(movLRrStart, movLRrEnd);
+for (const contract of [
+  "if (d == s)", "if (isconst(s))", "COMPCALL(mov_l_ri)(d, live.state[s].val);",
+  "s = readreg(s);", "d = writereg(d);", "compemu_raw_mov_l_rr(d, s);",
+  "unlock2(d);", "unlock2(s);",
+]) requireText(movLRrBody, contract, "mov_l_rr state/ownership contract");
+requireBefore(movLRrBody, "s = readreg(s);", "d = writereg(d);", "mov_l_rr source lifetime");
+requireBefore(movLRrBody, "compemu_raw_mov_l_rr(d, s);", "unlock2(s);", "mov_l_rr source lifetime");
+const rawMovLRr = bodyBetween(
+  "LOWFUNC(NONE,NONE,2,compemu_raw_mov_l_rr,(W4 d, RR4 s))",
+  "LENDFUNC(NONE,NONE,2,compemu_raw_mov_l_rr,(W4 d, RR4 s))",
+);
+requireText(rawMovLRr, "MOV_xx(d, s);", "mov_l_rr raw full-width boundary");
+if (rawMovLRr.includes("MOV_ww")) fail("mov_l_rr raw boundary narrowed to W width");
+for (const contract of [
+  "compemu_raw_mov_l_rr(d, s);", "compemu_raw_mov_l_rr(nr, rr);",
+  "compemu_raw_mov_l_rr(REG_PAR2, R_REGSTRUCT);",
+]) requireText(`${midfuncSource}\n${allocatorSource}`, contract, "mov_l_rr raw caller class");
+const rawMovLRrCalls = [...`${midfuncSource}\n${allocatorSource}`.matchAll(/\bcompemu_raw_mov_l_rr\s*\(/g)];
+if (rawMovLRrCalls.length !== 4) fail(`compemu_raw_mov_l_rr callers=${rawMovLRrCalls.length}, expected 4`);
+const movLRrInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("midfunc,mov_l_rr,"));
+const rawMovLRrInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_mov_l_rr,"));
+if (!movLRrInventory?.includes(",2359,") || !rawMovLRrInventory?.includes(",6,"))
+  fail("mov_l_rr inventory reference census changed");
+const generatedMovLRrCalls = [...generatedSource.matchAll(/\bmov_l_rr\s*\(/g)];
+if (generatedMovLRrCalls.length !== 2518)
+  fail(`mov_l_rr raw generated spelling census=${generatedMovLRrCalls.length}, expected 2518`);
+const generatedPcpDest = [...generatedSource.matchAll(/\bmov_l_rr\s*\(\s*PC_P\s*,\s*src\s*\)/g)];
+if (generatedPcpDest.length !== 6) fail(`mov_l_rr PC_P destinations=${generatedPcpDest.length}, expected 6`);
+if (/\bmov_l_rr\s*\([^,]+,\s*PC_P\s*\)/.test(generatedSource))
+  fail("mov_l_rr generated source gained PC_P-to-guest copy");
+for (const contract of [
+  "mov_l_rr configured root census changed", "movLRrRootCounts.generated !== 2342",
+  "movLRrRootCounts.support !== 1", "movLRrRootCounts.fpp !== 14",
+  "movLRrMid2Calls !== 2",
+]) requireText(closureInventorySource, contract, "mov_l_rr configured preprocessing census");
+for (const contract of [
+  'TESTS[mov_l_rr_self_native]="2000"', 'TESTS[mov_l_rr_const_movea_native]="207C 89AB CDEF"',
+  'EXPECTED_REG_FIELDS[mov_l_rr_self_native]="D0=DEADBEEF SR=2718"',
+  'EXPECTED_REG_FIELDS[mov_l_rr_const_movea_native]="A0=89ABCDEF SR=271F"',
+]) requireText(harnessSource, contract, "mov_l_rr strict state witnesses");
+for (const contract of [
+  "mov_l_rr_exact_words=%u", "mov_l_rr_native_vectors=%u", "mov_l_rr_full_width64=1",
+  "mov_l_rr_self_alias=1", "exact_words == 4 && native_vectors == 7",
+]) requireText(movLRrConformance, contract, "mov_l_rr native conformance");
+for (const contract of [
+  "mov_l_rr_self_native,mov_l_rr_const_movea_native,move_core_l_reg_negative_native,bcc_core_bra_l_forward_native",
+  "move_core_l_areg_postinc_alias_native", "move_core_l_memmem_postinc_alias_native",
+  "MOV_L_RR_LIFECYCLE conformance=7 focused=4 controls=4 fail=0 total=15",
+]) requireText(movLRrLifecycleMatrix, contract, "mov_l_rr lifecycle matrix");
+console.log("METRIC structural_mov_l_rr_inventory_references=2359");
+console.log("METRIC structural_mov_l_rr_configured_generated_calls=2342");
+console.log("METRIC structural_mov_l_rr_pointer_destinations=6");
+console.log("METRIC structural_mov_l_rr_raw_references=6");
+console.log("METRIC structural_mov_l_rr_exact_words=4");
+console.log("METRIC structural_mov_l_rr_native_vectors=15");
 
 console.log("METRIC structural_move_complete_source_ownership=1");
 console.log("METRIC structural_move_exact_native_vectors=31");

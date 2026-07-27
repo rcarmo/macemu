@@ -710,6 +710,7 @@ declare -a MOVE_NATIVE_MATRIX_NAMES=(
     move_core_w_reg_negative_native move_core_w_reg_zero_native
     move_core_l_reg_negative_native move_core_l_reg_zero_native
     move_core_b_self_alias_native move_core_w_self_alias_native
+    mov_l_rr_self_native
     move_core_b_imm_negative_native move_core_w_imm_negative_native
     move_core_l_imm_zero_native
     move_core_b_aind_to_dn_special_native move_core_w_postinc_to_dn_native
@@ -730,6 +731,7 @@ TEST_ORDER+=("${MOVE_NATIVE_MATRIX_NAMES[@]}")
 # let the assignment win.
 declare -a MOVEA_NATIVE_MATRIX_NAMES=(
     movea_core_w_dreg_native movea_core_w_imm_native movea_core_l_dreg_native
+    mov_l_rr_const_movea_native
     movea_core_w_aind_special_native movea_core_w_postinc_alias_native
     movea_core_w_predec_alias_native movea_core_l_postinc_alias_native
     movea_core_l_a7_postinc_native movea_core_w_index_special_native
@@ -3165,6 +3167,9 @@ TESTS[move_core_w_self_alias_native]="3000"
 TESTS[move_core_b_imm_negative_native]="103C 0080"
 TESTS[move_core_w_imm_negative_native]="303C 8001"
 TESTS[move_core_l_imm_zero_native]="203C 0000 0000"
+# Primitive-attribution probes for mov_l_rr's self-copy and constant-source paths.
+TESTS[mov_l_rr_self_native]="2000"
+TESTS[mov_l_rr_const_movea_native]="207C 89AB CDEF"
 EXPECTED_REG_FIELDS[move_core_b_reg_negative_native]="D0=A5A50080 SR=2718"
 EXPECTED_REG_FIELDS[move_core_b_reg_zero_native]="D0=A5A50000 SR=2714"
 EXPECTED_REG_FIELDS[move_core_w_reg_negative_native]="D0=A5A58001 SR=2718"
@@ -3176,6 +3181,8 @@ EXPECTED_REG_FIELDS[move_core_w_self_alias_native]="D0=A5A58001 SR=2718"
 EXPECTED_REG_FIELDS[move_core_b_imm_negative_native]="D0=A5A50080 SR=2718"
 EXPECTED_REG_FIELDS[move_core_w_imm_negative_native]="D0=A5A58001 SR=2718"
 EXPECTED_REG_FIELDS[move_core_l_imm_zero_native]="D0=00000000 SR=2714"
+EXPECTED_REG_FIELDS[mov_l_rr_self_native]="D0=DEADBEEF SR=2718"
+EXPECTED_REG_FIELDS[mov_l_rr_const_movea_native]="A0=89ABCDEF SR=271F"
 
 # Every readable source EA is represented. Memory forms snapshot SR before any
 # later verification access; forced-special duplicates exercise helper routing.
@@ -5429,6 +5436,8 @@ INIT_REGS[move_core_w_self_alias_native]="A5A58001 00000000 $_MOVE_ZERO_TAIL 000
 INIT_REGS[move_core_b_imm_negative_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
 INIT_REGS[move_core_w_imm_negative_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
 INIT_REGS[move_core_l_imm_zero_native]="A5A50000 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[mov_l_rr_self_native]="DEADBEEF 00000000 $_MOVE_ZERO_TAIL 00002717"
+INIT_REGS[mov_l_rr_const_movea_native]="00000000 00000000 $_MOVE_ZERO_TAIL 0000271F"
 INIT_REGS[move_core_b_aind_to_dn_special_native]="A5A50000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
 INIT_REGS[move_core_w_postinc_to_dn_native]="A5A5BEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A000 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
 INIT_REGS[move_core_l_predec_to_dn_native]="A5A5BEEF 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00002000 0000A004 00000000 00000000 00000000 00000000 00000000 007EFF00 00002717"
@@ -6378,6 +6387,8 @@ SENTINEL_A6[subx_64bit]="a6010112"
 SENTINEL_A6[muls_boundary]="a6010113"
 SENTINEL_A6[divu_max_quotient]="a6010114"
 SENTINEL_A6[move_b_preserve_flags]="a6010115"
+SENTINEL_A6[mov_l_rr_self_native]="a6010551"
+SENTINEL_A6[mov_l_rr_const_movea_native]="a6010552"
 SENTINEL_A6[byte_logic_chain]="a6010116"
 SENTINEL_A6[bchg_imm_high]="a6010117"
 SENTINEL_A6[neg_w_partial]="a6010118"
