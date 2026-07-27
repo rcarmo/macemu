@@ -96,6 +96,7 @@ const logimmEmitterHarnessSource = await Bun.file(new URL("./emitter-logical-imm
 const transformEmitterProbeSource = await Bun.file(new URL("./emitter-transform-conformance.cpp", import.meta.url)).text();
 const transformEmitterHarnessSource = await Bun.file(new URL("./emitter-transform-conformance.sh", import.meta.url)).text();
 const rawChecksumHarnessSource = await Bun.file(new URL("./raw-checksum-boundary-matrix.sh", import.meta.url)).text();
+const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-boundary-matrix.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4304,6 +4305,63 @@ console.log("METRIC structural_raw_checksum_configured_references=3");
 console.log("METRIC structural_raw_checksum_runtime_cases=3");
 console.log("METRIC structural_raw_checksum_forced_direct_entries=2");
 console.log("METRIC structural_raw_checksum_unforced_direct_entries=0");
+
+/* Host metadata RMW cluster: dec_m must write a 32-bit wrapped decrement and
+ * publish signed NZCV for maybe_recompile; inc_m shares the pointer/load/store
+ * skeleton but must preserve NZCV because it runs after branch selection. */
+const rawMetadataDecBody = bodyBetween(
+  "LOWFUNC(WRITE,RMW,1,compemu_raw_dec_m,(MEMRW d))\n{",
+  "LENDFUNC(WRITE,RMW,1,compemu_raw_dec_m",
+);
+for (const contract of [
+  "clobber_flags();", "LOAD_U64(REG_WORK1, d);", "LDR_wXi(REG_WORK2, REG_WORK1, 0);",
+  "SUBS_wwi(REG_WORK2, REG_WORK2, 1);", "STR_wXi(REG_WORK2, REG_WORK1, 0);",
+]) requireText(rawMetadataDecBody, contract, "raw metadata decrement body");
+let rawMetadataPrevious = -1;
+for (const contract of ["LOAD_U64(REG_WORK1, d);", "LDR_wXi(REG_WORK2, REG_WORK1, 0);", "SUBS_wwi(REG_WORK2, REG_WORK2, 1);", "STR_wXi(REG_WORK2, REG_WORK1, 0);"]) {
+  const position = rawMetadataDecBody.indexOf(contract);
+  if (position <= rawMetadataPrevious) fail("raw metadata decrement ordering changed");
+  rawMetadataPrevious = position;
+}
+const rawMetadataIncBody = bodyBetween(
+  "LOWFUNC(WRITE,RMW,1,compemu_raw_inc_m,(MEMRW d))\n{",
+  "LENDFUNC(WRITE,RMW,1,compemu_raw_inc_m",
+);
+for (const contract of [
+  "LOAD_U64(REG_WORK1, d);", "LDR_wXi(REG_WORK2, REG_WORK1, 0);",
+  "ADD_wwi(REG_WORK2, REG_WORK2, 1);", "STR_wXi(REG_WORK2, REG_WORK1, 0);",
+]) requireText(rawMetadataIncBody, contract, "raw metadata increment body");
+for (const forbidden of ["clobber_flags();", "ADDS_wwi(", "SUBS_wwi("])
+  if (rawMetadataIncBody.includes(forbidden)) fail(`raw metadata increment gained NZCV clobber ${forbidden}`);
+rawMetadataPrevious = -1;
+for (const contract of ["LOAD_U64(REG_WORK1, d);", "LDR_wXi(REG_WORK2, REG_WORK1, 0);", "ADD_wwi(REG_WORK2, REG_WORK2, 1);", "STR_wXi(REG_WORK2, REG_WORK1, 0);"]) {
+  const position = rawMetadataIncBody.indexOf(contract);
+  if (position <= rawMetadataPrevious) fail("raw metadata increment ordering changed");
+  rawMetadataPrevious = position;
+}
+const rawMetadataCompile = functionBody(allocatorSource, "if (bi->count >= 0) { /* Need to generate countdown code */", "uae_u32 block_m68k_pc = 0;", "raw metadata compile sequence");
+for (const contract of ["compemu_raw_set_pc_i((uintptr)pc_hist[0].location);", "compemu_raw_dec_m((uintptr) & (bi->count));", "compemu_raw_maybe_recompile();"])
+  requireText(rawMetadataCompile, contract, "raw metadata countdown/recompile sequence");
+requireBefore(rawMetadataCompile, "compemu_raw_dec_m((uintptr) & (bi->count));", "compemu_raw_maybe_recompile();", "raw metadata signed decrement before branch");
+for (const contract of [
+  "B2_TEST_METADATA_RMW_COUNT", "parsed < 1 || parsed > 64", "optlev = max_optlev;", "bi->count = (int)parsed;",
+  "jit_test_metadata_rmw_rebuilds", "jit_test_metadata_rmw_edge_total", "jit_test_metadata_rmw_summary_mask",
+  "metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx",
+]) requireText(allocatorSource, contract, "raw metadata runtime test contract");
+for (const contract of [
+  "B2_TEST_HEX='707f 5380 66fc'", "run_valid 1 02", "run_valid 64 02", "run_invalid 0", "run_invalid 65",
+  "${recomp:-0} -eq 1", "${rebuild:-0} -eq 1", '${edges:-0} -eq "$count"', '${mask:-} == "$expected_mask"',
+  "raw_metadata_rmw_boundaries=2", "raw_metadata_rmw_runtime_cases=2", "raw_metadata_rmw_rejections=2", "raw_metadata_rmw_max_edges=64",
+]) requireText(rawMetadataRmwHarnessSource, contract, "raw metadata native matrix");
+for (const name of ["compemu_raw_dec_m", "compemu_raw_inc_m"]) {
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`raw_boundary,${name},`));
+  if (!row?.includes(",audited,")) fail(`${name} not promoted by accepted metadata RMW report`);
+}
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-metadata-rmw-boundary-matrix.sh"', "raw metadata bounded acceptance gate");
+console.log("METRIC structural_raw_metadata_rmw_boundaries=2");
+console.log("METRIC structural_raw_metadata_rmw_runtime_cases=2");
+console.log("METRIC structural_raw_metadata_rmw_rejections=2");
+console.log("METRIC structural_raw_metadata_rmw_max_edges=64");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

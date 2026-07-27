@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
 | emitter_api | 294 | 121 | 0 | 103 | 70 |
-| raw_boundary | 83 | 39 | 0 | 28 | 16 |
+| raw_boundary | 83 | 41 | 0 | 28 | 14 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,14 +42,12 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `compemu_raw_dec_m` | raw_boundary:`compemu_raw_dec_m` |
 | 60 | `compemu_raw_exec_nostats` | raw_boundary:`compemu_raw_exec_nostats` |
 | 60 | `compemu_raw_execute_normal` | raw_boundary:`compemu_raw_execute_normal` |
 | 60 | `compemu_raw_execute_normal_cycles` | raw_boundary:`compemu_raw_execute_normal_cycles` |
 | 60 | `compemu_raw_fmov_mr_drop` | raw_boundary:`compemu_raw_fmov_mr_drop` |
 | 60 | `compemu_raw_fmov_rm` | raw_boundary:`compemu_raw_fmov_rm` |
 | 60 | `compemu_raw_handle_except` | raw_boundary:`compemu_raw_handle_except` |
-| 60 | `compemu_raw_inc_m` | raw_boundary:`compemu_raw_inc_m` |
 | 60 | `compemu_raw_inc_opcount` | raw_boundary:`compemu_raw_inc_opcount` |
 | 60 | `compemu_raw_init_r_regstruct` | raw_boundary:`compemu_raw_init_r_regstruct` |
 | 60 | `compemu_raw_jcc_l_oponly` | raw_boundary:`compemu_raw_jcc_l_oponly` |
@@ -62,6 +60,8 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `CSET_xc` | emitter_api:`CSET_xc` |
 | 60 | `CSETM_wc` | emitter_api:`CSETM_wc` |
 | 60 | `LDP_xxXi` | emitter_api:`LDP_xxXi` |
+| 60 | `LDP_xxXpost` | emitter_api:`LDP_xxXpost` |
+| 60 | `LDR_dXi` | emitter_api:`LDR_dXi` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`compemu_raw_dec_m` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_dec_m`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`compemu_raw_exec_nostats` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_exec_nostats`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

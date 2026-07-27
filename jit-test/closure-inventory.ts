@@ -249,6 +249,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
 ];
 const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^compemu_raw_check_checksum$/, "AARCH64_JIT_AUDIT_RAW_CHECKSUM_BOUNDARY.md"],
+  [/^compemu_raw_(?:dec|inc)_m$/, "AARCH64_JIT_AUDIT_RAW_METADATA_RMW_BOUNDARIES.md"],
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^raw_fmov_to_[bwl]_rr$/, "AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md"],
   [/^raw_fmov_s_rr$/, "AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md"],

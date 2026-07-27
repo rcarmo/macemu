@@ -1572,6 +1572,10 @@ static void jit_trace_stable_direct_event(const char *tag, const blockinfo *sour
         target_bi ? (void*)target_bi->handler_to_use : NULL);
 }
 
+static unsigned long jit_test_metadata_rmw_rebuilds = 0;
+static unsigned long jit_test_metadata_rmw_edge_total = 0;
+static unsigned long jit_test_metadata_rmw_summary_mask = 0;
+
 static inline void jit_commit_edge_summary_for_rebuild(blockinfo *bi)
 {
     if (!bi)
@@ -1580,13 +1584,20 @@ static inline void jit_commit_edge_summary_for_rebuild(blockinfo *bi)
     bi->stable_edge_pc[0] = 0;
     bi->stable_edge_pc[1] = 0;
     const int dominant = jit_dominant_edge_index(bi);
-    if (dominant < 0 || !jit_dominant_edge_stable(bi))
-        return;
-    if (bi->edge_target_pc[dominant] == 0)
-        return;
-    bi->stable_edge_mask = (uae_u8)(1u << dominant);
-    bi->stable_edge_pc[dominant] = bi->edge_target_pc[dominant];
-    jit_trace_stable_direct_event("SUMMARY", bi, dominant, (uintptr)get_real_address(bi->stable_edge_pc[dominant], 0, sz_word), NULL, NULL);
+    if (dominant >= 0 && jit_dominant_edge_stable(bi) &&
+        bi->edge_target_pc[dominant] != 0) {
+        bi->stable_edge_mask = (uae_u8)(1u << dominant);
+        bi->stable_edge_pc[dominant] = bi->edge_target_pc[dominant];
+        jit_trace_stable_direct_event("SUMMARY", bi, dominant, (uintptr)get_real_address(bi->stable_edge_pc[dominant], 0, sz_word), NULL, NULL);
+    }
+    const char *metadata_rmw_count = getenv("B2_TEST_METADATA_RMW_COUNT");
+    const unsigned long metadata_edges =
+        (unsigned long)bi->edge_exec_count[0] + bi->edge_exec_count[1];
+    if (metadata_rmw_count && *metadata_rmw_count && metadata_edges != 0) {
+        jit_test_metadata_rmw_rebuilds++;
+        jit_test_metadata_rmw_edge_total += metadata_edges;
+        jit_test_metadata_rmw_summary_mask |= bi->stable_edge_mask;
+    }
 }
 
 static inline bool jit_source_edge_prefers_direct(const blockinfo *source_bi, int edge_slot, uintptr hostpc)
@@ -2144,10 +2155,12 @@ void jit_test_dump_dispatch_summary(void)
 {
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu\n",
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx\n",
             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
             jit_diag_checksum_good, jit_diag_checksum_bad,
-            jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls);
+            jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
+            jit_diag_recompile_block_calls, jit_test_metadata_rmw_rebuilds,
+            jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask);
     }
 #endif
 }
@@ -7632,8 +7645,21 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     else
                         bi->count = -2;
                 } else {
+                    const char *metadata_rmw_count = getenv("B2_TEST_METADATA_RMW_COUNT");
                     const char *force_l2_ram = getenv("B2_TEST_FORCE_L2_RAM");
-                    if (jit_strict_full_jit_env() ||
+                    if (metadata_rmw_count && *metadata_rmw_count && bi_was_invalid) {
+                        char *end = NULL;
+                        const unsigned long parsed = strtoul(metadata_rmw_count, &end, 0);
+                        if (end == metadata_rmw_count || *end || parsed < 1 || parsed > 64)
+                            jit_abort("B2_TEST_METADATA_RMW_COUNT must be 1..64");
+                        /* Test-only conjunction of two ordinary policies: emit
+                           native L2 code while retaining a bounded positive
+                           first-generation countdown. This exercises the real
+                           dec_m/recompile and edge-counter inc_m paths; later
+                           generations follow the ordinary no-countdown policy. */
+                        optlev = max_optlev;
+                        bi->count = (int)parsed;
+                    } else if (jit_strict_full_jit_env() ||
                         (force_l2_ram && *force_l2_ram && strcmp(force_l2_ram, "0") != 0)) {
                         optlev = max_optlev;
                         bi->count = -2;
