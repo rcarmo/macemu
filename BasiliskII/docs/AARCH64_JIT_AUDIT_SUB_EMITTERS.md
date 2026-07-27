@@ -62,14 +62,16 @@ width-swapped encoding.
 
 ## Source caller audit
 
-The four production implementation files contain 115 direct source call
-spellings. The structural gate audits all of them, including definitions that
-are dormant in the configured graph, rather than relying on reachability to
-excuse an unsafe field:
+At acceptance, the four production implementation files contained 115 direct
+source call spellings. The later accepted `sub_l_ri` lifecycle audit retired
+one dead pointer-width `SUB_xxi` branch, leaving 114. The structural gate audits
+all remaining spellings, including definitions that are dormant in the
+configured graph, rather than relying on reachability to excuse an unsafe
+field:
 
 ```text
 SUB_wwi          58
-SUB_xxi           6
+SUB_xxi           5
 SUB_www          36
 SUB_xxx           3
 SUBS_wwi          6
@@ -81,7 +83,8 @@ The immediate and shift fields are bounded before emission:
 
 - signed EA and host-pointer offsets choose immediate SUB only for
   `-0xfff..-1`, then negate the bounded value;
-- `sub_l_ri` and `arm_SUB_l_ri8` receive `IM8` values;
+- guest-only `sub_l_ri` and `arm_SUB_l_ri8` receive `IM8` values; `sub_l_ri`
+  now emits only `SUB_wwi` and rejects pointer-width state;
 - ADDA negative immediates use the immediate form only inside `-0xfff..-1`;
 - no-flags and flags-live long SUB use immediate forms only for `0..4095`;
 - byte immediates are masked with `& 0xff`;

@@ -75,6 +75,8 @@ const movLRiLifecycleMatrix = await Bun.file(new URL("./mov-l-ri-lifecycle-matri
 const movLRiConformance = await Bun.file(new URL("./mov-l-ri-conformance.cpp", import.meta.url)).text();
 const movLRrLifecycleMatrix = await Bun.file(new URL("./mov-l-rr-lifecycle-matrix.sh", import.meta.url)).text();
 const movLRrConformance = await Bun.file(new URL("./mov-l-rr-conformance.cpp", import.meta.url)).text();
+const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
+const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv",
   import.meta.url,
@@ -6297,7 +6299,7 @@ for (const contract of [
 
 const subEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (const [name, expected] of [
-  ["SUB_wwi", 54], ["SUB_xxi", 6], ["SUB_www", 36], ["SUB_xxx", 3],
+  ["SUB_wwi", 54], ["SUB_xxi", 5], ["SUB_www", 36], ["SUB_xxx", 3],
   ["SUBS_wwi", 6], ["SUBS_www", 3], ["SUBS_wwwLSLi", 3],
 ] as const) {
   const found = (subEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
@@ -6310,7 +6312,7 @@ expectArgs("SUB_wwi imm12", [...subEmitterCallers.matchAll(/\bSUB_wwi\([^,\n]+,[
   "v & 0xff", "v", "v", "v", "6", "0x60", "6", "0x60", "cycles", "cycles", "cycles", "cycles",
 ]);
 expectArgs("SUB_xxi imm12", [...subEmitterCallers.matchAll(/\bSUB_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
-  "-offset", "i", "-offset", "i", "-offset", "JIT_OBSERVER_SAVE_SIZE",
+  "-offset", "-offset", "i", "-offset", "JIT_OBSERVER_SAVE_SIZE",
 ]);
 expectArgs("SUBS_wwi imm12", [...subEmitterCallers.matchAll(/\bSUBS_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
   "1", "1", "1", "v", "1", "1",
@@ -9780,6 +9782,52 @@ console.log("METRIC structural_mv2sccr_word_memory_handlers=18");
 console.log("METRIC structural_mv2sccr_flag_combinations=32");
 console.log("METRIC structural_mv2sccr_exact_native_vectors=44");
 console.log("METRIC structural_mv2sccr_special_memory_vectors=1");
+
+/* sub_l_ri is exclusively modulo-2^32 guest arithmetic. Pointer arithmetic
+ * must use a typed pointer MIDFUNC rather than infer type from numeric value. */
+const subLRiStart = midfuncSource.indexOf("MIDFUNC(2,sub_l_ri,(RW4 d, IM8 i))");
+const subLRiEnd = midfuncSource.indexOf("MENDFUNC(2,sub_l_ri,(RW4 d, IM8 i))", subLRiStart);
+if (subLRiStart < 0 || subLRiEnd < 0) fail("missing sub_l_ri MIDFUNC");
+const subLRiBody = midfuncSource.slice(subLRiStart, subLRiEnd);
+for (const contract of [
+  "if (d == PC_P || (isconst(d) && live.state[d].val > (uintptr)0xFFFFFFFFULL))",
+  'jit_abort("sub_l_ri received pointer-width state")', "if (!i)",
+  "live.state[d].val = (uae_u32)(live.state[d].val - i);", "d = rmw(d);",
+  "SUB_wwi(d, d, i);", "unlock2(d);", "arm_ADD_ptr_ri(d, -i)",
+]) requireText(subLRiBody, contract, "sub_l_ri guest-width/type contract");
+for (const forbidden of ["SUB_xxi(", "live.state[d].val > 0xffffffff) {"])
+  if (subLRiBody.includes(forbidden)) fail(`sub_l_ri retained pointer-width inference: ${forbidden}`);
+requireBefore(subLRiBody, "if (!i)", "if (isconst(d))", "sub_l_ri zero-immediate state contract");
+const generatedSubLRiCalls = [...generatedSource.matchAll(/\bsub_l_ri\s*\(\s*([^,]+),\s*([^\)]+)\)/g)];
+const generatedSubLRiDestinations = new Map<string, number>();
+for (const call of generatedSubLRiCalls) {
+  const destination = call[1].trim();
+  generatedSubLRiDestinations.set(destination, (generatedSubLRiDestinations.get(destination) ?? 0) + 1);
+}
+const expectedSubLRiDestinations = new Map(Object.entries({src: 90, offs: 32, SP_REG: 24, movem_dsta: 4}));
+if (generatedSubLRiCalls.length !== 150 || generatedSubLRiDestinations.size !== expectedSubLRiDestinations.size ||
+    [...expectedSubLRiDestinations].some(([name, count]) => generatedSubLRiDestinations.get(name) !== count))
+  fail(`sub_l_ri generated caller classes changed: ${JSON.stringify(Object.fromEntries(generatedSubLRiDestinations))}`);
+const fppSubLRiCalls = [...fppCompilerSource.matchAll(/\bsub_l_ri\s*\(\s*ad\s*,\s*4\s*\)/g)];
+if (fppSubLRiCalls.length !== 6) fail(`sub_l_ri configured FPU address callers=${fppSubLRiCalls.length}, expected 6`);
+const subLRiInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("midfunc,sub_l_ri,"));
+if (!subLRiInventory?.includes(",156,")) fail("sub_l_ri inventory reference census changed");
+for (const contract of [
+  "sub_l_ri_exact_words=1", "sub_l_ri_native_vectors=%u", "sub_l_ri_modulo32=1",
+  "return vectors==6?0:1;",
+]) requireText(subLRiConformance, contract, "sub_l_ri native conformance");
+for (const contract of [
+  "bcc_core_bra_b_forward_native,bcc_core_bra_w_forward_native,bcc_core_bra_l_forward_native,bcc_core_bne_w_backward_native",
+  "CASE=link_w_a7_snapshot", "movem_l_predec_base_alias_native,movem_w_predec_base_alias_native",
+  "CASE=static_to_predec_all_direct_mask",
+  "SUB_L_RI_LIFECYCLE conformance=6 branches=4 stack=1 movem=2 fpu_service=1 fail=0 total=14",
+]) requireText(subLRiLifecycleMatrix, contract, "sub_l_ri lifecycle matrix");
+console.log("METRIC structural_sub_l_ri_inventory_references=156");
+console.log("METRIC structural_sub_l_ri_branch_calls=122");
+console.log("METRIC structural_sub_l_ri_stack_calls=24");
+console.log("METRIC structural_sub_l_ri_movem_calls=4");
+console.log("METRIC structural_sub_l_ri_fpu_calls=6");
+console.log("METRIC structural_sub_l_ri_native_vectors=14");
 
 console.log("METRIC structural_move_complete_source_ownership=1");
 console.log("METRIC structural_move_exact_native_vectors=31");

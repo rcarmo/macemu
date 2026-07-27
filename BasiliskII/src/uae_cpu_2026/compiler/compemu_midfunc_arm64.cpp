@@ -535,27 +535,27 @@ MENDFUNC(2,mov_b_ri,(W1 d, IM8 s))
 
 MIDFUNC(2,sub_l_ri,(RW4 d, IM8 i))
 {
+	/* This primitive is modulo-2^32 guest arithmetic.
+	 *
+	 * All configured callers operate on guest branch displacements, SP,
+	 * MOVEM cursors, or FPU guest addresses before host-pointer conversion.
+	 * A numeric value range is not a type tag: the old greater-than-32-bit
+	 * heuristic had no reachable dynamic arm after the constant early return.
+	 *
+	 * Reject future pointer state rather than silently changing arithmetic
+	 * width. Pointer-width callers must use the explicitly typed
+	 * arm_ADD_ptr_ri(d, -i) contract. */
+	if (d == PC_P || (isconst(d) && live.state[d].val > (uintptr)0xFFFFFFFFULL))
+		jit_abort("sub_l_ri received pointer-width state");
 	if (!i)
 		return;
 	if (isconst(d)) {
-		// Always preserve full 64-bit for PC_P (host pointer) or
-		// when the current value already exceeds 32 bits.
-		if (d == PC_P || live.state[d].val > (uintptr)0xFFFFFFFFULL)
-			live.state[d].val = live.state[d].val - i;
-		else
-			live.state[d].val = (uae_u32)(live.state[d].val - i);
+		live.state[d].val = (uae_u32)(live.state[d].val - i);
 		return;
 	}
 
-	bool is_pcp = (d == PC_P);
-	bool is_ptr = is_pcp || (isconst(d) && live.state[d].val > (uintptr)0xFFFFFFFFULL);
 	d = rmw(d);
-
-	if (is_ptr)
-		SUB_xxi(d, d, i);  // 64-bit SUB for host pointer
-	else
-		SUB_wwi(d, d, i);
-
+	SUB_wwi(d, d, i);
 	unlock2(d);
 }
 MENDFUNC(2,sub_l_ri,(RW4 d, IM8 i))

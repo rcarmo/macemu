@@ -258,7 +258,7 @@ emitter_api,STURH_wXi,unreachable,STURH_wXi,60,0,BasiliskII/src/uae_cpu_2026/com
 emitter_api,SUB_wwi,audited,SUB_wwi,80,35,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,252,AARCH64_JIT_AUDIT_SUB_EMITTERS.md
 emitter_api,SUB_www,audited,SUB_www,80,23,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,254,AARCH64_JIT_AUDIT_SUB_EMITTERS.md
 emitter_api,SUB_wwwEX,unreachable,SUB_wwwEX,80,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,256,no path from reachable AArch64 compiler/emitter roots
-emitter_api,SUB_xxi,audited,SUB_xxi,80,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,253,AARCH64_JIT_AUDIT_SUB_EMITTERS.md
+emitter_api,SUB_xxi,audited,SUB_xxi,80,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,253,AARCH64_JIT_AUDIT_SUB_EMITTERS.md
 emitter_api,SUB_xxx,audited,SUB_xxx,80,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,255,AARCH64_JIT_AUDIT_SUB_EMITTERS.md
 emitter_api,SUBS_wwi,audited,SUBS_wwi,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,257,AARCH64_JIT_AUDIT_SUB_EMITTERS.md
 emitter_api,SUBS_wwish,unreachable,SUBS_wwish,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,260,only used by unreachable sub_w_ri; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm
@@ -843,7 +843,7 @@ midfunc,preserve_flags_before_nzcv_clobber,audited,preserve_flags_before_nzcv_cl
 midfunc,roxr_b_ri,unreachable,roxr_b_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1341,no path from configured generated/support/FPU compiler roots
 midfunc,save_and_discard_flags_in_nzcv,audited,save_and_discard_flags_in_nzcv,68,28,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,199,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md
 midfunc,sign_extend_16_rr,audited,sign_extend_16_rr,68,157,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,293,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
-midfunc,sub_l_ri,unreviewed,sub_l_ri,68,156,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,536,reachable; no accepted family-level closure report
+midfunc,sub_l_ri,audited,sub_l_ri,68,156,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,536,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_L_RI_LIFECYCLE.md
 midfunc,sub_w_ri,unreachable,sub_w_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,563,raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead
 raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3222,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
 raw_boundary,compemu_raw_call,audited,compemu_raw_call,86,19,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,231,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md

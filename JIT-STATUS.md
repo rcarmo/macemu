@@ -1545,3 +1545,20 @@ restarts itself once with ASLR disabled.
 launches) previously saw ~30% failure rate from address collisions. With the
 fix, it achieves **100% reliability without external wrappers** like
 `setarch -R`.
+
+### Final MIDFUNC closure — `sub_l_ri` (2026-07-27)
+
+- The last unreviewed AArch64 MIDFUNC is now audited as explicitly modulo-2^32
+  guest subtraction; future `PC_P` or pointer-width state fails closed and must
+  use typed `arm_ADD_ptr_ri(d, -i)`.
+- Configured calls are fixed at 156: 122 branch displacement normalisations,
+  24 guest-SP decrements, four private MOVEM cursors, and six FPU guest-address
+  cursors. No configured pointer caller remains.
+- The dead numeric pointer-width inference and its `SUB_xxi` emission are
+  retired; the accepted generic SUB emitter source census is updated without
+  changing its 70-vector encoding/NZCV conformance.
+- Acceptance passes 14/14 focused lifecycle, 904/904 active-risky, 33/33
+  allocator pressure, clean full build, structural/source-hygiene gates, and
+  deterministic closure regeneration; independent review is APPROVE.
+- Closure now has zero unreviewed generator and MIDFUNC rows. Remaining work is
+  127 emitter APIs plus 17 raw boundaries; `_W` is mechanically selected next.
