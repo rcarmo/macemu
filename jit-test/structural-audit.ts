@@ -75,6 +75,8 @@ const movLRiLifecycleMatrix = await Bun.file(new URL("./mov-l-ri-lifecycle-matri
 const movLRiConformance = await Bun.file(new URL("./mov-l-ri-conformance.cpp", import.meta.url)).text();
 const movLRrLifecycleMatrix = await Bun.file(new URL("./mov-l-rr-lifecycle-matrix.sh", import.meta.url)).text();
 const movLRrConformance = await Bun.file(new URL("./mov-l-rr-conformance.cpp", import.meta.url)).text();
+const wordEmitterProbeSource = await Bun.file(new URL("./emitter-word-conformance.cpp", import.meta.url)).text();
+const wordEmitterHarnessSource = await Bun.file(new URL("./emitter-word-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -9828,6 +9830,37 @@ console.log("METRIC structural_sub_l_ri_stack_calls=24");
 console.log("METRIC structural_sub_l_ri_movem_calls=4");
 console.log("METRIC structural_sub_l_ri_fpu_calls=6");
 console.log("METRIC structural_sub_l_ri_native_vectors=14");
+
+/* _W is the common one-word sink for the configured AArch64 encoder header.
+ * Keep semantic API audits separate, but bind the sink to production target
+ * storage/advancement and representative native words from major classes. */
+requireText(codegenHeaderSource, "#define _W(c) emit_long((uae_u32)(c))", "_W unsigned one-word contract");
+const wordMacroReferences = (codegenHeaderSource.match(/\b_W\(/g) || []).length;
+if (wordMacroReferences !== 268) fail(`_W header token census=${wordMacroReferences}, expected 268`);
+const emitLongStart = allocatorSource.indexOf("static inline void emit_long(uae_u32 x)\n{");
+const emitLongEnd = allocatorSource.indexOf("static inline void emit_quad(uae_u64 x)", emitLongStart);
+if (emitLongStart < 0 || emitLongEnd < 0) fail("missing production emit_long boundary");
+const emitLongBody = allocatorSource.slice(emitLongStart, emitLongEnd);
+for (const contract of ["*((uae_u32*)target) = x;", "skip_long();"])
+  requireText(emitLongBody, contract, "production emit_long word/advance contract");
+requireText(allocatorSource, "static inline void skip_long()\n{\n    skip_n_bytes(4);\n}", "production emit_long four-byte advance");
+const wordInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("emitter_api,_W,"));
+if (!wordInventory?.includes(",269,")) fail("_W inventory reference census changed");
+for (const contract of [
+  "_W(0x1122334455667788ull);", "_W(static_cast<std::int64_t>(-1));",
+  "_W(side_effect_value());", "sequence order/cardinality", "B_i(1); ADD_wwi(0, 0, 1);",
+  "EOR_www(0, 0, 1); LDR_wXi(2, 3, 16);", "FMOV_dd(4, 5); RET;",
+  "0x14000001u", "0xb9401062u", "0x1e6040a4u", "native mixed raw-word sequence",
+  "direct_vectors == 5 && representative_words == 6 && native_vectors == 1",
+]) requireText(wordEmitterProbeSource, contract, "_W native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-word-conformance.cpp"])
+  requireText(wordEmitterHarnessSource, contract, "_W conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-word-conformance.sh"', "_W bounded acceptance gate");
+console.log("METRIC structural_word_emitter_inventory_references=269");
+console.log("METRIC structural_word_emitter_header_tokens=268");
+console.log("METRIC structural_word_emitter_direct_vectors=5");
+console.log("METRIC structural_word_emitter_representative_words=6");
+console.log("METRIC structural_word_emitter_native_vectors=1");
 
 console.log("METRIC structural_move_complete_source_ownership=1");
 console.log("METRIC structural_move_exact_native_vectors=31");

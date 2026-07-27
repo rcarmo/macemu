@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 64 | 0 | 103 | 127 |
+| emitter_api | 294 | 65 | 0 | 103 | 126 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `_W` | emitter_api:`_W` |
 | 60 | `ADCS_www` | emitter_api:`ADCS_www` |
 | 60 | `ADDS_wwi` | emitter_api:`ADDS_wwi` |
 | 60 | `ADDS_www` | emitter_api:`ADDS_www` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `CLEAR_xxbit` | emitter_api:`CLEAR_xxbit` |
 | 60 | `CLEAR_xxCflag` | emitter_api:`CLEAR_xxCflag` |
 | 60 | `CLEAR_xxVflag` | emitter_api:`CLEAR_xxVflag` |
+| 60 | `CLEAR_xxZflag` | emitter_api:`CLEAR_xxZflag` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`_W` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`_W`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`ADCS_www` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ADCS_www`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

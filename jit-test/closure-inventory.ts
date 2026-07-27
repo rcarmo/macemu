@@ -213,6 +213,7 @@ const riskOf = (name: string, layer: Layer): number => {
   return layer === "generator" ? 72 : layer === "midfunc" ? 68 : 60;
 };
 const emitterAuditRules: Array<[RegExp, string]> = [
+  [/^_W$/, "AARCH64_JIT_AUDIT_WORD_EMITTER.md"],
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
   [/^ADD_(?:wwi|xxi|wwwEX|xxwEX|www|xxx|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
   [/^(?:SUB_(?:wwi|xxi|www|xxx)|SUBS_(?:wwi|www|wwwLSLi))$/, "AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],

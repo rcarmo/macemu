@@ -1562,3 +1562,17 @@ fix, it achieves **100% reliability without external wrappers** like
   deterministic closure regeneration; independent review is APPROVE.
 - Closure now has zero unreviewed generator and MIDFUNC rows. Remaining work is
   127 emitter APIs plus 17 raw boundaries; `_W` is mechanically selected next.
+
+### AArch64 `_W` emission sink closure (2026-07-27)
+
+- The common `_W(c) -> emit_long((uae_u32)c)` sink is audited independently
+  from the semantic encoder APIs that use it.
+- The contract proves one evaluation, low-32 truncation, one-word cardinality,
+  source order, production `uae_u32` target storage, and exact four-byte target
+  advancement.
+- Acceptance covers five direct sink vectors, six representative branch/ALU/
+  logical/load/FP/return words, one native sequence, all 24 emitter suites,
+  904/904 active-risky, 33/33 allocator pressure, clean build, deterministic
+  closure, and independent APPROVE.
+- Closure promotes only `_W`; 126 emitter APIs and 17 raw boundaries remain.
+  `ADCS_www` is mechanically selected next.

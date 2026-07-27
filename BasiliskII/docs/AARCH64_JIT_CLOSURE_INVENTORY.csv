@@ -1,5 +1,5 @@
 layer,name,status,family,risk,references,file,line,evidence
-emitter_api,_W,unreviewed,_W,60,269,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,45,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,_W,audited,_W,60,269,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,45,AARCH64_JIT_AUDIT_WORD_EMITTER.md
 emitter_api,ADC_www,unreachable,ADC_www,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,186,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADC_xxx,unreachable,ADC_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,187,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADCS_www,unreviewed,ADCS_www,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,188,reachable encoder API; requires opcode/width/branch-range contract classification
