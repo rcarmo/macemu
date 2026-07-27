@@ -49,20 +49,24 @@ compile a RAM block, then an env-gated test control selects its already emitted
 `direct_pcc` before replay. Instrumentation increments only on entry to the
 `popall_check_checksum_setpc` label, separately from the C helper counter.
 
-Two cases pass:
+Three cases pass:
 
 ```text
+unforced:  direct_checksum=0
 unchanged: direct_checksum=1 check_checksum=1 good=1 bad=0
 changed:   direct_checksum=1 check_checksum=1 good=0 bad=1
 ```
 
-Both cases require exactly one direct entry and one checksum-helper call, with
-mutually exclusive good/bad counters, and produce a clean `REGDUMP`. The
-unchanged stream proves direct entry, PC publication, checksum validation, and
-reactivation. The changed stream proves stale native code is rejected. Test
-controls and summary output are inactive unless
-`B2_TEST_FORCE_DIRECT_CHECKSUM` / `B2_TEST_DISPATCH_SUMMARY` are explicitly
-set.
+The unforced control proves ordinary dispatcher entry does not accidentally
+cross the raw-stub counter. Both forced cases require exactly one direct entry
+and one checksum-helper call, with mutually exclusive good/bad counters, and
+produce a clean `REGDUMP`. The selected block must own its cache line; the hook
+fails closed otherwise, and keeps the cache tag coherent with
+`handler_to_use=direct_pcc`. The unchanged stream proves direct entry, PC
+publication, checksum validation, and reactivation. The changed stream proves
+stale native code is rejected. Test controls and summary output are inactive
+unless `B2_TEST_FORCE_DIRECT_CHECKSUM` / `B2_TEST_DISPATCH_SUMMARY` are
+explicitly set.
 
 ## Structural acceptance
 
@@ -75,7 +79,8 @@ unreviewed status of the three sibling raw boundaries.
 
 The accepted clean-source epoch passes:
 
-- direct checksum boundary matrix: **2/2** (unchanged good + changed bad);
+- direct checksum boundary matrix: **3/3** (unforced negative control +
+  unchanged good + changed bad);
 - complete emitter/boundary phase: all 34 bounded suites pass;
 - complete active-risky corpus: **904/904**, zero equivalence or infrastructure failures;
 - allocator pressure: **33/33**;
@@ -83,8 +88,10 @@ The accepted clean-source epoch passes:
 - complete structural audit: pass;
 - repeated inventory/source hashes: byte-identical;
 - source hygiene: `git diff --check` pass;
-- independent bounded review: **APPROVE** after tightening both runtime cases
-  to exact one-entry/one-helper and mutually exclusive good/bad outcomes.
+- independent bounded review: initial approval was superseded by a sibling
+  ownership-invariant rejection; follow-up repairs add cache-line ownership,
+  coherent handler policy, an unforced negative control, and exact census-column
+  checking. Final independent and original-rejector re-reviews: **APPROVE**.
 
 Clean-epoch hashes before publication:
 

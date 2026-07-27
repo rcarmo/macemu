@@ -4250,8 +4250,13 @@ for (const contract of [
 ]) requireText(rawChecksumBody, contract, "raw checksum boundary body");
 requireBefore(rawChecksumBody, "LOAD_U64(REG_WORK1, s);", "LDR_xXi(REG_WORK1, REG_WORK1, 0);", "raw checksum pointer load");
 requireBefore(rawChecksumBody, "LDR_xXi(REG_WORK1, REG_WORK1, 0);", "B_i(0);", "raw checksum PC before branch");
-const rawChecksumInventory = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_check_checksum,"));
-if (!rawChecksumInventory?.includes(",3,")) fail("raw checksum configured reference census changed");
+const rawChecksumRows = closureInventoryCsv.trimEnd().split("\n");
+const rawChecksumHeader = rawChecksumRows[0].split(",");
+const rawChecksumReferencesColumn = rawChecksumHeader.indexOf("references");
+const rawChecksumInventory = rawChecksumRows.find((line) => line.startsWith("raw_boundary,compemu_raw_check_checksum,"));
+if (rawChecksumReferencesColumn < 0 || !rawChecksumInventory ||
+    rawChecksumInventory.split(",")[rawChecksumReferencesColumn] !== "3")
+  fail("raw checksum configured reference census changed");
 const checksumPopall = functionBody(
   allocatorSource,
   "popall_check_checksum_setpc = get_target();",
@@ -4264,30 +4269,41 @@ for (const contract of [
 ]) requireText(checksumPopall, contract, "raw checksum popall contract");
 requireBefore(checksumPopall, "compemu_raw_set_pc_from_reg(REG_WORK1);", "raw_pop_preserved_regs();", "raw checksum PC before unwind");
 requireBefore(checksumPopall, "raw_pop_preserved_regs();", "compemu_raw_jmp((uintptr)check_checksum);", "raw checksum tail ABI");
+const rawChecksumTestHook = functionBody(
+  allocatorSource,
+  "bool jit_test_prepare_direct_checksum_entry(void)",
+  "STATIC_INLINE void create_popalls(void)",
+  "raw checksum runtime test hook",
+);
 for (const contract of [
-  "bool jit_test_prepare_direct_checksum_entry(void)", "B2_TEST_FORCE_DIRECT_CHECKSUM",
-  "bi->direct_pcc", "set_dhtu_validated(bi, bi->direct_pcc);",
-  "cache_tags[cacheline(bi->pc_p)].handler = bi->direct_pcc;", "bi->status = BI_NEED_CHECK;",
-  "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu",
-]) requireText(allocatorSource, contract, "raw checksum runtime test contract");
+  "B2_TEST_FORCE_DIRECT_CHECKSUM", "bi->direct_pcc", "const uae_u32 cl = cacheline(bi->pc_p);",
+  "if (bi != cache_tags[cl + 1].bi)", "bi->handler_to_use = bi->direct_pcc;",
+  "set_dhtu_validated(bi, bi->direct_pcc);", "cache_tags[cl].handler = bi->handler_to_use;",
+  "bi->status = BI_NEED_CHECK;",
+]) requireText(rawChecksumTestHook, contract, "raw checksum runtime test contract");
+if (rawChecksumTestHook.includes("cache_tags[cacheline(bi->pc_p)].handler = bi->direct_pcc"))
+  fail("raw checksum test hook bypasses cache-line ownership/handler policy");
+requireText(allocatorSource, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu", "raw checksum runtime summary");
 for (const contract of [
   "jit_test_prepare_direct_checksum_entry()", "B2_TEST_FORCE_DIRECT_CHECKSUM could not prepare direct checksum entry",
   "jit_test_dump_dispatch_summary()",
 ]) requireText(basiliskGlueSource, contract, "raw checksum test integration");
 for (const contract of [
-  "B2_TEST_FORCE_DIRECT_CHECKSUM=1", "B2_TEST_DISPATCH_SUMMARY=1",
-  "direct_checksum=", "check_checksum=", "good=", "bad=", "run_case unchanged", "run_case changed",
+  "env -u B2_TEST_FORCE_DIRECT_CHECKSUM", "force_env+=(B2_TEST_FORCE_DIRECT_CHECKSUM=1)", "B2_TEST_DISPATCH_SUMMARY=1",
+  "direct_checksum=", "check_checksum=", "good=", "bad=", "run_case unforced", "run_case unchanged", "run_case changed",
+  "${direct:-0} -eq 0 && ${calls:-0} -eq 0 && ${good:-0} -eq 0 && ${bad:-0} -eq 0",
   "${direct:-0} -eq 1 && ${calls:-0} -eq 1",
   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
-  "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=2", "raw_checksum_good=1", "raw_checksum_bad=1",
+  "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
 ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
 for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles", "compemu_raw_exec_nostats"])
   if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} was promoted without direct evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
 console.log("METRIC structural_raw_checksum_boundaries=1");
 console.log("METRIC structural_raw_checksum_configured_references=3");
-console.log("METRIC structural_raw_checksum_runtime_cases=2");
-console.log("METRIC structural_raw_checksum_direct_entries=2");
+console.log("METRIC structural_raw_checksum_runtime_cases=3");
+console.log("METRIC structural_raw_checksum_forced_direct_entries=2");
+console.log("METRIC structural_raw_checksum_unforced_direct_entries=0");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

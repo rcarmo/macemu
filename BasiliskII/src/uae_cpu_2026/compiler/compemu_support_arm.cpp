@@ -6609,9 +6609,15 @@ bool jit_test_prepare_direct_checksum_entry(void)
     blockinfo* bi = get_blockinfo_addr(regs.pc_p);
     if (!bi || !bi->csi || !bi->direct_pcc)
         return false;
-    bi->handler_to_use = (cpuop_func*)popall_check_checksum;
+    const uae_u32 cl = cacheline(bi->pc_p);
+    if (bi != cache_tags[cl + 1].bi)
+        return false;
+    /* Unlike the ordinary shared-handler path, this test deliberately enters
+       the per-block raw stub. Keep cache-tag and relink policy coherent, and
+       only override a cache line that this block actually owns. */
+    bi->handler_to_use = bi->direct_pcc;
     set_dhtu_validated(bi, bi->direct_pcc);
-    cache_tags[cacheline(bi->pc_p)].handler = bi->direct_pcc;
+    cache_tags[cl].handler = bi->handler_to_use;
     bi->status = BI_NEED_CHECK;
 #endif
     return true;

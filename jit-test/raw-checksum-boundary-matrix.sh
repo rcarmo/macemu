@@ -33,15 +33,16 @@ nogui true
 ignoresegv true
 EOF
 run_case(){
-  local name=$1 rewrite=$2 expect=$3
+  local name=$1 rewrite=$2 expect=$3 force=${4:-1}
   local log="$RUN/$name.log"
-  env SDL_VIDEODRIVER=x11 DISPLAY="$D" HOME="$RUN/home" \
+  local -a force_env=()
+  [[ "$force" == 0 ]] || force_env+=(B2_TEST_FORCE_DIRECT_CHECKSUM=1)
+  env -u B2_TEST_FORCE_DIRECT_CHECKSUM SDL_VIDEODRIVER=x11 DISPLAY="$D" HOME="$RUN/home" \
     B2_TEST_HEX='7001 5280 2C7C A6A0 0001' B2_TEST_REWRITE_HEX="$rewrite" \
     B2_TEST_DUMP=1 B2_TEST_TWO_PASS=1 B2_TEST_REPLAY_COUNT=1 \
     B2_JIT_FORCE_TRANSLATE=1 B2_TEST_FORCE_L2_RAM=1 \
     B2_JIT_PREFER_DIRECT_SUCCESSOR_HANDLER=1 B2_JIT_DIAG=1 B2_TEST_DISPATCH_SUMMARY=1 \
-    B2_TEST_FORCE_DIRECT_CHECKSUM=1 \
-    timeout -k 5s 30s "$BIN" --config "$RUN/prefs" >"$log" 2>&1
+    ${force_env[@]+"${force_env[@]}"} timeout -k 5s 30s "$BIN" --config "$RUN/prefs" >"$log" 2>&1
   local summary; summary=$(grep '^JIT_TEST_DISPATCH ' "$log" | tail -1 || true)
   [[ -n "$summary" ]] || { echo "RAW_DISPATCH_FAIL $name missing summary" >&2; tail -30 "$log" >&2; return 1; }
   local direct calls good bad
@@ -49,12 +50,18 @@ run_case(){
   calls=$(sed -n 's/.* check_checksum=\([0-9][0-9]*\).*/\1/p' <<<"$summary")
   good=$(sed -n 's/.* good=\([0-9][0-9]*\).*/\1/p' <<<"$summary")
   bad=$(sed -n 's/.* bad=\([0-9][0-9]*\).*/\1/p' <<<"$summary")
-  [[ ${direct:-0} -eq 1 && ${calls:-0} -eq 1 ]] || { echo "RAW_DISPATCH_FAIL $name expected exactly one direct checksum call: $summary" >&2; return 1; }
-  if [[ "$expect" == good ]]; then [[ ${good:-0} -eq 1 && ${bad:-0} -eq 0 ]]; else [[ ${good:-0} -eq 0 && ${bad:-0} -eq 1 ]]; fi || {
-    echo "RAW_DISPATCH_FAIL $name unexpected summary: $summary" >&2; return 1; }
+  if [[ "$expect" == control ]]; then
+    [[ ${direct:-0} -eq 0 && ${calls:-0} -eq 0 && ${good:-0} -eq 0 && ${bad:-0} -eq 0 ]] || {
+      echo "RAW_DISPATCH_FAIL $name unforced path entered checksum machinery: $summary" >&2; return 1; }
+  else
+    [[ ${direct:-0} -eq 1 && ${calls:-0} -eq 1 ]] || { echo "RAW_DISPATCH_FAIL $name expected exactly one direct checksum call: $summary" >&2; return 1; }
+    if [[ "$expect" == good ]]; then [[ ${good:-0} -eq 1 && ${bad:-0} -eq 0 ]]; else [[ ${good:-0} -eq 0 && ${bad:-0} -eq 1 ]]; fi || {
+      echo "RAW_DISPATCH_FAIL $name unexpected summary: $summary" >&2; return 1; }
+  fi
   grep -q '^REGDUMP:' "$log" || { echo "RAW_DISPATCH_FAIL $name missing REGDUMP" >&2; return 1; }
   printf 'RAW_DISPATCH_PASS case=%s %s\n' "$name" "$summary"
 }
+run_case unforced  '7001 5280 2C7C A6A0 0001' control 0
 run_case unchanged '7001 5280 2C7C A6A0 0001' good
 run_case changed   '7002 5280 2C7C A6A0 0001' bad
-printf 'METRIC raw_checksum_boundaries=1\nMETRIC raw_checksum_runtime_cases=2\nMETRIC raw_checksum_good=1\nMETRIC raw_checksum_bad=1\n'
+printf 'METRIC raw_checksum_boundaries=1\nMETRIC raw_checksum_runtime_cases=3\nMETRIC raw_checksum_unforced_direct=0\nMETRIC raw_checksum_good=1\nMETRIC raw_checksum_bad=1\n'
