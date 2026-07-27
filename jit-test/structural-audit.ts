@@ -70,6 +70,7 @@ for (const layoutDependency of [
 const harnessSource = await Bun.file(new URL("./run.sh", import.meta.url)).text();
 const activeRiskySource = await Bun.file(new URL("./active-risky-tests.txt", import.meta.url)).text();
 const closureInventorySource = await Bun.file(new URL("./closure-inventory.ts", import.meta.url)).text();
+const movBRiLifecycleMatrix = await Bun.file(new URL("./mov-b-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv",
   import.meta.url,
@@ -9545,6 +9546,45 @@ console.log("METRIC structural_coverage_taxonomy=1");
 console.log("METRIC structural_trace_source_coherency=1");
 console.log("METRIC structural_native_fpu_state_boundary=1");
 console.log("METRIC structural_disabled_fpu_semantic_service=1");
+/* mov_b_ri has exactly eleven configured zero-staging roots in MOVE.B-to-Dn
+ * generated handlers. Audit its constant-folded and materialised RMW branches
+ * without inheriting generic BFI/allocator status. */
+const movBRiStart = midfuncSource.indexOf("MIDFUNC(2,mov_b_ri,(W1 d, IM8 s))");
+const movBRiEnd = midfuncSource.indexOf("MENDFUNC(2,mov_b_ri,(W1 d, IM8 s))", movBRiStart);
+if (movBRiStart < 0 || movBRiEnd < 0) fail("missing mov_b_ri MIDFUNC");
+const movBRiBody = midfuncSource.slice(movBRiStart, movBRiEnd);
+for (const contract of [
+  "if(d < 16)", "if (isconst(d))", "live.state[d].val & 0xffffff00", "s & 0x000000ff",
+  "d = rmw(d);", "MOV_wi(REG_WORK1, (s & 0xff));", "BFI_wwii(d, REG_WORK1, 0, 8);",
+  "unlock2(d);", "set_const(d, s & 0xff);",
+]) requireText(movBRiBody, contract, "mov_b_ri lane/ownership contract");
+const movBRiCalls = [...generatedSource.matchAll(/\bmov_b_ri\s*\(\s*dst\s*,\s*0\s*\)/g)];
+if (movBRiCalls.length !== 11 || (generatedSource.match(/\bmov_b_ri\s*\(/g) || []).length !== 11)
+  fail(`mov_b_ri generated zero/total calls=${movBRiCalls.length}/${(generatedSource.match(/\bmov_b_ri\s*\(/g) || []).length}, expected 11/11`);
+const moveByteDnHandlers = [...generatedSource.matchAll(/void REGPARAM2 op_10(?:00|10|18|20|28|30|38|39|3a|3b|3c)_0_comp_ff[\s\S]*?(?=\nvoid REGPARAM2|$)/g)];
+if (moveByteDnHandlers.length !== 11 || moveByteDnHandlers.some((match) =>
+    !match[0].includes("mov_b_ri(dst,0);") || !match[0].includes("start_needflags();") ||
+    !match[0].includes("or_b(dst,src);") || !match[0].includes("live_flags();")))
+  fail("mov_b_ri MOVE.B-to-Dn source-class composition changed");
+for (const contract of [
+  "NATIVE_REPLAY_TESTS[move_b_preserve_flags]=1", "NATIVE_REPLAY_PC[move_b_preserve_flags]=0x1000",
+  "NATIVE_REPLAY_COUNT[move_b_preserve_flags]=2", 'TESTS[move_b_preserve_flags]="203C AABB CCDD 103C 0011 4A00"',
+  'EXPECTED_REG_FIELDS[move_core_b_reg_negative_native]="D0=A5A50080 SR=2718"',
+]) requireText(harnessSource, contract, "mov_b_ri constant/materialised strict-native witnesses");
+for (const contract of [
+  "move_b_mem_source_dst_collision", "[move_b_mem_source_dst_collision]=20",
+  "[move_b_mem_source_dst_collision]=0", "[move_b_mem_source_dst_collision]=1",
+]) requireText(regallocPressureSource, contract, "mov_b_ri forced source/destination pressure");
+for (const contract of [
+  "move_b_preserve_flags,move_core_b_reg_negative_native", "move_core_b_aind_to_dn_special_native",
+  "move_core_b_a7_postinc_src_native", "--cells move_b_mem_source_dst_collision",
+  "MOV_B_RI_LIFECYCLE focused=2 source_ea=12 pressure=1 fail=0 total=15",
+]) requireText(movBRiLifecycleMatrix, contract, "mov_b_ri lifecycle matrix");
+console.log("METRIC structural_mov_b_ri_generated_roots=11");
+console.log("METRIC structural_mov_b_ri_constant_branches=2");
+console.log("METRIC structural_mov_b_ri_runtime_vectors=14");
+console.log("METRIC structural_mov_b_ri_pressure_cells=1");
+
 console.log("METRIC structural_move_complete_source_ownership=1");
 console.log("METRIC structural_move_exact_native_vectors=31");
 console.log("METRIC structural_movea_exact_native_vectors=10");

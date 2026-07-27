@@ -161,6 +161,7 @@ const auditFamilyRules: Array<[RegExp, string]> = [
   [/^forget_about$/, "AARCH64_JIT_AUDIT_FORGET_ABOUT.md"],
   [/^fflags_into_flags$/, "AARCH64_JIT_AUDIT_FFLAGS_INTO_FLAGS.md"],
   [/^fmov_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
+  [/^mov_b_ri$/, "AARCH64_JIT_AUDIT_MOV_B_RI_LIFECYCLE.md"],
   [/^(?:jnf_)?MEM_(?:GETADR|READ|WRITE)/, "AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md"],
   [/^(?:live_flags|dont_care_flags|preserve_flags_before_nzcv_clobber|discard_flags_in_nzcv|save_and_discard_flags_in_nzcv|make_flags_live)$/, "AARCH64_JIT_AUDIT_AREA3_FLAGS_LIVENESS.md"],
   [/^(?:call_helper|mov_l_mi|mov_l_mr|mov_l_rm)$/, "AARCH64_JIT_AUDIT_AREA4_CALLS_AND_ALLOCATOR.md"],

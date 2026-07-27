@@ -1810,6 +1810,11 @@ for _move_name in "${MOVE_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_COUNT["$_move_name"]=2
 done
 unset _move_name
+# This existing sequence keeps D0 constant across MOVE.L #imm then MOVE.B #imm,
+# exercising mov_b_ri's constant-folded low-lane update under strict replay.
+NATIVE_REPLAY_TESTS[move_b_preserve_flags]=1
+NATIVE_REPLAY_PC[move_b_preserve_flags]=0x1000
+NATIVE_REPLAY_COUNT[move_b_preserve_flags]=2
 for _movea_name in "${MOVEA_NATIVE_MATRIX_NAMES[@]}"; do
     NATIVE_REPLAY_TESTS["$_movea_name"]=1
     NATIVE_REPLAY_PC["$_movea_name"]=0x1000

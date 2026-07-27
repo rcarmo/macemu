@@ -216,6 +216,16 @@ inventory is 92/92, and the accepted register-count
 
 ### Recent bug fixes (2026-07)
 
+- **Audit `mov_b_ri` byte-lane constant lifecycle on AArch64** (2026-07-27):
+  all eleven configured calls are zero staging in flag-live MOVE.B-to-Dn
+  lowering, one per readable source EA. Architectural registers preserve upper
+  bits through constant merge or `rmw+BFI`; scratch vregs become exact masked
+  constants, and MOVE composition owns flags separately. A **2 focused + 12
+  source/destination-EA + 1 pressure** strict-native control proves both
+  allocator states and the forced source/destination collision. The 998-row
+  inventory promotes only `mov_b_ri`. See
+  `BasiliskII/docs/AARCH64_JIT_AUDIT_MOV_B_RI_LIFECYCLE.md`.
+
 - **Retire the host-`pow` FTWOTOX chain on AArch64** (2026-07-27): the sole
   retained `ftwotox_rr -> fpowx_rr(2,...)` source root lies after selector
   `0x11`'s unconditional exact-MPFR service return and cannot acquire an
