@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 84 | 0 | 103 | 107 |
+| emitter_api | 294 | 91 | 0 | 103 | 100 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `BIC_www` | emitter_api:`BIC_www` |
 | 60 | `BLR_x` | emitter_api:`BLR_x` |
 | 60 | `CLEAR_xxbit` | emitter_api:`CLEAR_xxbit` |
 | 60 | `CLEAR_xxCflag` | emitter_api:`CLEAR_xxCflag` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `compemu_raw_init_r_regstruct` | raw_boundary:`compemu_raw_init_r_regstruct` |
 | 60 | `compemu_raw_jcc_l_oponly` | raw_boundary:`compemu_raw_jcc_l_oponly` |
 | 60 | `compemu_raw_maybe_do_nothing` | raw_boundary:`compemu_raw_maybe_do_nothing` |
+| 60 | `compemu_raw_mov_l_mi` | raw_boundary:`compemu_raw_mov_l_mi` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`BIC_www` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`BIC_www`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`BLR_x` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`BLR_x`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

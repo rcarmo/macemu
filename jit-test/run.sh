@@ -201,6 +201,7 @@ if phase_enabled emitters; then
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-ands-conformance.sh" || emit_failure_metrics 1 "ARM64 AND-with-flags emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-asr-conformance.sh" || emit_failure_metrics 1 "ARM64 ASR emitter conformance failed" 0
     timeout -k 5s 120s "$SCRIPT_DIR/emitter-bitfield-conformance.sh" || emit_failure_metrics 1 "ARM64 bitfield emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-logical-conformance.sh" || emit_failure_metrics 1 "ARM64 logical emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh" || emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh" || emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0

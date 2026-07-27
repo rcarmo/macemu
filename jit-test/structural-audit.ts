@@ -87,6 +87,8 @@ const asrEmitterProbeSource = await Bun.file(new URL("./emitter-asr-conformance.
 const asrEmitterHarnessSource = await Bun.file(new URL("./emitter-asr-conformance.sh", import.meta.url)).text();
 const bitfieldEmitterProbeSource = await Bun.file(new URL("./emitter-bitfield-conformance.cpp", import.meta.url)).text();
 const bitfieldEmitterHarnessSource = await Bun.file(new URL("./emitter-bitfield-conformance.sh", import.meta.url)).text();
+const logicalEmitterProbeSource = await Bun.file(new URL("./emitter-logical-conformance.cpp", import.meta.url)).text();
+const logicalEmitterHarnessSource = await Bun.file(new URL("./emitter-logical-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4047,6 +4049,38 @@ console.log("METRIC structural_bitfield_emitter_anchor_words=16");
 console.log("METRIC structural_bitfield_emitter_exhaustive_encodings=10432");
 console.log("METRIC structural_bitfield_emitter_native_vectors=10456");
 console.log("METRIC structural_bitfield_emitter_alias_vectors=24");
+
+/* Remaining ordinary logical emitters comprise W BIC, W/X ORR register/shift,
+ * and W/X TST. Result forms preserve NZCV; TST publishes logical NZ, clears CV. */
+const logicalNames=["BIC_www","ORR_www","ORR_wwwLSRi","ORR_xxx","ORR_xxxLSLi","TST_ww","TST_xx"];
+const logicalInventoryCounts=[4,40,16,5,7,136,4];
+const logicalRawCounts=[4,40,16,21,7,152,10];
+for(let index=0;index<logicalNames.length;++index){
+  const name=logicalNames[index];const inventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith(`emitter_api,${name},`));
+  if(!inventory?.includes(`,${logicalInventoryCounts[index]},`)) fail(`${name} inventory reference census changed`);
+  const raw=(bitfieldRawText.match(new RegExp(`\\b${name}\\(`,"g"))||[]).length;
+  if(raw!==logicalRawCounts[index]) fail(`${name} raw caller census=${raw}, expected ${logicalRawCounts[index]}`);
+}
+for(const contract of [
+  "#define BIC_www(Wd,Wn,Wm)", "#define ORR_www(Wd,Wn,Wm)", "#define ORR_wwwLSRi(Wd,Wn,Wm,i)",
+  "#define ORR_xxx(Xd,Xn,Xm)", "#define ORR_xxxLSLi(Xd,Xn,Xm,i)",
+  "#define TST_ww(Wn,Wm)", "#define TST_xx(Xn,Xm)",
+]) requireText(codegenHeaderSource,contract,"logical emitter definition");
+for(const contract of [
+  "emitter_logical_apis=7", "emitter_logical_anchor_words=%u", "emitter_logical_native_vectors=%u",
+  "emitter_logical_alias_vectors=%u", "emitter_logical_flag_vectors=16", "0x0a2b0149u",
+  "0x2a4b7d49u", "0xaa0bfd49u", "0xea1f03ffu", "hostile", "Api::TSTW", "Api::TSTX",
+  "anchors==14&&total==104&&aliases==57",
+]) requireText(logicalEmitterProbeSource,contract,"logical native conformance");
+for(const contract of ["-Wall -Wextra -Werror","emitter-logical-conformance.cpp"])
+  requireText(logicalEmitterHarnessSource,contract,"logical conformance build");
+requireText(harnessSource,'timeout -k 5s 60s "$SCRIPT_DIR/emitter-logical-conformance.sh"',"logical bounded acceptance gate");
+console.log("METRIC structural_logical_emitter_apis=7");
+console.log("METRIC structural_logical_emitter_configured_references=212");
+console.log("METRIC structural_logical_emitter_raw_callers=250");
+console.log("METRIC structural_logical_emitter_anchor_words=14");
+console.log("METRIC structural_logical_emitter_native_vectors=104");
+console.log("METRIC structural_logical_emitter_alias_vectors=57");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

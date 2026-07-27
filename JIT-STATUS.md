@@ -1653,3 +1653,18 @@ fix, it achieves **100% reliability without external wrappers** like
   APPROVE.
 - Closure leaves 107 emitter APIs and 17 raw boundaries; `BIC_www` is selected
   next.
+
+### AArch64 remaining logical emitter closure (2026-07-27)
+
+- Seven reachable BIC/ORR/TST W/X register/shift encoders are audited; logical-
+  immediate builders and three unreachable sibling forms remain separate.
+- Direct conformance proves 14 exact words and 104 native result/flag vectors,
+  including width/shift edges, 57 aliases, strict BIC/ORR NZCV preservation,
+  and 16 TST N/Z with C/V-clear cases.
+- Configured per-API references total 212 versus 250 raw calls in retained X
+  compatibility bodies; both lists are locked independently.
+- Acceptance passes all 30 emitter suites, 904/904 active-risky, 33/33
+  allocator pressure, clean build, deterministic closure, and independent
+  APPROVE.
+- Closure leaves 100 emitter APIs and 17 raw boundaries; `BLR_x` is selected
+  next.
