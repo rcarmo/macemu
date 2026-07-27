@@ -1,0 +1,493 @@
+EXEC_NOSTATS REVIEW
+BASE 2e5a2bfc
+--- raw body context ---
+
+LOWFUNC(NONE,WRITE,1,compemu_raw_check_checksum,(MEMR s))
+{
+	LOAD_U64(REG_WORK1, s);
+	LDR_xXi(REG_WORK1, REG_WORK1, 0);
+	uae_u32* branchadd = (uae_u32*)get_target();
+	B_i(0); // <exec_nostats>
+	write_jmp_target(branchadd, (uintptr)popall_check_checksum_setpc);
+}
+LENDFUNC(NONE,WRITE,1,compemu_raw_check_checksum,(MEMR s))
+
+LOWFUNC(NONE,WRITE,1,compemu_raw_exec_nostats,(IMPTR s))
+{
+	LOAD_U64(REG_WORK1, s);
+	uae_u32* branchadd = (uae_u32*)get_target();
+	B_i(0); // <exec_nostats>
+	write_jmp_target(branchadd, (uintptr)popall_exec_nostats_setpc);
+}
+LENDFUNC(NONE,WRITE,1,compemu_raw_exec_nostats,(IMPTR s))
+
+STATIC_INLINE void compemu_raw_maybe_recompile(void)
+{
+	BGE_i(2);
+
+--- final tranche diff ---
+diff --git a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
+index a4e12d17..4e65f4d5 100644
+--- a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
++++ b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
+@@ -8,7 +8,7 @@ emitter_api,ADD_wwi,audited,ADD_wwi,80,12,BasiliskII/src/uae_cpu_2026/compiler/c
+ emitter_api,ADD_www,audited,ADD_www,80,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,194,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
+ emitter_api,ADD_wwwEX,audited,ADD_wwwEX,80,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,190,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
+ emitter_api,ADD_wwwLSLi,audited,ADD_wwwLSLi,80,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,196,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
+-emitter_api,ADD_xxi,audited,ADD_xxi,80,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,193,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
++emitter_api,ADD_xxi,audited,ADD_xxi,80,10,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,193,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
+ emitter_api,ADD_xxwEX,audited,ADD_xxwEX,80,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,191,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
+ emitter_api,ADD_xxx,audited,ADD_xxx,80,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,195,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
+ emitter_api,ADD_xxxLSLi,unreachable,ADD_xxxLSLi,80,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,197,no path from reachable AArch64 compiler/emitter roots
+@@ -148,7 +148,7 @@ emitter_api,LDR_wXi,unreviewed,LDR_wXi,60,27,BasiliskII/src/uae_cpu_2026/compile
+ emitter_api,LDR_wXx,unreviewed,LDR_wXx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,132,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,LDR_wXxLSLi,unreviewed,LDR_wXxLSLi,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,135,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,LDR_xPCi,unreviewed,LDR_xPCi,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,126,reachable encoder API; requires opcode/width/branch-range contract classification
+-emitter_api,LDR_xXi,unreviewed,LDR_xXi,60,26,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,123,reachable encoder API; requires opcode/width/branch-range contract classification
++emitter_api,LDR_xXi,unreviewed,LDR_xXi,60,27,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,123,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,LDR_xXpost,unreviewed,LDR_xXpost,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,124,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,LDR_xXx,unreachable,LDR_xXx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,133,no path from reachable AArch64 compiler/emitter roots
+ emitter_api,LDR_xXxLSLi,unreviewed,LDR_xXxLSLi,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,136,reachable encoder API; requires opcode/width/branch-range contract classification
+@@ -246,7 +246,7 @@ emitter_api,STR_sXi,unreachable,STR_sXi,60,0,BasiliskII/src/uae_cpu_2026/compile
+ emitter_api,STR_wXi,unreviewed,STR_wXi,60,35,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,145,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,STR_wXx,unreviewed,STR_wXx,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,148,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,STR_wXxLSLi,unreviewed,STR_wXxLSLi,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,151,reachable encoder API; requires opcode/width/branch-range contract classification
+-emitter_api,STR_xXi,unreviewed,STR_xXi,60,20,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,146,reachable encoder API; requires opcode/width/branch-range contract classification
++emitter_api,STR_xXi,unreviewed,STR_xXi,60,21,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,146,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,STR_xXpre,unreviewed,STR_xXpre,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,147,reachable encoder API; requires opcode/width/branch-range contract classification
+ emitter_api,STR_xXx,unreachable,STR_xXx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,149,no path from reachable AArch64 compiler/emitter roots
+ emitter_api,STRB_wXi,unreachable,STRB_wXi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,152,no path from reachable AArch64 compiler/emitter roots
+@@ -845,7 +845,7 @@ midfunc,save_and_discard_flags_in_nzcv,audited,save_and_discard_flags_in_nzcv,68
+ midfunc,sign_extend_16_rr,audited,sign_extend_16_rr,68,157,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,293,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
+ midfunc,sub_l_ri,audited,sub_l_ri,68,156,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,536,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_L_RI_LIFECYCLE.md
+ midfunc,sub_w_ri,unreachable,sub_w_ri,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,563,raw references were comments; configured DBcc uses dbcc_dec_w -> jnf_SUB_w_imm instead
+-raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3254,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
++raw_boundary,compemu_raw_branch,audited,compemu_raw_branch,86,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,3256,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+ raw_boundary,compemu_raw_call,audited,compemu_raw_call,86,19,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,231,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+ raw_boundary,compemu_raw_call_observer_i,audited,compemu_raw_call_observer_i,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,276,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+ raw_boundary,compemu_raw_call_observer_ii,audited,compemu_raw_call_observer_ii,86,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,284,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+@@ -857,7 +857,7 @@ raw_boundary,compemu_raw_cmp_pc,audited,compemu_raw_cmp_pc,60,3,BasiliskII/src/u
+ raw_boundary,compemu_raw_dec_m,audited,compemu_raw_dec_m,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,469,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_METADATA_RMW_BOUNDARIES.md
+ raw_boundary,compemu_raw_endblock_pc_inreg,audited,compemu_raw_endblock_pc_inreg,86,13,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,791,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+ raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isconst,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,839,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md
+-raw_boundary,compemu_raw_exec_nostats,unreviewed,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,693,reachable raw boundary; no exact closure classification
++raw_boundary,compemu_raw_exec_nostats,audited,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,693,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXEC_NOSTATS_BOUNDARY.md
+ raw_boundary,compemu_raw_execute_normal,unreviewed,compemu_raw_execute_normal,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,654,reachable raw boundary; no exact closure classification
+ raw_boundary,compemu_raw_execute_normal_cycles,unreviewed,compemu_raw_execute_normal_cycles,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,664,reachable raw boundary; no exact closure classification
+ raw_boundary,compemu_raw_fmov_mr_drop,unreviewed,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,892,reachable raw boundary; no exact closure classification
+@@ -970,30 +970,30 @@ runtime_boundary,jit_op_trap,unreachable,jit_op_trap,60,1,BasiliskII/src/uae_cpu
+ runtime_boundary,jit_op_trapcc,unreachable,jit_op_trapcc,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2423,definition/declaration has no generated or registration caller
+ runtime_boundary,jit_op_trapv,unreachable,jit_op_trapv,60,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,1854,definition/declaration has no generated or registration caller
+ runtime_boundary,jit_op_unpk,serviced,jit_op_unpk,60,6,BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp,2014,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_aline_trap,serviced,jit_runtime_aline_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5077,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_andsr_word,serviced,jit_runtime_andsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4301,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_bitfield,serviced,jit_runtime_bitfield,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4764,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_bsr,serviced,jit_runtime_bsr,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4494,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_cache_control,serviced,jit_runtime_cache_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4608,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_cas,serviced,jit_runtime_cas,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4843,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_cas2,serviced,jit_runtime_cas2,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4942,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_emulop,serviced,jit_runtime_emulop,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5204,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_eorsr_word,serviced,jit_runtime_eorsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4313,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_fbcc,serviced,jit_runtime_fbcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5101,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_fdbcc,serviced,jit_runtime_fdbcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5116,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_fpp,serviced,jit_runtime_fpp,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5087,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_fpu_semantic,serviced,jit_runtime_fpu_semantic,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5174,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_frestore,serviced,jit_runtime_frestore,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5164,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_fsave,serviced,jit_runtime_fsave,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5152,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_fscc,serviced,jit_runtime_fscc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5094,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_ftrapcc,serviced,jit_runtime_ftrapcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5125,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_illegal_advanced,serviced,jit_runtime_illegal_advanced,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4623,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_illegal_trap,serviced,jit_runtime_illegal_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5082,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_moves,serviced,jit_runtime_moves,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4632,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_mv2sr_word_full,serviced,jit_runtime_mv2sr_word_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4386,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_mvsr2_full,serviced,jit_runtime_mvsr2_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4325,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_orsr_word,serviced,jit_runtime_orsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4289,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_rts,serviced,jit_runtime_rts,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4488,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_system_control,serviced,jit_runtime_system_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4546,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_trap,serviced,jit_runtime_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4514,explicit flushed/end-block runtime semantic boundary
+-runtime_boundary,jit_runtime_trapcc,serviced,jit_runtime_trapcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4522,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_aline_trap,serviced,jit_runtime_aline_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5079,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_andsr_word,serviced,jit_runtime_andsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4303,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_bitfield,serviced,jit_runtime_bitfield,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4766,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_bsr,serviced,jit_runtime_bsr,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4496,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_cache_control,serviced,jit_runtime_cache_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4610,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_cas,serviced,jit_runtime_cas,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4845,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_cas2,serviced,jit_runtime_cas2,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4944,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_emulop,serviced,jit_runtime_emulop,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5206,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_eorsr_word,serviced,jit_runtime_eorsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4315,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_fbcc,serviced,jit_runtime_fbcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5103,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_fdbcc,serviced,jit_runtime_fdbcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5118,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_fpp,serviced,jit_runtime_fpp,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5089,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_fpu_semantic,serviced,jit_runtime_fpu_semantic,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5176,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_frestore,serviced,jit_runtime_frestore,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5166,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_fsave,serviced,jit_runtime_fsave,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5154,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_fscc,serviced,jit_runtime_fscc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5096,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_ftrapcc,serviced,jit_runtime_ftrapcc,60,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5127,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_illegal_advanced,serviced,jit_runtime_illegal_advanced,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4625,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_illegal_trap,serviced,jit_runtime_illegal_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,5084,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_moves,serviced,jit_runtime_moves,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4634,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_mv2sr_word_full,serviced,jit_runtime_mv2sr_word_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4388,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_mvsr2_full,serviced,jit_runtime_mvsr2_full,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4327,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_orsr_word,serviced,jit_runtime_orsr_word,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4291,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_rts,serviced,jit_runtime_rts,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4490,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_system_control,serviced,jit_runtime_system_control,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4548,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_trap,serviced,jit_runtime_trap,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4516,explicit flushed/end-block runtime semantic boundary
++runtime_boundary,jit_runtime_trapcc,serviced,jit_runtime_trapcc,60,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp,4524,explicit flushed/end-block runtime semantic boundary
+diff --git a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+index 19ffe4ec..ec1c4af3 100644
+--- a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
++++ b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
+ | generator | 130 | 75 | 44 | 11 | 0 |
+ | midfunc | 422 | 291 | 0 | 131 | 0 |
+ | emitter_api | 294 | 121 | 0 | 103 | 70 |
+-| raw_boundary | 83 | 41 | 0 | 28 | 14 |
++| raw_boundary | 83 | 42 | 0 | 28 | 13 |
+ | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
+
+ Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
+@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
+
+ | Risk | Family | Layers / entries |
+ |---:|---|---|
+-| 60 | `compemu_raw_exec_nostats` | raw_boundary:`compemu_raw_exec_nostats` |
+ | 60 | `compemu_raw_execute_normal` | raw_boundary:`compemu_raw_execute_normal` |
+ | 60 | `compemu_raw_execute_normal_cycles` | raw_boundary:`compemu_raw_execute_normal_cycles` |
+ | 60 | `compemu_raw_fmov_mr_drop` | raw_boundary:`compemu_raw_fmov_mr_drop` |
+@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
+ | 60 | `LDP_xxXi` | emitter_api:`LDP_xxXi` |
+ | 60 | `LDP_xxXpost` | emitter_api:`LDP_xxXpost` |
+ | 60 | `LDR_dXi` | emitter_api:`LDR_dXi` |
++| 60 | `LDR_dXx` | emitter_api:`LDR_dXx` |
+
+ ## Accepted closure targets
+
+@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
+
+ ## Next selected family
+
+-`compemu_raw_exec_nostats` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_exec_nostats`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
++`compemu_raw_execute_normal` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_execute_normal`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+
+ ## Mechanical invariants
+
+diff --git a/BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp b/BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp
+index bb30e76d..f91ceec9 100644
+--- a/BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp
++++ b/BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp
+@@ -2065,6 +2065,7 @@ static unsigned long jit_diag_max_block_bytes = 0;
+ static unsigned long jit_diag_checksum_good = 0;
+ static unsigned long jit_diag_checksum_bad = 0;
+ static unsigned long jit_test_direct_checksum_entries = 0;
++static unsigned long jit_test_direct_exec_nostats_entries = 0;
+ static time_t jit_diag_last_print = 0;
+ static time_t jit_diag_start_time = 0;
+
+@@ -2155,12 +2156,13 @@ void jit_test_dump_dispatch_summary(void)
+ {
+ #if defined(CPU_AARCH64)
+     if (jit_test_dispatch_summary_enabled()) {
+-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx\n",
++        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu\n",
+             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
+             jit_diag_checksum_good, jit_diag_checksum_bad,
+             jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
+             jit_diag_recompile_block_calls, jit_test_metadata_rmw_rebuilds,
+-            jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask);
++            jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask,
++            jit_test_direct_exec_nostats_entries);
+     }
+ #endif
+ }
+@@ -6753,6 +6755,12 @@ STATIC_INLINE void create_popalls(void)
+
+     popall_exec_nostats_setpc = get_target();
+ #if defined(CPU_AARCH64)
++    if (jit_test_dispatch_summary_enabled()) {
++        LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_exec_nostats_entries);
++        LDR_xXi(R18_INDEX, REG_WORK4, 0);
++        ADD_xxi(R18_INDEX, R18_INDEX, 1);
++        STR_xXi(R18_INDEX, REG_WORK4, 0);
++    }
+     compemu_raw_set_pc_from_reg(REG_WORK1);
+ #else
+     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
+diff --git a/jit-test/closure-inventory.ts b/jit-test/closure-inventory.ts
+index aeb78fe3..616317d8 100644
+--- a/jit-test/closure-inventory.ts
++++ b/jit-test/closure-inventory.ts
+@@ -250,6 +250,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
+ const primitiveAuditRules: Array<[RegExp, string]> = [
+   [/^compemu_raw_check_checksum$/, "AARCH64_JIT_AUDIT_RAW_CHECKSUM_BOUNDARY.md"],
+   [/^compemu_raw_(?:dec|inc)_m$/, "AARCH64_JIT_AUDIT_RAW_METADATA_RMW_BOUNDARIES.md"],
++  [/^compemu_raw_exec_nostats$/, "AARCH64_JIT_AUDIT_RAW_EXEC_NOSTATS_BOUNDARY.md"],
+   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
+   [/^raw_fmov_to_[bwl]_rr$/, "AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md"],
+   [/^raw_fmov_s_rr$/, "AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md"],
+diff --git a/jit-test/run.sh b/jit-test/run.sh
+index f1939e5a..f3f72ea9 100755
+--- a/jit-test/run.sh
++++ b/jit-test/run.sh
+@@ -207,6 +207,7 @@ if phase_enabled emitters; then
+     timeout -k 5s 120s "$SCRIPT_DIR/emitter-transform-conformance.sh" || emit_failure_metrics 1 "ARM64 scalar-transform emitter conformance failed" 0
+     timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw checksum boundary conformance failed" 0
+     timeout -k 5s 180s "$SCRIPT_DIR/raw-metadata-rmw-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw metadata RMW boundary conformance failed" 0
++    timeout -k 5s 120s "$SCRIPT_DIR/raw-exec-nostats-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw exec_nostats boundary conformance failed" 0
+     timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh" || emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
+     timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
+     timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh" || emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0
+diff --git a/jit-test/structural-audit.ts b/jit-test/structural-audit.ts
+index cd2d7ac4..7c6878ff 100644
+--- a/jit-test/structural-audit.ts
++++ b/jit-test/structural-audit.ts
+@@ -97,6 +97,7 @@ const transformEmitterProbeSource = await Bun.file(new URL("./emitter-transform-
+ const transformEmitterHarnessSource = await Bun.file(new URL("./emitter-transform-conformance.sh", import.meta.url)).text();
+ const rawChecksumHarnessSource = await Bun.file(new URL("./raw-checksum-boundary-matrix.sh", import.meta.url)).text();
+ const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-boundary-matrix.sh", import.meta.url)).text();
++const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
+ const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
+ const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
+ const closureInventoryCsv = await Bun.file(new URL(
+@@ -4297,7 +4298,7 @@ for (const contract of [
+   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
+   "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
+ ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
+-for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles", "compemu_raw_exec_nostats"])
++for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles"])
+   if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} was promoted without direct evidence`);
+ requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
+ console.log("METRIC structural_raw_checksum_boundaries=1");
+@@ -4363,6 +4364,46 @@ console.log("METRIC structural_raw_metadata_rmw_runtime_cases=2");
+ console.log("METRIC structural_raw_metadata_rmw_rejections=2");
+ console.log("METRIC structural_raw_metadata_rmw_max_edges=64");
+
++/* Optlevel-0 dispatcher terminal: materialise the immediate host PC, publish
++ * canonical PC through the dedicated set-PC label, unwind the preserved entry
++ * frame, and tail-enter exec_nostats. Do not promote adjacent dispatcher raw
++ * boundaries merely because their prologues are similar. */
++const rawExecNostatsBody = bodyBetween(
++  "LOWFUNC(NONE,WRITE,1,compemu_raw_exec_nostats,(IMPTR s))\n{",
++  "LENDFUNC(NONE,WRITE,1,compemu_raw_exec_nostats",
++);
++for (const contract of [
++  "LOAD_U64(REG_WORK1, s);", "uae_u32* branchadd = (uae_u32*)get_target();", "B_i(0);",
++  "write_jmp_target(branchadd, (uintptr)popall_exec_nostats_setpc);",
++]) requireText(rawExecNostatsBody, contract, "raw exec_nostats body");
++requireBefore(rawExecNostatsBody, "LOAD_U64(REG_WORK1, s);", "B_i(0);", "raw exec_nostats PC before branch");
++const execNostatsPopall = functionBody(
++  allocatorSource,
++  "popall_exec_nostats_setpc = get_target();",
++  "popall_recompile_block = get_target();",
++  "raw exec_nostats popall boundary",
++);
++for (const contract of [
++  "jit_test_direct_exec_nostats_entries", "compemu_raw_set_pc_from_reg(REG_WORK1);",
++  "raw_pop_preserved_regs();", "compemu_raw_jmp((uintptr)exec_nostats);",
++]) requireText(execNostatsPopall, contract, "raw exec_nostats popall contract");
++requireBefore(execNostatsPopall, "jit_test_direct_exec_nostats_entries", "popall_exec_nostats = get_target();", "raw exec_nostats counter on the direct side");
++requireBefore(execNostatsPopall, "compemu_raw_set_pc_from_reg(REG_WORK1);", "raw_pop_preserved_regs();", "raw exec_nostats PC before unwind");
++requireBefore(execNostatsPopall, "raw_pop_preserved_regs();", "compemu_raw_jmp((uintptr)exec_nostats);", "raw exec_nostats tail ABI");
++for (const contract of [
++  "B2_TEST_HEX='7001 5280 2C7C A6E0 0001'", "B2_TEST_TWO_PASS=1", "B2_TEST_REPLAY_COUNT=2",
++  "B2_JIT_FORCE_OPTLEV0=1", "${direct:-0} -eq 2", "${calls:-0} -eq 2", "${normal:-0} -eq 1",
++  "raw_exec_nostats_boundaries=1", "raw_exec_nostats_runtime_cases=1", "raw_exec_nostats_direct_entries=2",
++]) requireText(rawExecNostatsHarnessSource, contract, "raw exec_nostats native matrix");
++const rawExecNostatsRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_exec_nostats,"));
++if (!rawExecNostatsRow?.includes(",audited,")) fail("compemu_raw_exec_nostats not promoted by accepted report");
++for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles"])
++  if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} promoted without direct runtime evidence`);
++requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-exec-nostats-boundary-matrix.sh"', "raw exec_nostats bounded acceptance gate");
++console.log("METRIC structural_raw_exec_nostats_boundaries=1");
++console.log("METRIC structural_raw_exec_nostats_runtime_cases=1");
++console.log("METRIC structural_raw_exec_nostats_direct_entries=2");
++
+ /* ADD's MIDFUNC register initialisers own both operands while arithmetic
+  * allocates its destination. Memory destinations additionally pin the private
+  * pre-write EA through X publication and ordered storage; this is the value
+
+--- untracked BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXEC_NOSTATS_BOUNDARY.md ---
+# AArch64 JIT raw exec_nostats boundary audit
+
+Date: 2026-07-27
+
+Base: `2e5a2bfc` (`master`, published metadata-RMW raw closure)
+
+## Scope
+
+This tranche audits only the mechanically selected
+`compemu_raw_exec_nostats`. The structurally adjacent
+`compemu_raw_execute_normal`, `compemu_raw_execute_normal_cycles`, and
+`compemu_raw_handle_except` remain unreviewed until their distinct cache,
+cycle-countdown, and exception contracts receive direct evidence.
+
+## Boundary contract
+
+The optlevel-0 terminal must:
+
+1. materialise the immediate canonical host PC into `REG_WORK1`;
+2. branch through a range-checked/patched AArch64 `B` to
+   `popall_exec_nostats_setpc`;
+3. publish canonical `regs.pc_p`, `regs.pc_oldp`, and `regs.pc` through the
+   audited `compemu_raw_set_pc_from_reg` dependency;
+4. restore the preserved JIT-entry register frame; and
+5. tail-branch to `exec_nostats` without changing LR ownership.
+
+The boundary is terminal: it does not promise guest-NZCV preservation across
+the optional FPU synchronisation and C interpreter entry.
+
+## Runtime proof
+
+`jit-test/raw-exec-nostats-boundary-matrix.sh` compiles a short RAM stream with
+optlevel 0 forced, then replays it through the generated block stub. A counter
+emitted only at `popall_exec_nostats_setpc` is distinct from the existing C
+`exec_nostats` counter.
+
+The exact accepted summary after two requested replays is:
+
+```text
+direct_exec_nostats=2 exec_nostats=2 exec_normal=1
+```
+
+The two direct-label/C-entry events make cardinality observable rather than
+conflating the boundary with an unrelated once-per-run event. The final
+register dump requires `D0=2`, proving each replay entered at the published
+start PC, interpreted the complete stream, and returned normally.
+The direct-label instrumentation is emitted only when the existing
+`B2_TEST_DISPATCH_SUMMARY` gate is active.
+
+## Structural acceptance
+
+The structural gate locks the raw body instruction ordering, patch target,
+set-PC/unwind/tail-branch order, distinct direct and C counters, exact replay
+oracle, bounded runner integration, and continued unreviewed status of
+`execute_normal` and `execute_normal_cycles`.
+
+## Acceptance results
+
+Final acceptance:
+
+- direct exec_nostats matrix: **1/1**, with exact repeated entry counts
+  `direct_exec_nostats=2`, `exec_nostats=2`, and `exec_normal=1`;
+- complete emitter/boundary phase: pass;
+- complete active-risky corpus: **904/904**;
+- allocator pressure: **33/33**;
+- clean full build: pass;
+- complete structural audit: pass, including a direct-side ordering assertion
+  that keeps the counter before the shared `popall_exec_nostats` label;
+- deterministic closure inventory: **998 rows**, with **13 raw boundaries** and
+  **70 emitter APIs** remaining unreviewed;
+- source hygiene: pass;
+- independent bounded review: approve; sibling review approve after the
+  direct-side ordering assertion requested here.
+
+## Closure effect
+
+Deterministic regeneration must move exactly `compemu_raw_exec_nostats` from
+`unreviewed` to `audited`. Whole-engine closure is not claimed.
+
+## Reproduction
+
+```sh
+./jit-test/raw-exec-nostats-boundary-matrix.sh
+./jit-test/run.sh --phases emitters --build-mode skip
+bun jit-test/structural-audit.ts
+bun jit-test/closure-inventory.ts
+git diff --check
+```
+
+--- untracked jit-test/raw-exec-nostats-boundary-matrix.sh ---
+#!/bin/bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BIN="$ROOT/BasiliskII/src/Unix/BasiliskII"
+ROM="${B2_TEST_ROM:-/workspace/projects/rpi-basilisk2-sdl2-nox/Quadra800.ROM}"
+DISK="${B2_TEST_DISK:-/workspace/fixtures/basilisk/images/HD200MB}"
+COW_LIB="${COW_LIB:-/workspace/scripts/lib/cow-disk.sh}"
+source "$COW_LIB"
+RUN="$(mktemp -d /tmp/b2-raw-exec-nostats-XXXXXX)"
+XV=""; CLONE=""
+cleanup(){ [[ -z "$XV" ]] || { kill "$XV" 2>/dev/null || true; wait "$XV" 2>/dev/null || true; }; [[ -z "$CLONE" ]] || cow_release "$CLONE"; rm -rf "$RUN"; }
+trap cleanup EXIT
+mkdir -p "$RUN/home"
+CLONE="$(cow_clone "$DISK" "$RUN/disk.img" raw-exec-nostats | tail -1)"
+for n in $(seq 100 199); do if [[ ! -e /tmp/.X$n-lock && ! -S /tmp/.X11-unix/X$n ]]; then DISPLAY=:$n Xvfb :$n -screen 0 640x480x24 >/dev/null 2>&1 & XV=$!; D=:$n; break; fi; done
+[[ -n "${D:-}" ]] || { echo 'RAW_EXEC_NOSTATS_FAIL no display' >&2; exit 1; }
+for _ in $(seq 1 30); do DISPLAY="$D" xdpyinfo >/dev/null 2>&1 && break; sleep .1; done
+DISPLAY="$D" xdpyinfo >/dev/null
+cat >"$RUN/prefs" <<EOF
+rom $ROM
+disk $CLONE
+ramsize 8388608
+modelid 14
+cpu 4
+fpu false
+jit true
+jitfpu false
+jitcachesize 8192
+screen win/640/480
+nosound true
+nocdrom true
+nogui true
+ignoresegv true
+EOF
+log="$RUN/run.log"
+env SDL_VIDEODRIVER=x11 DISPLAY="$D" HOME="$RUN/home" \
+  B2_TEST_HEX='7001 5280 2C7C A6E0 0001' B2_TEST_DUMP=1 \
+  B2_TEST_TWO_PASS=1 B2_TEST_REPLAY_COUNT=2 \
+  B2_JIT_FORCE_OPTLEV0=1 B2_JIT_DIAG=1 B2_TEST_DISPATCH_SUMMARY=1 \
+  timeout -k 5s 30s "$BIN" --config "$RUN/prefs" >"$log" 2>&1
+summary=$(grep '^JIT_TEST_DISPATCH ' "$log" | tail -1 || true)
+[[ -n "$summary" ]] || { echo 'RAW_EXEC_NOSTATS_FAIL missing summary' >&2; tail -30 "$log" >&2; exit 1; }
+direct=$(sed -n 's/.* direct_exec_nostats=\([0-9][0-9]*\).*/\1/p' <<<"$summary")
+calls=$(sed -n 's/.* exec_nostats=\([0-9][0-9]*\).*/\1/p' <<<"$summary")
+normal=$(sed -n 's/.* exec_normal=\([0-9][0-9]*\).*/\1/p' <<<"$summary")
+[[ ${direct:-0} -eq 2 && ${calls:-0} -eq 2 && ${normal:-0} -eq 1 ]] || {
+  echo "RAW_EXEC_NOSTATS_FAIL unexpected summary: $summary" >&2; exit 1; }
+grep -q '^REGDUMP: D0=00000002 ' "$log" || { echo 'RAW_EXEC_NOSTATS_FAIL missing terminal D0/REGDUMP' >&2; exit 1; }
+printf 'RAW_EXEC_NOSTATS_PASS %s\n' "$summary"
+printf 'METRIC raw_exec_nostats_boundaries=1\nMETRIC raw_exec_nostats_runtime_cases=1\nMETRIC raw_exec_nostats_direct_entries=2\n'
+
+--- final matrix ---
+RAW_EXEC_NOSTATS_PASS JIT_TEST_DISPATCH direct_checksum=0 check_checksum=0 good=0 bad=0 exec_normal=1 exec_nostats=2 recompile_block=0 metadata_rebuild=0 metadata_edges=0 metadata_summary=00 direct_exec_nostats=2
+METRIC raw_exec_nostats_boundaries=1
+METRIC raw_exec_nostats_runtime_cases=1
+METRIC raw_exec_nostats_direct_entries=2
+
+--- structural metrics ---
+METRIC structural_raw_exec_nostats_boundaries=1
+METRIC structural_raw_exec_nostats_runtime_cases=1
+METRIC structural_raw_exec_nostats_direct_entries=2
+
+--- broad evidence ---
+METRIC pass=904
+METRIC fail=0
+METRIC total=904
+METRIC infra_fail=0
+METRIC risky_total=904
+METRIC risky_pass=904
+METRIC risky_fail=0
+METRIC score=100
+METRIC selected_vectors=904
+METRIC validation_complete=1
+REGPRESSURE_SUMMARY selected=33 pass=33 fail=0
+METRIC regpressure_selected=33
+METRIC regpressure_pass=33
+METRIC regpressure_fail=0
+
+--- deterministic hashes ---
+390827d47fbca4070ca6fbcf7a508347e85aa758ffed7438046ff64ca7f8794b  BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
+6ce6a8c721903a0aa3c48b7936a6f33464caff53d6d1f1e124c393aa7611a8d6  BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa  BasiliskII/src/Unix/compemu.cpp
+
+--- inventory totals ---
+CLOSURE_INVENTORY rows=998 generator=130 midfunc=422 emitter_api=294 raw_boundary=83 runtime_boundary=69
+CLOSURE_LAYER layer=generator total=130 audited=75 serviced=44 unreachable=11 unreviewed=0
+CLOSURE_LAYER layer=midfunc total=422 audited=291 serviced=0 unreachable=131 unreviewed=0
+CLOSURE_LAYER layer=emitter_api total=294 audited=121 serviced=0 unreachable=103 unreviewed=70
+CLOSURE_LAYER layer=raw_boundary total=83 audited=42 serviced=0 unreachable=28 unreviewed=13
+CLOSURE_LAYER layer=runtime_boundary total=69 audited=0 serviced=40 unreachable=29 unreviewed=0
+wrote BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv and BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+
+--- reviews ---
+Independent bounded reviewer: APPROVE.
+Sibling reviewer: APPROVE conditional on direct-side ordering gate; requested gate applied, cardinality advisory strengthened to exact 2/2.

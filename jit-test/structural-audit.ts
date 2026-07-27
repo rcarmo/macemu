@@ -97,6 +97,7 @@ const transformEmitterProbeSource = await Bun.file(new URL("./emitter-transform-
 const transformEmitterHarnessSource = await Bun.file(new URL("./emitter-transform-conformance.sh", import.meta.url)).text();
 const rawChecksumHarnessSource = await Bun.file(new URL("./raw-checksum-boundary-matrix.sh", import.meta.url)).text();
 const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-boundary-matrix.sh", import.meta.url)).text();
+const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4297,7 +4298,7 @@ for (const contract of [
   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
   "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
 ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
-for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles", "compemu_raw_exec_nostats"])
+for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles"])
   if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} was promoted without direct evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
 console.log("METRIC structural_raw_checksum_boundaries=1");
@@ -4362,6 +4363,46 @@ console.log("METRIC structural_raw_metadata_rmw_boundaries=2");
 console.log("METRIC structural_raw_metadata_rmw_runtime_cases=2");
 console.log("METRIC structural_raw_metadata_rmw_rejections=2");
 console.log("METRIC structural_raw_metadata_rmw_max_edges=64");
+
+/* Optlevel-0 dispatcher terminal: materialise the immediate host PC, publish
+ * canonical PC through the dedicated set-PC label, unwind the preserved entry
+ * frame, and tail-enter exec_nostats. Do not promote adjacent dispatcher raw
+ * boundaries merely because their prologues are similar. */
+const rawExecNostatsBody = bodyBetween(
+  "LOWFUNC(NONE,WRITE,1,compemu_raw_exec_nostats,(IMPTR s))\n{",
+  "LENDFUNC(NONE,WRITE,1,compemu_raw_exec_nostats",
+);
+for (const contract of [
+  "LOAD_U64(REG_WORK1, s);", "uae_u32* branchadd = (uae_u32*)get_target();", "B_i(0);",
+  "write_jmp_target(branchadd, (uintptr)popall_exec_nostats_setpc);",
+]) requireText(rawExecNostatsBody, contract, "raw exec_nostats body");
+requireBefore(rawExecNostatsBody, "LOAD_U64(REG_WORK1, s);", "B_i(0);", "raw exec_nostats PC before branch");
+const execNostatsPopall = functionBody(
+  allocatorSource,
+  "popall_exec_nostats_setpc = get_target();",
+  "popall_recompile_block = get_target();",
+  "raw exec_nostats popall boundary",
+);
+for (const contract of [
+  "jit_test_direct_exec_nostats_entries", "compemu_raw_set_pc_from_reg(REG_WORK1);",
+  "raw_pop_preserved_regs();", "compemu_raw_jmp((uintptr)exec_nostats);",
+]) requireText(execNostatsPopall, contract, "raw exec_nostats popall contract");
+requireBefore(execNostatsPopall, "jit_test_direct_exec_nostats_entries", "popall_exec_nostats = get_target();", "raw exec_nostats counter on the direct side");
+requireBefore(execNostatsPopall, "compemu_raw_set_pc_from_reg(REG_WORK1);", "raw_pop_preserved_regs();", "raw exec_nostats PC before unwind");
+requireBefore(execNostatsPopall, "raw_pop_preserved_regs();", "compemu_raw_jmp((uintptr)exec_nostats);", "raw exec_nostats tail ABI");
+for (const contract of [
+  "B2_TEST_HEX='7001 5280 2C7C A6E0 0001'", "B2_TEST_TWO_PASS=1", "B2_TEST_REPLAY_COUNT=2",
+  "B2_JIT_FORCE_OPTLEV0=1", "${direct:-0} -eq 2", "${calls:-0} -eq 2", "${normal:-0} -eq 1",
+  "raw_exec_nostats_boundaries=1", "raw_exec_nostats_runtime_cases=1", "raw_exec_nostats_direct_entries=2",
+]) requireText(rawExecNostatsHarnessSource, contract, "raw exec_nostats native matrix");
+const rawExecNostatsRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_exec_nostats,"));
+if (!rawExecNostatsRow?.includes(",audited,")) fail("compemu_raw_exec_nostats not promoted by accepted report");
+for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles"])
+  if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} promoted without direct runtime evidence`);
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-exec-nostats-boundary-matrix.sh"', "raw exec_nostats bounded acceptance gate");
+console.log("METRIC structural_raw_exec_nostats_boundaries=1");
+console.log("METRIC structural_raw_exec_nostats_runtime_cases=1");
+console.log("METRIC structural_raw_exec_nostats_direct_entries=2");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

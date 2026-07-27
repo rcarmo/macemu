@@ -2065,6 +2065,7 @@ static unsigned long jit_diag_max_block_bytes = 0;
 static unsigned long jit_diag_checksum_good = 0;
 static unsigned long jit_diag_checksum_bad = 0;
 static unsigned long jit_test_direct_checksum_entries = 0;
+static unsigned long jit_test_direct_exec_nostats_entries = 0;
 static time_t jit_diag_last_print = 0;
 static time_t jit_diag_start_time = 0;
 
@@ -2155,12 +2156,13 @@ void jit_test_dump_dispatch_summary(void)
 {
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx\n",
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu\n",
             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
             jit_diag_checksum_good, jit_diag_checksum_bad,
             jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
             jit_diag_recompile_block_calls, jit_test_metadata_rmw_rebuilds,
-            jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask);
+            jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask,
+            jit_test_direct_exec_nostats_entries);
     }
 #endif
 }
@@ -6753,6 +6755,12 @@ STATIC_INLINE void create_popalls(void)
 
     popall_exec_nostats_setpc = get_target();
 #if defined(CPU_AARCH64)
+    if (jit_test_dispatch_summary_enabled()) {
+        LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_exec_nostats_entries);
+        LDR_xXi(R18_INDEX, REG_WORK4, 0);
+        ADD_xxi(R18_INDEX, R18_INDEX, 1);
+        STR_xXi(R18_INDEX, REG_WORK4, 0);
+    }
     compemu_raw_set_pc_from_reg(REG_WORK1);
 #else
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
