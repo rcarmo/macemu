@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 67 | 0 | 103 | 124 |
+| emitter_api | 294 | 70 | 0 | 103 | 121 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,9 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `ADDS_wwi` | emitter_api:`ADDS_wwi` |
-| 60 | `ADDS_www` | emitter_api:`ADDS_www` |
-| 60 | `ADDS_wwwLSLi` | emitter_api:`ADDS_wwwLSLi` |
 | 60 | `ANDS_ww3f` | emitter_api:`ANDS_ww3f` |
 | 60 | `ANDS_www` | emitter_api:`ANDS_www` |
 | 60 | `ANDS_xx7fff` | emitter_api:`ANDS_xx7fff` |
@@ -62,6 +59,9 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `CLEAR_xxVflag` | emitter_api:`CLEAR_xxVflag` |
 | 60 | `CLEAR_xxZflag` | emitter_api:`CLEAR_xxZflag` |
 | 60 | `CLS_ww` | emitter_api:`CLS_ww` |
+| 60 | `compemu_raw_check_checksum` | raw_boundary:`compemu_raw_check_checksum` |
+| 60 | `compemu_raw_dec_m` | raw_boundary:`compemu_raw_dec_m` |
+| 60 | `compemu_raw_exec_nostats` | raw_boundary:`compemu_raw_exec_nostats` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`ADDS_wwi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ADDS_wwi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`ANDS_ww3f` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ANDS_ww3f`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

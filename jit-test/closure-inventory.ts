@@ -215,6 +215,7 @@ const riskOf = (name: string, layer: Layer): number => {
 const emitterAuditRules: Array<[RegExp, string]> = [
   [/^_W$/, "AARCH64_JIT_AUDIT_WORD_EMITTER.md"],
   [/^(?:ADCS|SBCS)_www$/, "AARCH64_JIT_AUDIT_CARRY_EMITTERS.md"],
+  [/^ADDS_(?:wwi|www|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADDS_EMITTERS.md"],
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
   [/^ADD_(?:wwi|xxi|wwwEX|xxwEX|www|xxx|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
   [/^(?:SUB_(?:wwi|xxi|www|xxx)|SUBS_(?:wwi|www|wwwLSLi))$/, "AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],

@@ -1592,3 +1592,18 @@ fix, it achieves **100% reliability without external wrappers** like
   APPROVE.
 - Closure leaves 124 emitter APIs and 17 raw boundaries; `ADDS_wwi` is selected
   next.
+
+### AArch64 ADDS emitter closure (2026-07-27)
+
+- The three reachable W-width flag-setting ADD encoders—immediate, register,
+  and shifted-register—are audited; all X forms remain unreachable.
+- Direct conformance proves seven exact words and 39 native result/NZCV vectors
+  across imm12 edges, shifts 0/1/16/24/31, W truncation, overflow/carry/zero,
+  hostile initial flags, and 24 destination-alias cases.
+- Configured roots are locked at 1 + 2 + 4, including narrow-lane shifts
+  24,24,16,16 and carry-to-X publication.
+- Acceptance passes all 26 emitter suites, 904/904 active-risky, 33/33
+  allocator pressure, clean build, deterministic closure, and independent
+  APPROVE.
+- Closure leaves 121 emitter APIs and 17 raw boundaries; `ANDS_ww3f` is
+  selected next.

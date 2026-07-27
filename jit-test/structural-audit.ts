@@ -79,6 +79,8 @@ const wordEmitterProbeSource = await Bun.file(new URL("./emitter-word-conformanc
 const wordEmitterHarnessSource = await Bun.file(new URL("./emitter-word-conformance.sh", import.meta.url)).text();
 const carryEmitterProbeSource = await Bun.file(new URL("./emitter-carry-conformance.cpp", import.meta.url)).text();
 const carryEmitterHarnessSource = await Bun.file(new URL("./emitter-carry-conformance.sh", import.meta.url)).text();
+const addsEmitterProbeSource = await Bun.file(new URL("./emitter-adds-conformance.cpp", import.meta.url)).text();
+const addsEmitterHarnessSource = await Bun.file(new URL("./emitter-adds-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -3885,6 +3887,46 @@ console.log("METRIC structural_carry_emitter_configured_callers=6");
 console.log("METRIC structural_carry_emitter_raw_callers=12");
 console.log("METRIC structural_carry_emitter_exact_words=4");
 console.log("METRIC structural_carry_emitter_native_vectors=48");
+
+/* The reachable ADD-with-flags encoder set is W-width only: immediate and
+ * register forms own long ADD, while fixed shifted-register forms normalise
+ * byte/word operands into the high lane before extracting the result. */
+for (const contract of [
+  "#define ADDS_wwi(Wd,Wn,i12)       _W((0b0011000100 << 22) | (((i12) & 0xfff) << 10) | ((Wn) << 5) | (Wd))",
+  "#define ADDS_www(Wd,Wn,Wm)        _W((0b00101011000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define ADDS_wwwLSLi(Wd,Wn,Wm,i)  _W((0b00101011000 << 21) | ((Wm) << 16) | (((i) & 0x1f) << 10) | ((Wn) << 5) | (Wd))",
+]) requireText(codegenHeaderSource, contract, "ADD-with-flags emitter encoding");
+for (const [name,expected] of [["ADDS_wwi",1],["ADDS_www",2],["ADDS_wwwLSLi",4]] as const) {
+  const found=(midfunc2Source.match(new RegExp(`\\b${name}\\(`,"g"))||[]).length;
+  if(found!==expected) fail(`${name} configured caller census=${found}, expected ${expected}`);
+  const inventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith(`emitter_api,${name},`));
+  if(!inventory?.includes(`,${expected},`)) fail(`${name} inventory reference census changed`);
+}
+for (const contract of [
+  "if(v >= 0 && v <= 0xfff) {\n\t\tADDS_wwi(d, d, v);",
+  "ADDS_www(d, d, REG_WORK2);", "ADDS_www(d, d, s);",
+  "ADDS_wwwLSLi(REG_WORK1, REG_WORK2, d, 24);",
+  "ADDS_wwwLSLi(REG_WORK1, REG_WORK1, d, 16);",
+  "flags_carry_inverted = false;\n\tDUPLICACTE_CARRY",
+]) requireText(midfunc2Source, contract, "configured ADD-with-flags caller contract");
+const addsShifts=[...midfunc2Source.matchAll(/\bADDS_wwwLSLi\([^\n]+,\s*(\d+)\);/g)].map((m)=>m[1]);
+if(JSON.stringify(addsShifts)!==JSON.stringify(["24","24","16","16"]))
+  fail(`ADDS_wwwLSLi configured shifts changed: ${JSON.stringify(addsShifts)}`);
+for (const contract of [
+  "emitter_adds_apis=3", "emitter_adds_exact_words=%u", "emitter_adds_immediate_vectors=%u",
+  "emitter_adds_register_vectors=%u", "emitter_adds_shift_vectors=%u", "emitter_adds_alias_vectors=%u",
+  "emitter_adds_native_vectors=%u", "0x31000149u", "0x313fffffu", "0x2b1f03ffu", "0x2b1f7fffu",
+  "expected(lhs,rhs_effective)", "const unsigned shifts[]={0,1,16,24,31};",
+  "exact==7&&imm_vectors==12&&reg_vectors==12&&shift_vectors==15&&alias_vectors==24",
+]) requireText(addsEmitterProbeSource, contract, "ADD-with-flags native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-adds-conformance.cpp"])
+  requireText(addsEmitterHarnessSource, contract, "ADD-with-flags conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-adds-conformance.sh"', "ADD-with-flags bounded acceptance gate");
+console.log("METRIC structural_adds_emitter_apis=3");
+console.log("METRIC structural_adds_emitter_configured_callers=7");
+console.log("METRIC structural_adds_emitter_exact_words=7");
+console.log("METRIC structural_adds_emitter_native_vectors=39");
+console.log("METRIC structural_adds_emitter_alias_vectors=24");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

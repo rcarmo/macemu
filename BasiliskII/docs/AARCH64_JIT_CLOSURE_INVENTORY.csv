@@ -12,9 +12,9 @@ emitter_api,ADD_xxi,audited,ADD_xxi,80,8,BasiliskII/src/uae_cpu_2026/compiler/co
 emitter_api,ADD_xxwEX,audited,ADD_xxwEX,80,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,191,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
 emitter_api,ADD_xxx,audited,ADD_xxx,80,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,195,AARCH64_JIT_AUDIT_ADD_EMITTERS.md
 emitter_api,ADD_xxxLSLi,unreachable,ADD_xxxLSLi,80,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,197,no path from reachable AArch64 compiler/emitter roots
-emitter_api,ADDS_wwi,unreviewed,ADDS_wwi,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,198,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,ADDS_www,unreviewed,ADDS_www,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,200,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,ADDS_wwwLSLi,unreviewed,ADDS_wwwLSLi,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,202,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,ADDS_wwi,audited,ADDS_wwi,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,198,AARCH64_JIT_AUDIT_ADDS_EMITTERS.md
+emitter_api,ADDS_www,audited,ADDS_www,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,200,AARCH64_JIT_AUDIT_ADDS_EMITTERS.md
+emitter_api,ADDS_wwwLSLi,audited,ADDS_wwwLSLi,60,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,202,AARCH64_JIT_AUDIT_ADDS_EMITTERS.md
 emitter_api,ADDS_xxi,unreachable,ADDS_xxi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,199,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADDS_xxx,unreachable,ADDS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,201,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ADDS_xxxLSLi,unreachable,ADDS_xxxLSLi,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,203,no path from reachable AArch64 compiler/emitter roots

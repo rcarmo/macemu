@@ -197,6 +197,7 @@ if phase_enabled emitters; then
     # by literal path so a dynamic loop cannot silently omit a suite.
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-word-conformance.sh" || emit_failure_metrics 1 "ARM64 word-emission conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-carry-conformance.sh" || emit_failure_metrics 1 "ARM64 carry-arithmetic emitter conformance failed" 0
+    timeout -k 5s 60s "$SCRIPT_DIR/emitter-adds-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD-with-flags emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh" || emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh" || emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0
