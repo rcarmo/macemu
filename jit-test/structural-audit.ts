@@ -81,6 +81,8 @@ const carryEmitterProbeSource = await Bun.file(new URL("./emitter-carry-conforma
 const carryEmitterHarnessSource = await Bun.file(new URL("./emitter-carry-conformance.sh", import.meta.url)).text();
 const addsEmitterProbeSource = await Bun.file(new URL("./emitter-adds-conformance.cpp", import.meta.url)).text();
 const addsEmitterHarnessSource = await Bun.file(new URL("./emitter-adds-conformance.sh", import.meta.url)).text();
+const andsEmitterProbeSource = await Bun.file(new URL("./emitter-ands-conformance.cpp", import.meta.url)).text();
+const andsEmitterHarnessSource = await Bun.file(new URL("./emitter-ands-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -3927,6 +3929,44 @@ console.log("METRIC structural_adds_emitter_configured_callers=7");
 console.log("METRIC structural_adds_emitter_exact_words=7");
 console.log("METRIC structural_adds_emitter_native_vectors=39");
 console.log("METRIC structural_adds_emitter_alias_vectors=24");
+
+/* Reachable ANDS forms split into W register flags/results, a six-bit W count
+ * mask, and one X-width 0x7fff exponent test. Logical flags must clear C/V. */
+for(const contract of [
+  "#define ANDS_www(Wd,Wn,Wm)        _W((0b01101010000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define ANDS_xx7fff(Xd,Xn)        _W((0b111100100 << 23) | immEncode(1,0b000000,0b001110) | ((Xn) << 5) | (Xd))",
+  "#define ANDS_ww3f(Wd,Wn)          _W((0b011100100 << 23) | immEncode(0,0b000000,0b000101) | ((Wn) << 5) | (Wd))",
+]) requireText(codegenHeaderSource,contract,"AND-with-flags emitter encoding");
+for(const [name,expected] of [["ANDS_ww3f",14],["ANDS_www",11],["ANDS_xx7fff",1]] as const){
+  const inventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith(`emitter_api,${name},`));
+  if(!inventory?.includes(`,${expected},`)) fail(`${name} inventory reference census changed`);
+}
+const rawAnds3f=(midfunc2Source.match(/\bANDS_ww3f\(/g)||[]).length;
+const rawAndsW=(midfunc2Source.match(/\bANDS_www\(/g)||[]).length;
+const rawAndsX=(codegenSource.match(/\bANDS_xx7fff\(/g)||[]).length;
+if(rawAnds3f!==14||rawAndsW!==12||rawAndsX!==1)
+  fail(`ANDS raw caller census changed: 3f=${rawAnds3f} w=${rawAndsW} x=${rawAndsX}`);
+for(const contract of [
+  "ANDS_ww3f(REG_WORK1, i);", "ANDS_www(d, d, s);",
+  "ANDS_www(REG_WORK3, REG_WORK1, REG_WORK2);",
+]) requireText(midfunc2Source,contract,"configured AND-with-flags caller class");
+requireText(codegenSource,"ANDS_xx7fff(REG_WORK2, REG_WORK4);","configured extended-FP exponent test");
+for(const contract of [
+  "emitter_ands_apis=3", "emitter_ands_exact_words=%u", "emitter_ands_register_vectors=%u",
+  "emitter_ands_mask3f_vectors=%u", "emitter_ands_mask7fff_vectors=%u", "emitter_ands_alias_vectors=%u",
+  "emitter_ands_native_vectors=%u", "emitter_ands_cv_clear=1", "0x6a0b0149u", "0x720017ffu",
+  "0xf2403949u", "0xf2403bffu", "logical_nzcv", "values3f", "values7fff",
+  "exact==6&&reg_vectors==12&&mask3f_vectors==12&&mask7fff_vectors==12&&alias_vectors==20",
+]) requireText(andsEmitterProbeSource,contract,"AND-with-flags native conformance");
+for(const contract of ["-Wall -Wextra -Werror","emitter-ands-conformance.cpp"])
+  requireText(andsEmitterHarnessSource,contract,"AND-with-flags conformance build");
+requireText(harnessSource,'timeout -k 5s 60s "$SCRIPT_DIR/emitter-ands-conformance.sh"',"AND-with-flags bounded acceptance gate");
+console.log("METRIC structural_ands_emitter_apis=3");
+console.log("METRIC structural_ands_emitter_configured_references=26");
+console.log("METRIC structural_ands_emitter_raw_callers=27");
+console.log("METRIC structural_ands_emitter_exact_words=6");
+console.log("METRIC structural_ands_emitter_native_vectors=36");
+console.log("METRIC structural_ands_emitter_alias_vectors=20");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

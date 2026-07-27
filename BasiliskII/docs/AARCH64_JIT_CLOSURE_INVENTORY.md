@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 70 | 0 | 103 | 121 |
+| emitter_api | 294 | 73 | 0 | 103 | 118 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,9 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `ANDS_ww3f` | emitter_api:`ANDS_ww3f` |
-| 60 | `ANDS_www` | emitter_api:`ANDS_www` |
-| 60 | `ANDS_xx7fff` | emitter_api:`ANDS_xx7fff` |
 | 60 | `ASR_wwi` | emitter_api:`ASR_wwi` |
 | 60 | `ASR_xxi` | emitter_api:`ASR_xxi` |
 | 60 | `ASR_xxx` | emitter_api:`ASR_xxx` |
@@ -62,6 +59,9 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `compemu_raw_check_checksum` | raw_boundary:`compemu_raw_check_checksum` |
 | 60 | `compemu_raw_dec_m` | raw_boundary:`compemu_raw_dec_m` |
 | 60 | `compemu_raw_exec_nostats` | raw_boundary:`compemu_raw_exec_nostats` |
+| 60 | `compemu_raw_execute_normal` | raw_boundary:`compemu_raw_execute_normal` |
+| 60 | `compemu_raw_execute_normal_cycles` | raw_boundary:`compemu_raw_execute_normal_cycles` |
+| 60 | `compemu_raw_fmov_mr_drop` | raw_boundary:`compemu_raw_fmov_mr_drop` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`ANDS_ww3f` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ANDS_ww3f`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`ASR_wwi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`ASR_wwi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

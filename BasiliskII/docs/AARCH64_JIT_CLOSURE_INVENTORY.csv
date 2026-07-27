@@ -24,11 +24,11 @@ emitter_api,AND_www,audited,AND_www,80,16,BasiliskII/src/uae_cpu_2026/compiler/c
 emitter_api,AND_xx1f,unreachable,AND_xx1f,80,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,291,no path from reachable AArch64 compiler/emitter roots
 emitter_api,AND_xxx,audited,AND_xxx,80,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,290,AARCH64_JIT_AUDIT_AND_EMITTERS.md
 emitter_api,ANDS_ww1f,unreachable,ANDS_ww1f,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,300,no path from reachable AArch64 compiler/emitter roots
-emitter_api,ANDS_ww3f,unreviewed,ANDS_ww3f,60,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,299,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,ANDS_ww3f,audited,ANDS_ww3f,60,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,299,AARCH64_JIT_AUDIT_ANDS_EMITTERS.md
 emitter_api,ANDS_ww7f,unreachable,ANDS_ww7f,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,298,no path from reachable AArch64 compiler/emitter roots
-emitter_api,ANDS_www,unreviewed,ANDS_www,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,294,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,ANDS_www,audited,ANDS_www,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,294,AARCH64_JIT_AUDIT_ANDS_EMITTERS.md
 emitter_api,ANDS_xx1f,unreachable,ANDS_xx1f,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,297,no path from reachable AArch64 compiler/emitter roots
-emitter_api,ANDS_xx7fff,unreviewed,ANDS_xx7fff,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,296,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,ANDS_xx7fff,audited,ANDS_xx7fff,60,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,296,AARCH64_JIT_AUDIT_ANDS_EMITTERS.md
 emitter_api,ANDS_xxx,unreachable,ANDS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,295,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ARM_CV_FLAGS,unreachable,ARM_CV_FLAGS,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,38,no path from reachable AArch64 compiler/emitter roots
 emitter_api,ASR_wwi,unreviewed,ASR_wwi,60,7,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,326,reachable encoder API; requires opcode/width/branch-range contract classification

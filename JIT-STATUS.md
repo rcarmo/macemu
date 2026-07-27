@@ -1607,3 +1607,19 @@ fix, it achieves **100% reliability without external wrappers** like
   APPROVE.
 - Closure leaves 121 emitter APIs and 17 raw boundaries; `ANDS_ww3f` is
   selected next.
+
+### AArch64 ANDS emitter closure (2026-07-27)
+
+- Three reachable AND-with-flags encoders are audited: W register, W six-bit
+  immediate mask, and X 15-bit immediate mask; four adjacent forms remain
+  unreachable.
+- Direct conformance proves six exact words and 36 native W/X result/NZCV
+  vectors, including upper-width truncation/preservation, aliases, mask edges,
+  and mandatory C/V clearing.
+- Configured references are locked at 14 + 11 + 1, distinct from 14 + 12 + 1
+  raw calls because `jnf_DIVS` is service-dominated by the live flag provider.
+- Acceptance passes all 27 emitter suites, 904/904 active-risky, 33/33
+  allocator pressure, clean build, deterministic closure, and independent
+  APPROVE.
+- Closure leaves 118 emitter APIs and 17 raw boundaries; `ASR_wwi` is selected
+  next.
