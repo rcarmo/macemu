@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 76 | 0 | 103 | 115 |
+| emitter_api | 294 | 84 | 0 | 103 | 107 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `BFI_wwii` | emitter_api:`BFI_wwii` |
-| 60 | `BFI_xxii` | emitter_api:`BFI_xxii` |
-| 60 | `BFXIL_wwii` | emitter_api:`BFXIL_wwii` |
-| 60 | `BFXIL_xxii` | emitter_api:`BFXIL_xxii` |
 | 60 | `BIC_www` | emitter_api:`BIC_www` |
 | 60 | `BLR_x` | emitter_api:`BLR_x` |
 | 60 | `CLEAR_xxbit` | emitter_api:`CLEAR_xxbit` |
@@ -62,6 +58,10 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `compemu_raw_fmov_rm` | raw_boundary:`compemu_raw_fmov_rm` |
 | 60 | `compemu_raw_handle_except` | raw_boundary:`compemu_raw_handle_except` |
 | 60 | `compemu_raw_inc_m` | raw_boundary:`compemu_raw_inc_m` |
+| 60 | `compemu_raw_inc_opcount` | raw_boundary:`compemu_raw_inc_opcount` |
+| 60 | `compemu_raw_init_r_regstruct` | raw_boundary:`compemu_raw_init_r_regstruct` |
+| 60 | `compemu_raw_jcc_l_oponly` | raw_boundary:`compemu_raw_jcc_l_oponly` |
+| 60 | `compemu_raw_maybe_do_nothing` | raw_boundary:`compemu_raw_maybe_do_nothing` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`BFI_wwii` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`BFI_wwii`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`BIC_www` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`BIC_www`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

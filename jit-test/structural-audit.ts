@@ -85,6 +85,8 @@ const andsEmitterProbeSource = await Bun.file(new URL("./emitter-ands-conformanc
 const andsEmitterHarnessSource = await Bun.file(new URL("./emitter-ands-conformance.sh", import.meta.url)).text();
 const asrEmitterProbeSource = await Bun.file(new URL("./emitter-asr-conformance.cpp", import.meta.url)).text();
 const asrEmitterHarnessSource = await Bun.file(new URL("./emitter-asr-conformance.sh", import.meta.url)).text();
+const bitfieldEmitterProbeSource = await Bun.file(new URL("./emitter-bitfield-conformance.cpp", import.meta.url)).text();
+const bitfieldEmitterHarnessSource = await Bun.file(new URL("./emitter-bitfield-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4008,6 +4010,43 @@ console.log("METRIC structural_asr_emitter_raw_callers=18");
 console.log("METRIC structural_asr_emitter_exact_words=8");
 console.log("METRIC structural_asr_emitter_native_vectors=72");
 console.log("METRIC structural_asr_emitter_alias_vectors=44");
+
+/* Reachable unsigned bitfield insert/extract encoders share one W/X field
+ * algebra. Exhaust every legal lsb/width pair and keep signed forms unreachable. */
+for(const contract of [
+  "#define BFI_wwii(Wd,Wn,lsb,width)", "#define BFI_xxii(Xd,Xn,lsb,width)",
+  "#define UBFIZ_wwii(Wd,Wn,lsb,width)", "#define UBFIZ_xxii(Xd,Xn,lsb,width)",
+  "#define BFXIL_wwii(Wd,Wn,lsb,width)", "#define BFXIL_xxii(Xd,Xn,lsb,width)",
+  "#define UBFX_wwii(Wd,Wn,lsb,width)", "#define UBFX_xxii(Xd,Xn,lsb,width)",
+]) requireText(codegenHeaderSource,contract,"bitfield emitter definition");
+const bitfieldNames=["BFI_wwii","BFI_xxii","BFXIL_wwii","BFXIL_xxii","UBFIZ_wwii","UBFIZ_xxii","UBFX_wwii","UBFX_xxii"];
+const bitfieldInventoryCounts=[135,24,1,26,3,26,11,25];
+const bitfieldRawCounts=[167,65,5,29,3,26,44,38];
+const bitfieldRawText=`${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for(let index=0;index<bitfieldNames.length;++index){
+  const name=bitfieldNames[index];
+  const inventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith(`emitter_api,${name},`));
+  if(!inventory?.includes(`,${bitfieldInventoryCounts[index]},`)) fail(`${name} inventory reference census changed`);
+  const raw=(bitfieldRawText.match(new RegExp(`\\b${name}\\(`,"g"))||[]).length;
+  if(raw!==bitfieldRawCounts[index]) fail(`${name} raw caller census=${raw}, expected ${bitfieldRawCounts[index]}`);
+}
+for(const contract of [
+  "emitter_bitfield_apis=8", "emitter_bitfield_anchor_words=%u", "emitter_bitfield_exhaustive_encodings=%u",
+  "emitter_bitfield_native_vectors=%u", "emitter_bitfield_alias_vectors=%u", "emitter_bitfield_preserves_nzcv=1",
+  "expected_word", "expected_result", "width_mask", "for(unsigned lsb=0;lsb<bits;++lsb)",
+  "for(unsigned width=1;width<=bits-lsb;++width)", "0x33010149u", "0xb37fffffu",
+  "0x530103ffu", "0xd37fffffu", "anchor_words==16&&exhaustive==10432&&native==10456&&aliases==24",
+]) requireText(bitfieldEmitterProbeSource,contract,"bitfield exhaustive native conformance");
+for(const contract of ["-Wall -Wextra -Werror","emitter-bitfield-conformance.cpp"])
+  requireText(bitfieldEmitterHarnessSource,contract,"bitfield conformance build");
+requireText(harnessSource,'timeout -k 5s 120s "$SCRIPT_DIR/emitter-bitfield-conformance.sh"',"bitfield bounded acceptance gate");
+console.log("METRIC structural_bitfield_emitter_apis=8");
+console.log("METRIC structural_bitfield_emitter_configured_references=251");
+console.log("METRIC structural_bitfield_emitter_raw_callers=377");
+console.log("METRIC structural_bitfield_emitter_anchor_words=16");
+console.log("METRIC structural_bitfield_emitter_exhaustive_encodings=10432");
+console.log("METRIC structural_bitfield_emitter_native_vectors=10456");
+console.log("METRIC structural_bitfield_emitter_alias_vectors=24");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

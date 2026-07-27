@@ -1638,3 +1638,18 @@ fix, it achieves **100% reliability without external wrappers** like
   APPROVE.
 - Closure leaves 115 emitter APIs and 17 raw boundaries; `BFI_wwii` is selected
   next.
+
+### AArch64 unsigned bitfield emitter closure (2026-07-27)
+
+- Eight reachable BFI/BFXIL/UBFIZ/UBFX W/X encoders are audited together; four
+  signed SBFIZ/SBFX forms remain unreachable.
+- Direct conformance exhausts all **10,432** legal `(lsb,width)` encodings,
+  executes **10,456** native cases including 24 aliases, checks 16 assembler
+  anchors, and proves strict NZCV preservation.
+- Configured per-API references total 251 versus 377 raw calls in retained
+  compatibility bodies; both lists are locked independently.
+- Acceptance passes all 29 emitter suites, 904/904 active-risky, 33/33
+  allocator pressure, clean build, deterministic closure, and independent
+  APPROVE.
+- Closure leaves 107 emitter APIs and 17 raw boundaries; `BIC_www` is selected
+  next.
