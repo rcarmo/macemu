@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
 | emitter_api | 294 | 121 | 0 | 103 | 70 |
-| raw_boundary | 83 | 38 | 0 | 28 | 17 |
+| raw_boundary | 83 | 39 | 0 | 28 | 16 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `compemu_raw_check_checksum` | raw_boundary:`compemu_raw_check_checksum` |
 | 60 | `compemu_raw_dec_m` | raw_boundary:`compemu_raw_dec_m` |
 | 60 | `compemu_raw_exec_nostats` | raw_boundary:`compemu_raw_exec_nostats` |
 | 60 | `compemu_raw_execute_normal` | raw_boundary:`compemu_raw_execute_normal` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `CSEL_xxxc` | emitter_api:`CSEL_xxxc` |
 | 60 | `CSET_xc` | emitter_api:`CSET_xc` |
 | 60 | `CSETM_wc` | emitter_api:`CSETM_wc` |
+| 60 | `LDP_xxXi` | emitter_api:`LDP_xxXi` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`compemu_raw_check_checksum` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_check_checksum`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`compemu_raw_dec_m` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_dec_m`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

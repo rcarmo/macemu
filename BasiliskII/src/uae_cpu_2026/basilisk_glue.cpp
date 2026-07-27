@@ -497,6 +497,16 @@ static bool run_opcode_test_mode_glue()
 			m68k_setpc(second_addr);
 			fill_prefetch_0();
 			quit_program = 0;
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+			if (UseJIT) {
+				extern bool jit_test_prepare_direct_checksum_entry(void);
+				if (!jit_test_prepare_direct_checksum_entry()) {
+					fprintf(stderr, "B2_TEST_FORCE_DIRECT_CHECKSUM could not prepare direct checksum entry\n");
+					quit_program = 1;
+					return true;
+				}
+			}
+#endif
 #if USE_JIT
 			if (UseJIT)
 				m68k_compile_execute();
@@ -505,6 +515,11 @@ static bool run_opcode_test_mode_glue()
 				m68k_execute();
 		}
 	}
+
+#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+	extern void jit_test_dump_dispatch_summary(void);
+	jit_test_dump_dispatch_summary();
+#endif
 
 	if (test_dump_enabled_glue()) {
 		MakeSR();

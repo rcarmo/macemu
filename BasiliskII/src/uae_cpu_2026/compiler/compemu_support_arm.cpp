@@ -2053,6 +2053,7 @@ static unsigned long jit_diag_max_block_cycles = 0;
 static unsigned long jit_diag_max_block_bytes = 0;
 static unsigned long jit_diag_checksum_good = 0;
 static unsigned long jit_diag_checksum_bad = 0;
+static unsigned long jit_test_direct_checksum_entries = 0;
 static time_t jit_diag_last_print = 0;
 static time_t jit_diag_start_time = 0;
 
@@ -2132,6 +2133,24 @@ static inline void jit_diag_note_compile_block(unsigned, unsigned, unsigned, uns
 static inline void jit_diag_note_checksum_result(bool) {}
 static inline void jit_diag_maybe_print(void) {}
 #endif
+
+static bool jit_test_dispatch_summary_enabled(void)
+{
+    const char *enabled = getenv("B2_TEST_DISPATCH_SUMMARY");
+    return enabled && *enabled && strcmp(enabled, "0") != 0;
+}
+
+void jit_test_dump_dispatch_summary(void)
+{
+#if defined(CPU_AARCH64)
+    if (jit_test_dispatch_summary_enabled()) {
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu\n",
+            jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
+            jit_diag_checksum_good, jit_diag_checksum_bad,
+            jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls);
+    }
+#endif
+}
 /* ---- end JIT dispatch diagnostic counters ---- */
 
 extern bool UseJIT;
@@ -6581,6 +6600,23 @@ STATIC_INLINE void match_states(blockinfo* bi)
     }
 }
 
+bool jit_test_prepare_direct_checksum_entry(void)
+{
+#if defined(CPU_AARCH64)
+    const char *enabled = getenv("B2_TEST_FORCE_DIRECT_CHECKSUM");
+    if (!(enabled && *enabled && strcmp(enabled, "0") != 0))
+        return true;
+    blockinfo* bi = get_blockinfo_addr(regs.pc_p);
+    if (!bi || !bi->csi || !bi->direct_pcc)
+        return false;
+    bi->handler_to_use = (cpuop_func*)popall_check_checksum;
+    set_dhtu_validated(bi, bi->direct_pcc);
+    cache_tags[cacheline(bi->pc_p)].handler = bi->direct_pcc;
+    bi->status = BI_NEED_CHECK;
+#endif
+    return true;
+}
+
 STATIC_INLINE void create_popalls(void)
 {
     int i, r;
@@ -6679,6 +6715,12 @@ STATIC_INLINE void create_popalls(void)
 
     popall_check_checksum_setpc = get_target();
 #if defined(CPU_AARCH64)
+    if (jit_test_dispatch_summary_enabled()) {
+        LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_checksum_entries);
+        LDR_xXi(R18_INDEX, REG_WORK4, 0);
+        ADD_xxi(R18_INDEX, R18_INDEX, 1);
+        STR_xXi(R18_INDEX, REG_WORK4, 0);
+    }
     compemu_raw_set_pc_from_reg(REG_WORK1);
 #else
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
