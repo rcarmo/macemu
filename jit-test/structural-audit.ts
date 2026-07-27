@@ -91,6 +91,8 @@ const logicalEmitterProbeSource = await Bun.file(new URL("./emitter-logical-conf
 const logicalEmitterHarnessSource = await Bun.file(new URL("./emitter-logical-conformance.sh", import.meta.url)).text();
 const blrEmitterProbeSource = await Bun.file(new URL("./emitter-blr-conformance.cpp", import.meta.url)).text();
 const blrEmitterHarnessSource = await Bun.file(new URL("./emitter-blr-conformance.sh", import.meta.url)).text();
+const logimmEmitterProbeSource = await Bun.file(new URL("./emitter-logical-immediate-conformance.cpp", import.meta.url)).text();
+const logimmEmitterHarnessSource = await Bun.file(new URL("./emitter-logical-immediate-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4125,6 +4127,59 @@ console.log("METRIC structural_blr_emitter_exact_words=32");
 console.log("METRIC structural_blr_emitter_native_vectors=4");
 console.log("METRIC structural_blr_emitter_target_decoys=4");
 console.log("METRIC structural_blr_emitter_x18_abi=1");
+
+/* Complete reachable logical-immediate builder/mutator cluster. The inventory
+ * distinguishes configured source references from retained raw source sites. */
+const logimmNames = [
+  "immEncode", "immOP_AND", "immOP_ORR", "CLEAR_xxZflag", "CLEAR_xxCflag",
+  "CLEAR_xxVflag", "SET_xxZflag", "SET_xxVflag", "CLEAR_xxbit", "SET_xxbit",
+];
+const logimmInventoryCounts = [23, 7, 5, 7, 5, 2, 8, 11, 5, 10];
+const logimmCppRawCounts = [-1, -1, -1, 7, 5, 2, 12, 11, 5, 11];
+const logimmRawText = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for (let index = 0; index < logimmNames.length; ++index) {
+  const name = logimmNames[index];
+  const inventory = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!inventory?.includes(`,${logimmInventoryCounts[index]},`))
+    fail(`${name} configured reference census changed`);
+  if (logimmCppRawCounts[index] >= 0) {
+    const raw = (logimmRawText.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+    if (raw !== logimmCppRawCounts[index]) fail(`${name} raw source-site census=${raw}, expected ${logimmCppRawCounts[index]}`);
+  }
+}
+for (const [name, expected] of [["immEncode", 24], ["immOP_AND", 8], ["immOP_ORR", 6]] as const) {
+  const found = (codegenHeaderSource.match(new RegExp(`\\b${name}\\b`, "g")) || []).length;
+  if (found !== expected) fail(`${name} header composition census=${found}, expected ${expected}`);
+}
+for (const contract of [
+  "#define immEncode(N,immr,imms)    (N << 22) | (immr << 16) | (imms << 10)",
+  "#define immOP_AND                 (0b100100100 << 23)",
+  "#define immOP_ORR                 (0b101100100 << 23)",
+  "#define CLEAR_xxZflag(Xd,Xn)", "#define CLEAR_xxCflag(Xd,Xn)", "#define CLEAR_xxVflag(Xd,Xn)",
+  "#define SET_xxZflag(Xd,Xn)", "#define SET_xxVflag(Xd,Xn)",
+  "#define CLEAR_xxbit(Xd,Xn,bit)", "#define SET_xxbit(Xd,Xn,bit)",
+]) requireText(codegenHeaderSource, contract, "logical-immediate emitter definition");
+for (const contract of [
+  "emitter_logimm_apis=10", "emitter_logimm_encode_checks=%u", "emitter_logimm_base_constants=%u",
+  "emitter_logimm_exact_words=%u", "emitter_logimm_exhaustive_native=%u",
+  "emitter_logimm_alias_vectors=%u", "emitter_logimm_distinct_vectors=%u",
+  "emitter_logimm_flag_vectors=%u", "emitter_logimm_native_vectors=%u",
+  "encode_checks == 8192", "exact_words == 147", "exhaustive_native == 256",
+  "alias_vectors == 266", "distinct_vectors == 15", "flag_vectors == 7", "native_vectors == 288",
+  "for (unsigned bit = 0; bit < 64; ++bit)", "run_flags(clear_bit(3, 0, 63))",
+  "run_flags(set_bit(3, 0, 63))", "PROT_READ | PROT_WRITE", "PROT_READ | PROT_EXEC",
+]) requireText(logimmEmitterProbeSource, contract, "logical-immediate native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-logical-immediate-conformance.cpp"])
+  requireText(logimmEmitterHarnessSource, contract, "logical-immediate conformance build");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-logical-immediate-conformance.sh"', "logical-immediate bounded acceptance gate");
+if (!closureInventoryCsv.includes("emitter_api,CLEAR_NZCV,unreachable,") ||
+    !closureInventoryCsv.includes("emitter_api,SET_xxCflag,unreachable,"))
+  fail("logical-immediate unreachable neighbours changed");
+console.log("METRIC structural_logimm_emitter_apis=10");
+console.log("METRIC structural_logimm_configured_references=83");
+console.log("METRIC structural_logimm_encode_checks=8192");
+console.log("METRIC structural_logimm_exact_words=147");
+console.log("METRIC structural_logimm_native_vectors=288");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

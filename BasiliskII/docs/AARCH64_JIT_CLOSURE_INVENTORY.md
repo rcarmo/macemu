@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 92 | 0 | 103 | 99 |
+| emitter_api | 294 | 102 | 0 | 103 | 89 |
 | raw_boundary | 83 | 38 | 0 | 28 | 17 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `CLEAR_xxbit` | emitter_api:`CLEAR_xxbit` |
-| 60 | `CLEAR_xxCflag` | emitter_api:`CLEAR_xxCflag` |
-| 60 | `CLEAR_xxVflag` | emitter_api:`CLEAR_xxVflag` |
-| 60 | `CLEAR_xxZflag` | emitter_api:`CLEAR_xxZflag` |
 | 60 | `CLS_ww` | emitter_api:`CLS_ww` |
 | 60 | `compemu_raw_check_checksum` | raw_boundary:`compemu_raw_check_checksum` |
 | 60 | `compemu_raw_dec_m` | raw_boundary:`compemu_raw_dec_m` |
@@ -62,6 +58,10 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `compemu_raw_maybe_do_nothing` | raw_boundary:`compemu_raw_maybe_do_nothing` |
 | 60 | `compemu_raw_mov_l_mi` | raw_boundary:`compemu_raw_mov_l_mi` |
 | 60 | `compemu_raw_mov_l_mr` | raw_boundary:`compemu_raw_mov_l_mr` |
+| 60 | `compemu_raw_mov_l_rm` | raw_boundary:`compemu_raw_mov_l_rm` |
+| 60 | `CSEL_wwwc` | emitter_api:`CSEL_wwwc` |
+| 60 | `CSEL_xxxc` | emitter_api:`CSEL_xxxc` |
+| 60 | `CSET_xc` | emitter_api:`CSET_xc` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`CLEAR_xxbit` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`CLEAR_xxbit`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`CLS_ww` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`CLS_ww`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 
