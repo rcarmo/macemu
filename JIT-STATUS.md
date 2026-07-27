@@ -1623,3 +1623,18 @@ fix, it achieves **100% reliability without external wrappers** like
   APPROVE.
 - Closure leaves 118 emitter APIs and 17 raw boundaries; `ASR_wwi` is selected
   next.
+
+### AArch64 ASR emitter closure (2026-07-27)
+
+- Reachable W-immediate, X-immediate, and X-register arithmetic-right-shift
+  encoders are audited; W-register ASR remains unreachable.
+- Direct conformance proves eight exact words and 72 native signed-result
+  vectors across immediate masking, modulo-64 register counts through 127,
+  W truncation, sign fill, 44 aliases, and strict NZCV preservation.
+- Configured `7+2+9` and raw `8+1+9` caller compositions are locked separately;
+  the extra raw W call is inside unreachable `arm_ADD_ldiv8`.
+- Acceptance passes all 28 emitter suites, 904/904 active-risky, 33/33
+  allocator pressure, clean build, deterministic closure, and independent
+  APPROVE.
+- Closure leaves 115 emitter APIs and 17 raw boundaries; `BFI_wwii` is selected
+  next.

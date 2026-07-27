@@ -83,6 +83,8 @@ const addsEmitterProbeSource = await Bun.file(new URL("./emitter-adds-conformanc
 const addsEmitterHarnessSource = await Bun.file(new URL("./emitter-adds-conformance.sh", import.meta.url)).text();
 const andsEmitterProbeSource = await Bun.file(new URL("./emitter-ands-conformance.cpp", import.meta.url)).text();
 const andsEmitterHarnessSource = await Bun.file(new URL("./emitter-ands-conformance.sh", import.meta.url)).text();
+const asrEmitterProbeSource = await Bun.file(new URL("./emitter-asr-conformance.cpp", import.meta.url)).text();
+const asrEmitterHarnessSource = await Bun.file(new URL("./emitter-asr-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -3967,6 +3969,45 @@ console.log("METRIC structural_ands_emitter_raw_callers=27");
 console.log("METRIC structural_ands_emitter_exact_words=6");
 console.log("METRIC structural_ands_emitter_native_vectors=36");
 console.log("METRIC structural_ands_emitter_alias_vectors=20");
+
+/* Reachable ASR emitters are W/X immediate and X register-count forms. They
+ * preserve NZCV; parent shift MIDFUNCs own guest result narrowing and flags. */
+for(const contract of [
+  "#define ASR_xxx(Xd,Xn,Xm)         _W((0b10011010110 << 21) | ((Xm) << 16) | (0b001010 << 10) | ((Xn) << 5) | (Xd))",
+  "#define ASR_wwi(Wd,Wn,i)          _W((0b0001001100 << 22) | (((i) & 0x1f) << 16) | (0b011111 << 10) | ((Wn) << 5) | (Wd))",
+  "#define ASR_xxi(Xd,Xn,i)          _W((0b1001001101 << 22) | (((i) & 0x3f) << 16) | (0b111111 << 10) | ((Xn) << 5) | (Xd))",
+]) requireText(codegenHeaderSource,contract,"ASR emitter encoding");
+for(const [name,expected] of [["ASR_wwi",7],["ASR_xxi",2],["ASR_xxx",9]] as const){
+  const inventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith(`emitter_api,${name},`));
+  if(!inventory?.includes(`,${expected},`)) fail(`${name} inventory reference census changed`);
+}
+const rawAsrW=(midfuncSource.match(/\bASR_wwi\(/g)||[]).length+(midfunc2Source.match(/\bASR_wwi\(/g)||[]).length;
+const rawAsrXi=(midfunc2Source.match(/\bASR_xxi\(/g)||[]).length;
+const rawAsrXr=(midfunc2Source.match(/\bASR_xxx\(/g)||[]).length;
+if(rawAsrW!==8||rawAsrXi!==1||rawAsrXr!==9)
+  fail(`ASR raw caller census changed: wi=${rawAsrW} xi=${rawAsrXi} xr=${rawAsrXr}`);
+for(const contract of [
+  "if(i > 31)\n\t\t\ti = 31;", "if(i > 32)\n\t\t\ti = 32;",
+  "ASR_xxi(d, REG_WORK1, i);", "AND_ww3f(REG_WORK2, i);",
+  "ASR_xxx(REG_WORK1, REG_WORK1, REG_WORK2);", "MOV_ww(d, d);",
+]) requireText(midfunc2Source,contract,"configured ASR parent contract");
+requireText(midfuncSource,"MIDFUNC(2,arm_ADD_ldiv8","ASR unreachable helper parent");
+for(const contract of [
+  "emitter_asr_apis=3", "emitter_asr_exact_words=%u", "emitter_asr_w_immediate_vectors=%u",
+  "emitter_asr_x_immediate_vectors=%u", "emitter_asr_x_register_vectors=%u", "emitter_asr_alias_vectors=%u",
+  "emitter_asr_native_vectors=%u", "emitter_asr_preserves_nzcv=1", "0x13007d49u", "0x131f7fffu",
+  "0x9340fd49u", "0x937fffffu", "0x9acb2949u", "0x9adf2bffu", "arithmetic_right",
+  "counts[]={0,1,31,32,63,64,65,127}", "exact==8&&wimm==12&&ximm==12&&xreg==48&&aliases==44",
+]) requireText(asrEmitterProbeSource,contract,"ASR native conformance");
+for(const contract of ["-Wall -Wextra -Werror","emitter-asr-conformance.cpp"])
+  requireText(asrEmitterHarnessSource,contract,"ASR conformance build");
+requireText(harnessSource,'timeout -k 5s 60s "$SCRIPT_DIR/emitter-asr-conformance.sh"',"ASR bounded acceptance gate");
+console.log("METRIC structural_asr_emitter_apis=3");
+console.log("METRIC structural_asr_emitter_inventory_references=18");
+console.log("METRIC structural_asr_emitter_raw_callers=18");
+console.log("METRIC structural_asr_emitter_exact_words=8");
+console.log("METRIC structural_asr_emitter_native_vectors=72");
+console.log("METRIC structural_asr_emitter_alias_vectors=44");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private
