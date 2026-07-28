@@ -235,6 +235,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
   [/^(?:CSEL_(?:wwwc|xxxc)|CSET_xc|CSETM_wc)$/, "AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md"],
   [/^(?:LDP_xxX(?:i|post)|LDR_(?:wXi|wXx|wXxLSLi|xXi|xXpost|xXxLSLi)|LDRB_wXx|LDRH_wX(?:i|x)|STP_(?:wwXi|xxXi|xxXpre)|STR_(?:wXi|wXx|wXxLSLi|xXi|xXpre)|STRB_wXx|STRH_wX(?:i|x))$/, "AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
+  [/^(?:LDR_(?:xPCi|dXi|dXx|sXi)|STR_dX(?:i|x)|LSL_(?:wwi|www|xxi|xxx)|LSR_(?:wwi|www|xxi|xxx)|ROR_(?:wwi|www)|MOV_(?:wi|wish|ww|xi|xish|xx)|MOVI_di|MOVK_(?:wi|wish|xi|xish)|MOVN_(?:wi|xi)|MRS_(?:NZCV|FPCR|FPSR)_x|MSR_(?:NZCV|FPCR|FPSR)_x|REV64_dd|MSUB_(?:wwww|xxxx)|SMULL_xww|UMULL_xww|SDIV_(?:www|xxx)|UDIV_(?:www|xxx))$/, "AARCH64_JIT_AUDIT_FINAL_EMITTERS.md"],
   [/^ADD_(?:wwi|xxi|wwwEX|xxwEX|www|xxx|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
   [/^(?:SUB_(?:wwi|xxi|www|xxx)|SUBS_(?:wwi|www|wwwLSLi))$/, "AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],
   [/^AND_(?:ww3f|www|xxx)$/, "AARCH64_JIT_AUDIT_AND_EMITTERS.md"],

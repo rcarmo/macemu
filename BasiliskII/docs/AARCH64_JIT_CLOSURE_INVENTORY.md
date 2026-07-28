@@ -19,7 +19,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 147 | 0 | 103 | 44 |
+| emitter_api | 294 | 191 | 0 | 103 | 0 |
 | raw_boundary | 83 | 54 | 0 | 29 | 0 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
@@ -42,26 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `LDR_dXi` | emitter_api:`LDR_dXi` |
-| 60 | `LDR_dXx` | emitter_api:`LDR_dXx` |
-| 60 | `LDR_sXi` | emitter_api:`LDR_sXi` |
-| 60 | `LDR_xPCi` | emitter_api:`LDR_xPCi` |
-| 60 | `LSL_wwi` | emitter_api:`LSL_wwi` |
-| 60 | `LSL_www` | emitter_api:`LSL_www` |
-| 60 | `LSL_xxi` | emitter_api:`LSL_xxi` |
-| 60 | `LSL_xxx` | emitter_api:`LSL_xxx` |
-| 60 | `LSR_wwi` | emitter_api:`LSR_wwi` |
-| 60 | `LSR_www` | emitter_api:`LSR_www` |
-| 60 | `LSR_xxi` | emitter_api:`LSR_xxi` |
-| 60 | `LSR_xxx` | emitter_api:`LSR_xxx` |
-| 60 | `MOV_wi` | emitter_api:`MOV_wi` |
-| 60 | `MOV_wish` | emitter_api:`MOV_wish` |
-| 60 | `MOV_ww` | emitter_api:`MOV_ww` |
-| 60 | `MOV_xi` | emitter_api:`MOV_xi` |
-| 60 | `MOV_xish` | emitter_api:`MOV_xish` |
-| 60 | `MOV_xx` | emitter_api:`MOV_xx` |
-| 60 | `MOVI_di` | emitter_api:`MOVI_di` |
-| 60 | `MOVK_wi` | emitter_api:`MOVK_wi` |
 
 ## Accepted closure targets
 
@@ -75,7 +55,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`LDR_dXi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`LDR_dXi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+No unreviewed family remains in the current source-derived inventory.
 
 ## Mechanical invariants
 
