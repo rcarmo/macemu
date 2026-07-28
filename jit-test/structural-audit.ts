@@ -144,6 +144,10 @@ const conditionalEmitterReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md",
   import.meta.url,
 )).text();
+const memoryEmitterReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -476,6 +480,14 @@ const conditionalEmitterProbeSource = await Bun.file(new URL(
 )).text();
 const conditionalEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-conditional-conformance.sh",
+  import.meta.url,
+)).text();
+const memoryEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-memory-conformance.cpp",
+  import.meta.url,
+)).text();
+const memoryEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-memory-conformance.sh",
   import.meta.url,
 )).text();
 const andEmitterProbeSource = await Bun.file(new URL(
@@ -4734,13 +4746,17 @@ for (const contract of [
   "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
   "source hygiene: pass", "initial reject", "final re-review: **approve**",
 ]) requireText(rawIncOpcountReportSource, contract, "raw inc-opcount final evidence");
-for (const [name, status] of [
-  ["LDR_xXi", "unreviewed"], ["MOV_xi", "unreviewed"],
-  ["LDR_wXxLSLi", "unreviewed"], ["ADD_wwi", "audited"],
-  ["STR_wXxLSLi", "unreviewed"],
+for (const [name, report] of [
+  ["LDR_xXi", "AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
+  ["MOV_xi", ""],
+  ["LDR_wXxLSLi", "AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
+  ["ADD_wwi", "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
+  ["STR_wXxLSLi", "AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
 ] as const) {
   const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
-  if (!row?.includes(`,${status},`)) fail(`raw inc-opcount child emitter ${name} classification changed`);
+  const expectedStatus = report ? "audited" : "unreviewed";
+  if (!row?.includes(`,${expectedStatus},`) || (report && !row.includes(report)))
+    fail(`raw inc-opcount child emitter ${name} independent classification changed`);
 }
 console.log("METRIC structural_raw_inc_opcount_unreachable=1");
 console.log("METRIC structural_raw_inc_opcount_configured_references=2");
@@ -4795,10 +4811,11 @@ const rawInitRegstructRow = closureInventoryCsv.split("\n").find((line) => line.
 if (!rawInitRegstructRow?.includes(",audited,") || !rawInitRegstructRow.includes(",3,") ||
     !rawInitRegstructRow.includes("AARCH64_JIT_AUDIT_RAW_INIT_REGSTRUCT_BOUNDARY.md"))
   fail("raw init-regstruct configured whole-root census or closure promotion changed");
-for (const name of ["MOV_xi", "LDR_xXi"]) {
-  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
-  if (!row?.includes(",unreviewed,")) fail(`${name} generic emitter status leaked from raw init-regstruct seam`);
-}
+const movXiInitRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("emitter_api,MOV_xi,"));
+if (!movXiInitRow?.includes(",unreviewed,")) fail("MOV_xi generic emitter status leaked from raw init-regstruct seam");
+const ldrXXiInitRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("emitter_api,LDR_xXi,"));
+if (!ldrXXiInitRow?.includes(",audited,") || !ldrXXiInitRow.includes("AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"))
+  fail("LDR_xXi lacks independent integer-memory emitter classification at raw init-regstruct seam");
 for (const contract of [
   "Final acceptance:", "exact-extracted production body: **7/7 words**",
   "native fixed-register matrix: **5/5**", "NZCV preservation: **5/5** hostile patterns",
@@ -4922,11 +4939,29 @@ const restorePublishedConditionalEmitterRows = (csv: string) => {
   }
   return restored;
 };
+const publishedMemoryEmitterNames = [
+  "LDP_xxXi", "LDP_xxXpost", "LDR_wXi", "LDR_wXx", "LDR_wXxLSLi", "LDR_xXi",
+  "LDR_xXpost", "LDR_xXxLSLi", "LDRB_wXx", "LDRH_wXi", "LDRH_wXx", "STP_wwXi",
+  "STP_xxXi", "STP_xxXpre", "STR_wXi", "STR_wXx", "STR_wXxLSLi", "STR_xXi",
+  "STR_xXpre", "STRB_wXx", "STRH_wXi", "STRH_wXx",
+];
+const restorePublishedMemoryEmitterRows = (csv: string) => {
+  let restored = csv;
+  for (const name of publishedMemoryEmitterNames) {
+    const current = restored.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+    if (!current) fail(`integer memory emitter row missing during predecessor reconstruction: ${name}`);
+    const columns = current.split(",");
+    const published = [columns[0], columns[1], "unreviewed", columns[3], columns[4], columns[5], columns[6], columns[7],
+      "reachable encoder API; requires opcode/width/branch-range contract classification"].join(",");
+    restored = restored.replace(`${current}\n`, `${published}\n`);
+  }
+  return restored;
+};
 /* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
  * every subsequently promoted row before hashing the published JCC base. */
-const reconstructedPublishedCsv = restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv
+const reconstructedPublishedCsv = restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv
   .replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`)
-  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`))));
+  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`)))));
 if (reconstructedPublishedCsv === closureInventoryCsv)
   fail("raw condition-only predecessor reconstruction changed no row");
 const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
@@ -5026,9 +5061,9 @@ const rawMaybeDoNothingRow = closureInventoryCsv.split("\n").find((line) => line
 if (!rawMaybeDoNothingRow?.includes(",audited,") || !rawMaybeDoNothingRow.includes(",9,") ||
     !rawMaybeDoNothingRow.includes("AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md"))
   fail("raw maybe-do-nothing configured census or closure promotion changed");
-const reconstructedMaybeDoNothingBase = restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv.replace(
+const reconstructedMaybeDoNothingBase = restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv.replace(
   `${rawMaybeDoNothingRow}\n`, `${publishedMaybeDoNothingRow}\n`,
-))));
+)))));
 /* Mechanical one-row proof against the committed predecessor is supplied by
  * the exact published hash, not by selected-column comparison. */
 const maybeDoNothingPredecessorHash = createHash("sha256").update(reconstructedMaybeDoNothingBase).digest("hex");
@@ -5131,7 +5166,7 @@ for (const [name, refs] of [
     fail(`raw move closure promotion changed for ${name}`);
 }
 const rawMovPredecessorHash = createHash("sha256")
-  .update(restorePublishedConditionalEmitterRows(restorePublishedRawMovRows(restorePublishedRawFflagsRow(closureInventoryCsv)))).digest("hex");
+  .update(restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(restorePublishedRawMovRows(restorePublishedRawFflagsRow(closureInventoryCsv))))).digest("hex");
 if (rawMovPredecessorHash !== "ccad95c24f1975dbfb0e7c2bc5de24fc6d331bbb19f8815da6a59d41fe885091")
   fail(`raw move exact three-row predecessor hash=${rawMovPredecessorHash}`);
 if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication|re-review is pending/i.test(rawMovHostMemoryReportSource))
@@ -7795,7 +7830,7 @@ requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-conditional-c
 if (/Review state: \*\*pending independent review\*\*|Review state: \*\*pending final re-review\*\*/i.test(conditionalEmitterReportSource))
   fail("generic conditional emitter evidence report is not final");
 const conditionalEmitterPredecessorHash = createHash("sha256")
-  .update(restorePublishedConditionalEmitterRows(closureInventoryCsv)).digest("hex");
+  .update(restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(closureInventoryCsv))).digest("hex");
 if (conditionalEmitterPredecessorHash !== "7dee9ce2603c44f959ac1e59020106eaa640c1bc5aaf2a7fc3ca979d798fed44")
   fail(`generic conditional exact four-row predecessor hash=${conditionalEmitterPredecessorHash}`);
 for (const contract of [
@@ -7809,6 +7844,63 @@ for (const contract of [
 console.log("METRIC structural_conditional_emitter_exact_words=8");
 console.log("METRIC structural_conditional_emitter_native_vectors=960");
 console.log("METRIC structural_conditional_emitter_callers=64");
+
+/* Integer memory encoders share scaling, writeback, lane, pair-order and NZCV
+ * contracts. Direct guest-memory forms intentionally encode natmem as Rn and
+ * zero-extend the 32-bit guest offset as Rm through UXTW. */
+const memoryEmitterNames = [
+  "LDP_xxXi", "LDP_xxXpost", "LDR_wXi", "LDR_wXx", "LDR_wXxLSLi", "LDR_xXi",
+  "LDR_xXpost", "LDR_xXxLSLi", "LDRB_wXx", "LDRH_wXi", "LDRH_wXx", "STP_wwXi",
+  "STP_xxXi", "STP_xxXpre", "STR_wXi", "STR_wXx", "STR_wXxLSLi", "STR_xXi",
+  "STR_xXpre", "STRB_wXx", "STRH_wXi", "STRH_wXx",
+];
+const memoryInventoryReferences = [1,2,27,2,1,31,5,5,2,6,2,1,1,2,37,2,1,26,5,4,3,2];
+const memoryRawCallers = [2,2,31,2,1,25,4,5,2,7,2,1,2,2,45,2,1,20,4,4,4,2];
+const memoryEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for (let i = 0; i < memoryEmitterNames.length; ++i) {
+  const name = memoryEmitterNames[i];
+  const found = (memoryEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== memoryRawCallers[i]) fail(`generic ${name} raw caller census: expected ${memoryRawCallers[i]}, found ${found}`);
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!row?.includes(",audited,") || !row.includes(`,${memoryInventoryReferences[i]},`) ||
+      !row.includes("AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"))
+    fail(`generic ${name} configured census or closure promotion changed`);
+}
+for (const contract of [
+  "Use UXTW to zero-extend 32-bit M68k addresses to 64-bit host offsets",
+  "#define LDR_wXx(Wt,Xn,Xm)", "#define LDRB_wXx(Wt,Xn,Xm)", "#define LDRH_wXx(Wt,Xn,Xm)",
+  "#define STR_wXx(Wt,Xn,Xm)", "#define STRB_wXx(Wt,Xn,Xm)", "#define STRH_wXx(Wt,Xn,Xm)",
+]) requireText(codegenHeaderSource, contract, "generic integer memory UXTW encoding");
+for (const contract of [
+  "0xa9602969u", "0xa8dfb5ccu", "0xb97ffd49u", "0xb86d498bu", "0xb87079eeu",
+  "0xf97ffd49u", "0xf850058bu", "0xf86f79cdu", "0x386b4949u", "0x797ffdacu",
+  "0x787049eeu", "0x29202969u", "0xa91fb5ccu", "0xa9a0422fu", "0xb93ffd49u",
+  "0xb82d498bu", "0xb83079eeu", "0xf93ffd49u", "0xf8100d8bu", "0x382f49cdu",
+  "0x793ffe30u", "0x78344a72u", "MAP_NORESERVE", "0x80000000ull",
+  "LDRB UXTW high bit", "LDRH UXTW high bit", "LDR W UXTW high bit",
+  "STRB UXTW high bit", "STRH UXTW high bit", "STR W UXTW high bit",
+  "memory op preserves NZCV", "exact_words==22&&native_values==31&&nzcv_vectors==22&&uxtw_vectors==6",
+]) requireText(memoryEmitterProbeSource, contract, "generic integer memory native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-memory-conformance.cpp"])
+  requireText(memoryEmitterHarnessSource, contract, "generic integer memory conformance build");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/emitter-memory-conformance.sh"', "generic integer memory bounded gate");
+const memoryEmitterPredecessorHash = createHash("sha256")
+  .update(restorePublishedMemoryEmitterRows(closureInventoryCsv)).digest("hex");
+if (memoryEmitterPredecessorHash !== "fa880dd456f1ad6112b56a90ea15ede909e932f7d5d939c86096a03d467c477d")
+  fail(`generic integer memory exact 22-row predecessor hash=${memoryEmitterPredecessorHash}`);
+if (/Review state: \*\*pending independent review\*\*|Review state: \*\*pending final (?:re-review|readiness review)\*\*/i.test(memoryEmitterReportSource))
+  fail("generic integer memory evidence report is not final");
+for (const contract of [
+  "**22/22** canonical boundary instruction words", "**31/31** native value", "**22/22** NZCV-preservation",
+  "**6/6** direct byte/halfword/word", "configured closure\nreference total is **168**",
+  "contains **170**\nraw calls", "`147 audited / 44 unreviewed`",
+  "final re-review: **approve**",
+]) requireText(memoryEmitterReportSource, contract, "generic integer memory final evidence");
+console.log("METRIC structural_memory_emitter_apis=22");
+console.log("METRIC structural_memory_emitter_exact_words=22");
+console.log("METRIC structural_memory_emitter_native_vectors=59");
+console.log("METRIC structural_memory_emitter_configured_references=168");
+console.log("METRIC structural_memory_emitter_raw_callers=170");
 
 /* The mechanically selected reachable generic AND cluster consists only of the
  * 32-bit #0x3f logical-immediate form and the W/X register forms. Keep its raw
@@ -9943,7 +10035,7 @@ if (!rawFflagsRow?.includes(",audited,") || !rawFflagsRow.includes(",2,") ||
     !rawFflagsRow.includes("AARCH64_JIT_AUDIT_RAW_FFLAGS_INTO_FLAGS_BOUNDARY.md"))
   fail("raw_fflags_into_flags closure promotion changed");
 const rawFflagsPredecessorHash = createHash("sha256")
-  .update(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(closureInventoryCsv))).digest("hex");
+  .update(restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(closureInventoryCsv)))).digest("hex");
 if (rawFflagsPredecessorHash !== "ecb65b0ae5e2aa2326406f5cb47e06a414625f2ed61936aec04db862f844617d")
   fail(`raw_fflags_into_flags exact one-row predecessor hash=${rawFflagsPredecessorHash}`);
 if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication/i.test(rawFflagsReportSource))

@@ -234,6 +234,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^(?:SBFM_(?:wwii|xxii)|SXTB_(?:ww|xx)|SXTH_(?:ww|xx)|SXTW_xw|UBFM_(?:wwii|xxii)|UXTB_(?:ww|xx)|UXTH_(?:ww|xx)|REV_(?:ww|xx)|REV16_(?:ww|xx)|REV32_xx|CLS_ww)$/, "AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md"],
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
   [/^(?:CSEL_(?:wwwc|xxxc)|CSET_xc|CSETM_wc)$/, "AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md"],
+  [/^(?:LDP_xxX(?:i|post)|LDR_(?:wXi|wXx|wXxLSLi|xXi|xXpost|xXxLSLi)|LDRB_wXx|LDRH_wX(?:i|x)|STP_(?:wwXi|xxXi|xxXpre)|STR_(?:wXi|wXx|wXxLSLi|xXi|xXpre)|STRB_wXx|STRH_wX(?:i|x))$/, "AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
   [/^ADD_(?:wwi|xxi|wwwEX|xxwEX|www|xxx|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
   [/^(?:SUB_(?:wwi|xxi|www|xxx)|SUBS_(?:wwi|www|wwwLSLi))$/, "AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],
   [/^AND_(?:ww3f|www|xxx)$/, "AARCH64_JIT_AUDIT_AND_EMITTERS.md"],
@@ -292,7 +293,7 @@ for (const [, reports] of [...auditFamilyRules, ...emitterAuditRules, ...primiti
     if (!existsSync(reportPath))
       throw new Error(`accepted audit report is missing: ${report}`);
     const reportText = readFileSync(reportPath, "utf8");
-    if (/Pending complete acceptance\.|Review state:\s*\*\*pending independent review\*\*|pending final re-review/i.test(reportText))
+    if (/Pending complete acceptance\.|Review state:\s*\*\*pending independent review\*\*|pending final (?:re-review|readiness review)/i.test(reportText))
       throw new Error(`accepted audit report is still pending: ${report}`);
   }
 }
