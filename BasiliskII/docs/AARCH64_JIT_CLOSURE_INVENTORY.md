@@ -20,10 +20,10 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
 | emitter_api | 294 | 121 | 0 | 103 | 70 |
-| raw_boundary | 83 | 53 | 0 | 29 | 1 |
+| raw_boundary | 83 | 54 | 0 | 29 | 0 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
-Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
+Detailed rows: `--check`.
 
 ## Configured-root and registration corrections
 

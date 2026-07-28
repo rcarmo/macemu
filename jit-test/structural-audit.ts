@@ -136,6 +136,10 @@ const rawMovHostMemoryReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_MOV_HOST_MEMORY_BOUNDARIES.md",
   import.meta.url,
 )).text();
+const rawFflagsReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FFLAGS_INTO_FLAGS_BOUNDARY.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -4885,11 +4889,17 @@ const restorePublishedRawMovRows = (csv: string) => {
   }
   return restored;
 };
+const publishedRawFflagsRow = "raw_boundary,raw_fflags_into_flags,unreviewed,raw_fflags_into_flags,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,1549,reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification";
+const restorePublishedRawFflagsRow = (csv: string) => {
+  const current = csv.split("\n").find((line) => line.startsWith("raw_boundary,raw_fflags_into_flags,"));
+  if (!current) fail("raw_fflags_into_flags row missing during predecessor reconstruction");
+  return csv.replace(`${current}\n`, `${publishedRawFflagsRow}\n`);
+};
 /* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
  * every subsequently promoted row before hashing the published JCC base. */
-const reconstructedPublishedCsv = restorePublishedRawMovRows(closureInventoryCsv
+const reconstructedPublishedCsv = restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv
   .replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`)
-  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`));
+  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`)));
 if (reconstructedPublishedCsv === closureInventoryCsv)
   fail("raw condition-only predecessor reconstruction changed no row");
 const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
@@ -4989,9 +4999,9 @@ const rawMaybeDoNothingRow = closureInventoryCsv.split("\n").find((line) => line
 if (!rawMaybeDoNothingRow?.includes(",audited,") || !rawMaybeDoNothingRow.includes(",9,") ||
     !rawMaybeDoNothingRow.includes("AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md"))
   fail("raw maybe-do-nothing configured census or closure promotion changed");
-const reconstructedMaybeDoNothingBase = restorePublishedRawMovRows(closureInventoryCsv.replace(
+const reconstructedMaybeDoNothingBase = restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv.replace(
   `${rawMaybeDoNothingRow}\n`, `${publishedMaybeDoNothingRow}\n`,
-));
+)));
 /* Mechanical one-row proof against the committed predecessor is supplied by
  * the exact published hash, not by selected-column comparison. */
 const maybeDoNothingPredecessorHash = createHash("sha256").update(reconstructedMaybeDoNothingBase).digest("hex");
@@ -5094,7 +5104,7 @@ for (const [name, refs] of [
     fail(`raw move closure promotion changed for ${name}`);
 }
 const rawMovPredecessorHash = createHash("sha256")
-  .update(restorePublishedRawMovRows(closureInventoryCsv)).digest("hex");
+  .update(restorePublishedRawMovRows(restorePublishedRawFflagsRow(closureInventoryCsv))).digest("hex");
 if (rawMovPredecessorHash !== "ccad95c24f1975dbfb0e7c2bc5de24fc6d331bbb19f8815da6a59d41fe885091")
   fail(`raw move exact three-row predecessor hash=${rawMovPredecessorHash}`);
 if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication|re-review is pending/i.test(rawMovHostMemoryReportSource))
@@ -9841,8 +9851,35 @@ const rawFflagsStart = codegenSource.indexOf("STATIC_INLINE void raw_fflags_into
 const rawFflagsEnd = codegenSource.indexOf("LOWFUNC(NONE,NONE,2,raw_fp_fscc_ri", rawFflagsStart);
 if (rawFflagsStart < 0 || rawFflagsEnd < 0) fail("missing raw_fflags_into_flags boundary");
 const rawFflagsBody = codegenSource.slice(rawFflagsStart, rawFflagsEnd);
-if ((rawFflagsBody.match(/\bFCMP_d0\(/g) || []).length !== 1)
+if ((rawFflagsBody.match(/\bFCMP_d0\(/g) || []).length !== 1 ||
+    !/^STATIC_INLINE void raw_fflags_into_flags\(int r\)\s*\{\s*FCMP_d0\(r\);\s*\}$/s.test(rawFflagsBody.trim()))
   fail("raw_fflags_into_flags no longer emits exactly one FCMP_d0");
+if ((allocatorSource.match(/\braw_fflags_into_flags\s*\(/g) || []).length !== 1)
+  fail("raw_fflags_into_flags direct caller census changed");
+const rawFflagsRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,raw_fflags_into_flags,"));
+if (!rawFflagsRow?.includes(",audited,") || !rawFflagsRow.includes(",2,") ||
+    !rawFflagsRow.includes("AARCH64_JIT_AUDIT_RAW_FFLAGS_INTO_FLAGS_BOUNDARY.md"))
+  fail("raw_fflags_into_flags closure promotion changed");
+const rawFflagsPredecessorHash = createHash("sha256")
+  .update(restorePublishedRawFflagsRow(closureInventoryCsv)).digest("hex");
+if (rawFflagsPredecessorHash !== "ecb65b0ae5e2aa2326406f5cb47e06a414625f2ed61936aec04db862f844617d")
+  fail(`raw_fflags_into_flags exact one-row predecessor hash=${rawFflagsPredecessorHash}`);
+if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication/i.test(rawFflagsReportSource))
+  fail("raw_fflags_into_flags evidence report is not final");
+for (const contract of [
+  "Final acceptance:", "raw body: exactly **1** `FCMP_d0` statement",
+  "direct configured caller: **1**", "configured FScc/FBcc roots: **2**",
+  "focused strict-native composition: **8/8**", "**1,056 exact words**",
+  "**72 native vectors**", "complete emitter/boundary phase: pass",
+  "`emitter_fmsub_exact_words=1048576`", "complete active-risky corpus: **904/904**",
+  "allocator pressure: **33/33**", "clean full AArch64 build: pass",
+  "complete structural audit: pass", "raw-boundary", "unreviewed count becomes **0**",
+  "**70 emitter APIs** remaining", "`ecb65b0ae5e2aa2326406f5cb47e06a414625f2ed61936aec04db862f844617d`",
+  "`7dee9ce2603c44f959ac1e59020106eaa640c1bc5aaf2a7fc3ca979d798fed44`",
+  "`e72f4ff1283c1cfcdd5d620e9d3c54106a7ff56d0ba8e70cf02c1ab6421f7324`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "production and generated source: unchanged", "source hygiene: pass",
+]) requireText(rawFflagsReportSource, contract, "raw_fflags_into_flags final evidence");
 const fflagsSourceCalls = (fppCompilerSource.match(/^\s*fflags_into_flags\(\);/gm) || []).length;
 if (fflagsSourceCalls !== 2) fail(`fflags_into_flags source-call census=${fflagsSourceCalls}, expected=2`);
 for (const [body, consumer, label] of [
