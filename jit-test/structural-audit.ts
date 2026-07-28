@@ -98,6 +98,7 @@ const transformEmitterHarnessSource = await Bun.file(new URL("./emitter-transfor
 const rawChecksumHarnessSource = await Bun.file(new URL("./raw-checksum-boundary-matrix.sh", import.meta.url)).text();
 const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-boundary-matrix.sh", import.meta.url)).text();
 const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
+const rawExecuteNormalHarnessSource = await Bun.file(new URL("./raw-execute-normal-boundary-matrix.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4298,7 +4299,7 @@ for (const contract of [
   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
   "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
 ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
-for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles"])
+for (const sibling of ["compemu_raw_execute_normal_cycles"])
   if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} was promoted without direct evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
 console.log("METRIC structural_raw_checksum_boundaries=1");
@@ -4397,12 +4398,73 @@ for (const contract of [
 ]) requireText(rawExecNostatsHarnessSource, contract, "raw exec_nostats native matrix");
 const rawExecNostatsRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_exec_nostats,"));
 if (!rawExecNostatsRow?.includes(",audited,")) fail("compemu_raw_exec_nostats not promoted by accepted report");
-for (const sibling of ["compemu_raw_execute_normal", "compemu_raw_execute_normal_cycles"])
+for (const sibling of ["compemu_raw_execute_normal_cycles"])
   if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} promoted without direct runtime evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-exec-nostats-boundary-matrix.sh"', "raw exec_nostats bounded acceptance gate");
 console.log("METRIC structural_raw_exec_nostats_boundaries=1");
 console.log("METRIC structural_raw_exec_nostats_runtime_cases=1");
 console.log("METRIC structural_raw_exec_nostats_direct_entries=2");
+
+/* Per-block first-entry dispatcher stub: load the block-owned host-PC pointer,
+ * publish canonical PC through the direct side of the shared popall boundary,
+ * unwind, and tail-enter execute_normal. The runtime hook must first use the
+ * ordinary BI_NEED_RECOMP transition and may only override its owned cache
+ * line; execute_normal_cycles retains its separate countdown contract. */
+const rawExecuteNormalBody = bodyBetween(
+  "LOWFUNC(NONE,WRITE,1,compemu_raw_execute_normal,(MEMR s))\n{",
+  "LENDFUNC(NONE,WRITE,1,compemu_raw_execute_normal",
+);
+for (const contract of [
+  "LOAD_U64(REG_WORK1, s);", "LDR_xXi(REG_WORK1, REG_WORK1, 0);",
+  "uae_u32* branchadd = (uae_u32*)get_target();", "B_i(0);",
+  "write_jmp_target(branchadd, (uintptr)popall_execute_normal_setpc);",
+]) requireText(rawExecuteNormalBody, contract, "raw execute_normal body");
+requireBefore(rawExecuteNormalBody, "LOAD_U64(REG_WORK1, s);", "LDR_xXi(REG_WORK1, REG_WORK1, 0);", "raw execute_normal pointer load");
+requireBefore(rawExecuteNormalBody, "LDR_xXi(REG_WORK1, REG_WORK1, 0);", "B_i(0);", "raw execute_normal PC before branch");
+const executeNormalPopall = functionBody(
+  allocatorSource,
+  "popall_execute_normal_setpc = get_target();",
+  "popall_check_checksum_setpc = get_target();",
+  "raw execute_normal popall boundary",
+);
+for (const contract of [
+  "jit_test_direct_execute_normal_entries", "compemu_raw_set_pc_from_reg(REG_WORK1);",
+  "popall_execute_normal = get_target();", "raw_pop_preserved_regs();",
+  "compemu_raw_jmp((uintptr)execute_normal);",
+]) requireText(executeNormalPopall, contract, "raw execute_normal popall contract");
+requireBefore(executeNormalPopall, "jit_test_direct_execute_normal_entries", "popall_execute_normal = get_target();", "raw execute_normal counter on direct side");
+requireBefore(executeNormalPopall, "compemu_raw_set_pc_from_reg(REG_WORK1);", "raw_pop_preserved_regs();", "raw execute_normal PC before unwind");
+requireBefore(executeNormalPopall, "raw_pop_preserved_regs();", "compemu_raw_jmp((uintptr)execute_normal);", "raw execute_normal tail ABI");
+const rawExecuteNormalTestHook = functionBody(
+  allocatorSource,
+  "bool jit_test_prepare_direct_execute_normal_entry(void)",
+  "STATIC_INLINE void create_popalls(void)",
+  "raw execute_normal runtime hook",
+);
+for (const contract of [
+  "B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL", "bi->direct_pen", "bi->status != BI_ACTIVE",
+  "const uae_u32 cl = cacheline(bi->pc_p);", "if (bi != cache_tags[cl + 1].bi)",
+  "block_need_recompile(bi);", "cache_tags[cl].handler = bi->direct_pen;",
+]) requireText(rawExecuteNormalTestHook, contract, "raw execute_normal runtime contract");
+requireBefore(rawExecuteNormalTestHook, "block_need_recompile(bi);", "cache_tags[cl].handler = bi->direct_pen;", "raw execute_normal lifecycle before override");
+for (const contract of [
+  "jit_test_prepare_direct_execute_normal_entry()",
+  "B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL could not prepare direct execute_normal entry",
+]) requireText(basiliskGlueSource, contract, "raw execute_normal replay integration");
+for (const contract of [
+  "B2_TEST_HEX='7001 5280 2C7C A6E0 0001'", "B2_TEST_TWO_PASS=1", "B2_TEST_REPLAY_COUNT=1",
+  "B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL=1", "${direct:-0} -eq 1", "${normal:-0} -eq 2",
+  "${nostats:-0} -eq 0", "${recompile:-0} -eq 0", "raw_execute_normal_boundaries=1",
+  "raw_execute_normal_runtime_cases=1", "raw_execute_normal_direct_entries=1",
+]) requireText(rawExecuteNormalHarnessSource, contract, "raw execute_normal native matrix");
+const rawExecuteNormalRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_execute_normal,"));
+if (!rawExecuteNormalRow?.includes(",audited,")) fail("compemu_raw_execute_normal not promoted by accepted report");
+if (!closureInventoryCsv.includes("raw_boundary,compemu_raw_execute_normal_cycles,unreviewed,"))
+  fail("compemu_raw_execute_normal_cycles promoted without countdown evidence");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-execute-normal-boundary-matrix.sh"', "raw execute_normal bounded acceptance gate");
+console.log("METRIC structural_raw_execute_normal_boundaries=1");
+console.log("METRIC structural_raw_execute_normal_runtime_cases=1");
+console.log("METRIC structural_raw_execute_normal_direct_entries=1");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private

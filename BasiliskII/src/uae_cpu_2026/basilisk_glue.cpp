@@ -500,8 +500,14 @@ static bool run_opcode_test_mode_glue()
 #if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 			if (UseJIT) {
 				extern bool jit_test_prepare_direct_checksum_entry(void);
+				extern bool jit_test_prepare_direct_execute_normal_entry(void);
 				if (!jit_test_prepare_direct_checksum_entry()) {
 					fprintf(stderr, "B2_TEST_FORCE_DIRECT_CHECKSUM could not prepare direct checksum entry\n");
+					quit_program = 1;
+					return true;
+				}
+				if (!jit_test_prepare_direct_execute_normal_entry()) {
+					fprintf(stderr, "B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL could not prepare direct execute_normal entry\n");
 					quit_program = 1;
 					return true;
 				}

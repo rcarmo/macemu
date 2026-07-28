@@ -2066,6 +2066,7 @@ static unsigned long jit_diag_checksum_good = 0;
 static unsigned long jit_diag_checksum_bad = 0;
 static unsigned long jit_test_direct_checksum_entries = 0;
 static unsigned long jit_test_direct_exec_nostats_entries = 0;
+static unsigned long jit_test_direct_execute_normal_entries = 0;
 static time_t jit_diag_last_print = 0;
 static time_t jit_diag_start_time = 0;
 
@@ -2156,13 +2157,14 @@ void jit_test_dump_dispatch_summary(void)
 {
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu\n",
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu\n",
             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
             jit_diag_checksum_good, jit_diag_checksum_bad,
             jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
             jit_diag_recompile_block_calls, jit_test_metadata_rmw_rebuilds,
             jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask,
-            jit_test_direct_exec_nostats_entries);
+            jit_test_direct_exec_nostats_entries,
+            jit_test_direct_execute_normal_entries);
     }
 #endif
 }
@@ -6638,6 +6640,27 @@ bool jit_test_prepare_direct_checksum_entry(void)
     return true;
 }
 
+bool jit_test_prepare_direct_execute_normal_entry(void)
+{
+#if defined(CPU_AARCH64)
+    const char *enabled = getenv("B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL");
+    if (!(enabled && *enabled && strcmp(enabled, "0") != 0))
+        return true;
+    blockinfo* bi = get_blockinfo_addr(regs.pc_p);
+    if (!bi || !bi->direct_pen || bi->status != BI_ACTIVE)
+        return false;
+    const uae_u32 cl = cacheline(bi->pc_p);
+    if (bi != cache_tags[cl + 1].bi)
+        return false;
+    /* Re-enter the canonical invalidation/recompile lifecycle before selecting
+       this block's raw direct_pen test stub. The cache line is the only
+       temporary override; block_need_recompile() owns handler/dependency state. */
+    block_need_recompile(bi);
+    cache_tags[cl].handler = bi->direct_pen;
+#endif
+    return true;
+}
+
 STATIC_INLINE void create_popalls(void)
 {
     int i, r;
@@ -6722,6 +6745,12 @@ STATIC_INLINE void create_popalls(void)
     /* Match m68k_setpc(): pc_p = pc_oldp = get_real_address(newpc),
        pc = newpc. Centralize this instead of open-coding the triple
        at every dispatcher-entry stub. */
+    if (jit_test_dispatch_summary_enabled()) {
+        LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_execute_normal_entries);
+        LDR_xXi(R18_INDEX, REG_WORK4, 0);
+        ADD_xxi(R18_INDEX, R18_INDEX, 1);
+        STR_xXi(R18_INDEX, REG_WORK4, 0);
+    }
     compemu_raw_set_pc_from_reg(REG_WORK1);
 #else
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
