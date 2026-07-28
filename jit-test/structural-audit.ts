@@ -100,6 +100,11 @@ const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-b
 const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
 const rawExecuteNormalHarnessSource = await Bun.file(new URL("./raw-execute-normal-boundary-matrix.sh", import.meta.url)).text();
 const rawExecuteNormalCyclesHarnessSource = await Bun.file(new URL("./raw-execute-normal-cycles-boundary-matrix.sh", import.meta.url)).text();
+const rawHandleExceptHarnessSource = await Bun.file(new URL("./raw-handle-except-boundary-matrix.sh", import.meta.url)).text();
+const rawHandleExceptReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_HANDLE_EXCEPT_BOUNDARY.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -4302,8 +4307,6 @@ for (const contract of [
   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
   "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
 ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
-for (const sibling of ["compemu_raw_handle_except"])
-  if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} was promoted without direct evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
 console.log("METRIC structural_raw_checksum_boundaries=1");
 console.log("METRIC structural_raw_checksum_configured_references=3");
@@ -4521,6 +4524,92 @@ requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-execute-normal-c
 console.log("METRIC structural_raw_execute_normal_cycles_boundaries=1");
 console.log("METRIC structural_raw_execute_normal_cycles_runtime_cases=2");
 console.log("METRIC structural_raw_execute_normal_cycles_lowerings=2");
+
+/* Deferred native exceptions are checked once at each producer's instruction
+ * boundary. Pin the zero-request fall-through, nonzero unwind, exact cycle
+ * argument, sole caller, test-only observation points, and strict CHK matrix. */
+const rawHandleExceptBody = functionBody(
+  codegenSource,
+  "STATIC_INLINE void compemu_raw_handle_except(IM32 cycles)",
+  "LOWFUNC(NONE,WRITE,1,compemu_raw_execute_normal",
+  "raw handle-except body",
+);
+for (const contract of [
+  "clobber_flags();", "LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);",
+  "jit_test_handle_except_checks", "CBZ_wi(REG_WORK1, 0);",
+  "jit_test_handle_except_taken", "jit_test_handle_except_cycles",
+  "LOAD_U32(REG_PAR1, cycles);", "B_i(0);",
+  "write_jmp_target(branchadd2, (uintptr)popall_execute_exception);",
+  "write_jmp_target(branchadd, (uintptr)get_target());",
+]) requireText(rawHandleExceptBody, contract, "raw handle-except body");
+requireBefore(rawHandleExceptBody, "jit_test_handle_except_checks", "CBZ_wi(REG_WORK1, 0);", "handle-except check observation before branch");
+requireBefore(rawHandleExceptBody, "CBZ_wi(REG_WORK1, 0);", "jit_test_handle_except_taken", "handle-except taken observation after branch");
+requireBefore(rawHandleExceptBody, "jit_test_handle_except_cycles", "LOAD_U32(REG_PAR1, cycles);", "handle-except cycle observation before ABI argument");
+requireBefore(rawHandleExceptBody, "LOAD_U32(REG_PAR1, cycles);", "write_jmp_target(branchadd2, (uintptr)popall_execute_exception);", "handle-except argument before terminal patch");
+if ((allocatorSource.match(/\bcompemu_raw_handle_except\s*\(/g) || []).length !== 1)
+  fail("raw handle-except caller census changed");
+const compileLoopStart = allocatorSource.indexOf("for (i = 0; i < blocklen && get_target() < MAX_COMPILE_PTR; i++)");
+const compileLoopEnd = allocatorSource.indexOf("if (!forced_interpreter_barrier && next_pc_p", compileLoopStart);
+if (compileLoopStart < 0 || compileLoopEnd < 0) fail("raw handle-except compile loop missing");
+const compileLoopBody = allocatorSource.slice(compileLoopStart, compileLoopEnd);
+for (const contract of [
+  "may_raise_exception = false;", "} else if (may_raise_exception) {",
+  "compemu_raw_handle_except(retired_cycles);", "may_raise_exception = false;",
+]) requireText(compileLoopBody, contract, "raw handle-except sole checkpoint");
+requireBefore(compileLoopBody, "may_raise_exception = false;", "compemu_raw_handle_except(retired_cycles);", "handle-except per-op reset before checkpoint");
+for (const contract of [
+  "--test-names chk_w_in_range,chk_w_negative_trap_n",
+  "B2_TEST_DISPATCH_SUMMARY=1", "handle_except_checks=", "handle_except_taken=", "handle_except_cycles=", "handle_except_received_cycles=",
+  "chk_w_in_range 0 0", "chk_w_negative_trap_n 1 1024",
+  "D4=00001018 D5=00001018 D6=0000271d D7=00000066",
+  "raw_handle_except_runtime_cases=2", "raw_handle_except_fallthrough=1",
+  "raw_handle_except_taken=1", "raw_handle_except_cycle_argument=1024", "raw_handle_except_received_cycle_argument=1024",
+]) requireText(rawHandleExceptHarnessSource, contract, "raw handle-except matrix");
+const popallExceptionStart = allocatorSource.indexOf("popall_execute_exception = get_target();");
+const popallExceptionEnd = allocatorSource.indexOf("#if defined(USE_DATA_BUFFER)", popallExceptionStart);
+if (popallExceptionStart < 0 || popallExceptionEnd < 0) fail("popall execute-exception seam missing");
+const popallExceptionBody = allocatorSource.slice(popallExceptionStart, popallExceptionEnd);
+for (const contract of [
+  "STR_xXpre(REG_PAR1, RSP_INDEX, -16);", "compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);",
+  "LDR_xXpost(REG_PAR1, RSP_INDEX, 16);", "raw_pop_preserved_regs();",
+  "compemu_raw_jmp((uintptr)execute_exception);",
+]) requireText(popallExceptionBody, contract, "popall execute-exception argument preservation");
+requireBefore(popallExceptionBody, "STR_xXpre(REG_PAR1", "jit_fpu_sync_from_shadow", "exception cycles saved before FPU sync");
+requireBefore(popallExceptionBody, "jit_fpu_sync_from_shadow", "LDR_xXpost(REG_PAR1", "exception cycles restored after FPU sync");
+requireBefore(popallExceptionBody, "LDR_xXpost(REG_PAR1", "raw_pop_preserved_regs();", "exception cycles restored before unwind");
+const rawHandleExceptExecuteBody = functionBody(
+  compatSource, "void execute_exception(uae_u32 cycles)", "/* --- JIT native-call helpers for SR/CCR opcodes --- */",
+  "execute-exception received-cycle observation",
+);
+for (const contract of ["jit_test_handle_except_received_cycles = cycles;", "countdown -= cycles;"])
+  requireText(rawHandleExceptExecuteBody, contract, "execute-exception received-cycle observation");
+requireBefore(rawHandleExceptExecuteBody, "jit_test_handle_except_received_cycles = cycles;", "countdown -= cycles;", "received-cycle observation before consumption");
+const rawHandleExceptRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_handle_except,"));
+if (!rawHandleExceptRow?.includes(",audited,")) fail("compemu_raw_handle_except not promoted by accepted report");
+if (!rawHandleExceptRow.includes("AARCH64_JIT_AUDIT_RAW_HANDLE_EXCEPT_BOUNDARY.md"))
+  fail("compemu_raw_handle_except missing bounded evidence report");
+if (/Pending complete acceptance\./i.test(rawHandleExceptReportSource))
+  fail("raw handle-except evidence report is still pending");
+for (const contract of [
+  "Final acceptance:", "direct two-case matrix: **2/2**",
+  "handle-except checks: **2**", "taken exception exits: **1**",
+  "sent cycle argument: **1024**", "received cycle argument: **1024**",
+  "complete emitter/boundary phase: pass", "complete active-risky corpus: **904/904**",
+  "allocator pressure: **33/33**", "clean full build: pass",
+  "complete structural audit: pass", "leaving **70 emitter APIs** and **8 raw boundaries** unreviewed",
+  "`abab404df8c6124770ab9915e9f07098047e29b6ea0669569bec60b063862467`",
+  "`c20c80c72d45b0e2f5c897740a1859b9957f10d558b65b916d72f873a1816786`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "source hygiene: pass", "initial reject", "final re-review: **approve**",
+]) requireText(rawHandleExceptReportSource, contract, "raw handle-except final evidence");
+requireText(harnessSource, 'timeout -k 5s 300s "$SCRIPT_DIR/raw-handle-except-boundary-matrix.sh"', "raw handle-except bounded acceptance gate");
+console.log("METRIC structural_raw_handle_except_boundaries=1");
+console.log("METRIC structural_raw_handle_except_runtime_cases=2");
+console.log("METRIC structural_raw_handle_except_fallthrough=1");
+console.log("METRIC structural_raw_handle_except_taken=1");
+console.log("METRIC structural_raw_handle_except_cycle_argument=1024");
+console.log("METRIC structural_raw_handle_except_received_cycle_argument=1024");
+console.log("METRIC structural_raw_handle_except_fpu_sync_preservation=1");
 
 /* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
  * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
@@ -6986,7 +7075,7 @@ for (const contract of [
 
 const addEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (const [name, expected] of [
-  ["ADD_wwi", 17], ["ADD_xxi", 8], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
+  ["ADD_wwi", 17], ["ADD_xxi", 10], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
   ["ADD_www", 27], ["ADD_xxx", 3], ["ADD_wwwLSLi", 8],
 ] as const) {
   const found = (addEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
@@ -7002,7 +7091,7 @@ expectArgs("ADD_wwi imm12", lastArgs(/\bADD_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g
   "v", "v", "v", "tmp", "v", "live.state[s].val", "6", "0x60", "1", "1",
 ]);
 expectArgs("ADD_xxi imm12", lastArgs(/\bADD_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
-  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "1", "4", "4",
+  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "1", "1", "1", "4", "4",
 ]);
 expectArgs("ADD_wwwEX extension", lastArgs(/\bADD_wwwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), ["EX_SXTH"]);
 expectArgs("ADD_xxwEX extension", lastArgs(/\bADD_xxwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
@@ -10640,7 +10729,7 @@ console.log("METRIC structural_compare_emitter_apis=5");
 console.log("METRIC structural_compare_emitter_callsites=86");
 console.log("METRIC structural_compare_emitter_native_vectors=20");
 console.log("METRIC structural_add_emitter_apis=7");
-console.log("METRIC structural_add_emitter_raw_callsites=72");
+console.log("METRIC structural_add_emitter_raw_callsites=74");
 console.log("METRIC structural_add_emitter_exact_words=12");
 console.log("METRIC structural_add_emitter_native_vectors=46");
 console.log("METRIC structural_eor_emitter_apis=5");

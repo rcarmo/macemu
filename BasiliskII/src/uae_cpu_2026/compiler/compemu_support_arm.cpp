@@ -2070,6 +2070,10 @@ static unsigned long jit_test_direct_execute_normal_entries = 0;
 static unsigned long jit_test_execute_normal_cycles_entries = 0;
 static unsigned long jit_test_execute_normal_cycles_before = 0;
 static unsigned long jit_test_execute_normal_cycles_after = 0;
+static unsigned long jit_test_handle_except_checks = 0;
+static unsigned long jit_test_handle_except_taken = 0;
+static unsigned long jit_test_handle_except_cycles = 0;
+static unsigned long jit_test_handle_except_received_cycles = 0;
 static time_t jit_diag_last_print = 0;
 static time_t jit_diag_start_time = 0;
 
@@ -2160,7 +2164,7 @@ void jit_test_dump_dispatch_summary(void)
 {
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu execute_normal_cycles=%lu cycles_before=%lu cycles_after=%lu\n",
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu execute_normal_cycles=%lu cycles_before=%lu cycles_after=%lu handle_except_checks=%lu handle_except_taken=%lu handle_except_cycles=%lu handle_except_received_cycles=%lu\n",
             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
             jit_diag_checksum_good, jit_diag_checksum_bad,
             jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
@@ -2170,7 +2174,11 @@ void jit_test_dump_dispatch_summary(void)
             jit_test_direct_execute_normal_entries,
             jit_test_execute_normal_cycles_entries,
             jit_test_execute_normal_cycles_before,
-            jit_test_execute_normal_cycles_after);
+            jit_test_execute_normal_cycles_after,
+            jit_test_handle_except_checks,
+            jit_test_handle_except_taken,
+            jit_test_handle_except_cycles,
+            jit_test_handle_except_received_cycles);
     }
 #endif
 }
@@ -6848,7 +6856,16 @@ STATIC_INLINE void create_popalls(void)
 
     popall_execute_exception = get_target();
 #ifdef USE_JIT_FPU
+#if defined(CPU_AARCH64)
+    /* execute_exception's retired-cycle argument arrives in W0. The FPU shadow
+       sync is an AAPCS64 C call and may clobber X0, so preserve the complete
+       argument register in a balanced 16-byte stack slot across that call. */
+    STR_xXpre(REG_PAR1, RSP_INDEX, -16);
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+    LDR_xXpost(REG_PAR1, RSP_INDEX, 16);
+#else
+    compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
+#endif
 #endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)execute_exception);

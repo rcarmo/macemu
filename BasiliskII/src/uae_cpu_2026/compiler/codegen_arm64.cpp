@@ -639,9 +639,24 @@ STATIC_INLINE void compemu_raw_handle_except(IM32 cycles)
 
 	uintptr idx = (uintptr)(&regs.jit_exception) - (uintptr)(&regs);
 	LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	if (jit_test_dispatch_summary_enabled()) {
+		LOAD_U64(REG_WORK4, (uintptr)&jit_test_handle_except_checks);
+		LDR_xXi(R18_INDEX, REG_WORK4, 0);
+		ADD_xxi(R18_INDEX, R18_INDEX, 1);
+		STR_xXi(R18_INDEX, REG_WORK4, 0);
+	}
 	branchadd = (uae_u32*)get_target();
 	CBZ_wi(REG_WORK1, 0);  // no exception, jump to next instruction
 
+	if (jit_test_dispatch_summary_enabled()) {
+		LOAD_U64(REG_WORK4, (uintptr)&jit_test_handle_except_taken);
+		LDR_xXi(R18_INDEX, REG_WORK4, 0);
+		ADD_xxi(R18_INDEX, R18_INDEX, 1);
+		STR_xXi(R18_INDEX, REG_WORK4, 0);
+		LOAD_U64(REG_WORK4, (uintptr)&jit_test_handle_except_cycles);
+		LOAD_U32(R18_INDEX, cycles);
+		STR_xXi(R18_INDEX, REG_WORK4, 0);
+	}
 	LOAD_U32(REG_PAR1, cycles);
 	uae_u32* branchadd2 = (uae_u32*)get_target();
 	B_i(0); // <exec_nostats>

@@ -1384,6 +1384,8 @@ jit_pctrace_done:
 
 void execute_exception(uae_u32 cycles)
 {
+	if (jit_test_dispatch_summary_enabled())
+		jit_test_handle_except_received_cycles = cycles;
 	countdown -= cycles;
 	const uae_u32 request = regs.jit_exception;
 	const bool has_oldpc = (request & JIT_EXCEPTION_OLDPC_VALID) != 0;
