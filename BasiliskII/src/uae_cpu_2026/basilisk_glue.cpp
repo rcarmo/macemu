@@ -517,6 +517,16 @@ static bool run_opcode_test_mode_glue()
 					quit_program = 1;
 					return true;
 				}
+				const char *maybe_do_nothing_spcflags = getenv("B2_TEST_MAYBE_DO_NOTHING_SPCFLAGS");
+				if (maybe_do_nothing_spcflags && *maybe_do_nothing_spcflags) {
+					if (strcmp(maybe_do_nothing_spcflags, "0") != 0 && strcmp(maybe_do_nothing_spcflags, "64") != 0) {
+						fprintf(stderr, "B2_TEST_MAYBE_DO_NOTHING_SPCFLAGS parse failed (need 0 or 64)\n");
+						quit_program = 1;
+						return true;
+					}
+					if (strcmp(maybe_do_nothing_spcflags, "64") == 0)
+						SPCFLAGS_SET(SPCFLAG_JIT_END_COMPILE);
+				}
 			}
 #endif
 #if USE_JIT

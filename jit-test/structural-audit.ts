@@ -123,6 +123,13 @@ const rawJccOponlyReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_JCC_OPONLY_BOUNDARY.md",
   import.meta.url,
 )).text();
+const rawMaybeDoNothingProbeSource = await Bun.file(new URL("./raw-maybe-do-nothing-conformance.cpp", import.meta.url)).text();
+const rawMaybeDoNothingHarnessSource = await Bun.file(new URL("./raw-maybe-do-nothing-conformance.sh", import.meta.url)).text();
+const rawMaybeDoNothingMatrixSource = await Bun.file(new URL("./raw-maybe-do-nothing-boundary-matrix.sh", import.meta.url)).text();
+const rawMaybeDoNothingReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -4841,7 +4848,14 @@ if (!rawJccOponlyRow?.includes(",audited,") || !rawJccOponlyRow.includes(",5,") 
 const publishedRawJccRow = "raw_boundary,compemu_raw_jcc_l_oponly,unreviewed,compemu_raw_jcc_l_oponly,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,524,reachable raw boundary; no exact closure classification";
 const currentRawJccRows = closureInventoryCsv.split("\n").filter((line) => line.startsWith("raw_boundary,compemu_raw_jcc_l_oponly,"));
 if (currentRawJccRows.length !== 1) fail(`raw condition-only row count=${currentRawJccRows.length}, expected 1`);
-const reconstructedPublishedCsv = closureInventoryCsv.replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`);
+const currentMaybeDoNothingRows = closureInventoryCsv.split("\n").filter((line) => line.startsWith("raw_boundary,compemu_raw_maybe_do_nothing,"));
+if (currentMaybeDoNothingRows.length !== 1) fail(`raw maybe-do-nothing row count=${currentMaybeDoNothingRows.length}, expected 1`);
+const publishedMaybeDoNothingRow = "raw_boundary,compemu_raw_maybe_do_nothing,unreviewed,compemu_raw_maybe_do_nothing,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,777,reachable raw boundary; no exact closure classification";
+/* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
+ * every subsequently promoted row before hashing the published JCC base. */
+const reconstructedPublishedCsv = closureInventoryCsv
+  .replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`)
+  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`);
 if (reconstructedPublishedCsv === closureInventoryCsv)
   fail("raw condition-only predecessor reconstruction changed no row");
 const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
@@ -4876,6 +4890,107 @@ console.log("METRIC structural_raw_jcc_oponly_fp_vectors=128");
 console.log("METRIC structural_raw_jcc_oponly_native_vectors=608");
 console.log("METRIC structural_raw_jcc_oponly_inverted_carry_vectors=304");
 console.log("METRIC structural_raw_jcc_oponly_condition_ids=31");
+
+/* Interpreter/fallback barriers may service pending specialties before their
+ * following terminal. Pin zero-flags fall-through, nonzero exclusive unwind,
+ * exact once-only 32-bit subtraction, both cycle lowerings, all configured
+ * callers, and gated live observation/injection. */
+const rawMaybeDoNothingBody = functionBody(
+  codegenSource,
+  "STATIC_INLINE void compemu_raw_maybe_do_nothing(IM32 cycles)",
+  "// Optimize access to struct regstruct with and memory with fixed registers",
+  "raw maybe-do-nothing body",
+);
+for (const contract of [
+  "LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);", "CBZ_wi(REG_WORK1, 0);",
+  "LOAD_U64(REG_WORK3, (uintptr)&countdown);",
+  "LDR_wXi(REG_WORK2, REG_WORK3, 0);", "if(cycles >= 0 && cycles <= 0xfff)",
+  "SUB_wwi(REG_WORK2, REG_WORK2, cycles);", "LOAD_U32(REG_WORK1, cycles);",
+  "SUB_www(REG_WORK2, REG_WORK2, REG_WORK1);",
+  "STR_wXi(REG_WORK2, REG_WORK3, 0);", "B_i(0);",
+  "write_jmp_target(branchadd2, (uintptr)popall_do_nothing);",
+  "write_jmp_target((uae_u32 *)branchadd, (uintptr)get_target());",
+]) requireText(rawMaybeDoNothingBody, contract, "raw maybe-do-nothing contract");
+requireBefore(rawMaybeDoNothingBody, "LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);", "CBZ_wi(REG_WORK1, 0);", "maybe-do-nothing flags load before branch");
+requireBefore(rawMaybeDoNothingBody, "CBZ_wi(REG_WORK1, 0);", "LOAD_U64(REG_WORK3, (uintptr)&countdown);", "maybe-do-nothing fall-through before countdown access");
+requireBefore(rawMaybeDoNothingBody, "LDR_wXi(REG_WORK2, REG_WORK3, 0);", "SUB_wwi(REG_WORK2, REG_WORK2, cycles);", "maybe-do-nothing countdown before immediate subtraction");
+requireBefore(rawMaybeDoNothingBody, "SUB_www(REG_WORK2, REG_WORK2, REG_WORK1);", "STR_wXi(REG_WORK2, REG_WORK3, 0);", "maybe-do-nothing register subtraction before store");
+requireBefore(rawMaybeDoNothingBody, "STR_wXi(REG_WORK2, REG_WORK3, 0);", "write_jmp_target(branchadd2, (uintptr)popall_do_nothing);", "maybe-do-nothing store before terminal");
+if ((allocatorSource.match(/\bcompemu_raw_maybe_do_nothing\s*\(/g) || []).length !== 8)
+  fail("raw maybe-do-nothing configured caller census changed");
+for (const contract of [
+  "if (jit_force_runtime_pc_endblock)", "if (is_dynamic_return)",
+  "if (is_dbcc_cond)", "if ((prop[cft_map(opcode)].cflow & fl_end_block) != 0)",
+  "if (jit_force_interpreter_barrier_opcode", "if (jit_end_block_on_fallback_env())",
+  "if (i < blocklen - 1)", "compemu_raw_maybe_do_nothing(scaled_cycles(totcycles));",
+]) requireText(allocatorSource, contract, "raw maybe-do-nothing caller contexts");
+for (const contract of [
+  "B2_TEST_MAYBE_DO_NOTHING_SPCFLAGS", "strcmp(maybe_do_nothing_spcflags, \"0\") != 0",
+  "strcmp(maybe_do_nothing_spcflags, \"64\") != 0",
+  "B2_TEST_MAYBE_DO_NOTHING_SPCFLAGS parse failed (need 0 or 64)",
+  "SPCFLAGS_SET(SPCFLAG_JIT_END_COMPILE);",
+]) requireText(basiliskGlueSource, contract, "raw maybe-do-nothing replay injection");
+for (const contract of [
+  '#include "raw-maybe-do-nothing.inc"', "constexpr std::size_t terminal_index = 128;",
+  "compemu_raw_maybe_do_nothing(cycles);", "for (const auto cycles : {0xfff, 0x1000})",
+  "for (const auto spcflags : {0u, 0x80000001u})", "seed - static_cast<uae_u32>(cycles)",
+  "imm_shape.has_imm_sub", "reg_shape.has_reg_sub",
+  "reg_shape.words != imm_shape.words + 1", "raw_maybe_do_nothing_native_vectors=%u",
+  "raw_maybe_do_nothing_fallthrough=2", "raw_maybe_do_nothing_taken=2",
+  "raw_maybe_do_nothing_imm12=1", "raw_maybe_do_nothing_register=1",
+  "raw_maybe_do_nothing_once_only=1",
+]) requireText(rawMaybeDoNothingProbeSource, contract, "raw maybe-do-nothing exact-native probe");
+for (const contract of [
+  "^STATIC_INLINE void LOAD_U32", "^STATIC_INLINE void LOAD_U64",
+  "^STATIC_INLINE void compemu_raw_maybe_do_nothing", "-Wall -Wextra -Werror",
+]) requireText(rawMaybeDoNothingHarnessSource, contract, "raw maybe-do-nothing exact extraction");
+for (const contract of [
+  "B2_TEST_MAYBE_DO_NOTHING_SPCFLAGS=\"$spcflags\"", "B2_JIT_RESTORE_BARRIERS=sr",
+  "B2_TEST_FORCE_L2_RAM=1", "direct_execute_normal=", "execute_normal_cycles=",
+  "run_case fallthrough 0 1 1 10000 8976", "run_case taken 64 0 0 0 0",
+  "raw_maybe_do_nothing_runtime_cases=2", "raw_maybe_do_nothing_live_fallthrough=1",
+  "raw_maybe_do_nothing_live_taken=1", "raw_maybe_do_nothing_exclusive_terminals=1",
+]) requireText(rawMaybeDoNothingMatrixSource, contract, "raw maybe-do-nothing live matrix");
+const rawMaybeDoNothingRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_maybe_do_nothing,"));
+if (!rawMaybeDoNothingRow?.includes(",audited,") || !rawMaybeDoNothingRow.includes(",9,") ||
+    !rawMaybeDoNothingRow.includes("AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md"))
+  fail("raw maybe-do-nothing configured census or closure promotion changed");
+const reconstructedMaybeDoNothingBase = closureInventoryCsv.replace(
+  `${rawMaybeDoNothingRow}\n`, `${publishedMaybeDoNothingRow}\n`,
+);
+/* Mechanical one-row proof against the committed predecessor is supplied by
+ * the exact published hash, not by selected-column comparison. */
+const maybeDoNothingPredecessorHash = createHash("sha256").update(reconstructedMaybeDoNothingBase).digest("hex");
+if (maybeDoNothingPredecessorHash !== "f3a79573a57e2d6664910b445dbfb779a56c401684e62b878154971e858999f5")
+  fail(`raw maybe-do-nothing exact one-row predecessor hash=${maybeDoNothingPredecessorHash}`);
+if (/Pending complete acceptance\.|Acceptance candidate/i.test(rawMaybeDoNothingReportSource))
+  fail("raw maybe-do-nothing evidence report is not final");
+for (const contract of [
+  "Final acceptance:", "exact-extracted native matrix: **4/4**",
+  "zero-flags fall-throughs: **2/2**", "nonzero-flags terminals: **2/2**",
+  "imm12/register lowering boundary: **2/2**", "once-only subtraction: **4/4**",
+  "configured live matrix: **2/2**", "exclusive following terminals: **2/2**",
+  "configured whole-root references: **9**", "complete emitter/boundary phase: pass",
+  "`emitter_fmsub_exact_words=1048576`", "complete active-risky corpus: **904/904**",
+  "allocator pressure: **33/33**", "clean full AArch64 build: pass",
+  "complete structural audit: pass", "leaving **70 emitter APIs** and **4 raw boundaries** unreviewed",
+  "`f3a79573a57e2d6664910b445dbfb779a56c401684e62b878154971e858999f5`",
+  "`ccad95c24f1975dbfb0e7c2bc5de24fc6d331bbb19f8815da6a59d41fe885091`",
+  "`e2b31beee21aab8655ffb45342f07e7cae59dce017878edb19c5407fe06c9f8a`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "the emitted raw body and ordinary runtime path are unchanged",
+  "source hygiene: pass", "first attempt timed out", "final re-review:", "**approve**",
+]) requireText(rawMaybeDoNothingReportSource, contract, "raw maybe-do-nothing final evidence");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-maybe-do-nothing-conformance.sh"', "raw maybe-do-nothing exact-native acceptance gate");
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-maybe-do-nothing-boundary-matrix.sh"', "raw maybe-do-nothing live acceptance gate");
+console.log("METRIC structural_raw_maybe_do_nothing_boundaries=1");
+console.log("METRIC structural_raw_maybe_do_nothing_native_vectors=4");
+console.log("METRIC structural_raw_maybe_do_nothing_runtime_cases=2");
+console.log("METRIC structural_raw_maybe_do_nothing_fallthrough=2");
+console.log("METRIC structural_raw_maybe_do_nothing_taken=2");
+console.log("METRIC structural_raw_maybe_do_nothing_lowerings=2");
+console.log("METRIC structural_raw_maybe_do_nothing_configured_references=9");
+console.log("METRIC structural_raw_maybe_do_nothing_once_only=1");
 
 /* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
  * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
