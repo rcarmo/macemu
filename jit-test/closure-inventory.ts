@@ -42,6 +42,7 @@ const paths = {
   mid1: "BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp",
   mid2: "BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp",
   support: "BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp",
+  supportTu: "BasiliskII/src/uae_cpu_2026/compiler/compemu_support.cpp",
   compat: "BasiliskII/src/uae_cpu_2026/compiler/compemu_legacy_arm64_compat.cpp",
   fpp: "BasiliskII/src/uae_cpu_2026/compiler/compemu_fpp.cpp",
   fppCompat: "BasiliskII/src/uae_cpu_2026/compiler/compemu_fpp_arm64_compat.h",
@@ -71,7 +72,7 @@ const configuredIncludes = [
   "BasiliskII/src/uae_cpu_2026",
   "BasiliskII/src/slirp",
 ].map((path) => `-I${resolve(root, path)}`);
-const configuredExpandedSource = (path: string, directivesOnly = false): string => {
+const runConfiguredPreprocessor = (path: string, directivesOnly = false) => {
   const target = resolve(root, path);
   const result = Bun.spawnSync([
     "g++", "-E", ...(directivesOnly ? ["-fdirectives-only"] : []), "-x", "c++",
@@ -81,10 +82,13 @@ const configuredExpandedSource = (path: string, directivesOnly = false): string 
   ], { cwd: unixDir, stdout: "pipe", stderr: "pipe" });
   if (result.exitCode !== 0)
     throw new Error(`configured preprocessing failed for ${path}: ${result.stderr.toString().trim()}`);
-
+  return { target, text: result.stdout.toString() };
+};
+const configuredExpandedSource = (path: string, directivesOnly = false): string => {
+  const { target, text } = runConfiguredPreprocessor(path, directivesOnly);
   const active: string[] = [];
   let inTarget = false;
-  for (const line of result.stdout.toString().split("\n")) {
+  for (const line of text.split("\n")) {
     const marker = line.match(/^#\s+\d+\s+"([^"]+)"/);
     if (marker) {
       const markerPath = marker[1];
@@ -100,6 +104,9 @@ const configuredGencomp = configuredExpandedSource(paths.gencomp);
 const configuredMid1 = configuredExpandedSource(paths.mid1);
 const configuredMid2 = configuredExpandedSource(paths.mid2);
 const configuredSupport = configuredExpandedSource(paths.support);
+const configuredSupportTu = runConfiguredPreprocessor(paths.supportTu, true).text;
+if ((configuredSupportTu.match(/\bcompemu_raw_inc_opcount\s*\(\s*opcode\s*\)\s*;/g) || []).length !== 0)
+  throw new Error("actual configured compemu_support.cpp translation unit enables compemu_raw_inc_opcount");
 const configuredCompat = configuredExpandedSource(paths.compat);
 const configuredFpp = configuredExpandedSource(paths.fpp);
 const configuredFppCompat = configuredExpandedSource(paths.fppCompat);
@@ -705,6 +712,7 @@ if (rawNames.size !== 83)
   throw new Error(`raw-boundary census changed: ${rawNames.size}, expected 83`);
 const auditedRaw = /^(?:compemu_raw_(?:branch|call|call_observer_|cmp_pc|endblock_|jmp|maybe_cachemiss|maybe_recompile|observer_|set_pc_)|raw_(?:flags_to_reg|reg_to_flags|jcc|push_regs_to_preserve|pop_preserved_regs))/;
 const structuralUnreachableRaw = new Map<string, string>([
+  ["compemu_raw_inc_opcount", "only its LOWFUNC/LENDFUNC definition remains because the sole support caller is under disabled PROFILE_UNTRANSLATED_INSNS; retained indexed load/add/store emitters remain independently classified; AARCH64_JIT_AUDIT_RAW_INC_OPCOUNT_UNREACHABLE.md"],
   ["raw_fabs_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fabs_rr"],
   ["raw_fneg_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fneg_rr"],
   ["raw_fadd_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 add selectors service before unreachable fadd_rr"],

@@ -105,6 +105,10 @@ const rawHandleExceptReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_HANDLE_EXCEPT_BOUNDARY.md",
   import.meta.url,
 )).text();
+const rawIncOpcountReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_INC_OPCOUNT_UNREACHABLE.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -347,6 +351,10 @@ if (allocatorSource.includes("jit_trace_setpc_value")) {
 }
 const supportSource = await Bun.file(new URL(
   "../BasiliskII/src/uae_cpu_2026/compiler/compemu_support.cpp",
+  import.meta.url,
+)).text();
+const configuredMakefileSource = await Bun.file(new URL(
+  "../BasiliskII/src/Unix/Makefile",
   import.meta.url,
 )).text();
 const timerSource = await Bun.file(new URL(
@@ -4610,6 +4618,76 @@ console.log("METRIC structural_raw_handle_except_taken=1");
 console.log("METRIC structural_raw_handle_except_cycle_argument=1024");
 console.log("METRIC structural_raw_handle_except_received_cycle_argument=1024");
 console.log("METRIC structural_raw_handle_except_fpu_sync_preservation=1");
+
+/* The untranslated-opcode profiler is disabled in the configured AArch64
+ * build. Pin its sole source call beneath the inactive macro, the exact
+ * definition-only raw body, configured inventory reference count, and child
+ * emitter classifications without treating retained source as reachability. */
+const rawIncOpcountBody = functionBody(
+  codegenSource,
+  "LOWFUNC(WRITE,RMW,2,compemu_raw_inc_opcount,(IM16 op))",
+  "LENDFUNC(WRITE,RMW,1,compemu_raw_inc_opcount,(IM16 op))",
+  "raw inc-opcount retained body",
+);
+let rawIncOpcountPrevious = -1;
+for (const contract of [
+  "uintptr idx = (uintptr) &(regs.raw_cputbl_count) - (uintptr) &regs;",
+  "LDR_xXi(REG_WORK2, R_REGSTRUCT, idx);", "MOV_xi(REG_WORK3, op);",
+  "LDR_wXxLSLi(REG_WORK1, REG_WORK2, REG_WORK3, 1);",
+  "ADD_wwi(REG_WORK1, REG_WORK1, 1);",
+  "STR_wXxLSLi(REG_WORK1, REG_WORK2, REG_WORK3, 1);",
+]) {
+  const position = requireText(rawIncOpcountBody, contract, "raw inc-opcount retained body");
+  if (position <= rawIncOpcountPrevious) fail("raw inc-opcount retained body order changed");
+  rawIncOpcountPrevious = position;
+}
+if ((codegenSource.match(/\bcompemu_raw_inc_opcount\b/g) || []).length !== 2)
+  fail("raw inc-opcount definition-marker census changed");
+if ((allocatorSource.match(/\bcompemu_raw_inc_opcount\s*\(/g) || []).length !== 1)
+  fail("raw inc-opcount source caller census changed");
+const rawIncOpcountGuardStart = allocatorSource.lastIndexOf("#ifdef PROFILE_UNTRANSLATED_INSNS", allocatorSource.indexOf("compemu_raw_inc_opcount(opcode);"));
+const rawIncOpcountGuardEnd = allocatorSource.indexOf("#endif", allocatorSource.indexOf("compemu_raw_inc_opcount(opcode);"));
+if (rawIncOpcountGuardStart < 0 || rawIncOpcountGuardEnd < 0 ||
+    !allocatorSource.slice(rawIncOpcountGuardStart, rawIncOpcountGuardEnd).includes("compemu_raw_inc_opcount(opcode);"))
+  fail("raw inc-opcount sole caller escaped profiling guard");
+requireText(supportSource, "#if DEBUG\n#define PROFILE_COMPILE_TIME", "raw inc-opcount profiling definition");
+requireText(supportSource, "#define PROFILE_UNTRANSLATED_INSNS\t1", "raw inc-opcount profiling definition");
+if (/(?:^|\s)-D(?:DEBUG|PROFILE_UNTRANSLATED_INSNS)(?:=|\s|$)/m.test(configuredMakefileSource))
+  fail("configured build unexpectedly enables untranslated-opcode profiling");
+requireBefore(supportSource, '#include "compemu_support_arm.cpp"', "#if DEBUG\n#define PROFILE_COMPILE_TIME", "raw inc-opcount actual translation-unit ordering");
+for (const contract of [
+  'supportTu: "BasiliskII/src/uae_cpu_2026/compiler/compemu_support.cpp"',
+  "const configuredSupportTu = runConfiguredPreprocessor(paths.supportTu, true).text;",
+  "actual configured compemu_support.cpp translation unit enables compemu_raw_inc_opcount",
+  '["compemu_raw_inc_opcount", "only its LOWFUNC/LENDFUNC definition remains because the sole support caller is under disabled PROFILE_UNTRANSLATED_INSNS',
+  "if (structuralUnreachableRaw.has(name) && references !== 2)",
+]) requireText(closureInventorySource, contract, "raw inc-opcount configured preprocessing census");
+const rawIncOpcountRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_inc_opcount,"));
+if (!rawIncOpcountRow?.includes(",unreachable,") || !rawIncOpcountRow.includes(",2,") ||
+    !rawIncOpcountRow.includes("AARCH64_JIT_AUDIT_RAW_INC_OPCOUNT_UNREACHABLE.md"))
+  fail("raw inc-opcount closure classification changed");
+if (/Pending complete acceptance\./i.test(rawIncOpcountReportSource))
+  fail("raw inc-opcount evidence report is still pending");
+for (const contract of [
+  "Final acceptance:", "**zero active calls**", "no `compemu_raw_inc_opcount` symbol",
+  "raw definition-marker references: **2**", "retained child emitters: **5**",
+  "complete structural audit: pass", "leaving **70 emitter APIs** and **7 raw boundaries** unreviewed",
+  "`54f2e06ca87c61014b7f2129ca532dc31ba76871729e3681827a0ea7f8716603`",
+  "`71f98e0f5f2c37c56aae27ff27672b919161609561e4eff06328a5e77d667708`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "source hygiene: pass", "initial reject", "final re-review: **approve**",
+]) requireText(rawIncOpcountReportSource, contract, "raw inc-opcount final evidence");
+for (const [name, status] of [
+  ["LDR_xXi", "unreviewed"], ["MOV_xi", "unreviewed"],
+  ["LDR_wXxLSLi", "unreviewed"], ["ADD_wwi", "audited"],
+  ["STR_wXxLSLi", "unreviewed"],
+] as const) {
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!row?.includes(`,${status},`)) fail(`raw inc-opcount child emitter ${name} classification changed`);
+}
+console.log("METRIC structural_raw_inc_opcount_unreachable=1");
+console.log("METRIC structural_raw_inc_opcount_configured_references=2");
+console.log("METRIC structural_raw_inc_opcount_child_emitters=5");
 
 /* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
  * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
