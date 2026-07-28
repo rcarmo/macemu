@@ -1,0 +1,622 @@
+RAW FMOV HOST-MEMORY REVIEW
+BASE 752fdc06
+
+--- final tranche diff ---
+diff --git a/jit-test/closure-inventory.ts b/jit-test/closure-inventory.ts
+index a7c1be48..4821ac10 100644
+--- a/jit-test/closure-inventory.ts
++++ b/jit-test/closure-inventory.ts
+@@ -253,6 +253,7 @@ const primitiveAuditRules: Array<[RegExp, string]> = [
+   [/^compemu_raw_exec_nostats$/, "AARCH64_JIT_AUDIT_RAW_EXEC_NOSTATS_BOUNDARY.md"],
+   [/^compemu_raw_execute_normal$/, "AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_BOUNDARY.md"],
+   [/^compemu_raw_execute_normal_cycles$/, "AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_CYCLES_BOUNDARY.md"],
++  [/^compemu_raw_fmov_(?:mr_drop|rm)$/, "AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md"],
+   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
+   [/^raw_fmov_to_[bwl]_rr$/, "AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md"],
+   [/^raw_fmov_s_rr$/, "AARCH64_JIT_AUDIT_FMOV_S_RR_LIFECYCLE.md"],
+diff --git a/jit-test/run.sh b/jit-test/run.sh
+index b298b021..4f51ccc9 100755
+--- a/jit-test/run.sh
++++ b/jit-test/run.sh
+@@ -210,6 +210,7 @@ if phase_enabled emitters; then
+     timeout -k 5s 120s "$SCRIPT_DIR/raw-exec-nostats-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw exec_nostats boundary conformance failed" 0
+     timeout -k 5s 120s "$SCRIPT_DIR/raw-execute-normal-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw execute_normal boundary conformance failed" 0
+     timeout -k 5s 180s "$SCRIPT_DIR/raw-execute-normal-cycles-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw execute_normal_cycles boundary conformance failed" 0
++    timeout -k 5s 180s "$SCRIPT_DIR/raw-fmov-host-memory-conformance.sh" || emit_failure_metrics 1 "ARM64 raw FPU host-memory boundary conformance failed" 0
+     timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh" || emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
+     timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0
+     timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh" || emit_failure_metrics 1 "ARM64 SUB emitter conformance failed" 0
+diff --git a/jit-test/structural-audit.ts b/jit-test/structural-audit.ts
+index f0d30ddc..982864c4 100644
+--- a/jit-test/structural-audit.ts
++++ b/jit-test/structural-audit.ts
+@@ -100,6 +100,8 @@ const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-b
+ const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
+ const rawExecuteNormalHarnessSource = await Bun.file(new URL("./raw-execute-normal-boundary-matrix.sh", import.meta.url)).text();
+ const rawExecuteNormalCyclesHarnessSource = await Bun.file(new URL("./raw-execute-normal-cycles-boundary-matrix.sh", import.meta.url)).text();
++const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
++const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
+ const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
+ const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
+ const closureInventoryCsv = await Bun.file(new URL(
+@@ -4520,6 +4522,88 @@ console.log("METRIC structural_raw_execute_normal_cycles_boundaries=1");
+ console.log("METRIC structural_raw_execute_normal_cycles_runtime_cases=2");
+ console.log("METRIC structural_raw_execute_normal_cycles_lowerings=2");
+
++/* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
++ * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
++ * sole allocator callers, state transitions, source-extracted native oracle,
++ * and narrow closure promotion without inheriting generic encoder status. */
++const rawFmovStoreBody = functionBody(
++  codegenSource,
++  "LOWFUNC(NONE,WRITE,2,compemu_raw_fmov_mr_drop,(MEMW mem, FR s))",
++  "LENDFUNC(NONE,WRITE,2,compemu_raw_fmov_mr_drop,(MEMW mem, FR s))",
++  "raw FPU host-memory store",
++);
++const rawFmovLoadBody = functionBody(
++  codegenSource,
++  "LOWFUNC(NONE,READ,2,compemu_raw_fmov_rm,(FW d, MEMR mem))",
++  "LENDFUNC(NONE,READ,2,compemu_raw_fmov_rm,(FW d, MEMW mem))",
++  "raw FPU host-memory load",
++);
++for (const [body, direct, fallback, label] of [
++  [rawFmovStoreBody, "STR_dXi(s, R_REGSTRUCT, (mem - (uintptr) &regs));", "STR_dXi(s, REG_WORK1, 0);", "store"],
++  [rawFmovLoadBody, "LDR_dXi(d, R_REGSTRUCT, (mem - (uintptr) &regs));", "LDR_dXi(d, REG_WORK1, 0);", "load"],
++] as const) {
++  for (const contract of [
++    "mem >= (uintptr) &regs", "mem < (uintptr) &regs + 32760",
++    "((mem - (uintptr) &regs) & 0x7) == 0", direct,
++    "LOAD_U64(REG_WORK1, mem);", fallback,
++  ]) requireText(body, contract, `raw FPU host-memory ${label}`);
++  requireBefore(body, "LOAD_U64(REG_WORK1, mem);", fallback, `raw FPU host-memory ${label} fallback ordering`);
++}
++if ((allocatorSource.match(/\bcompemu_raw_fmov_mr_drop\s*\(/g) || []).length !== 1)
++  fail("raw FPU host-memory store caller census changed");
++if ((allocatorSource.match(/\bcompemu_raw_fmov_rm\s*\(/g) || []).length !== 1)
++  fail("raw FPU host-memory load caller census changed");
++const rawFmovTomemBody = functionBody(
++  allocatorSource, "static void f_tomem_drop(int r)", "static int f_isinreg(int r)",
++  "raw FPU spill state transition",
++);
++for (const contract of [
++  "if (live.fate[r].status == DIRTY)",
++  "compemu_raw_fmov_mr_drop((uintptr)live.fate[r].mem, live.fate[r].realreg);",
++  "live.fate[r].status = INMEM;",
++]) requireText(rawFmovTomemBody, contract, "raw FPU spill state transition");
++requireBefore(rawFmovTomemBody, "compemu_raw_fmov_mr_drop", "live.fate[r].status = INMEM;", "raw FPU spill before INMEM publication");
++const fAllocRegBody = functionBody(
++  allocatorSource, "static int f_alloc_reg(int r, int willclobber)", "static void f_unlock(int r)",
++  "raw FPU reload state transition",
++);
++for (const contract of [
++  "if (!willclobber)", "if (live.fate[r].status == INMEM)",
++  "compemu_raw_fmov_rm(bestreg, (uintptr)live.fate[r].mem);",
++  "live.fate[r].status = CLEAN;", "live.fate[r].realreg = bestreg;",
++  "live.fat[bestreg].holds = r;", "live.fat[bestreg].nholds = 1;",
++]) requireText(fAllocRegBody, contract, "raw FPU reload state transition");
++requireBefore(fAllocRegBody, "compemu_raw_fmov_rm", "live.fate[r].status = CLEAN;", "raw FPU reload before CLEAN publication");
++for (const contract of [
++  "raw-fmov-host-memory.inc", "compemu_raw_fmov_mr_drop(address, fpreg)",
++  "compemu_raw_fmov_rm(fpreg, address)", "base + 32752", "base + 32760", "base + 1",
++  "{external, 15}", "direct_exact_words == 128", "fallback_shapes == 30",
++  "store_vectors == 60", "load_vectors == 60",
++  "caller_saved_fp == 40", "callee_saved_fp == 20",
++  "0x7ff0000000000001ull", "0xfff8deadbeef1234ull",
++  "native store NZCV", "native load NZCV",
++]) requireText(rawFmovHostMemoryProbeSource, contract, "raw FPU host-memory native probe");
++for (const contract of [
++  "codegen_arm64.cpp", "awk '", "STATIC_INLINE void LOAD_U64", "compemu_raw_fmov_mr_drop", "compemu_raw_fmov_rm",
++  "test \"$(grep -c '^LOWFUNC'", "-Wall -Wextra -Werror", '"$W/probe"',
++]) requireText(rawFmovHostMemoryHarnessSource, contract, "raw FPU host-memory source extraction");
++for (const name of ["compemu_raw_fmov_mr_drop", "compemu_raw_fmov_rm"]) {
++  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`raw_boundary,${name},`));
++  if (!row?.includes(",audited,")) fail(`${name} not promoted by accepted report`);
++  if (!row.includes("AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md"))
++    fail(`${name} missing bounded evidence report`);
++}
++for (const name of ["LDR_dXi", "STR_dXi"]) {
++  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
++  if (!row?.includes(",unreviewed,")) fail(`${name} generic emitter status leaked from raw FPU seam`);
++}
++requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-fmov-host-memory-conformance.sh"', "raw FPU host-memory bounded acceptance gate");
++console.log("METRIC structural_raw_fmov_host_memory_boundaries=2");
++console.log("METRIC structural_raw_fmov_host_memory_direct_exact_words=128");
++console.log("METRIC structural_raw_fmov_host_memory_fallback_shapes=30");
++console.log("METRIC structural_raw_fmov_host_memory_native_vectors=120");
++console.log("METRIC structural_raw_fmov_host_memory_allocator_callers=2");
++
+ /* ADD's MIDFUNC register initialisers own both operands while arithmetic
+  * allocates its destination. Memory destinations additionally pin the private
+  * pre-write EA through X publication and ordered storage; this is the value
+
+--- untracked BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md ---
+# AArch64 JIT raw FPU host-memory boundary audit
+
+Date: 2026-07-28
+
+Base: `752fdc06` (`master`, published raw execute-normal-cycles closure)
+
+## Scope
+
+This source-coherent batch audits only the paired fixed-home FPU allocator
+boundaries:
+
+- `compemu_raw_fmov_mr_drop`: spill one binary64 host FP register to its owned
+  host-memory slot; and
+- `compemu_raw_fmov_rm`: reload one binary64 host FP register from its owned
+  host-memory slot.
+
+The already accepted `fmov_rm -> raw_fmov_d_rm` guest-FMOVE composition remains
+separate. Generic `LDR_dXi`, `STR_dXi`, and immediate-materialisation emitter
+APIs are not promoted by this audit.
+
+## Boundary contract
+
+Both raw bodies select one of two addressing forms at emit time:
+
+1. an eight-byte-aligned address in `[&regs, &regs + 32760)` emits one unsigned
+   immediate binary64 `LDR/STR Dn,[X28,#offset]`; or
+2. every other host address is materialised in `X2`, then accessed as a
+   binary64 lane at offset zero.
+
+The upper direct boundary is offset 32752. Offset 32760, misaligned addresses,
+and unrelated host allocations must take the absolute-pointer branch. Neither
+path may alter NZCV or reinterpret the 64 payload bits; signed zero, infinities,
+subnormals, and NaN class/payload/sign are ordinary bits here.
+
+## Allocator contract
+
+`f_tomem_drop()` is the sole configured store caller. It emits a spill only for
+a `DIRTY` virtual FP value and publishes `INMEM` only after the raw store.
+`f_evict()` then clears the fixed host-register association.
+
+`f_alloc_reg(r, 0)` is the sole configured load caller. For an `INMEM` value it
+emits the raw reload, publishes `CLEAN`, and records the fixed mapping:
+architectural FP0-FP7 to D8-D15, `FP_RESULT` to D6, and `FS1` to D7. A
+write-only allocation (`willclobber`) does not reload and becomes `DIRTY`.
+
+## Direct native proof
+
+`jit-test/raw-fmov-host-memory-conformance.sh` extracts both exact production
+`LOWFUNC...LENDFUNC` bodies and their production `LOAD_U64` pointer-materialiser
+from `codegen_arm64.cpp`, compiles them against the production AArch64 encoder
+header and a synthetic regstruct, then executes the generated code natively.
+This avoids copying the implementations into the test and avoids conflating
+this host-memory seam with guest FPU decoding.
+
+The matrix requires:
+
+- 128 exact direct words: load/store, offsets 0 and 32752, all D0-D31 fields;
+- 30 absolute-pointer shapes: load/store, unrelated/misaligned/upper-boundary
+  addresses, representative D0/D7/D8/D15/D31 fields;
+- 60 native stores and 60 native loads, including unrelated, offset-32760, and
+  misaligned (`&regs + 1`) fallback execution;
+- direct and absolute-pointer execution;
+- caller-saved and callee-saved FP register groups; and
+- ten payload classes including positive/negative zero, minimum subnormal,
+  maximum finite, infinities, signalling/quiet signed NaNs, and arbitrary bit
+  patterns, with exact NZCV preservation.
+
+## Structural acceptance
+
+The structural gate pins both range/alignment predicates, direct and fallback
+instructions, pointer materialisation ordering, explicit unrelated/misaligned/
+offset-32760 runtime witnesses, sole-caller counts, spill and reload state
+publication ordering, exact raw-body/helper source extraction, matrix cardinality,
+main-runner integration, two-row closure promotion, and continued unreviewed
+status for generic `LDR_dXi`/`STR_dXi`.
+
+## Acceptance results
+
+Final acceptance:
+
+- source-extracted direct matrix: **128/128 exact direct words**;
+- fallback-shape matrix: **30/30**;
+- native host-memory matrix: **120/120** (60 stores and 60 loads), including
+  direct, unrelated-pointer, upper-boundary, and misaligned paths;
+- complete emitter/boundary phase: pass;
+- complete active-risky corpus: **904/904**;
+- allocator pressure: **33/33**;
+- clean full build: pass;
+- complete structural audit: pass;
+- deterministic 998-row closure regeneration: exactly two rows promoted,
+  leaving **70 emitter APIs** and **9 raw boundaries** unreviewed;
+- repeated hashes: inventory CSV
+  `9dc985e20749ca87f0681c43d07554f4856ac2a6fd9992833ac113a4156f5d94`,
+  Markdown
+  `0410d73ebd811a070b29c701cefd75c6ecf42940bf3b8eb97dfae93e748c6d00`,
+  and generated `compemu.cpp`
+  `37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`;
+- source hygiene: pass;
+- independent bounded review: initial reject for a shape-only misaligned case,
+  insufficiently explicit fallback witnesses, and locally replicated
+  `LOAD_U64`; all three were corrected by native misaligned execution,
+  structural witness pins, and exact helper extraction; final re-review:
+  **approve**.
+
+## Closure effect
+
+Deterministic regeneration must move exactly `compemu_raw_fmov_mr_drop` and
+`compemu_raw_fmov_rm` from `unreviewed` to `audited`. Whole-engine closure is
+not claimed.
+
+## Reproduction
+
+```sh
+./jit-test/raw-fmov-host-memory-conformance.sh
+./jit-test/run.sh --phases emitters --build-mode skip
+bun jit-test/structural-audit.ts
+bun jit-test/closure-inventory.ts
+git diff --check
+```
+
+--- untracked jit-test/raw-fmov-host-memory-conformance.cpp ---
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <vector>
+
+using uae_u8 = std::uint8_t;
+using uae_s8 = std::int8_t;
+using uae_u16 = std::uint16_t;
+using uae_s16 = std::int16_t;
+using uae_u32 = std::uint32_t;
+using uae_s32 = std::int32_t;
+using uae_u64 = std::uint64_t;
+using uintptr = std::uintptr_t;
+using MEMW = uintptr;
+using MEMR = uintptr;
+using FW = uae_u32;
+using FR = uae_u32;
+
+struct alignas(16) SyntheticRegs { std::array<uae_u8, 32776> bytes{}; };
+static SyntheticRegs regs;
+
+static std::vector<uae_u32> emitted;
+static void emit_long(uae_u32 word) { emitted.push_back(word); }
+#include "codegen_arm64.h"
+
+#define R_REGSTRUCT 28
+#define REG_WORK1 2
+#define STATIC_INLINE static inline
+#define LOWFUNC(flags,mem,nargs,func,args) static inline void func args
+#define LENDFUNC(flags,mem,nargs,func,args)
+
+#include "raw-fmov-host-memory.inc"
+
+struct Output { std::uint64_t bits; std::uint64_t nzcv; };
+enum class Direction { Store, Load };
+
+[[noreturn]] static void fail(const char *label, std::uint64_t expected, std::uint64_t found)
+{
+    std::fprintf(stderr, "RAW_FMOV_HOST_MEMORY_FAIL label=%s expected=%016llx found=%016llx\n",
+        label, static_cast<unsigned long long>(expected),
+        static_cast<unsigned long long>(found));
+    std::exit(1);
+}
+
+static bool direct_address(uintptr address)
+{
+    const uintptr base = reinterpret_cast<uintptr>(&regs);
+    return address >= base && address < base + 32760 && ((address - base) & 7) == 0;
+}
+
+static uae_u32 expected_memory_word(Direction direction, unsigned fpreg,
+    unsigned base, unsigned offset)
+{
+    const uae_u32 opcode = direction == Direction::Store ? 0xfd000000u : 0xfd400000u;
+    return opcode | ((offset / 8) << 10) | (base << 5) | fpreg;
+}
+
+static void emit_boundary(Direction direction, uintptr address, unsigned fpreg)
+{
+    if (direction == Direction::Store)
+        compemu_raw_fmov_mr_drop(address, fpreg);
+    else
+        compemu_raw_fmov_rm(fpreg, address);
+}
+
+static void emit_prologue()
+{
+    STP_xxXpre(28, 30, 31, -16);
+    SUB_xxi(31, 31, 64);
+    for (unsigned reg = 8; reg <= 15; ++reg)
+        STR_dXi(reg, 31, (reg - 8) * 8);
+    MOV_xx(28, 1);
+}
+
+static void emit_epilogue()
+{
+    for (unsigned reg = 8; reg <= 15; ++reg)
+        LDR_dXi(reg, 31, (reg - 8) * 8);
+    ADD_xxi(31, 31, 64);
+    LDP_xxXpost(28, 30, 31, 16);
+    emitted.push_back(0xd65f03c0u); // RET
+}
+
+static Output execute(Direction direction, uintptr address, unsigned fpreg,
+    std::uint64_t input, std::uint64_t hostile_nzcv)
+{
+    emitted.clear();
+    emit_prologue();
+    if (direction == Direction::Store)
+        FMOV_dx(fpreg, 0);
+    MSR_NZCV_x(2);
+    emit_boundary(direction, address, fpreg);
+    if (direction == Direction::Load)
+        FMOV_xd(4, fpreg);
+    MRS_NZCV_x(5);
+    if (direction == Direction::Load)
+        STR_xXi(4, 3, 0);
+    STR_xXi(5, 3, 8);
+    emit_epilogue();
+
+    const long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size <= 0 || emitted.size() * sizeof(uae_u32) > static_cast<std::size_t>(page_size))
+        fail("executable page size", 1, emitted.size() * sizeof(uae_u32));
+    void *page = mmap(nullptr, static_cast<std::size_t>(page_size),
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (page == MAP_FAILED) { std::perror("mmap code"); std::exit(1); }
+    std::memcpy(page, emitted.data(), emitted.size() * sizeof(uae_u32));
+    if (mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC) != 0) {
+        std::perror("mprotect code"); std::exit(1);
+    }
+    __builtin___clear_cache(static_cast<char *>(page),
+        static_cast<char *>(page) + emitted.size() * sizeof(uae_u32));
+    Output output{};
+    using Fn = void (*)(std::uint64_t, void *, std::uint64_t, Output *);
+    reinterpret_cast<Fn>(page)(input, &regs, hostile_nzcv, &output);
+    if (munmap(page, static_cast<std::size_t>(page_size)) != 0) {
+        std::perror("munmap code"); std::exit(1);
+    }
+    return output;
+}
+
+int main()
+{
+#if !defined(__aarch64__)
+    std::fprintf(stderr, "RAW_FMOV_HOST_MEMORY_FAIL native AArch64 host required\n");
+    return 1;
+#endif
+    const uintptr base = reinterpret_cast<uintptr>(&regs);
+    const std::array<unsigned, 2> offsets{{0, 32752}};
+    unsigned direct_exact_words = 0;
+    for (const auto direction : {Direction::Store, Direction::Load}) {
+        for (const unsigned offset : offsets) {
+            for (unsigned fpreg = 0; fpreg < 32; ++fpreg) {
+                emitted.clear();
+                emit_boundary(direction, base + offset, fpreg);
+                if (emitted.size() != 1) fail("direct emission count", 1, emitted.size());
+                const auto expected = expected_memory_word(direction, fpreg, 28, offset);
+                if (emitted[0] != expected) fail("direct exact word", expected, emitted[0]);
+                ++direct_exact_words;
+            }
+        }
+    }
+
+    const long page_size = sysconf(_SC_PAGESIZE);
+    void *external_page = mmap(nullptr, static_cast<std::size_t>(page_size),
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (external_page == MAP_FAILED) { std::perror("mmap data"); return 1; }
+    const uintptr external = reinterpret_cast<uintptr>(external_page) + 64;
+    if (direct_address(external)) fail("external address classified direct", 0, 1);
+
+    unsigned fallback_shapes = 0;
+    for (const auto direction : {Direction::Store, Direction::Load}) {
+        for (const uintptr address : {external, base + 1, base + 32760}) {
+            for (const unsigned fpreg : {0u, 7u, 8u, 15u, 31u}) {
+                emitted.clear(); emit_boundary(direction, address, fpreg);
+                if (emitted.size() < 2 || emitted.size() > 5)
+                    fail("fallback emission count", 2, emitted.size());
+                const auto expected = expected_memory_word(direction, fpreg, 2, 0);
+                if (emitted.back() != expected) fail("fallback terminal word", expected, emitted.back());
+                ++fallback_shapes;
+            }
+        }
+    }
+
+    constexpr std::array<std::uint64_t, 10> values{{
+        0x0000000000000000ull, 0x8000000000000000ull,
+        0x0000000000000001ull, 0x7fefffffffffffffull,
+        0x7ff0000000000000ull, 0xfff0000000000000ull,
+        0x7ff0000000000001ull, 0xfff8deadbeef1234ull,
+        0x0123456789abcdefull, 0xfedcba9876543210ull,
+    }};
+    struct RuntimeCase { uintptr address; unsigned fpreg; };
+    const std::array<RuntimeCase, 6> runtime_cases{{
+        {base, 0}, {base + 32752, 7}, {base + 8, 8},
+        {external, 15}, {base + 32760, 31}, {base + 1, 6},
+    }};
+    unsigned store_vectors = 0, load_vectors = 0;
+    unsigned caller_saved_fp = 0, callee_saved_fp = 0;
+    unsigned index = 0;
+    for (const auto &test : runtime_cases) {
+        for (const auto bits : values) {
+            const std::uint64_t hostile = (index++ & 1) ? 0xb0000000ull : 0x50000000ull;
+            std::uint64_t poison = ~bits;
+            std::memcpy(reinterpret_cast<void *>(test.address), &poison, sizeof(poison));
+            const auto stored = execute(Direction::Store, test.address, test.fpreg, bits, hostile);
+            std::uint64_t found = 0;
+            std::memcpy(&found, reinterpret_cast<const void *>(test.address), sizeof(found));
+            if (found != bits) fail("native store payload", bits, found);
+            if ((stored.nzcv & 0xf0000000ull) != hostile)
+                fail("native store NZCV", hostile, stored.nzcv & 0xf0000000ull);
+            ++store_vectors;
+
+            std::memcpy(reinterpret_cast<void *>(test.address), &bits, sizeof(bits));
+            const auto loaded = execute(Direction::Load, test.address, test.fpreg, 0, hostile);
+            if (loaded.bits != bits) fail("native load payload", bits, loaded.bits);
+            if ((loaded.nzcv & 0xf0000000ull) != hostile)
+                fail("native load NZCV", hostile, loaded.nzcv & 0xf0000000ull);
+            ++load_vectors;
+            if (test.fpreg >= 8 && test.fpreg <= 15) ++callee_saved_fp;
+            else ++caller_saved_fp;
+        }
+    }
+    if (munmap(external_page, static_cast<std::size_t>(page_size)) != 0) {
+        std::perror("munmap data"); return 1;
+    }
+
+    std::printf("METRIC raw_fmov_host_memory_boundaries=2\n");
+    std::printf("METRIC raw_fmov_host_memory_direct_exact_words=%u\n", direct_exact_words);
+    std::printf("METRIC raw_fmov_host_memory_fallback_shapes=%u\n", fallback_shapes);
+    std::printf("METRIC raw_fmov_host_memory_store_vectors=%u\n", store_vectors);
+    std::printf("METRIC raw_fmov_host_memory_load_vectors=%u\n", load_vectors);
+    std::printf("METRIC raw_fmov_host_memory_bit_classes=%zu\n", values.size());
+    std::printf("METRIC raw_fmov_host_memory_caller_saved_fp_vectors=%u\n", caller_saved_fp);
+    std::printf("METRIC raw_fmov_host_memory_callee_saved_fp_vectors=%u\n", callee_saved_fp);
+    return direct_exact_words == 128 && fallback_shapes == 30 &&
+        store_vectors == 60 && load_vectors == 60 &&
+        caller_saved_fp == 40 && callee_saved_fp == 20 ? 0 : 1;
+}
+
+--- untracked jit-test/raw-fmov-host-memory-conformance.sh ---
+#!/bin/bash
+# Compile the production raw host-memory FPU spill/reload bodies against the
+# production AArch64 encoder, then execute both address branches natively.
+set -euo pipefail
+D="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$D/.." && pwd)"
+case "$(uname -m)" in
+    aarch64|arm64) ;;
+    *) echo "RAW_FMOV_HOST_MEMORY_FAIL native AArch64 host required" >&2; exit 1 ;;
+esac
+W="$(mktemp -d /tmp/b2-raw-fmov-host-memory-XXXXXX)"
+trap 'rm -rf "$W"' EXIT
+SOURCE="$ROOT/BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp"
+awk '
+  /^STATIC_INLINE void LOAD_U64\(int r, uae_u64 val\)/ { capture="helper" }
+  /^LOWFUNC\(NONE,WRITE,2,compemu_raw_fmov_mr_drop,/ { capture="body" }
+  /^LOWFUNC\(NONE,READ,2,compemu_raw_fmov_rm,/ { capture="body" }
+  capture { print }
+  capture == "helper" && /^}/ { capture="" }
+  capture == "body" && /^LENDFUNC\(NONE,WRITE,2,compemu_raw_fmov_mr_drop,/ { capture="" }
+  capture == "body" && /^LENDFUNC\(NONE,READ,2,compemu_raw_fmov_rm,/ { capture="" }
+' "$SOURCE" >"$W/raw-fmov-host-memory.inc"
+grep -q '^STATIC_INLINE void LOAD_U64(int r, uae_u64 val)' "$W/raw-fmov-host-memory.inc"
+grep -q '^LOWFUNC(NONE,WRITE,2,compemu_raw_fmov_mr_drop,' "$W/raw-fmov-host-memory.inc"
+grep -q '^LOWFUNC(NONE,READ,2,compemu_raw_fmov_rm,' "$W/raw-fmov-host-memory.inc"
+test "$(grep -c '^LOWFUNC' "$W/raw-fmov-host-memory.inc")" -eq 2
+test "$(grep -c '^LENDFUNC' "$W/raw-fmov-host-memory.inc")" -eq 2
+test "$(grep -Ec '^LOWFUNC\(NONE,(WRITE,2,compemu_raw_fmov_mr_drop|READ,2,compemu_raw_fmov_rm),' "$W/raw-fmov-host-memory.inc")" -eq 2
+test "$(grep -Ec '^LENDFUNC\(NONE,(WRITE,2,compemu_raw_fmov_mr_drop|READ,2,compemu_raw_fmov_rm),' "$W/raw-fmov-host-memory.inc")" -eq 2
+cp "$D/raw-fmov-host-memory-conformance.cpp" "$W/probe.cpp"
+"${CXX:-c++}" -std=c++17 -O2 -Wall -Wextra -Werror \
+    -I"$ROOT/BasiliskII/src/uae_cpu_2026/compiler" "$W/probe.cpp" -o "$W/probe"
+"$W/probe"
+
+--- closure effect ---
+diff --git a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
+index 4d98ef99..d0364cc7 100644
+--- a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
++++ b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
+@@ -860,8 +860,8 @@ raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isc
+ raw_boundary,compemu_raw_exec_nostats,audited,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,705,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXEC_NOSTATS_BOUNDARY.md
+ raw_boundary,compemu_raw_execute_normal,audited,compemu_raw_execute_normal,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,654,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_BOUNDARY.md
+ raw_boundary,compemu_raw_execute_normal_cycles,audited,compemu_raw_execute_normal_cycles,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,664,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_CYCLES_BOUNDARY.md
+-raw_boundary,compemu_raw_fmov_mr_drop,unreviewed,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,reachable raw boundary; no exact closure classification
+-raw_boundary,compemu_raw_fmov_rm,unreviewed,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,915,reachable raw boundary; no exact closure classification
++raw_boundary,compemu_raw_fmov_mr_drop,audited,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md
++raw_boundary,compemu_raw_fmov_rm,audited,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,915,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md
+ raw_boundary,compemu_raw_handle_except,unreviewed,compemu_raw_handle_except,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,634,reachable raw boundary; no exact closure classification
+ raw_boundary,compemu_raw_inc_m,audited,compemu_raw_inc_m,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,480,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_METADATA_RMW_BOUNDARIES.md
+ raw_boundary,compemu_raw_inc_opcount,unreviewed,compemu_raw_inc_opcount,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,220,reachable raw boundary; no exact closure classification
+diff --git a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+index d6b521c5..d8e65dde 100644
+--- a/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
++++ b/BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
+ | generator | 130 | 75 | 44 | 11 | 0 |
+ | midfunc | 422 | 291 | 0 | 131 | 0 |
+ | emitter_api | 294 | 121 | 0 | 103 | 70 |
+-| raw_boundary | 83 | 44 | 0 | 28 | 11 |
++| raw_boundary | 83 | 46 | 0 | 28 | 9 |
+ | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
+
+ Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
+@@ -42,8 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
+
+ | Risk | Family | Layers / entries |
+ |---:|---|---|
+-| 60 | `compemu_raw_fmov_mr_drop` | raw_boundary:`compemu_raw_fmov_mr_drop` |
+-| 60 | `compemu_raw_fmov_rm` | raw_boundary:`compemu_raw_fmov_rm` |
+ | 60 | `compemu_raw_handle_except` | raw_boundary:`compemu_raw_handle_except` |
+ | 60 | `compemu_raw_inc_opcount` | raw_boundary:`compemu_raw_inc_opcount` |
+ | 60 | `compemu_raw_init_r_regstruct` | raw_boundary:`compemu_raw_init_r_regstruct` |
+@@ -62,6 +60,8 @@ Risk is a deterministic triage score, not a correctness verdict.
+ | 60 | `LDR_dXx` | emitter_api:`LDR_dXx` |
+ | 60 | `LDR_sXi` | emitter_api:`LDR_sXi` |
+ | 60 | `LDR_wXi` | emitter_api:`LDR_wXi` |
++| 60 | `LDR_wXx` | emitter_api:`LDR_wXx` |
++| 60 | `LDR_wXxLSLi` | emitter_api:`LDR_wXxLSLi` |
+
+ ## Accepted closure targets
+
+@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
+
+ ## Next selected family
+
+-`compemu_raw_fmov_mr_drop` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_fmov_mr_drop`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
++`compemu_raw_handle_except` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_handle_except`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+
+ ## Mechanical invariants
+
+
+--- direct clean probe ---
+METRIC raw_fmov_host_memory_boundaries=2
+METRIC raw_fmov_host_memory_direct_exact_words=128
+METRIC raw_fmov_host_memory_fallback_shapes=30
+METRIC raw_fmov_host_memory_store_vectors=60
+METRIC raw_fmov_host_memory_load_vectors=60
+METRIC raw_fmov_host_memory_bit_classes=10
+METRIC raw_fmov_host_memory_caller_saved_fp_vectors=40
+METRIC raw_fmov_host_memory_callee_saved_fp_vectors=20
+
+--- broad acceptance ---
+METRIC pass=904
+METRIC fail=0
+METRIC total=904
+METRIC infra_fail=0
+METRIC risky_total=904
+METRIC risky_pass=904
+METRIC risky_fail=0
+METRIC score=100
+METRIC selected_vectors=904
+METRIC validation_complete=1
+
+--- allocator acceptance ---
+REGPRESSURE_SUMMARY selected=33 pass=33 fail=0
+METRIC regpressure_selected=33
+METRIC regpressure_pass=33
+METRIC regpressure_fail=0
+
+--- closure and hashes ---
+CLOSURE_INVENTORY rows=998 generator=130 midfunc=422 emitter_api=294 raw_boundary=83 runtime_boundary=69
+CLOSURE_LAYER layer=generator total=130 audited=75 serviced=44 unreachable=11 unreviewed=0
+CLOSURE_LAYER layer=midfunc total=422 audited=291 serviced=0 unreachable=131 unreviewed=0
+CLOSURE_LAYER layer=emitter_api total=294 audited=121 serviced=0 unreachable=103 unreviewed=70
+CLOSURE_LAYER layer=raw_boundary total=83 audited=46 serviced=0 unreachable=28 unreviewed=9
+CLOSURE_LAYER layer=runtime_boundary total=69 audited=0 serviced=40 unreachable=29 unreviewed=0
+wrote BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv and BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+9dc985e20749ca87f0681c43d07554f4856ac2a6fd9992833ac113a4156f5d94  BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv
+0410d73ebd811a070b29c701cefd75c6ecf42940bf3b8eb97dfae93e748c6d00  BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.md
+37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa  BasiliskII/src/Unix/compemu.cpp
+
+--- structural metrics ---
+METRIC structural_raw_fmov_host_memory_boundaries=2
+METRIC structural_raw_fmov_host_memory_direct_exact_words=128
+METRIC structural_raw_fmov_host_memory_fallback_shapes=30
+METRIC structural_raw_fmov_host_memory_native_vectors=120
+METRIC structural_raw_fmov_host_memory_allocator_callers=2
+
+--- clean build ---
+CLEAN_BUILD_PASS
+
+--- independent review history ---
+INITIAL REJECT: add native misaligned runtime witness; pin misaligned and unrelated witnesses; exact-extract LOAD_U64 or narrow wording.
+FIXED: base+1 executes store/load; structural gate names base+1 and external; production LOAD_U64 exact-extracted.
+FINAL APPROVE: previous blockers fixed; counts/ABI/NZCV/caller-state/narrow promotion all accepted.

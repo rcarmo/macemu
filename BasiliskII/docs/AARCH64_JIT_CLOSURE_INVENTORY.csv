@@ -860,8 +860,8 @@ raw_boundary,compemu_raw_endblock_pc_isconst,audited,compemu_raw_endblock_pc_isc
 raw_boundary,compemu_raw_exec_nostats,audited,compemu_raw_exec_nostats,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,705,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXEC_NOSTATS_BOUNDARY.md
 raw_boundary,compemu_raw_execute_normal,audited,compemu_raw_execute_normal,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,654,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_BOUNDARY.md
 raw_boundary,compemu_raw_execute_normal_cycles,audited,compemu_raw_execute_normal_cycles,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,664,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_CYCLES_BOUNDARY.md
-raw_boundary,compemu_raw_fmov_mr_drop,unreviewed,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,reachable raw boundary; no exact closure classification
-raw_boundary,compemu_raw_fmov_rm,unreviewed,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,915,reachable raw boundary; no exact closure classification
+raw_boundary,compemu_raw_fmov_mr_drop,audited,compemu_raw_fmov_mr_drop,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,904,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md
+raw_boundary,compemu_raw_fmov_rm,audited,compemu_raw_fmov_rm,60,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,915,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md
 raw_boundary,compemu_raw_handle_except,unreviewed,compemu_raw_handle_except,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,634,reachable raw boundary; no exact closure classification
 raw_boundary,compemu_raw_inc_m,audited,compemu_raw_inc_m,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,480,BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_METADATA_RMW_BOUNDARIES.md
 raw_boundary,compemu_raw_inc_opcount,unreviewed,compemu_raw_inc_opcount,60,2,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,220,reachable raw boundary; no exact closure classification

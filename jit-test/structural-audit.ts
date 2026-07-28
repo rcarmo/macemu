@@ -100,6 +100,8 @@ const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-b
 const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
 const rawExecuteNormalHarnessSource = await Bun.file(new URL("./raw-execute-normal-boundary-matrix.sh", import.meta.url)).text();
 const rawExecuteNormalCyclesHarnessSource = await Bun.file(new URL("./raw-execute-normal-cycles-boundary-matrix.sh", import.meta.url)).text();
+const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
+const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4519,6 +4521,88 @@ requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-execute-normal-c
 console.log("METRIC structural_raw_execute_normal_cycles_boundaries=1");
 console.log("METRIC structural_raw_execute_normal_cycles_runtime_cases=2");
 console.log("METRIC structural_raw_execute_normal_cycles_lowerings=2");
+
+/* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
+ * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
+ * sole allocator callers, state transitions, source-extracted native oracle,
+ * and narrow closure promotion without inheriting generic encoder status. */
+const rawFmovStoreBody = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,WRITE,2,compemu_raw_fmov_mr_drop,(MEMW mem, FR s))",
+  "LENDFUNC(NONE,WRITE,2,compemu_raw_fmov_mr_drop,(MEMW mem, FR s))",
+  "raw FPU host-memory store",
+);
+const rawFmovLoadBody = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,READ,2,compemu_raw_fmov_rm,(FW d, MEMR mem))",
+  "LENDFUNC(NONE,READ,2,compemu_raw_fmov_rm,(FW d, MEMW mem))",
+  "raw FPU host-memory load",
+);
+for (const [body, direct, fallback, label] of [
+  [rawFmovStoreBody, "STR_dXi(s, R_REGSTRUCT, (mem - (uintptr) &regs));", "STR_dXi(s, REG_WORK1, 0);", "store"],
+  [rawFmovLoadBody, "LDR_dXi(d, R_REGSTRUCT, (mem - (uintptr) &regs));", "LDR_dXi(d, REG_WORK1, 0);", "load"],
+] as const) {
+  for (const contract of [
+    "mem >= (uintptr) &regs", "mem < (uintptr) &regs + 32760",
+    "((mem - (uintptr) &regs) & 0x7) == 0", direct,
+    "LOAD_U64(REG_WORK1, mem);", fallback,
+  ]) requireText(body, contract, `raw FPU host-memory ${label}`);
+  requireBefore(body, "LOAD_U64(REG_WORK1, mem);", fallback, `raw FPU host-memory ${label} fallback ordering`);
+}
+if ((allocatorSource.match(/\bcompemu_raw_fmov_mr_drop\s*\(/g) || []).length !== 1)
+  fail("raw FPU host-memory store caller census changed");
+if ((allocatorSource.match(/\bcompemu_raw_fmov_rm\s*\(/g) || []).length !== 1)
+  fail("raw FPU host-memory load caller census changed");
+const rawFmovTomemBody = functionBody(
+  allocatorSource, "static void f_tomem_drop(int r)", "static int f_isinreg(int r)",
+  "raw FPU spill state transition",
+);
+for (const contract of [
+  "if (live.fate[r].status == DIRTY)",
+  "compemu_raw_fmov_mr_drop((uintptr)live.fate[r].mem, live.fate[r].realreg);",
+  "live.fate[r].status = INMEM;",
+]) requireText(rawFmovTomemBody, contract, "raw FPU spill state transition");
+requireBefore(rawFmovTomemBody, "compemu_raw_fmov_mr_drop", "live.fate[r].status = INMEM;", "raw FPU spill before INMEM publication");
+const fAllocRegBody = functionBody(
+  allocatorSource, "static int f_alloc_reg(int r, int willclobber)", "static void f_unlock(int r)",
+  "raw FPU reload state transition",
+);
+for (const contract of [
+  "if (!willclobber)", "if (live.fate[r].status == INMEM)",
+  "compemu_raw_fmov_rm(bestreg, (uintptr)live.fate[r].mem);",
+  "live.fate[r].status = CLEAN;", "live.fate[r].realreg = bestreg;",
+  "live.fat[bestreg].holds = r;", "live.fat[bestreg].nholds = 1;",
+]) requireText(fAllocRegBody, contract, "raw FPU reload state transition");
+requireBefore(fAllocRegBody, "compemu_raw_fmov_rm", "live.fate[r].status = CLEAN;", "raw FPU reload before CLEAN publication");
+for (const contract of [
+  "raw-fmov-host-memory.inc", "compemu_raw_fmov_mr_drop(address, fpreg)",
+  "compemu_raw_fmov_rm(fpreg, address)", "base + 32752", "base + 32760", "base + 1",
+  "{external, 15}", "direct_exact_words == 128", "fallback_shapes == 30",
+  "store_vectors == 60", "load_vectors == 60",
+  "caller_saved_fp == 40", "callee_saved_fp == 20",
+  "0x7ff0000000000001ull", "0xfff8deadbeef1234ull",
+  "native store NZCV", "native load NZCV",
+]) requireText(rawFmovHostMemoryProbeSource, contract, "raw FPU host-memory native probe");
+for (const contract of [
+  "codegen_arm64.cpp", "awk '", "STATIC_INLINE void LOAD_U64", "compemu_raw_fmov_mr_drop", "compemu_raw_fmov_rm",
+  "test \"$(grep -c '^LOWFUNC'", "-Wall -Wextra -Werror", '"$W/probe"',
+]) requireText(rawFmovHostMemoryHarnessSource, contract, "raw FPU host-memory source extraction");
+for (const name of ["compemu_raw_fmov_mr_drop", "compemu_raw_fmov_rm"]) {
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`raw_boundary,${name},`));
+  if (!row?.includes(",audited,")) fail(`${name} not promoted by accepted report`);
+  if (!row.includes("AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md"))
+    fail(`${name} missing bounded evidence report`);
+}
+for (const name of ["LDR_dXi", "STR_dXi"]) {
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!row?.includes(",unreviewed,")) fail(`${name} generic emitter status leaked from raw FPU seam`);
+}
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-fmov-host-memory-conformance.sh"', "raw FPU host-memory bounded acceptance gate");
+console.log("METRIC structural_raw_fmov_host_memory_boundaries=2");
+console.log("METRIC structural_raw_fmov_host_memory_direct_exact_words=128");
+console.log("METRIC structural_raw_fmov_host_memory_fallback_shapes=30");
+console.log("METRIC structural_raw_fmov_host_memory_native_vectors=120");
+console.log("METRIC structural_raw_fmov_host_memory_allocator_callers=2");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private
