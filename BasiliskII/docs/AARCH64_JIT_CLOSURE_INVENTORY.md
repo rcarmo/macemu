@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
 | emitter_api | 294 | 121 | 0 | 103 | 70 |
-| raw_boundary | 83 | 50 | 0 | 29 | 4 |
+| raw_boundary | 83 | 53 | 0 | 29 | 1 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,9 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `compemu_raw_mov_l_mi` | raw_boundary:`compemu_raw_mov_l_mi` |
-| 60 | `compemu_raw_mov_l_mr` | raw_boundary:`compemu_raw_mov_l_mr` |
-| 60 | `compemu_raw_mov_l_rm` | raw_boundary:`compemu_raw_mov_l_rm` |
 | 60 | `CSEL_wwwc` | emitter_api:`CSEL_wwwc` |
 | 60 | `CSEL_xxxc` | emitter_api:`CSEL_xxxc` |
 | 60 | `CSET_xc` | emitter_api:`CSET_xc` |
@@ -62,6 +59,9 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `LDR_xXpost` | emitter_api:`LDR_xXpost` |
 | 60 | `LDR_xXxLSLi` | emitter_api:`LDR_xXxLSLi` |
 | 60 | `LDRB_wXx` | emitter_api:`LDRB_wXx` |
+| 60 | `LDRH_wXi` | emitter_api:`LDRH_wXi` |
+| 60 | `LDRH_wXx` | emitter_api:`LDRH_wXx` |
+| 60 | `LSL_wwi` | emitter_api:`LSL_wwi` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`compemu_raw_mov_l_mi` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_mov_l_mi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`CSEL_wwwc` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`CSEL_wwwc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

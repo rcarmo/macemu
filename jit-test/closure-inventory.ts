@@ -272,6 +272,7 @@ const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^raw_fmov_d_rm$/, "AARCH64_JIT_AUDIT_FMOV_RM_LIFECYCLE.md"],
   [/^(?:fmov_rr|raw_fmov_rr)$/, "AARCH64_JIT_AUDIT_FMOV_PRIMITIVES.md"],
   [/^raw_fp_fscc_ri$/, "AARCH64_JIT_AUDIT_FSCC_LIFECYCLE.md"],
+  [/^compemu_raw_mov_l_(?:mi|mr|rm)$/, "AARCH64_JIT_AUDIT_RAW_MOV_HOST_MEMORY_BOUNDARIES.md"],
   [/^compemu_raw_mov_l_ri$/, "AARCH64_JIT_AUDIT_MOV_L_RI_LIFECYCLE.md"],
   [/^compemu_raw_mov_l_rr$/, "AARCH64_JIT_AUDIT_MOV_L_RR_LIFECYCLE.md"],
 ];

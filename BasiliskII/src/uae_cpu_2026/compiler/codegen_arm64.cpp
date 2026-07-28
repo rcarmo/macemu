@@ -427,9 +427,9 @@ LOWFUNC(NONE,WRITE,2,compemu_raw_mov_l_mr,(MEMW d, RR4 s))
 		// globals like regflags that the linker places close by).
 		STR_wXi(s, R_REGSTRUCT, idx);
 	} else {
-		// Address too far from R_REGSTRUCT — use absolute address.
-		LOAD_U64(REG_WORK1, d);
-		STR_wXi(s, REG_WORK1, 0);
+		// Absolute address: alternate scratch preserves a REG_WORK1 source.
+		const int addr_reg = s == REG_WORK1 ? REG_WORK2 : REG_WORK1; LOAD_U64(addr_reg, d);
+		STR_wXi(s, addr_reg, 0);
 	}
 }
 LENDFUNC(NONE,WRITE,2,compemu_raw_mov_l_mr,(MEMW d, RR4 s))

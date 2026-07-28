@@ -130,6 +130,12 @@ const rawMaybeDoNothingReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md",
   import.meta.url,
 )).text();
+const rawMovHostMemoryProbeSource = await Bun.file(new URL("./raw-mov-host-memory-conformance.cpp", import.meta.url)).text();
+const rawMovHostMemoryHarnessSource = await Bun.file(new URL("./raw-mov-host-memory-conformance.sh", import.meta.url)).text();
+const rawMovHostMemoryReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_MOV_HOST_MEMORY_BOUNDARIES.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -378,6 +384,20 @@ const configuredMakefileSource = await Bun.file(new URL(
   "../BasiliskII/src/Unix/Makefile",
   import.meta.url,
 )).text();
+const configuredMakefileDefines = [...configuredMakefileSource.matchAll(/-D([A-Za-z_][A-Za-z0-9_]*)/g)]
+  .map((match) => `-D${match[1]}`);
+const configuredSupportPreprocess = Bun.spawnSync([
+  "g++", "-E", "-fdirectives-only", "-x", "c++",
+  "-I", new URL("../BasiliskII/src/include", import.meta.url).pathname,
+  "-I", new URL("../BasiliskII/src/Unix", import.meta.url).pathname,
+  "-I", new URL("../BasiliskII/src/CrossPlatform", import.meta.url).pathname,
+  "-I", new URL("../BasiliskII/src/uae_cpu_2026", import.meta.url).pathname,
+  "-I", new URL("../BasiliskII/src/slirp", import.meta.url).pathname,
+  ...configuredMakefileDefines, allocatorPath.pathname,
+], { stdout: "pipe", stderr: "pipe" });
+if (configuredSupportPreprocess.exitCode !== 0)
+  fail(`configured support preprocessing failed: ${configuredSupportPreprocess.stderr.toString().trim()}`);
+const configuredAllocatorSource = configuredSupportPreprocess.stdout.toString();
 const timerSource = await Bun.file(new URL(
   "../BasiliskII/src/timer.cpp",
   import.meta.url,
@@ -4851,11 +4871,25 @@ if (currentRawJccRows.length !== 1) fail(`raw condition-only row count=${current
 const currentMaybeDoNothingRows = closureInventoryCsv.split("\n").filter((line) => line.startsWith("raw_boundary,compemu_raw_maybe_do_nothing,"));
 if (currentMaybeDoNothingRows.length !== 1) fail(`raw maybe-do-nothing row count=${currentMaybeDoNothingRows.length}, expected 1`);
 const publishedMaybeDoNothingRow = "raw_boundary,compemu_raw_maybe_do_nothing,unreviewed,compemu_raw_maybe_do_nothing,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,777,reachable raw boundary; no exact closure classification";
+const publishedRawMovRows = new Map([
+  ["compemu_raw_mov_l_mi", "raw_boundary,compemu_raw_mov_l_mi,unreviewed,compemu_raw_mov_l_mi,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,400,reachable raw boundary; no exact closure classification"],
+  ["compemu_raw_mov_l_mr", "raw_boundary,compemu_raw_mov_l_mr,unreviewed,compemu_raw_mov_l_mr,60,17,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,420,reachable raw boundary; no exact closure classification"],
+  ["compemu_raw_mov_l_rm", "raw_boundary,compemu_raw_mov_l_rm,unreviewed,compemu_raw_mov_l_rm,60,26,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,443,reachable raw boundary; no exact closure classification"],
+]);
+const restorePublishedRawMovRows = (csv: string) => {
+  let restored = csv;
+  for (const [name, published] of publishedRawMovRows) {
+    const current = restored.split("\n").find((line) => line.startsWith(`raw_boundary,${name},`));
+    if (!current) fail(`raw move row missing during predecessor reconstruction: ${name}`);
+    restored = restored.replace(`${current}\n`, `${published}\n`);
+  }
+  return restored;
+};
 /* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
  * every subsequently promoted row before hashing the published JCC base. */
-const reconstructedPublishedCsv = closureInventoryCsv
+const reconstructedPublishedCsv = restorePublishedRawMovRows(closureInventoryCsv
   .replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`)
-  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`);
+  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`));
 if (reconstructedPublishedCsv === closureInventoryCsv)
   fail("raw condition-only predecessor reconstruction changed no row");
 const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
@@ -4955,9 +4989,9 @@ const rawMaybeDoNothingRow = closureInventoryCsv.split("\n").find((line) => line
 if (!rawMaybeDoNothingRow?.includes(",audited,") || !rawMaybeDoNothingRow.includes(",9,") ||
     !rawMaybeDoNothingRow.includes("AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md"))
   fail("raw maybe-do-nothing configured census or closure promotion changed");
-const reconstructedMaybeDoNothingBase = closureInventoryCsv.replace(
+const reconstructedMaybeDoNothingBase = restorePublishedRawMovRows(closureInventoryCsv.replace(
   `${rawMaybeDoNothingRow}\n`, `${publishedMaybeDoNothingRow}\n`,
-);
+));
 /* Mechanical one-row proof against the committed predecessor is supplied by
  * the exact published hash, not by selected-column comparison. */
 const maybeDoNothingPredecessorHash = createHash("sha256").update(reconstructedMaybeDoNothingBase).digest("hex");
@@ -4991,6 +5025,110 @@ console.log("METRIC structural_raw_maybe_do_nothing_taken=2");
 console.log("METRIC structural_raw_maybe_do_nothing_lowerings=2");
 console.log("METRIC structural_raw_maybe_do_nothing_configured_references=9");
 console.log("METRIC structural_raw_maybe_do_nothing_once_only=1");
+
+/* The raw integer host-memory move family shares one address classifier:
+ * pointer fields are 64-bit, aligned in-range values are 32-bit fixed-base,
+ * and every other host address is a 32-bit absolute access. Pin all paths,
+ * the REG_WORK1 source/address collision repair, native extraction, configured
+ * caller census, and exactly three closure promotions. */
+const rawMovMiBody = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,WRITE,2,compemu_raw_mov_l_mi,(MEMW d, IMPTR s))",
+  "LENDFUNC(NONE,WRITE,2,compemu_raw_mov_l_mi,(MEMW d, IMPTR s))",
+  "raw move immediate store",
+);
+const rawMovMrBody = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,WRITE,2,compemu_raw_mov_l_mr,(MEMW d, RR4 s))",
+  "LENDFUNC(NONE,WRITE,2,compemu_raw_mov_l_mr,(MEMW d, RR4 s))",
+  "raw move register store",
+);
+const rawMovRmBody = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,READ,2,compemu_raw_mov_l_rm,(W4 d, MEMR s))",
+  "LENDFUNC(NONE,READ,2,compemu_raw_mov_l_rm,(W4 d, MEMR s))",
+  "raw move load",
+);
+for (const [body, direct64, direct32, absolute, label] of [
+  [rawMovMiBody, "LOAD_U64(REG_WORK2, s);", "STR_wXi(REG_WORK2, R_REGSTRUCT, idx);", "STR_wXi(REG_WORK2, REG_WORK1, 0);", "immediate store"],
+  [rawMovMrBody, "STR_xXi(s, R_REGSTRUCT, idx);", "STR_wXi(s, R_REGSTRUCT, idx);", "STR_wXi(s, addr_reg, 0);", "register store"],
+  [rawMovRmBody, "LDR_xXi(d, R_REGSTRUCT, idx);", "LDR_wXi(d, R_REGSTRUCT, idx);", "LDR_wXi(d, REG_WORK1, 0);", "load"],
+] as const) {
+  for (const contract of [
+    "regs.pc_p", "regs.pc_oldp", "idx <= 16380", "(idx & 3) == 0",
+    direct64, direct32, absolute,
+  ]) requireText(body, contract, `raw move ${label}`);
+}
+for (const contract of [
+  "const int addr_reg = s == REG_WORK1 ? REG_WORK2 : REG_WORK1;",
+  "LOAD_U64(addr_reg, d);", "STR_wXi(s, addr_reg, 0);",
+]) requireText(rawMovMrBody, contract, "raw move register-store alias repair");
+requireBefore(rawMovMrBody, "const int addr_reg", "STR_wXi(s, addr_reg, 0);", "raw move alias-safe address before store");
+for (const [name, count] of [
+  ["compemu_raw_mov_l_mi", 6], ["compemu_raw_mov_l_mr", 14], ["compemu_raw_mov_l_rm", 24],
+] as const) {
+  const calls = configuredAllocatorSource.match(new RegExp(`\\b${name}\\s*\\(`, "g"))?.length ?? 0;
+  if (calls !== count) fail(`raw move configured caller ${name}=${calls}, expected ${count}`);
+}
+for (const contract of [
+  '#include "raw-mov-host-memory.inc"', "regs.pc_p", "regs.pc_oldp",
+  "base + 16380", "base + 17", "external", "0xffff000080000001ull",
+  "for (const unsigned reg : {1u, 2u, 6u})", "terminal load/store width",
+  "raw_mov_host_memory_boundaries=3", "raw_mov_host_memory_exact_shapes=%u",
+  "raw_mov_host_memory_immediate_vectors=%u", "raw_mov_host_memory_register_vectors=%u",
+  "raw_mov_host_memory_load_vectors=%u", "raw_mov_host_memory_pointer_vectors=%u",
+  "raw_mov_host_memory_direct32_vectors=%u", "raw_mov_host_memory_absolute_vectors=%u",
+  "raw_mov_host_memory_nzcv_preserved=1", "register_vectors == 90",
+]) requireText(rawMovHostMemoryProbeSource, contract, "raw move native oracle");
+for (const contract of [
+  "^STATIC_INLINE void LOAD_U32", "^STATIC_INLINE void LOAD_U64",
+  "compemu_raw_mov_l_mi", "compemu_raw_mov_l_mr", "compemu_raw_mov_l_rm",
+  "test \"$(grep -c '^LOWFUNC'", "-Wall -Wextra -Werror",
+]) requireText(rawMovHostMemoryHarnessSource, contract, "raw move exact extraction");
+for (const [name, refs] of [
+  ["compemu_raw_mov_l_mi", 9], ["compemu_raw_mov_l_mr", 17], ["compemu_raw_mov_l_rm", 26],
+] as const) {
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`raw_boundary,${name},`));
+  if (!row?.includes(",audited,") || !row.includes(`,${refs},`) ||
+      !row.includes("AARCH64_JIT_AUDIT_RAW_MOV_HOST_MEMORY_BOUNDARIES.md"))
+    fail(`raw move closure promotion changed for ${name}`);
+}
+const rawMovPredecessorHash = createHash("sha256")
+  .update(restorePublishedRawMovRows(closureInventoryCsv)).digest("hex");
+if (rawMovPredecessorHash !== "ccad95c24f1975dbfb0e7c2bc5de24fc6d331bbb19f8815da6a59d41fe885091")
+  fail(`raw move exact three-row predecessor hash=${rawMovPredecessorHash}`);
+if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication|re-review is pending/i.test(rawMovHostMemoryReportSource))
+  fail("raw move evidence report is not final");
+for (const contract of [
+  "Final acceptance:", "boundaries: **3**", "exact emission shapes: **18/18**",
+  "immediate-store executions: **30/30**", "register-store executions: **90/90**",
+  "load executions: **30/30**", "pointer-field cells: **10/10**",
+  "direct 32-bit cells: **10/10**", "absolute-address cells: **10/10**",
+  "NZCV preservation: **150/150**", "9, 17, and 26 whole-root",
+  "native payload executions: **150/150**", "x2/`REG_WORK1` absolute fallback",
+  "configured preprocessed caller counts: **6/14/24**",
+  "configured whole-root inventory references: **9/17/26**",
+  "complete emitter/boundary phase: pass", "`emitter_fmsub_exact_words=1048576`",
+  "complete active-risky corpus: **904/904**", "allocator pressure: **33/33**",
+  "clean full AArch64 build: pass", "complete structural audit: pass",
+  "**70 emitter APIs** and **1 raw boundary** unreviewed",
+  "`ccad95c24f1975dbfb0e7c2bc5de24fc6d331bbb19f8815da6a59d41fe885091`",
+  "`ecb65b0ae5e2aa2326406f5cb47e06a414625f2ed61936aec04db862f844617d`",
+  "`c1d31def556c6586d83e185f3b4d51f634f0a18d3410e78ae891d0e83586bb3f`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "source hygiene: pass", "initial reject", "first re-review confirmed",
+  "final re-review: **approve**",
+]) requireText(rawMovHostMemoryReportSource, contract, "raw move evidence report");
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-mov-host-memory-conformance.sh"', "raw move bounded acceptance gate");
+console.log("METRIC structural_raw_mov_host_memory_boundaries=3");
+console.log("METRIC structural_raw_mov_host_memory_exact_shapes=18");
+console.log("METRIC structural_raw_mov_host_memory_immediate_vectors=30");
+console.log("METRIC structural_raw_mov_host_memory_register_vectors=90");
+console.log("METRIC structural_raw_mov_host_memory_load_vectors=30");
+console.log("METRIC structural_raw_mov_host_memory_pointer_vectors=10");
+console.log("METRIC structural_raw_mov_host_memory_direct32_vectors=10");
+console.log("METRIC structural_raw_mov_host_memory_absolute_vectors=10");
+console.log("METRIC structural_raw_mov_host_memory_nzcv_preserved=1");
 
 /* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
  * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
