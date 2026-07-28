@@ -19,11 +19,11 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 |---|---:|---:|---:|---:|---:|
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
-| emitter_api | 294 | 121 | 0 | 103 | 70 |
+| emitter_api | 294 | 125 | 0 | 103 | 66 |
 | raw_boundary | 83 | 54 | 0 | 29 | 0 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
-Detailed rows: `--check`.
+Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
 
 ## Configured-root and registration corrections
 
@@ -42,10 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `CSEL_wwwc` | emitter_api:`CSEL_wwwc` |
-| 60 | `CSEL_xxxc` | emitter_api:`CSEL_xxxc` |
-| 60 | `CSET_xc` | emitter_api:`CSET_xc` |
-| 60 | `CSETM_wc` | emitter_api:`CSETM_wc` |
 | 60 | `LDP_xxXi` | emitter_api:`LDP_xxXi` |
 | 60 | `LDP_xxXpost` | emitter_api:`LDP_xxXpost` |
 | 60 | `LDR_dXi` | emitter_api:`LDR_dXi` |
@@ -62,6 +58,10 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `LDRH_wXi` | emitter_api:`LDRH_wXi` |
 | 60 | `LDRH_wXx` | emitter_api:`LDRH_wXx` |
 | 60 | `LSL_wwi` | emitter_api:`LSL_wwi` |
+| 60 | `LSL_www` | emitter_api:`LSL_www` |
+| 60 | `LSL_xxi` | emitter_api:`LSL_xxi` |
+| 60 | `LSL_xxx` | emitter_api:`LSL_xxx` |
+| 60 | `LSR_wwi` | emitter_api:`LSR_wwi` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`CSEL_wwwc` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`CSEL_wwwc`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`LDP_xxXi` is the highest-risk family still classified as unreviewed. Its current rows are emitter_api:`LDP_xxXi`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

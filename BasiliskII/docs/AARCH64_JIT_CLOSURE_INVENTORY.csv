@@ -83,11 +83,11 @@ emitter_api,CMP_wwLSLi,audited,CMP_wwLSLi,88,6,BasiliskII/src/uae_cpu_2026/compi
 emitter_api,CMP_xi,audited,CMP_xi,88,3,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,207,AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md
 emitter_api,CMP_xx,audited,CMP_xx,88,6,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,209,AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md
 emitter_api,CMP_xxLSLi,unreachable,CMP_xxLSLi,88,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,211,no path from reachable AArch64 compiler/emitter roots
-emitter_api,CSEL_wwwc,unreviewed,CSEL_wwwc,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,390,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,CSEL_xxxc,unreviewed,CSEL_xxxc,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,391,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,CSEL_wwwc,audited,CSEL_wwwc,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,390,AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md
+emitter_api,CSEL_xxxc,audited,CSEL_xxxc,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,391,AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md
 emitter_api,CSET_wc,unreachable,CSET_wc,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,394,no path from reachable AArch64 compiler/emitter roots
-emitter_api,CSET_xc,unreviewed,CSET_xc,60,15,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,395,reachable encoder API; requires opcode/width/branch-range contract classification
-emitter_api,CSETM_wc,unreviewed,CSETM_wc,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,398,reachable encoder API; requires opcode/width/branch-range contract classification
+emitter_api,CSET_xc,audited,CSET_xc,60,15,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,395,AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md
+emitter_api,CSETM_wc,audited,CSETM_wc,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,398,AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md
 emitter_api,CSETM_xc,unreachable,CSETM_xc,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,399,no path from reachable AArch64 compiler/emitter roots
 emitter_api,EOR_www,audited,EOR_www,80,24,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,303,AARCH64_JIT_AUDIT_EOR_EMITTERS.md
 emitter_api,EOR_wwwLSLi,audited,EOR_wwwLSLi,80,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,305,AARCH64_JIT_AUDIT_EOR_EMITTERS.md

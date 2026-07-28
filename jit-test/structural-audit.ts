@@ -140,6 +140,10 @@ const rawFflagsReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_FFLAGS_INTO_FLAGS_BOUNDARY.md",
   import.meta.url,
 )).text();
+const conditionalEmitterReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -464,6 +468,14 @@ const subEmitterProbeSource = await Bun.file(new URL(
 )).text();
 const subEmitterHarnessSource = await Bun.file(new URL(
   "./emitter-sub-conformance.sh",
+  import.meta.url,
+)).text();
+const conditionalEmitterProbeSource = await Bun.file(new URL(
+  "./emitter-conditional-conformance.cpp",
+  import.meta.url,
+)).text();
+const conditionalEmitterHarnessSource = await Bun.file(new URL(
+  "./emitter-conditional-conformance.sh",
   import.meta.url,
 )).text();
 const andEmitterProbeSource = await Bun.file(new URL(
@@ -4895,11 +4907,26 @@ const restorePublishedRawFflagsRow = (csv: string) => {
   if (!current) fail("raw_fflags_into_flags row missing during predecessor reconstruction");
   return csv.replace(`${current}\n`, `${publishedRawFflagsRow}\n`);
 };
+const publishedConditionalEmitterRows = new Map([
+  ["CSEL_wwwc", "emitter_api,CSEL_wwwc,unreviewed,CSEL_wwwc,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,390,reachable encoder API; requires opcode/width/branch-range contract classification"],
+  ["CSEL_xxxc", "emitter_api,CSEL_xxxc,unreviewed,CSEL_xxxc,60,11,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,391,reachable encoder API; requires opcode/width/branch-range contract classification"],
+  ["CSET_xc", "emitter_api,CSET_xc,unreviewed,CSET_xc,60,15,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,395,reachable encoder API; requires opcode/width/branch-range contract classification"],
+  ["CSETM_wc", "emitter_api,CSETM_wc,unreviewed,CSETM_wc,60,9,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,398,reachable encoder API; requires opcode/width/branch-range contract classification"],
+]);
+const restorePublishedConditionalEmitterRows = (csv: string) => {
+  let restored = csv;
+  for (const [name, published] of publishedConditionalEmitterRows) {
+    const current = restored.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+    if (!current) fail(`conditional emitter row missing during predecessor reconstruction: ${name}`);
+    restored = restored.replace(`${current}\n`, `${published}\n`);
+  }
+  return restored;
+};
 /* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
  * every subsequently promoted row before hashing the published JCC base. */
-const reconstructedPublishedCsv = restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv
+const reconstructedPublishedCsv = restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv
   .replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`)
-  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`)));
+  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`))));
 if (reconstructedPublishedCsv === closureInventoryCsv)
   fail("raw condition-only predecessor reconstruction changed no row");
 const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
@@ -4999,9 +5026,9 @@ const rawMaybeDoNothingRow = closureInventoryCsv.split("\n").find((line) => line
 if (!rawMaybeDoNothingRow?.includes(",audited,") || !rawMaybeDoNothingRow.includes(",9,") ||
     !rawMaybeDoNothingRow.includes("AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md"))
   fail("raw maybe-do-nothing configured census or closure promotion changed");
-const reconstructedMaybeDoNothingBase = restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv.replace(
+const reconstructedMaybeDoNothingBase = restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(closureInventoryCsv.replace(
   `${rawMaybeDoNothingRow}\n`, `${publishedMaybeDoNothingRow}\n`,
-)));
+))));
 /* Mechanical one-row proof against the committed predecessor is supplied by
  * the exact published hash, not by selected-column comparison. */
 const maybeDoNothingPredecessorHash = createHash("sha256").update(reconstructedMaybeDoNothingBase).digest("hex");
@@ -5104,7 +5131,7 @@ for (const [name, refs] of [
     fail(`raw move closure promotion changed for ${name}`);
 }
 const rawMovPredecessorHash = createHash("sha256")
-  .update(restorePublishedRawMovRows(restorePublishedRawFflagsRow(closureInventoryCsv))).digest("hex");
+  .update(restorePublishedConditionalEmitterRows(restorePublishedRawMovRows(restorePublishedRawFflagsRow(closureInventoryCsv)))).digest("hex");
 if (rawMovPredecessorHash !== "ccad95c24f1975dbfb0e7c2bc5de24fc6d331bbb19f8815da6a59d41fe885091")
   fail(`raw move exact three-row predecessor hash=${rawMovPredecessorHash}`);
 if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication|re-review is pending/i.test(rawMovHostMemoryReportSource))
@@ -7728,6 +7755,61 @@ for (const contract of ["-Wall -Wextra -Werror", "emitter-sub-conformance.cpp"])
   requireText(subEmitterHarnessSource, contract, "generic SUB conformance build");
 requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-sub-conformance.sh"', "generic SUB bounded acceptance gate");
 
+/* The mechanically selected conditional cluster shares the A64 conditional-
+ * select grammar. Prove all NZCV truth-table cells, W/X width semantics, alias
+ * condition inversion, and that configured alias callers exclude AL/NV. */
+for (const contract of [
+  "#define CSEL_wwwc(Wd,Wn,Wm,cond)  _W((0b00011010100 << 21) | ((Wm) << 16) | ((cond) << 12) | (0b00 << 10) | ((Wn) << 5) | (Wd))",
+  "#define CSEL_xxxc(Xd,Xn,Xm,cond)  _W((0b10011010100 << 21) | ((Xm) << 16) | ((cond) << 12) | (0b00 << 10) | ((Xn) << 5) | (Xd))",
+  "#define CSET_xc(Xd,cond)          _W((0b10011010100 << 21) | (0b11111 << 16) | ((cond^1) << 12) | (0b01 << 10) | (0b11111 << 5) | (Xd))",
+  "#define CSETM_wc(Wd,cond)         _W((0b01011010100 << 21) | (0b11111 << 16) | ((cond^1) << 12) | (0b00 << 10) | (0b11111 << 5) | (Wd))",
+]) requireText(codegenHeaderSource, contract, "generic conditional emitter encoding");
+const conditionalEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
+for (const [name, rawExpected, configuredExpected] of [
+  ["CSEL_wwwc", 9, 9], ["CSEL_xxxc", 29, 11], ["CSET_xc", 17, 15], ["CSETM_wc", 9, 9],
+] as const) {
+  const found = (conditionalEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
+  if (found !== rawExpected) fail(`generic ${name} raw caller census: expected ${rawExpected}, found ${found}`);
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!row?.includes(",audited,") || !row.includes(`,${configuredExpected},`) ||
+      !row.includes("AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md"))
+    fail(`generic ${name} configured census or closure promotion changed`);
+}
+for (const source of [midfuncSource, midfunc2Source, compatSource, codegenSource]) {
+  if (/\b(?:CSET_xc|CSETM_wc)\s*\([^;\n]*NATIVE_CC_(?:AL|NV)\s*\)/.test(source))
+    fail("generic conditional alias caller uses degenerate AL/NV predicate");
+}
+for (const contract of [
+  "0x1a8b0149u", "0x1a9cf3beu", "0x9a8e41acu", "0x9a9ce3beu",
+  "0x9a9f07efu", "0x9a9fc7feu", "0x5a9f33f0u", "0x5a9fd3feu",
+  "for (unsigned cond = 0; cond < 16; ++cond)", "for (unsigned nzcv = 0; nzcv < 16; ++nzcv)",
+  "for (unsigned cond = 0; cond < 14; ++cond)", "condition_holds", "CSEL_wwwc native truth table/zero extension",
+  "CSEL_xxxc native truth table", "CSET_xc native truth table", "CSETM_wc native truth table/zero extension",
+  "PROT_READ | PROT_WRITE", "mprotect(page, static_cast<std::size_t>(page_size), PROT_READ | PROT_EXEC)",
+  "__builtin___clear_cache", "exact_words == 8 && csel_w_vectors == 256 && csel_x_vectors == 256",
+  "cset_x_vectors == 224 && csetm_w_vectors == 224",
+]) requireText(conditionalEmitterProbeSource, contract, "generic conditional native conformance");
+for (const contract of ["-Wall -Wextra -Werror", "emitter-conditional-conformance.cpp"])
+  requireText(conditionalEmitterHarnessSource, contract, "generic conditional conformance build");
+requireText(harnessSource, 'timeout -k 5s 60s "$SCRIPT_DIR/emitter-conditional-conformance.sh"', "generic conditional bounded acceptance gate");
+if (/Review state: \*\*pending independent review\*\*|Review state: \*\*pending final re-review\*\*/i.test(conditionalEmitterReportSource))
+  fail("generic conditional emitter evidence report is not final");
+const conditionalEmitterPredecessorHash = createHash("sha256")
+  .update(restorePublishedConditionalEmitterRows(closureInventoryCsv)).digest("hex");
+if (conditionalEmitterPredecessorHash !== "7dee9ce2603c44f959ac1e59020106eaa640c1bc5aaf2a7fc3ca979d798fed44")
+  fail(`generic conditional exact four-row predecessor hash=${conditionalEmitterPredecessorHash}`);
+for (const contract of [
+  "**960/960 native vectors**", "**8/8 exact words**", "Configured raw-caller total: **64**",
+  "`7dee9ce2603c44f959ac1e59020106eaa640c1bc5aaf2a7fc3ca979d798fed44`",
+  "`125 audited / 66 unreviewed`", "No production encoding or semantic defect was reproduced",
+  "complete active-risky corpus: **904/904**", "allocator pressure: **33/33**",
+  "clean full `BasiliskII` build: pass", "initial independent verdict: **reject**",
+  "final re-review: **approve**",
+]) requireText(conditionalEmitterReportSource, contract, "generic conditional final evidence");
+console.log("METRIC structural_conditional_emitter_exact_words=8");
+console.log("METRIC structural_conditional_emitter_native_vectors=960");
+console.log("METRIC structural_conditional_emitter_callers=64");
+
 /* The mechanically selected reachable generic AND cluster consists only of the
  * 32-bit #0x3f logical-immediate form and the W/X register forms. Keep its raw
  * caller census and call shapes fail-closed, then prove exact words, W/X width,
@@ -9861,7 +9943,7 @@ if (!rawFflagsRow?.includes(",audited,") || !rawFflagsRow.includes(",2,") ||
     !rawFflagsRow.includes("AARCH64_JIT_AUDIT_RAW_FFLAGS_INTO_FLAGS_BOUNDARY.md"))
   fail("raw_fflags_into_flags closure promotion changed");
 const rawFflagsPredecessorHash = createHash("sha256")
-  .update(restorePublishedRawFflagsRow(closureInventoryCsv)).digest("hex");
+  .update(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(closureInventoryCsv))).digest("hex");
 if (rawFflagsPredecessorHash !== "ecb65b0ae5e2aa2326406f5cb47e06a414625f2ed61936aec04db862f844617d")
   fail(`raw_fflags_into_flags exact one-row predecessor hash=${rawFflagsPredecessorHash}`);
 if (/Pending complete acceptance\.|Acceptance candidate|will be recorded before publication/i.test(rawFflagsReportSource))

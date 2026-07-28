@@ -25,6 +25,8 @@ interface Row {
 }
 
 const root = resolve(import.meta.dir, "..");
+if (process.argv.slice(2).some((arg) => arg.startsWith("-")))
+  throw new Error("closure inventory output paths must not be option-like arguments");
 const rel = (path: string) => relative(root, path);
 const load = (path: string) => readFileSync(resolve(root, path), "utf8");
 const lineAt = (text: string, index: number) => text.slice(0, index).split("\n").length;
@@ -231,6 +233,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^(?:immEncode|immOP_(?:AND|ORR)|CLEAR_xx(?:Zflag|Cflag|Vflag|bit)|SET_xx(?:Zflag|Vflag|bit))$/, "AARCH64_JIT_AUDIT_LOGICAL_IMMEDIATE_EMITTERS.md"],
   [/^(?:SBFM_(?:wwii|xxii)|SXTB_(?:ww|xx)|SXTH_(?:ww|xx)|SXTW_xw|UBFM_(?:wwii|xxii)|UXTB_(?:ww|xx)|UXTH_(?:ww|xx)|REV_(?:ww|xx)|REV16_(?:ww|xx)|REV32_xx|CLS_ww)$/, "AARCH64_JIT_AUDIT_SCALAR_TRANSFORM_EMITTERS.md"],
   [/^CMP_(?:wi|xi|ww|xx|wwLSLi)$/, "AARCH64_JIT_AUDIT_COMPARE_EMITTERS.md"],
+  [/^(?:CSEL_(?:wwwc|xxxc)|CSET_xc|CSETM_wc)$/, "AARCH64_JIT_AUDIT_CONDITIONAL_EMITTERS.md"],
   [/^ADD_(?:wwi|xxi|wwwEX|xxwEX|www|xxx|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
   [/^(?:SUB_(?:wwi|xxi|www|xxx)|SUBS_(?:wwi|www|wwwLSLi))$/, "AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],
   [/^AND_(?:ww3f|www|xxx)$/, "AARCH64_JIT_AUDIT_AND_EMITTERS.md"],
@@ -289,7 +292,7 @@ for (const [, reports] of [...auditFamilyRules, ...emitterAuditRules, ...primiti
     if (!existsSync(reportPath))
       throw new Error(`accepted audit report is missing: ${report}`);
     const reportText = readFileSync(reportPath, "utf8");
-    if (/Pending complete acceptance\./i.test(reportText))
+    if (/Pending complete acceptance\.|Review state:\s*\*\*pending independent review\*\*|pending final re-review/i.test(reportText))
       throw new Error(`accepted audit report is still pending: ${report}`);
   }
 }
