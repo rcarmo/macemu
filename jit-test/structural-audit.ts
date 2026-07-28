@@ -109,6 +109,12 @@ const rawIncOpcountReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_INC_OPCOUNT_UNREACHABLE.md",
   import.meta.url,
 )).text();
+const rawInitRegstructProbeSource = await Bun.file(new URL("./raw-init-regstruct-conformance.cpp", import.meta.url)).text();
+const rawInitRegstructHarnessSource = await Bun.file(new URL("./raw-init-regstruct-conformance.sh", import.meta.url)).text();
+const rawInitRegstructReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_INIT_REGSTRUCT_BOUNDARY.md",
+  import.meta.url,
+)).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
 const rawFmovHostMemoryHarnessSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
@@ -4688,6 +4694,76 @@ for (const [name, status] of [
 console.log("METRIC structural_raw_inc_opcount_unreachable=1");
 console.log("METRIC structural_raw_inc_opcount_configured_references=2");
 console.log("METRIC structural_raw_inc_opcount_child_emitters=5");
+
+/* The shared JIT entry publishes full-width regs and NATMEM_OFFSET values in
+ * fixed X28/X27 before PC-tag dispatch. Pin the exact body, sole caller and
+ * entry ordering, source-extracted native probe, and narrow closure promotion. */
+const rawInitRegstructBody = functionBody(
+  codegenSource,
+  "LOWFUNC(NONE,NONE,1,compemu_raw_init_r_regstruct,(IMPTR s))",
+  "LENDFUNC(NONE,NONE,1,compemu_raw_init_r_regstruct,(IMPTR s))",
+  "raw fixed-register prologue",
+);
+for (const contract of [
+  "LOAD_U64(R_REGSTRUCT, s);",
+  "LOAD_U64(R_MEMSTART, (uintptr)&NATMEM_OFFSET);",
+  "LDR_xXi(R_MEMSTART, R_MEMSTART, 0);",
+]) requireText(rawInitRegstructBody, contract, "raw fixed-register prologue");
+requireBefore(rawInitRegstructBody, "LOAD_U64(R_REGSTRUCT, s);", "LOAD_U64(R_MEMSTART", "fixed-register publication order");
+requireBefore(rawInitRegstructBody, "LOAD_U64(R_MEMSTART", "LDR_xXi(R_MEMSTART", "NATMEM_OFFSET address/value order");
+if (rawInitRegstructBody.includes("(uintptr)&NATMEM_OFFSET - (uintptr) &regs"))
+  fail("fixed-register prologue reverted to range-limited regstruct offset");
+if ((allocatorSource.match(/\bcompemu_raw_init_r_regstruct\s*\(/g) || []).length !== 1)
+  fail("raw init-regstruct sole caller census changed");
+const entryStart = allocatorSource.indexOf("pushall_call_handler = get_target();");
+const entryEnd = allocatorSource.indexOf("/* now the exit points */", entryStart);
+if (entryStart < 0 || entryEnd < 0) fail("shared JIT entry stub missing");
+const entryBody = allocatorSource.slice(entryStart, entryEnd);
+for (const contract of [
+  "raw_push_regs_to_preserve();", "compemu_raw_call((uintptr)jit_fpu_sync_to_shadow);",
+  "compemu_raw_init_r_regstruct((uintptr)&regs);", "compemu_raw_jmp_pc_tag();",
+]) requireText(entryBody, contract, "shared JIT entry fixed-register publication");
+requireBefore(entryBody, "raw_push_regs_to_preserve();", "compemu_raw_init_r_regstruct", "fixed-register publication after save");
+requireBefore(entryBody, "jit_fpu_sync_to_shadow", "compemu_raw_init_r_regstruct", "fixed-register publication after FPU import");
+requireBefore(entryBody, "compemu_raw_init_r_regstruct", "compemu_raw_jmp_pc_tag();", "fixed-register publication before dispatch");
+for (const contract of [
+  '#include "raw-init-regstruct.inc"', "STP_xxXpre(27, 28, 31, -16);",
+  "compemu_raw_init_r_regstruct(reinterpret_cast<uintptr>(&regs));",
+  "STR_xXi(27, 0, 0);", "STR_xXi(28, 0, 8);", "MRS_NZCV_x(2);",
+  "LDP_xxXpost(27, 28, 31, 16);", "0x0000000100000000ull",
+  "0x123456789abcdef0ull", "0xffff000080000000ull",
+  'emitted.size() != 7', 'fail("production body exact word count", 7, emitted.size())',
+  "raw_init_regstruct_body_words=%u", "raw_init_regstruct_native_vectors=%u",
+  "raw_init_regstruct_pointer_width=64", "raw_init_regstruct_nzcv_preserved=1",
+]) requireText(rawInitRegstructProbeSource, contract, "raw init-regstruct native probe");
+for (const contract of [
+  "^STATIC_INLINE void LOAD_U64", "^LOWFUNC\\(NONE,NONE,1,compemu_raw_init_r_regstruct",
+  "test \"$(grep -c '^LOWFUNC'", "test \"$(grep -c '^LENDFUNC'",
+]) requireText(rawInitRegstructHarnessSource, contract, "raw init-regstruct source extraction");
+const rawInitRegstructRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_init_r_regstruct,"));
+if (!rawInitRegstructRow?.includes(",audited,") || !rawInitRegstructRow.includes(",3,") ||
+    !rawInitRegstructRow.includes("AARCH64_JIT_AUDIT_RAW_INIT_REGSTRUCT_BOUNDARY.md"))
+  fail("raw init-regstruct configured whole-root census or closure promotion changed");
+for (const name of ["MOV_xi", "LDR_xXi"]) {
+  const row = closureInventoryCsv.split("\n").find((line) => line.startsWith(`emitter_api,${name},`));
+  if (!row?.includes(",unreviewed,")) fail(`${name} generic emitter status leaked from raw init-regstruct seam`);
+}
+for (const contract of [
+  "Final acceptance:", "exact-extracted production body: **7/7 words**",
+  "native fixed-register matrix: **5/5**", "NZCV preservation: **5/5** hostile patterns",
+  "configured whole-root references: **3**", "complete emitter/boundary phase: pass",
+  "complete structural audit: pass", "leaving **70 emitter APIs** and **6 raw boundaries** unreviewed",
+  "`6dc4188cb85f9faf44e75d51c7ea477ef898e2f304fa903c8abe08e3e5b88452`",
+  "`4eb3fa0b297015cb2302da0efc3aa7fc6d1df79220761472bfcb224e7cce10b7`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "source hygiene: pass", "initial reject", "final re-review: **approve**",
+]) requireText(rawInitRegstructReportSource, contract, "raw init-regstruct final evidence");
+requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-init-regstruct-conformance.sh"', "raw init-regstruct bounded acceptance gate");
+console.log("METRIC structural_raw_init_regstruct_boundaries=1");
+console.log("METRIC structural_raw_init_regstruct_body_words=7");
+console.log("METRIC structural_raw_init_regstruct_native_vectors=5");
+console.log("METRIC structural_raw_init_regstruct_pointer_width=64");
+console.log("METRIC structural_raw_init_regstruct_nzcv_preserved=1");
 
 /* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
  * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,

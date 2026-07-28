@@ -20,7 +20,7 @@ Registration, a green corpus, and Finder boot do not by themselves promote an en
 | generator | 130 | 75 | 44 | 11 | 0 |
 | midfunc | 422 | 291 | 0 | 131 | 0 |
 | emitter_api | 294 | 121 | 0 | 103 | 70 |
-| raw_boundary | 83 | 47 | 0 | 29 | 7 |
+| raw_boundary | 83 | 48 | 0 | 29 | 6 |
 | runtime_boundary | 69 | 0 | 40 | 29 | 0 |
 
 Detailed rows: `BasiliskII/docs/AARCH64_JIT_CLOSURE_INVENTORY.csv`.
@@ -42,7 +42,6 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 | Risk | Family | Layers / entries |
 |---:|---|---|
-| 60 | `compemu_raw_init_r_regstruct` | raw_boundary:`compemu_raw_init_r_regstruct` |
 | 60 | `compemu_raw_jcc_l_oponly` | raw_boundary:`compemu_raw_jcc_l_oponly` |
 | 60 | `compemu_raw_maybe_do_nothing` | raw_boundary:`compemu_raw_maybe_do_nothing` |
 | 60 | `compemu_raw_mov_l_mi` | raw_boundary:`compemu_raw_mov_l_mi` |
@@ -62,6 +61,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 | 60 | `LDR_wXxLSLi` | emitter_api:`LDR_wXxLSLi` |
 | 60 | `LDR_xPCi` | emitter_api:`LDR_xPCi` |
 | 60 | `LDR_xXi` | emitter_api:`LDR_xXi` |
+| 60 | `LDR_xXpost` | emitter_api:`LDR_xXpost` |
 
 ## Accepted closure targets
 
@@ -75,7 +75,7 @@ Risk is a deterministic triage score, not a correctness verdict.
 
 ## Next selected family
 
-`compemu_raw_init_r_regstruct` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_init_r_regstruct`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
+`compemu_raw_jcc_l_oponly` is the highest-risk family still classified as unreviewed. Its current rows are raw_boundary:`compemu_raw_jcc_l_oponly`. Selection is mechanical; shared ownership, flags, fault, and helper-boundary contracts still require source review.
 
 ## Mechanical invariants
 

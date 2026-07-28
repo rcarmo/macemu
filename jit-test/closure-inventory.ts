@@ -261,6 +261,7 @@ const primitiveAuditRules: Array<[RegExp, string]> = [
   [/^compemu_raw_execute_normal$/, "AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_BOUNDARY.md"],
   [/^compemu_raw_execute_normal_cycles$/, "AARCH64_JIT_AUDIT_RAW_EXECUTE_NORMAL_CYCLES_BOUNDARY.md"],
   [/^compemu_raw_handle_except$/, "AARCH64_JIT_AUDIT_RAW_HANDLE_EXCEPT_BOUNDARY.md"],
+  [/^compemu_raw_init_r_regstruct$/, "AARCH64_JIT_AUDIT_RAW_INIT_REGSTRUCT_BOUNDARY.md"],
   [/^compemu_raw_fmov_(?:mr_drop|rm)$/, "AARCH64_JIT_AUDIT_RAW_FMOV_HOST_MEMORY_BOUNDARIES.md"],
   [/^(?:fmov_[bwl]_rr|raw_fmov_[bwl]_rr)$/, "AARCH64_JIT_AUDIT_FPP_FMOVE_INTEGER_SOURCE.md"],
   [/^raw_fmov_to_[bwl]_rr$/, "AARCH64_JIT_AUDIT_FMOV_TO_INTEGER_LIFECYCLE.md"],
