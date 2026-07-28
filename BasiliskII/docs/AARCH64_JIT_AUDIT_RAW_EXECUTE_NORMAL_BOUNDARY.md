@@ -44,17 +44,25 @@ The direct stub publishes PC and enters `execute_normal`. Its
 `check_for_cache_miss()` sees the same owner, and `compile_block()` accepts the
 `BI_NEED_RECOMP` state and rebuilds the block through the ordinary lifecycle.
 
-The exact accepted summary is:
+The exact accepted route matrix is:
 
 ```text
-direct_execute_normal=1 exec_normal=2 exec_nostats=0 recompile_block=0
+unforced: direct_execute_normal=0 exec_normal=1 exec_nostats=1 direct_exec_nostats=1
+forced:   direct_execute_normal=1 exec_normal=2 exec_nostats=0 direct_exec_nostats=0
 ```
 
-The two C entries are the initial trace and the one direct-stub replay. The
-separate direct-label count proves that exactly one of them passed through
-`compemu_raw_execute_normal`; zero `exec_nostats` excludes the neighbouring
-optlevel-0 handoff, and zero `recompile_block` excludes the countdown expiry
-entry. The final register dump requires `D0=2`.
+The unforced control proves the ordinary one-block replay selects the canonical
+optlevel-0 route and never enters `direct_pen`. The forced row's two C entries
+are the initial trace and the one direct-stub replay. Its separate direct-label
+count proves that exactly one entered `compemu_raw_execute_normal`; zero
+`exec_nostats` excludes the neighbouring optlevel-0 handoff, and zero
+`recompile_block` excludes the countdown expiry entry. Both rows also require
+all checksum, metadata-RMW, and execute-normal-cycles counters to remain zero.
+The final register dump requires `D0=2`.
+
+The force hook is deliberately one-shot: it requires `BI_ACTIVE`, then leaves
+the block in the canonical recompilation lifecycle. A second forced invocation
+fails closed rather than silently manufacturing another entry.
 
 The lifecycle hook is inactive unless
 `B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL` is explicitly enabled. The direct-side
@@ -73,7 +81,8 @@ unreviewed status of `compemu_raw_execute_normal_cycles`.
 
 Accepted evidence before the final clean epoch:
 
-- direct execute_normal matrix: **1/1**, with exact
+- direct execute_normal matrix: **2/2**, including an unforced
+  `direct_execute_normal=0` control and forced exact
   `direct_execute_normal=1`, `exec_normal=2`, `exec_nostats=0`, and
   `recompile_block=0`;
 - complete emitter/boundary phase: pass, including all four dispatcher

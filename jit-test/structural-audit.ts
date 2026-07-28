@@ -99,6 +99,7 @@ const rawChecksumHarnessSource = await Bun.file(new URL("./raw-checksum-boundary
 const rawMetadataRmwHarnessSource = await Bun.file(new URL("./raw-metadata-rmw-boundary-matrix.sh", import.meta.url)).text();
 const rawExecNostatsHarnessSource = await Bun.file(new URL("./raw-exec-nostats-boundary-matrix.sh", import.meta.url)).text();
 const rawExecuteNormalHarnessSource = await Bun.file(new URL("./raw-execute-normal-boundary-matrix.sh", import.meta.url)).text();
+const rawExecuteNormalCyclesHarnessSource = await Bun.file(new URL("./raw-execute-normal-cycles-boundary-matrix.sh", import.meta.url)).text();
 const subLRiLifecycleMatrix = await Bun.file(new URL("./sub-l-ri-lifecycle-matrix.sh", import.meta.url)).text();
 const subLRiConformance = await Bun.file(new URL("./sub-l-ri-conformance.cpp", import.meta.url)).text();
 const closureInventoryCsv = await Bun.file(new URL(
@@ -4299,7 +4300,7 @@ for (const contract of [
   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
   "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
 ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
-for (const sibling of ["compemu_raw_execute_normal_cycles"])
+for (const sibling of ["compemu_raw_handle_except"])
   if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} was promoted without direct evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
 console.log("METRIC structural_raw_checksum_boundaries=1");
@@ -4398,8 +4399,6 @@ for (const contract of [
 ]) requireText(rawExecNostatsHarnessSource, contract, "raw exec_nostats native matrix");
 const rawExecNostatsRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_exec_nostats,"));
 if (!rawExecNostatsRow?.includes(",audited,")) fail("compemu_raw_exec_nostats not promoted by accepted report");
-for (const sibling of ["compemu_raw_execute_normal_cycles"])
-  if (!closureInventoryCsv.includes(`raw_boundary,${sibling},unreviewed,`)) fail(`${sibling} promoted without direct runtime evidence`);
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-exec-nostats-boundary-matrix.sh"', "raw exec_nostats bounded acceptance gate");
 console.log("METRIC structural_raw_exec_nostats_boundaries=1");
 console.log("METRIC structural_raw_exec_nostats_runtime_cases=1");
@@ -4453,18 +4452,73 @@ for (const contract of [
 ]) requireText(basiliskGlueSource, contract, "raw execute_normal replay integration");
 for (const contract of [
   "B2_TEST_HEX='7001 5280 2C7C A6E0 0001'", "B2_TEST_TWO_PASS=1", "B2_TEST_REPLAY_COUNT=1",
-  "B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL=1", "${direct:-0} -eq 1", "${normal:-0} -eq 2",
-  "${nostats:-0} -eq 0", "${recompile:-0} -eq 0", "raw_execute_normal_boundaries=1",
-  "raw_execute_normal_runtime_cases=1", "raw_execute_normal_direct_entries=1",
+  "env -u B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL", "force_env+=(B2_TEST_FORCE_DIRECT_EXECUTE_NORMAL=1)",
+  "${direct:-0} -eq \"$expect_direct\"", "${normal:-0} -eq \"$expect_normal\"",
+  "${nostats:-0} -eq \"$expect_nostats\"", "${direct_nostats:-0} -eq \"$expect_direct_nostats\"",
+  "${recompile:-0} -eq 0", "${checksum:-0} -eq 0", "${check:-0} -eq 0",
+  "${good:-0} -eq 0", "${bad:-0} -eq 0", "${metadata:-0} -eq 0", "${cycles:-0} -eq 0",
+  "run_case unforced 0 0 1 1 1", "run_case forced 1 1 2 0 0",
+  "raw_execute_normal_boundaries=1", "raw_execute_normal_runtime_cases=2",
+  "raw_execute_normal_unforced_direct=0", "raw_execute_normal_direct_entries=1",
 ]) requireText(rawExecuteNormalHarnessSource, contract, "raw execute_normal native matrix");
 const rawExecuteNormalRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_execute_normal,"));
 if (!rawExecuteNormalRow?.includes(",audited,")) fail("compemu_raw_execute_normal not promoted by accepted report");
-if (!closureInventoryCsv.includes("raw_boundary,compemu_raw_execute_normal_cycles,unreviewed,"))
-  fail("compemu_raw_execute_normal_cycles promoted without countdown evidence");
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-execute-normal-boundary-matrix.sh"', "raw execute_normal bounded acceptance gate");
 console.log("METRIC structural_raw_execute_normal_boundaries=1");
-console.log("METRIC structural_raw_execute_normal_runtime_cases=1");
+console.log("METRIC structural_raw_execute_normal_runtime_cases=2");
 console.log("METRIC structural_raw_execute_normal_direct_entries=1");
+
+/* Interpreter-barrier cycle handoff: subtract every retired cycle in 32-bit
+ * arithmetic, store before loading/publishing the runtime PC, and enter the
+ * shared audited execute_normal set-PC label. Both imm12 and register lowering
+ * branches require direct runtime values from the production restored-SR
+ * barrier route. */
+const rawExecuteNormalCyclesBody = functionBody(
+  codegenSource,
+  "STATIC_INLINE void compemu_raw_execute_normal_cycles(MEMR s, IM32 cycles)",
+  "LOWFUNC(NONE,WRITE,1,compemu_raw_check_checksum",
+  "raw execute_normal_cycles body",
+);
+for (const contract of [
+  "LOAD_U64(REG_WORK3, (uintptr)&countdown);", "LDR_wXi(REG_WORK2, REG_WORK3, 0);",
+  "if(cycles >= 0 && cycles <= 0xfff)", "SUB_wwi(REG_WORK2, REG_WORK2, cycles);",
+  "LOAD_U32(REG_WORK1, cycles);", "SUB_www(REG_WORK2, REG_WORK2, REG_WORK1);",
+  "STR_wXi(REG_WORK2, REG_WORK3, 0);", "jit_test_execute_normal_cycles_entries",
+  "LOAD_U64(REG_WORK1, s);", "LDR_xXi(REG_WORK1, REG_WORK1, 0);", "B_i(0);",
+  "write_jmp_target(branchadd, (uintptr)popall_execute_normal_setpc);",
+]) requireText(rawExecuteNormalCyclesBody, contract, "raw execute_normal_cycles contract");
+requireBefore(rawExecuteNormalCyclesBody, "LDR_wXi(REG_WORK2, REG_WORK3, 0);", "SUB_wwi(REG_WORK2, REG_WORK2, cycles);", "raw cycles load before immediate subtraction");
+requireBefore(rawExecuteNormalCyclesBody, "SUB_www(REG_WORK2, REG_WORK2, REG_WORK1);", "STR_wXi(REG_WORK2, REG_WORK3, 0);", "raw cycles register subtraction before store");
+requireBefore(rawExecuteNormalCyclesBody, "STR_wXi(REG_WORK2, REG_WORK3, 0);", "LOAD_U64(REG_WORK1, s);", "raw cycles store before PC load");
+const rawExecuteNormalCyclesHook = functionBody(
+  allocatorSource,
+  "bool jit_test_prepare_execute_normal_cycles_entry(void)",
+  "STATIC_INLINE void create_popalls(void)",
+  "raw execute_normal_cycles seed hook",
+);
+for (const contract of [
+  "B2_TEST_EXECUTE_NORMAL_CYCLES_SEED", "parsed == 0", "parsed > 0x7fffffffUL",
+  "countdown = (uae_s32)parsed;", "jit_test_execute_normal_cycles_entries = 0;",
+  "jit_test_execute_normal_cycles_before = 0;", "jit_test_execute_normal_cycles_after = 0;",
+]) requireText(rawExecuteNormalCyclesHook, contract, "raw execute_normal_cycles seed contract");
+for (const contract of [
+  "jit_test_prepare_execute_normal_cycles_entry()",
+  "B2_TEST_EXECUTE_NORMAL_CYCLES_SEED could not prepare execute_normal_cycles entry",
+]) requireText(basiliskGlueSource, contract, "raw execute_normal_cycles replay integration");
+for (const contract of [
+  "B2_JIT_RESTORE_BARRIERS=sr", "B2_TEST_FORCE_L2_RAM=1", "B2_TEST_EXECUTE_NORMAL_CYCLES_SEED=\"$seed\"",
+  "${direct:-0} -eq 1", "${normal:-0} -eq 2", "${nostats:-0} -eq 0", "${recompile:-0} -eq 0",
+  "${entries:-0} -eq 1", "${before:-0} -eq \"$expect_before\"", "${after:-0} -eq \"$expect_after\"",
+  "run_case imm12", "1000 1000 4294967272", "run_case reg", "10000 10000 4880",
+  "raw_execute_normal_cycles_boundaries=1", "raw_execute_normal_cycles_runtime_cases=2",
+  "raw_execute_normal_cycles_imm12=1", "raw_execute_normal_cycles_register=1",
+]) requireText(rawExecuteNormalCyclesHarnessSource, contract, "raw execute_normal_cycles matrix");
+const rawExecuteNormalCyclesRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_execute_normal_cycles,"));
+if (!rawExecuteNormalCyclesRow?.includes(",audited,")) fail("compemu_raw_execute_normal_cycles not promoted by accepted report");
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-execute-normal-cycles-boundary-matrix.sh"', "raw execute_normal_cycles bounded acceptance gate");
+console.log("METRIC structural_raw_execute_normal_cycles_boundaries=1");
+console.log("METRIC structural_raw_execute_normal_cycles_runtime_cases=2");
+console.log("METRIC structural_raw_execute_normal_cycles_lowerings=2");
 
 /* ADD's MIDFUNC register initialisers own both operands while arithmetic
  * allocates its destination. Memory destinations additionally pin the private
@@ -6848,7 +6902,7 @@ for (const contract of [
 
 const addEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (const [name, expected] of [
-  ["ADD_wwi", 17], ["ADD_xxi", 7], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
+  ["ADD_wwi", 17], ["ADD_xxi", 8], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
   ["ADD_www", 27], ["ADD_xxx", 3], ["ADD_wwwLSLi", 8],
 ] as const) {
   const found = (addEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
@@ -6864,7 +6918,7 @@ expectArgs("ADD_wwi imm12", lastArgs(/\bADD_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g
   "v", "v", "v", "tmp", "v", "live.state[s].val", "6", "0x60", "1", "1",
 ]);
 expectArgs("ADD_xxi imm12", lastArgs(/\bADD_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
-  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "4", "4",
+  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "1", "4", "4",
 ]);
 expectArgs("ADD_wwwEX extension", lastArgs(/\bADD_wwwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), ["EX_SXTH"]);
 expectArgs("ADD_xxwEX extension", lastArgs(/\bADD_xxwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [

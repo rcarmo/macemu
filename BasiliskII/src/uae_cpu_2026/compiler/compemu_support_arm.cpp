@@ -2067,6 +2067,9 @@ static unsigned long jit_diag_checksum_bad = 0;
 static unsigned long jit_test_direct_checksum_entries = 0;
 static unsigned long jit_test_direct_exec_nostats_entries = 0;
 static unsigned long jit_test_direct_execute_normal_entries = 0;
+static unsigned long jit_test_execute_normal_cycles_entries = 0;
+static unsigned long jit_test_execute_normal_cycles_before = 0;
+static unsigned long jit_test_execute_normal_cycles_after = 0;
 static time_t jit_diag_last_print = 0;
 static time_t jit_diag_start_time = 0;
 
@@ -2157,14 +2160,17 @@ void jit_test_dump_dispatch_summary(void)
 {
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu\n",
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu execute_normal_cycles=%lu cycles_before=%lu cycles_after=%lu\n",
             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
             jit_diag_checksum_good, jit_diag_checksum_bad,
             jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
             jit_diag_recompile_block_calls, jit_test_metadata_rmw_rebuilds,
             jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask,
             jit_test_direct_exec_nostats_entries,
-            jit_test_direct_execute_normal_entries);
+            jit_test_direct_execute_normal_entries,
+            jit_test_execute_normal_cycles_entries,
+            jit_test_execute_normal_cycles_before,
+            jit_test_execute_normal_cycles_after);
     }
 #endif
 }
@@ -6657,6 +6663,24 @@ bool jit_test_prepare_direct_execute_normal_entry(void)
        temporary override; block_need_recompile() owns handler/dependency state. */
     block_need_recompile(bi);
     cache_tags[cl].handler = bi->direct_pen;
+#endif
+    return true;
+}
+
+bool jit_test_prepare_execute_normal_cycles_entry(void)
+{
+#if defined(CPU_AARCH64)
+    const char *seed = getenv("B2_TEST_EXECUTE_NORMAL_CYCLES_SEED");
+    if (!(seed && *seed))
+        return true;
+    char *end = NULL;
+    const unsigned long parsed = strtoul(seed, &end, 0);
+    if (end == seed || *end || parsed == 0 || parsed > 0x7fffffffUL)
+        return false;
+    countdown = (uae_s32)parsed;
+    jit_test_execute_normal_cycles_entries = 0;
+    jit_test_execute_normal_cycles_before = 0;
+    jit_test_execute_normal_cycles_after = 0;
 #endif
     return true;
 }

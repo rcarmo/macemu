@@ -665,6 +665,10 @@ STATIC_INLINE void compemu_raw_execute_normal_cycles(MEMR s, IM32 cycles)
 {
 	LOAD_U64(REG_WORK3, (uintptr)&countdown);
 	LDR_wXi(REG_WORK2, REG_WORK3, 0);
+	if (jit_test_dispatch_summary_enabled()) {
+		LOAD_U64(REG_WORK4, (uintptr)&jit_test_execute_normal_cycles_before);
+		STR_wXi(REG_WORK2, REG_WORK4, 0);
+	}
 	if(cycles >= 0 && cycles <= 0xfff) {
 		SUB_wwi(REG_WORK2, REG_WORK2, cycles);
 	} else {
@@ -672,6 +676,14 @@ STATIC_INLINE void compemu_raw_execute_normal_cycles(MEMR s, IM32 cycles)
 		SUB_www(REG_WORK2, REG_WORK2, REG_WORK1);
 	}
 	STR_wXi(REG_WORK2, REG_WORK3, 0);
+	if (jit_test_dispatch_summary_enabled()) {
+		LOAD_U64(REG_WORK4, (uintptr)&jit_test_execute_normal_cycles_after);
+		STR_wXi(REG_WORK2, REG_WORK4, 0);
+		LOAD_U64(REG_WORK4, (uintptr)&jit_test_execute_normal_cycles_entries);
+		LDR_xXi(R18_INDEX, REG_WORK4, 0);
+		ADD_xxi(R18_INDEX, R18_INDEX, 1);
+		STR_xXi(R18_INDEX, REG_WORK4, 0);
+	}
 
 	LOAD_U64(REG_WORK1, s);
 	LDR_xXi(REG_WORK1, REG_WORK1, 0);
