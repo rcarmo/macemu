@@ -212,6 +212,7 @@ if phase_enabled emitters; then
     timeout -k 5s 180s "$SCRIPT_DIR/raw-execute-normal-cycles-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw execute_normal_cycles boundary conformance failed" 0
     timeout -k 5s 300s "$SCRIPT_DIR/raw-handle-except-boundary-matrix.sh" || emit_failure_metrics 1 "ARM64 raw handle-except boundary conformance failed" 0
     timeout -k 5s 120s "$SCRIPT_DIR/raw-init-regstruct-conformance.sh" || emit_failure_metrics 1 "ARM64 raw fixed-register prologue conformance failed" 0
+    timeout -k 5s 180s "$SCRIPT_DIR/raw-jcc-oponly-conformance.sh" || emit_failure_metrics 1 "ARM64 raw condition-only branch conformance failed" 0
     timeout -k 5s 180s "$SCRIPT_DIR/raw-fmov-host-memory-conformance.sh" || emit_failure_metrics 1 "ARM64 raw FPU host-memory boundary conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-compare-conformance.sh" || emit_failure_metrics 1 "ARM64 CMP emitter conformance failed" 0
     timeout -k 5s 60s "$SCRIPT_DIR/emitter-add-conformance.sh" || emit_failure_metrics 1 "ARM64 ADD emitter conformance failed" 0

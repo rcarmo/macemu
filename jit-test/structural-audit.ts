@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { createHash } from "node:crypto";
+
 /**
  * Source-level structural invariants for the ARM64 JIT emitter.
  *
@@ -113,6 +115,12 @@ const rawInitRegstructProbeSource = await Bun.file(new URL("./raw-init-regstruct
 const rawInitRegstructHarnessSource = await Bun.file(new URL("./raw-init-regstruct-conformance.sh", import.meta.url)).text();
 const rawInitRegstructReportSource = await Bun.file(new URL(
   "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_INIT_REGSTRUCT_BOUNDARY.md",
+  import.meta.url,
+)).text();
+const rawJccOponlyProbeSource = await Bun.file(new URL("./raw-jcc-oponly-conformance.cpp", import.meta.url)).text();
+const rawJccOponlyHarnessSource = await Bun.file(new URL("./raw-jcc-oponly-conformance.sh", import.meta.url)).text();
+const rawJccOponlyReportSource = await Bun.file(new URL(
+  "../BasiliskII/docs/AARCH64_JIT_AUDIT_RAW_JCC_OPONLY_BOUNDARY.md",
   import.meta.url,
 )).text();
 const rawFmovHostMemoryProbeSource = await Bun.file(new URL("./raw-fmov-host-memory-conformance.cpp", import.meta.url)).text();
@@ -4764,6 +4772,110 @@ console.log("METRIC structural_raw_init_regstruct_body_words=7");
 console.log("METRIC structural_raw_init_regstruct_native_vectors=5");
 console.log("METRIC structural_raw_init_regstruct_pointer_width=64");
 console.log("METRIC structural_raw_init_regstruct_nzcv_preserved=1");
+
+/* The condition-only branch boundary owns M68K HI/LS and all 16 FP predicate
+ * compositions. Pin carry canonicalisation, exact switch shapes, both live
+ * caller classes, source-extracted native truth tables, and narrow promotion. */
+const rawJccOponlyBody = functionBody(
+  codegenSource,
+  "STATIC_INLINE void compemu_raw_jcc_l_oponly(int cc)",
+  "STATIC_INLINE void compemu_raw_handle_except(IM32 cycles)",
+  "raw condition-only branch",
+);
+for (const contract of [
+  "FIX_INVERTED_CARRY", "case NATIVE_CC_F_F:", "case NATIVE_CC_F_EQ:",
+  "case NATIVE_CC_HI:", "BEQ_i(2);", "BCC_i(0);",
+  "case NATIVE_CC_LS:", "BCC_i(2);", "case NATIVE_CC_F_OGT:",
+  "case NATIVE_CC_F_OGE:", "case NATIVE_CC_F_OLT:",
+  "case NATIVE_CC_F_OLE:", "case NATIVE_CC_F_OGL:",
+  "case NATIVE_CC_F_OR:", "case NATIVE_CC_F_UN:",
+  "case NATIVE_CC_F_UEQ:", "case NATIVE_CC_F_UGT:",
+  "case NATIVE_CC_F_UGE:", "case NATIVE_CC_F_ULT:",
+  "case NATIVE_CC_F_ULE:", "case NATIVE_CC_F_NE:",
+  "case NATIVE_CC_F_T:", "default:", "CC_B_i(cc, 0);",
+  "// emit of target into last branch will be done by caller",
+]) requireText(rawJccOponlyBody, contract, "raw condition-only branch");
+if ((rawJccOponlyBody.match(/case NATIVE_CC_F_/g) || []).length !== 16)
+  fail("raw condition-only branch FP case census changed");
+const carryMacroStart = codegenSource.indexOf("#define FIX_INVERTED_CARRY");
+const carryMacroEnd = codegenSource.indexOf("STATIC_INLINE void SIGNED8_IMM_2_REG", carryMacroStart);
+if (carryMacroStart < 0 || carryMacroEnd < 0) fail("raw condition-only carry macro missing");
+const carryMacro = codegenSource.slice(carryMacroStart, carryMacroEnd);
+for (const contract of [
+  "if(flags_carry_inverted)", "MRS_NZCV_x(REG_WORK1);",
+  "EOR_xxCflag(REG_WORK1, REG_WORK1);", "MSR_NZCV_x(REG_WORK1);",
+  "flags_carry_inverted = false;",
+]) requireText(carryMacro, contract, "raw condition-only carry canonicalisation");
+requireBefore(carryMacro, "MRS_NZCV_x", "EOR_xxCflag", "raw condition-only carry canonicalisation");
+requireBefore(carryMacro, "EOR_xxCflag", "MSR_NZCV_x", "raw condition-only carry canonicalisation");
+requireBefore(carryMacro, "MSR_NZCV_x", "flags_carry_inverted = false", "raw condition-only carry state publication");
+if ((allocatorSource.match(/\bcompemu_raw_jcc_l_oponly\s*\(/g) || []).length !== 2)
+  fail("raw condition-only AArch64 caller census changed");
+for (const contract of [
+  "compemu_raw_jcc_l_oponly(skip_cond);",
+  "uae_u32* patch_skip = (uae_u32*)get_target() - 1;",
+  "write_jmp_target(patch_skip, (uintptr)get_target());",
+  "compemu_raw_jcc_l_oponly(cc);   // Last emitted opcode is branch to target",
+  "branchadd = (uae_u32*)get_target() - 1;",
+]) requireText(allocatorSource, contract, "raw condition-only caller patch contract");
+for (const contract of [
+  '#include "raw-jcc-oponly.inc"', "case NATIVE_CC_HI: return !c && !z;",
+  "case NATIVE_CC_LS: return c || z;", "case NATIVE_CC_F_UEQ: return un || eq;",
+  "case NATIVE_CC_F_T: return true;", "base_words(cc) + (inverted ? 3u : 0u)",
+  "for (int cc = NATIVE_CC_EQ; cc <= NATIVE_CC_AL; ++cc)",
+  "for (unsigned nzcv = 0; nzcv < 16; ++nzcv)",
+  "for (int cc = NATIVE_CC_F_F; cc <= NATIVE_CC_F_T; ++cc)",
+  "FpClass::Greater, FpClass::Equal", "for (const bool inverted : {false, true})",
+  "raw_jcc_oponly_integer_vectors=%u", "raw_jcc_oponly_fp_vectors=%u",
+  "raw_jcc_oponly_native_vectors=%u", "raw_jcc_oponly_inverted_carry_vectors=%u",
+  "integer_vectors == 480 && fp_vectors == 128", "inverted_vectors == 304",
+]) requireText(rawJccOponlyProbeSource, contract, "raw condition-only native truth table");
+for (const contract of [
+  "^#define FIX_INVERTED_CARRY", "^STATIC_INLINE void compemu_raw_jcc_l_oponly",
+  "test \"$(grep -c 'case NATIVE_CC_F_'", "-Wall -Wextra -Werror",
+]) requireText(rawJccOponlyHarnessSource, contract, "raw condition-only exact extraction");
+const rawJccOponlyRow = closureInventoryCsv.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_jcc_l_oponly,"));
+if (!rawJccOponlyRow?.includes(",audited,") || !rawJccOponlyRow.includes(",5,") ||
+    !rawJccOponlyRow.includes("AARCH64_JIT_AUDIT_RAW_JCC_OPONLY_BOUNDARY.md"))
+  fail("raw condition-only configured census or closure promotion changed");
+const publishedRawJccRow = "raw_boundary,compemu_raw_jcc_l_oponly,unreviewed,compemu_raw_jcc_l_oponly,60,5,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,524,reachable raw boundary; no exact closure classification";
+const currentRawJccRows = closureInventoryCsv.split("\n").filter((line) => line.startsWith("raw_boundary,compemu_raw_jcc_l_oponly,"));
+if (currentRawJccRows.length !== 1) fail(`raw condition-only row count=${currentRawJccRows.length}, expected 1`);
+const reconstructedPublishedCsv = closureInventoryCsv.replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`);
+if (reconstructedPublishedCsv === closureInventoryCsv)
+  fail("raw condition-only predecessor reconstruction changed no row");
+const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
+if (reconstructedPublishedHash !== "6dc4188cb85f9faf44e75d51c7ea477ef898e2f304fa903c8abe08e3e5b88452")
+  fail(`raw condition-only exact one-row predecessor hash=${reconstructedPublishedHash}`);
+const branchEvidenceRows = closureInventoryCsv.split("\n").filter((line) =>
+  line.startsWith("emitter_api,") && line.endsWith(",AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"));
+if (branchEvidenceRows.length !== 21)
+  fail(`raw condition-only independent branch-emitter evidence rows=${branchEvidenceRows.length}, expected 21`);
+for (const row of branchEvidenceRows) {
+  if (!row.includes(",audited,")) fail(`generic branch status leaked from raw condition-only seam: ${row}`);
+}
+if (/Pending complete acceptance\.|Candidate evidence under review/i.test(rawJccOponlyReportSource))
+  fail("raw condition-only evidence report is not final");
+for (const contract of [
+  "Final acceptance:", "**608/608** outcomes", "integer matrix: **480/480**",
+  "floating-point matrix: **128/128**", "**304/304** with canonical final NZCV",
+  "condition IDs: **31**", "configured whole-root references: **5**",
+  "complete emitter/boundary phase: pass", "complete structural audit: pass",
+  "matching SHA-256", "`6dc4188cb85f9faf44e75d51c7ea477ef898e2f304fa903c8abe08e3e5b88452`",
+  "all **21** generic branch-emitter rows", "leaves **70 emitter APIs** and **5 raw boundaries** unreviewed",
+  "`f3a79573a57e2d6664910b445dbfb779a56c401684e62b878154971e858999f5`",
+  "`3f4774cd5e1102cf8173f109e62ac540fda881627cdbe336c4d5040264309240`",
+  "`37dfc019905a6e3c6a377201066fc7262ce475ba7caf85b0e2b4efda620550aa`",
+  "production and generated source: unchanged", "source hygiene: pass",
+  "initial reject", "final re-review: **approve**",
+]) requireText(rawJccOponlyReportSource, contract, "raw condition-only final evidence");
+requireText(harnessSource, 'timeout -k 5s 180s "$SCRIPT_DIR/raw-jcc-oponly-conformance.sh"', "raw condition-only bounded acceptance gate");
+console.log("METRIC structural_raw_jcc_oponly_boundaries=1");
+console.log("METRIC structural_raw_jcc_oponly_integer_vectors=480");
+console.log("METRIC structural_raw_jcc_oponly_fp_vectors=128");
+console.log("METRIC structural_raw_jcc_oponly_native_vectors=608");
+console.log("METRIC structural_raw_jcc_oponly_inverted_carry_vectors=304");
+console.log("METRIC structural_raw_jcc_oponly_condition_ids=31");
 
 /* The fixed-home FPU allocator's spill/reload seam uses paired binary64 raw
  * boundaries. Pin the direct-regstruct and arbitrary-host-pointer branches,
