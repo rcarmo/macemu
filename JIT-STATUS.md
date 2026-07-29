@@ -1593,6 +1593,25 @@ fix, it achieves **100% reliability without external wrappers** like
 - Closure leaves 124 emitter APIs and 17 raw boundaries; `ADDS_wwi` is selected
   next.
 
+### Strict native-entry evidence overhead removal (2026-07-29)
+
+- Strict-full entry accounting now increments its 64-bit evidence counter in
+  generated AArch64 and enters the full observer/C boundary only at power-of-two
+  summary counts; explicit `B2_NATIVE_ASSERT_PC` remains a per-entry diagnostic.
+- This removes roughly 100 million save/call/restore observer crossings from the
+  branch-heavy `ADDQ.L`/`DBRA` measurement without changing DBcc semantics,
+  dispatch, coherence, fallback policy, or zero-fallback accounting.
+- At a fixed 2.600198 GHz on CPU 11, the branch kernel is **2.632x faster** than
+  the interpreter: 3.391 s versus 1.288 s median, 95% bootstrap CI 2.627-2.636.
+  Hot-block and 16-op DBRA kernels are 3.873x and 3.881x faster respectively.
+- Strict Finder remains operational and zero-fallback, but its deterministic
+  visual desktop endpoint is slower: 2.300 s versus 1.194 s (0.519x). The claim
+  is therefore CPU-workload-specific, not an unqualified desktop boot speedup.
+- Acceptance passes 16/16 focused DBcc vectors, branch-emitter and structural
+  gates, 904/904 maintained vectors, 33/33 allocator pressure, interactive
+  Finder/VNC proof, and 14 fixed-frequency VNC timing trials. Details:
+  `BasiliskII/docs/AARCH64_JIT_STRICT_ENTRY_COUNTER_OPTIMISATION.md`.
+
 ### AArch64 ADDS emitter closure (2026-07-27)
 
 - The three reachable W-width flag-setting ADD encoders—immediate, register,

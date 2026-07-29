@@ -225,7 +225,7 @@ const emitterAuditRules: Array<[RegExp, string]> = [
   [/^_W$/, "AARCH64_JIT_AUDIT_WORD_EMITTER.md"],
   [/^(?:ADCS|SBCS)_www$/, "AARCH64_JIT_AUDIT_CARRY_EMITTERS.md"],
   [/^ADDS_(?:wwi|www|wwwLSLi)$/, "AARCH64_JIT_AUDIT_ADDS_EMITTERS.md"],
-  [/^ANDS_(?:ww3f|www|xx7fff)$/, "AARCH64_JIT_AUDIT_ANDS_EMITTERS.md"],
+  [/^ANDS_(?:ww3f|www|xxx|xx7fff)$/, "AARCH64_JIT_AUDIT_ANDS_EMITTERS.md"],
   [/^ASR_(?:wwi|xxi|xxx)$/, "AARCH64_JIT_AUDIT_ASR_EMITTERS.md"],
   [/^(?:BFI|BFXIL|UBFIZ|UBFX)_(?:wwii|xxii)$/, "AARCH64_JIT_AUDIT_BITFIELD_EMITTERS.md"],
   [/^(?:BIC_www|ORR_(?:www|wwwLSRi|xxx|xxxLSLi)|TST_(?:ww|xx))$/, "AARCH64_JIT_AUDIT_LOGICAL_EMITTERS.md"],
@@ -718,9 +718,9 @@ for (const name of [...runtimeNames].sort()) {
 const rawFiles = [paths.codegen, paths.support, paths.mid1, paths.mid2, paths.compat] as const;
 const rawNames = new Set<string>();
 for (const path of rawFiles) for (const match of load(path).matchAll(/\b((?:compemu_raw_|raw_)[A-Za-z0-9_]+)\s*\(/g)) rawNames.add(match[1]);
-if (rawNames.size !== 83)
-  throw new Error(`raw-boundary census changed: ${rawNames.size}, expected 83`);
-const auditedRaw = /^(?:compemu_raw_(?:branch|call|call_observer_|cmp_pc|endblock_|jmp|maybe_cachemiss|maybe_recompile|observer_|set_pc_)|raw_(?:flags_to_reg|reg_to_flags|jcc|push_regs_to_preserve|pop_preserved_regs))/;
+if (rawNames.size !== 84)
+  throw new Error(`raw-boundary census changed: ${rawNames.size}, expected 84`);
+const auditedRaw = /^(?:compemu_raw_(?:branch|call|call_observer_|cmp_pc|endblock_|jmp|maybe_cachemiss|maybe_recompile|observer_|set_pc_|strict_entry_counter)|raw_(?:flags_to_reg|reg_to_flags|jcc|push_regs_to_preserve|pop_preserved_regs))/;
 const structuralUnreachableRaw = new Map<string, string>([
   ["compemu_raw_inc_opcount", "only its LOWFUNC/LENDFUNC definition remains because the sole support caller is under disabled PROFILE_UNTRANSLATED_INSNS; retained indexed load/add/store emitters remain independently classified; AARCH64_JIT_AUDIT_RAW_INC_OPCOUNT_UNREACHABLE.md"],
   ["raw_fabs_rr", "only its LOWFUNC/LENDFUNC definition remains after configured AArch64 sign selectors service before unreachable fabs_rr"],
@@ -771,7 +771,9 @@ for (const name of [...rawNames].sort()) {
       ? `BasiliskII/docs/${primitiveAudit}`
       : name === "compemu_raw_call_preserve_nzcv"
         ? "BasiliskII/docs/AARCH64_JIT_AUDIT_FPP_SIGN_SUBTRANCHE.md"
-        : "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
+        : name === "compemu_raw_strict_entry_counter"
+          ? "BasiliskII/docs/AARCH64_JIT_STRICT_ENTRY_COUNTER_OPTIMISATION.md"
+          : "AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"
     : status === "unreachable" ? (structuralUnreachableRaw.get(name) ?? "no production caller")
     : /^raw_f/.test(name) && name !== "raw_flags_to_reg"
       ? "reachable when USE_JIT_FPU compfpu is enabled; no exact closure classification"

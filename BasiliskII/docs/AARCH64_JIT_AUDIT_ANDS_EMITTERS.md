@@ -6,18 +6,19 @@ Base: `31d17c79` (`master`, published ADDS emitter closure)
 
 ## Scope
 
-This tranche audits the three reachable ANDS encoders selected by
-`ANDS_ww3f`:
+This tranche originally audited the three reachable ANDS encoders selected by
+`ANDS_ww3f` and now includes the X-register form reached by strict native-entry
+accounting:
 
 - `emitter_api,ANDS_ww3f`
 - `emitter_api,ANDS_www`
+- `emitter_api,ANDS_xxx`
 - `emitter_api,ANDS_xx7fff`
 
 The other ANDS definitions remain configured-unreachable:
 
 - `ANDS_ww1f`, `ANDS_ww7f`;
-- `ANDS_xx1f`;
-- `ANDS_xxx`.
+- `ANDS_xx1f`.
 
 No production repair is required.
 
@@ -27,6 +28,7 @@ No production repair is required.
 |---|---:|---:|---|
 | `ANDS_ww3f` | 14 | 14 | mask register shift/rotate counts to six bits and set Z for count-zero routing |
 | `ANDS_www` | 11 | 12 | W logical result/flags in AND and bit/division paths |
+| `ANDS_xxx` | 1 | 1 | test the 64-bit strict native-entry count for a power of two |
 | `ANDS_xx7fff` | 1 | 1 | mask/test the 15-bit extended-FP exponent |
 
 The additional raw `ANDS_www` call is inside `jnf_DIVS`. Configured DIVS
@@ -35,13 +37,16 @@ so that spelling is service-dominated and is not an extra configured root.
 The closure inventory's 11-reference count is therefore intentional.
 
 `ANDS_ww3f` parents consume the result and Z flag to separate effective count
-zero from nonzero while retaining all six 68K count bits. `ANDS_xx7fff` must
-remain X-width because its source also carries extended-format sign state.
+zero from nonzero while retaining all six 68K count bits. `ANDS_xxx` must remain
+X-width because the strict evidence counter is 64-bit; its sole caller tests
+`count & (count - 1)`. `ANDS_xx7fff` must remain X-width because its source also
+carries extended-format sign state.
 
 ## Encoding and flag contract
 
 ```text
 ANDS Wd,Wn,Wm       01101010000 Wm 000000 Wn Wd
+ANDS Xd,Xn,Xm       11101010000 Xm 000000 Xn Xd
 ANDS Wd,Wn,#0x3f    N=0 immr=0 imms=5 Wn Wd
 ANDS Xd,Xn,#0x7fff  N=1 immr=0 imms=14 Xn Xd
 ```
@@ -61,6 +66,8 @@ Exact controls:
 ```text
 ANDS w9,w10,w11       6a0b0149
 TST  wzr,wzr           6a1f03ff
+ANDS x9,x10,x11       ea0b0149
+TST  xzr,xzr           ea1f03ff
 ANDS w9,w10,#0x3f      72001549
 TST  wzr,#0x3f         720017ff
 ANDS x9,x10,#0x7fff    f2403949
@@ -78,6 +85,8 @@ Coverage:
 
 - 12 W-register cases across zero, negative, W truncation, disjoint and
   overlapping masks;
+- 12 X-register cases across zero, negative, disjoint/overlapping masks,
+  upper-32-bit significance, and destination/source aliases;
 - 12 six-bit mask cases including 0, 1, 63, 64, high W bits, and nonzero upper
   32-bit input;
 - 12 X 15-bit mask cases including 0, `0x7fff`, `0x8000`, sign/high bits, and
@@ -88,13 +97,14 @@ Coverage:
 Result:
 
 ```text
-METRIC emitter_ands_apis=3
-METRIC emitter_ands_exact_words=6
+METRIC emitter_ands_apis=4
+METRIC emitter_ands_exact_words=8
 METRIC emitter_ands_register_vectors=12
+METRIC emitter_ands_xregister_vectors=12
 METRIC emitter_ands_mask3f_vectors=12
 METRIC emitter_ands_mask7fff_vectors=12
-METRIC emitter_ands_alias_vectors=20
-METRIC emitter_ands_native_vectors=36
+METRIC emitter_ands_alias_vectors=28
+METRIC emitter_ands_native_vectors=48
 METRIC emitter_ands_cv_clear=1
 ```
 
@@ -117,7 +127,7 @@ before the previously accepted semantic-family gates.
 
 The accepted clean-source epoch passes:
 
-- direct ANDS conformance: **6 exact words + 36 native result/NZCV vectors**;
+- direct ANDS conformance: **8 exact words + 48 native result/NZCV vectors**;
 - complete emitter phase: all 27 bounded suites pass;
 - complete active-risky corpus: **904/904**, zero equivalence or infrastructure failures;
 - allocator pressure: **33/33**;
@@ -145,9 +155,9 @@ emitter_api,ANDS_www: unreviewed -> audited
 emitter_api,ANDS_xx7fff: unreviewed -> audited
 ```
 
-No unreachable ANDS form changes classification. After this tranche,
-**118 emitter APIs and 17 raw boundaries remain unreviewed**. Whole-engine
-closure is not claimed.
+No unreachable ANDS form changes classification. The 2026-07-29 extension moves `emitter_api,ANDS_xxx` from unreachable to
+audited when strict native-entry accounting makes it reachable. The complete
+closure inventory remains at zero unreviewed rows.
 
 ## Reproduction
 

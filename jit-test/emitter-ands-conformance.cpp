@@ -27,6 +27,8 @@ static uae_u32 one_word(const char *label)
 }
 static uae_u32 ands_reg(unsigned d,unsigned n,unsigned m)
 { emitted.clear(); ANDS_www(d,n,m); return one_word("ANDS_www count"); }
+static uae_u32 ands_xreg(unsigned d,unsigned n,unsigned m)
+{ emitted.clear(); ANDS_xxx(d,n,m); return one_word("ANDS_xxx count"); }
 static uae_u32 ands_3f(unsigned d,unsigned n)
 { emitted.clear(); ANDS_ww3f(d,n); return one_word("ANDS_ww3f count"); }
 static uae_u32 ands_7fff(unsigned d,unsigned n)
@@ -70,9 +72,10 @@ int main()
 #if !defined(__aarch64__)
     std::fprintf(stderr,"ANDS_EMITTER_FAIL native AArch64 host required\n"); return 1;
 #endif
-    unsigned exact=0,reg_vectors=0,mask3f_vectors=0,mask7fff_vectors=0,alias_vectors=0;
+    unsigned exact=0,reg_vectors=0,xreg_vectors=0,mask3f_vectors=0,mask7fff_vectors=0,alias_vectors=0;
     for(const auto &c:std::initializer_list<std::pair<uae_u32,uae_u32>>{
         {0x6a0b0149u,ands_reg(9,10,11)},{0x6a1f03ffu,ands_reg(31,31,31)},
+        {0xea0b0149u,ands_xreg(9,10,11)},{0xea1f03ffu,ands_xreg(31,31,31)},
         {0x72001549u,ands_3f(9,10)},{0x720017ffu,ands_3f(31,31)},
         {0xf2403949u,ands_7fff(9,10)},{0xf2403bffu,ands_7fff(31,31)},
     }){if(c.first!=c.second)fail("exact",c.first,c.second);++exact;}
@@ -85,6 +88,15 @@ int main()
         const auto effective=static_cast<std::uint32_t>(pairs[i].first & pairs[i].second);
         check("ANDS_www",ands_reg(d,0,1),d,pairs[i].first,pairs[i].second,effective,32,reg_vectors);if(alias)++alias_vectors;}
 
+    const std::pair<std::uint64_t,std::uint64_t> xpairs[]={{0,0},{0,~0ull},{~0ull,~0ull},
+        {0x8000000000000000ull,~0ull},{0x7fffffffffffffffull,~0ull},
+        {0xaaaaaaaaaaaaaaaaull,0x5555555555555555ull},{0xf0f0f0f0f0f0f0f0ull,0xff00ff00ff00ff00ull},
+        {1,1},{0x1000000000000001ull,0x1000000000000000ull},
+        {0x8000000000000000ull,0x7fffffffffffffffull},{0x123456789abcdef0ull,~0ull},{~0ull,1}};
+    for(unsigned i=0;i<std::size(xpairs);++i){const unsigned alias=i%3,d=alias==0?4:alias==1?0:1;
+        check("ANDS_xxx",ands_xreg(d,0,1),d,xpairs[i].first,xpairs[i].second,
+            xpairs[i].first & xpairs[i].second,64,xreg_vectors);if(alias)++alias_vectors;}
+
     const std::uint64_t values3f[]={0,1,0x3f,0x40,0x7f,0xffffffffull,0x80000000ull,
         0x123456789abcdef0ull,0x100000000ull,0x10000003full,0x20,0x60};
     for(unsigned i=0;i<std::size(values3f);++i){const unsigned d=(i&1)?0:4;
@@ -96,9 +108,10 @@ int main()
     for(unsigned i=0;i<std::size(values7fff);++i){const unsigned d=(i&1)?0:4;
         check("ANDS_xx7fff",ands_7fff(d,0),d,values7fff[i],0,values7fff[i]&0x7fffull,64,mask7fff_vectors);if(d==0)++alias_vectors;}
 
-    std::printf("METRIC emitter_ands_apis=3\nMETRIC emitter_ands_exact_words=%u\n",exact);
-    std::printf("METRIC emitter_ands_register_vectors=%u\nMETRIC emitter_ands_mask3f_vectors=%u\n",reg_vectors,mask3f_vectors);
-    std::printf("METRIC emitter_ands_mask7fff_vectors=%u\nMETRIC emitter_ands_alias_vectors=%u\n",mask7fff_vectors,alias_vectors);
-    std::printf("METRIC emitter_ands_native_vectors=%u\nMETRIC emitter_ands_cv_clear=1\n",reg_vectors+mask3f_vectors+mask7fff_vectors);
-    return exact==6&&reg_vectors==12&&mask3f_vectors==12&&mask7fff_vectors==12&&alias_vectors==20?0:1;
+    std::printf("METRIC emitter_ands_apis=4\nMETRIC emitter_ands_exact_words=%u\n",exact);
+    std::printf("METRIC emitter_ands_register_vectors=%u\nMETRIC emitter_ands_xregister_vectors=%u\n",reg_vectors,xreg_vectors);
+    std::printf("METRIC emitter_ands_mask3f_vectors=%u\nMETRIC emitter_ands_mask7fff_vectors=%u\n",mask3f_vectors,mask7fff_vectors);
+    std::printf("METRIC emitter_ands_alias_vectors=%u\n",alias_vectors);
+    std::printf("METRIC emitter_ands_native_vectors=%u\nMETRIC emitter_ands_cv_clear=1\n",reg_vectors+xreg_vectors+mask3f_vectors+mask7fff_vectors);
+    return exact==8&&reg_vectors==12&&xreg_vectors==12&&mask3f_vectors==12&&mask7fff_vectors==12&&alias_vectors==28?0:1;
 }

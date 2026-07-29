@@ -367,22 +367,17 @@ static bool jit_strict_defer_cold_ram_trace(cpu_history *pc_hist, int blocklen)
 	return false;
 }
 
-static void jit_strict_note_native_entry(uae_u32 pc)
+static void jit_strict_report_native_entry(uae_u32 pc)
 {
-	if (!jit_strict_full_jit_env())
-		return;
-	jit_strict_native_entries++;
-	/* Power-of-two summaries give bounded evidence even when a boot is ended by
-	   timeout rather than normal process teardown. Forbidden counters are
-	   structurally fail-fast and therefore remain zero in every summary. */
-	if ((jit_strict_native_entries & (jit_strict_native_entries - 1)) == 0) {
-		fprintf(stderr,
-			"JIT_STRICT_SUMMARY native=%llu trace=%llu warmup=%llu verify=%llu blocks=%llu opt0=0 fallback=0 exec_nostats=0 pc=%08x\n",
-			jit_strict_native_entries, jit_strict_trace_ops,
-			jit_strict_trace_warmups, jit_strict_verify_references,
-			jit_strict_compiled_blocks, (unsigned)pc);
-		fflush(stderr);
-	}
+	/* The generated native entry has already incremented the counter and calls
+	   here only when it reaches a power of two.  Keeping the common path out of
+	   C avoids making branch-dense strict workloads measure observer overhead. */
+	fprintf(stderr,
+		"JIT_STRICT_SUMMARY native=%llu trace=%llu warmup=%llu verify=%llu blocks=%llu opt0=0 fallback=0 exec_nostats=0 pc=%08x\n",
+		jit_strict_native_entries, jit_strict_trace_ops,
+		jit_strict_trace_warmups, jit_strict_verify_references,
+		jit_strict_compiled_blocks, (unsigned)pc);
+	fflush(stderr);
 }
 
 static inline bool jit_force_all_special_mem(void)
@@ -7599,7 +7594,6 @@ static inline bool b2_native_entry_observer_enabled(void)
 
 static void b2_test_native_entry(uae_u32 pc)
 {
-    jit_strict_note_native_entry(pc);
     const char *env = getenv("B2_NATIVE_ASSERT_PC");
     if (!env || !*env)
         return;
@@ -7838,13 +7832,20 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
         bi->status = BI_COMPILING;
         current_block_start_target = (uintptr)get_target();
 #if defined(CPU_AARCH64)
-        /* Instrument the actual native entry, before countdown or translated
-           operations. Placing this in the non-direct wrapper misses direct
-           chains and can falsely claim that a replay never entered L2. Keep
-           ordinary product blocks free of the diagnostic call. */
-        if (b2_native_entry_observer_enabled()) {
+        /* Account at the actual native entry so direct chains are included.
+           Strict mode increments inline and enters C only for power-of-two
+           summaries.  Explicit per-PC assertion remains a diagnostic observer
+           and therefore retains the full save/call/restore path. */
+        const uae_u32 native_entry_pc =
+            (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);
+        if (jit_strict_full_jit_env()) {
+            compemu_raw_strict_entry_counter((uintptr)&jit_strict_native_entries,
+                (uintptr)jit_strict_report_native_entry, native_entry_pc);
+        }
+        if (b2_native_entry_observer_enabled() && getenv("B2_NATIVE_ASSERT_PC") &&
+            *getenv("B2_NATIVE_ASSERT_PC")) {
             compemu_raw_call_observer_i((uintptr)b2_test_native_entry,
-                (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff));
+                native_entry_pc);
         }
 #endif
 

@@ -281,6 +281,25 @@ STATIC_INLINE void compemu_raw_call_observer_i(uintptr target, uintptr arg1)
 	compemu_raw_observer_restore();
 }
 
+/* Strict native-entry accounting is evidence, not guest work.  Keep the hot
+   path to one load/increment/store plus a power-of-two test, and cross the
+   expensive observer/C ABI boundary only for the logarithmically sparse
+   summaries.  This is emitted before incoming guest NZCV is restored: ANDS
+   sets host NZCV transiently; the normal prologue then restores guest flags. */
+STATIC_INLINE void compemu_raw_strict_entry_counter(uintptr counter, uintptr reporter, uintptr pc)
+{
+	LOAD_U64(REG_WORK4, counter);
+	LDR_xXi(REG_WORK1, REG_WORK4, 0);
+	ADD_xxi(REG_WORK1, REG_WORK1, 1);
+	STR_xXi(REG_WORK1, REG_WORK4, 0);
+	SUB_xxi(REG_WORK2, REG_WORK1, 1);
+	ANDS_xxx(REG_WORK2, REG_WORK1, REG_WORK2);
+	uae_u32 *skip_report = (uae_u32 *)get_target();
+	CBNZ_xi(REG_WORK2, 0);
+	compemu_raw_call_observer_i(reporter, pc);
+	write_jmp_target(skip_report, (uintptr)get_target());
+}
+
 STATIC_INLINE void compemu_raw_call_observer_ii(uintptr target, uintptr arg1, uintptr arg2)
 {
 	compemu_raw_observer_save();

@@ -989,6 +989,88 @@ function matchingFunctionBodies(text: string, signatures: RegExp, context: strin
   });
 }
 
+const strictEntryCounterBody = functionBody(
+  codegenSource,
+  "STATIC_INLINE void compemu_raw_strict_entry_counter(uintptr counter, uintptr reporter, uintptr pc)",
+  "STATIC_INLINE void compemu_raw_call_observer_ii",
+  "strict native-entry counter",
+);
+for (const contract of [
+  "LOAD_U64(REG_WORK4, counter);",
+  "LDR_xXi(REG_WORK1, REG_WORK4, 0);",
+  "ADD_xxi(REG_WORK1, REG_WORK1, 1);",
+  "STR_xXi(REG_WORK1, REG_WORK4, 0);",
+  "SUB_xxi(REG_WORK2, REG_WORK1, 1);",
+  "ANDS_xxx(REG_WORK2, REG_WORK1, REG_WORK2);",
+  "CBNZ_xi(REG_WORK2, 0);",
+  "compemu_raw_call_observer_i(reporter, pc);",
+  "write_jmp_target(skip_report, (uintptr)get_target());",
+]) requireText(strictEntryCounterBody, contract, "strict native-entry counter");
+for (const [first, second] of [
+  ["LDR_xXi(REG_WORK1, REG_WORK4, 0);", "ADD_xxi(REG_WORK1, REG_WORK1, 1);"],
+  ["ADD_xxi(REG_WORK1, REG_WORK1, 1);", "STR_xXi(REG_WORK1, REG_WORK4, 0);"],
+  ["STR_xXi(REG_WORK1, REG_WORK4, 0);", "SUB_xxi(REG_WORK2, REG_WORK1, 1);"],
+  ["SUB_xxi(REG_WORK2, REG_WORK1, 1);", "ANDS_xxx(REG_WORK2, REG_WORK1, REG_WORK2);"],
+  ["ANDS_xxx(REG_WORK2, REG_WORK1, REG_WORK2);", "CBNZ_xi(REG_WORK2, 0);"],
+  ["CBNZ_xi(REG_WORK2, 0);", "compemu_raw_call_observer_i(reporter, pc);"],
+  ["compemu_raw_call_observer_i(reporter, pc);", "write_jmp_target(skip_report, (uintptr)get_target());"],
+] as const) {
+  requireBefore(strictEntryCounterBody, first, second, "strict native-entry counter");
+}
+const strictEntryObserverCalls = (strictEntryCounterBody.match(/\bcompemu_raw_call_observer_i\(/g) || []).length;
+if (strictEntryObserverCalls !== 1) {
+  fail(`strict native-entry counter observer gate count=${strictEntryObserverCalls}, expected 1`);
+}
+
+const strictEntryCompileStart = allocatorSource.indexOf("current_block_start_target = (uintptr)get_target();");
+const strictEntryCompileEnd = allocatorSource.indexOf(
+  "if (bi->count >= 0) { /* Need to generate countdown code */",
+  strictEntryCompileStart,
+);
+if (strictEntryCompileStart < 0 || strictEntryCompileEnd < 0)
+  fail("missing strict native-entry compile gate");
+const strictEntryCompileBody = allocatorSource.slice(strictEntryCompileStart, strictEntryCompileEnd);
+for (const contract of [
+  "const uae_u32 native_entry_pc =",
+  "(uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);",
+  "if (jit_strict_full_jit_env()) {",
+  "compemu_raw_strict_entry_counter((uintptr)&jit_strict_native_entries,",
+  "(uintptr)jit_strict_report_native_entry, native_entry_pc);",
+  'if (b2_native_entry_observer_enabled() && getenv("B2_NATIVE_ASSERT_PC") &&',
+  '*getenv("B2_NATIVE_ASSERT_PC")) {',
+  "compemu_raw_call_observer_i((uintptr)b2_test_native_entry,",
+  "native_entry_pc);",
+]) requireText(strictEntryCompileBody, contract, "strict native-entry compile gate");
+requireBefore(
+  strictEntryCompileBody,
+  "if (jit_strict_full_jit_env()) {",
+  "compemu_raw_strict_entry_counter((uintptr)&jit_strict_native_entries,",
+  "strict native-entry compile gate",
+);
+requireBefore(
+  strictEntryCompileBody,
+  "compemu_raw_strict_entry_counter((uintptr)&jit_strict_native_entries,",
+  'if (b2_native_entry_observer_enabled() && getenv("B2_NATIVE_ASSERT_PC") &&',
+  "strict native-entry compile gate",
+);
+requireBefore(
+  strictEntryCompileBody,
+  'if (b2_native_entry_observer_enabled() && getenv("B2_NATIVE_ASSERT_PC") &&',
+  "compemu_raw_call_observer_i((uintptr)b2_test_native_entry,",
+  "strict native-entry compile gate",
+);
+const b2NativeEntryBody = functionBody(
+  allocatorSource,
+  "static void b2_test_native_entry(uae_u32 pc)",
+  "void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)",
+  "explicit native-entry observer",
+);
+for (const forbidden of ["jit_strict_note_native_entry", "jit_strict_report_native_entry"]) {
+  if (b2NativeEntryBody.includes(forbidden)) {
+    fail(`explicit native-entry observer: strict summary path leaked through ${forbidden}`);
+  }
+}
+
 const fbccCompilerBody = functionBody(
   fppCompilerSource,
   "void comp_fbcc_opp(uae_u32 opcode)",
@@ -4043,33 +4125,39 @@ console.log("METRIC structural_adds_emitter_exact_words=7");
 console.log("METRIC structural_adds_emitter_native_vectors=39");
 console.log("METRIC structural_adds_emitter_alias_vectors=24");
 
-/* Reachable ANDS forms split into W register flags/results, a six-bit W count
- * mask, and one X-width 0x7fff exponent test. Logical flags must clear C/V. */
+/* Reachable ANDS forms split into W/X register flags/results, a six-bit W
+ * count mask, and one X-width 0x7fff exponent test. Logical flags clear C/V. */
 for(const contract of [
   "#define ANDS_www(Wd,Wn,Wm)        _W((0b01101010000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))",
+  "#define ANDS_xxx(Xd,Xn,Xm)        _W((0b11101010000 << 21) | ((Xm) << 16) | (0 << 10) | ((Xn) << 5) | (Xd))",
   "#define ANDS_xx7fff(Xd,Xn)        _W((0b111100100 << 23) | immEncode(1,0b000000,0b001110) | ((Xn) << 5) | (Xd))",
   "#define ANDS_ww3f(Wd,Wn)          _W((0b011100100 << 23) | immEncode(0,0b000000,0b000101) | ((Wn) << 5) | (Wd))",
 ]) requireText(codegenHeaderSource,contract,"AND-with-flags emitter encoding");
-for(const [name,expected] of [["ANDS_ww3f",14],["ANDS_www",11],["ANDS_xx7fff",1]] as const){
+for(const [name,expected] of [["ANDS_ww3f",14],["ANDS_www",11],["ANDS_xxx",1],["ANDS_xx7fff",1]] as const){
   const inventory=closureInventoryCsv.split("\n").find((line)=>line.startsWith(`emitter_api,${name},`));
   if(!inventory?.includes(`,${expected},`)) fail(`${name} inventory reference census changed`);
 }
 const rawAnds3f=(midfunc2Source.match(/\bANDS_ww3f\(/g)||[]).length;
 const rawAndsW=(midfunc2Source.match(/\bANDS_www\(/g)||[]).length;
-const rawAndsX=(codegenSource.match(/\bANDS_xx7fff\(/g)||[]).length;
-if(rawAnds3f!==14||rawAndsW!==12||rawAndsX!==1)
-  fail(`ANDS raw caller census changed: 3f=${rawAnds3f} w=${rawAndsW} x=${rawAndsX}`);
+const rawAndsXReg=(codegenSource.match(/\bANDS_xxx\(/g)||[]).length;
+const rawAndsXMask=(codegenSource.match(/\bANDS_xx7fff\(/g)||[]).length;
+if(rawAnds3f!==14||rawAndsW!==12||rawAndsXReg!==1||rawAndsXMask!==1)
+  fail(`ANDS raw caller census changed: 3f=${rawAnds3f} w=${rawAndsW} xreg=${rawAndsXReg} xmask=${rawAndsXMask}`);
 for(const contract of [
   "ANDS_ww3f(REG_WORK1, i);", "ANDS_www(d, d, s);",
   "ANDS_www(REG_WORK3, REG_WORK1, REG_WORK2);",
 ]) requireText(midfunc2Source,contract,"configured AND-with-flags caller class");
-requireText(codegenSource,"ANDS_xx7fff(REG_WORK2, REG_WORK4);","configured extended-FP exponent test");
+for (const contract of [
+  "ANDS_xxx(REG_WORK2, REG_WORK1, REG_WORK2);",
+  "ANDS_xx7fff(REG_WORK2, REG_WORK4);",
+]) requireText(codegenSource, contract, "configured X AND-with-flags caller class");
 for(const contract of [
-  "emitter_ands_apis=3", "emitter_ands_exact_words=%u", "emitter_ands_register_vectors=%u",
-  "emitter_ands_mask3f_vectors=%u", "emitter_ands_mask7fff_vectors=%u", "emitter_ands_alias_vectors=%u",
-  "emitter_ands_native_vectors=%u", "emitter_ands_cv_clear=1", "0x6a0b0149u", "0x720017ffu",
-  "0xf2403949u", "0xf2403bffu", "logical_nzcv", "values3f", "values7fff",
-  "exact==6&&reg_vectors==12&&mask3f_vectors==12&&mask7fff_vectors==12&&alias_vectors==20",
+  "emitter_ands_apis=4", "emitter_ands_exact_words=%u", "emitter_ands_register_vectors=%u",
+  "emitter_ands_xregister_vectors=%u", "emitter_ands_mask3f_vectors=%u", "emitter_ands_mask7fff_vectors=%u",
+  "emitter_ands_alias_vectors=%u", "emitter_ands_native_vectors=%u", "emitter_ands_cv_clear=1",
+  "0x6a0b0149u", "0xea0b0149u", "0xea1f03ffu", "0x720017ffu",
+  "0xf2403949u", "0xf2403bffu", "logical_nzcv", "xpairs", "values3f", "values7fff",
+  "exact==8&&reg_vectors==12&&xreg_vectors==12&&mask3f_vectors==12&&mask7fff_vectors==12&&alias_vectors==28",
 ]) requireText(andsEmitterProbeSource,contract,"AND-with-flags native conformance");
 for(const contract of ["-Wall -Wextra -Werror","emitter-ands-conformance.cpp"])
   requireText(andsEmitterHarnessSource,contract,"AND-with-flags conformance build");
@@ -4990,12 +5078,49 @@ const restorePublishedFinalEmitterRows = (csv: string) => {
   }
   return restored;
 };
-const beforeFinalEmitterPromotionCsv = restorePublishedFinalEmitterRows(closureInventoryCsv);
+const restoreStrictEntryInventoryRows = (csv: string) => {
+  const publishedRows = new Map([
+    ["emitter_api,ADD_xxi", "emitter_api,ADD_xxi,audited,ADD_xxi,80,14,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,193,AARCH64_JIT_AUDIT_ADD_EMITTERS.md"],
+    ["emitter_api,ANDS_xxx", "emitter_api,ANDS_xxx,unreachable,ANDS_xxx,60,0,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,295,no path from reachable AArch64 compiler/emitter roots"],
+    ["emitter_api,CBNZ_xi", "emitter_api,CBNZ_xi,audited,CBNZ_xi,87,1,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,103,AARCH64_JIT_AUDIT_BRANCH_EMITTERS.md"],
+    ["emitter_api,LDR_xXi", "emitter_api,LDR_xXi,audited,LDR_xXi,60,31,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,123,AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
+    ["emitter_api,STR_xXi", "emitter_api,STR_xXi,audited,STR_xXi,60,26,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,146,AARCH64_JIT_AUDIT_INTEGER_MEMORY_EMITTERS.md"],
+    ["emitter_api,SUB_xxi", "emitter_api,SUB_xxi,audited,SUB_xxi,80,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.h,253,AARCH64_JIT_AUDIT_SUB_EMITTERS.md"],
+    ["raw_boundary,compemu_raw_call_observer_i", "raw_boundary,compemu_raw_call_observer_i,audited,compemu_raw_call_observer_i,86,4,BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp,276,AARCH64_JIT_AUDIT_AREA1_BLOCK_LIFECYCLE.md; AREA2_PC_OWNERSHIP.md; AREA3_FLAGS_LIVENESS.md; AREA4_CALLS_AND_ALLOCATOR.md"],
+  ]);
+  let restored = csv;
+  for (const [prefix, published] of publishedRows) {
+    const current = restored.split("\n").find((line) => line.startsWith(`${prefix},`));
+    if (!current) fail(`strict entry predecessor row missing: ${prefix}`);
+    restored = restored.replace(`${current}\n`, `${published}\n`);
+  }
+  const newRaw = restored.split("\n").find((line) => line.startsWith("raw_boundary,compemu_raw_strict_entry_counter,"));
+  if (!newRaw) fail("strict entry raw boundary missing during predecessor reconstruction");
+  restored = restored.replace(`${newRaw}\n`, "");
+  restored = restored.split("\n").map((line) => {
+    const columns = line.split(",");
+    if (columns[6] === "BasiliskII/src/uae_cpu_2026/compiler/codegen_arm64.cpp" && Number(columns[7]) >= 303)
+      columns[7] = String(Number(columns[7]) - 19);
+    else if (columns[6] === "BasiliskII/src/uae_cpu_2026/compiler/compemu_support_arm.cpp" && Number(columns[7]) >= 3267)
+      columns[7] = String(Number(columns[7]) + 5);
+    return columns.join(",");
+  }).join("\n");
+  return restored;
+};
+const restoreInventoryRow = (csv: string, prefix: string, published: string) => {
+  const current = csv.split("\n").find((line) => line.startsWith(`${prefix},`));
+  if (!current) fail(`predecessor row missing: ${prefix}`);
+  return csv.replace(`${current}\n`, `${published}\n`);
+};
+const beforeFinalEmitterPromotionCsv = restorePublishedFinalEmitterRows(restoreStrictEntryInventoryRows(closureInventoryCsv));
 /* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
  * every subsequently promoted row before hashing the published JCC base. */
-const reconstructedPublishedCsv = restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(beforeFinalEmitterPromotionCsv
-  .replace(`${currentRawJccRows[0]}\n`, `${publishedRawJccRow}\n`)
-  .replace(`${currentMaybeDoNothingRows[0]}\n`, `${publishedMaybeDoNothingRow}\n`)))));
+const rawJccPredecessorCsv = restoreInventoryRow(
+  restoreInventoryRow(beforeFinalEmitterPromotionCsv, "raw_boundary,compemu_raw_jcc_l_oponly", publishedRawJccRow),
+  "raw_boundary,compemu_raw_maybe_do_nothing", publishedMaybeDoNothingRow,
+);
+const reconstructedPublishedCsv = restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(
+  restorePublishedRawFflagsRow(restorePublishedRawMovRows(rawJccPredecessorCsv))));
 if (reconstructedPublishedCsv === closureInventoryCsv)
   fail("raw condition-only predecessor reconstruction changed no row");
 const reconstructedPublishedHash = createHash("sha256").update(reconstructedPublishedCsv).digest("hex");
@@ -5095,9 +5220,10 @@ const rawMaybeDoNothingRow = closureInventoryCsv.split("\n").find((line) => line
 if (!rawMaybeDoNothingRow?.includes(",audited,") || !rawMaybeDoNothingRow.includes(",9,") ||
     !rawMaybeDoNothingRow.includes("AARCH64_JIT_AUDIT_RAW_MAYBE_DO_NOTHING_BOUNDARY.md"))
   fail("raw maybe-do-nothing configured census or closure promotion changed");
-const reconstructedMaybeDoNothingBase = restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(restorePublishedRawFflagsRow(restorePublishedRawMovRows(beforeFinalEmitterPromotionCsv.replace(
-  `${rawMaybeDoNothingRow}\n`, `${publishedMaybeDoNothingRow}\n`,
-)))));
+const reconstructedMaybeDoNothingBase = restorePublishedMemoryEmitterRows(restorePublishedConditionalEmitterRows(
+  restorePublishedRawFflagsRow(restorePublishedRawMovRows(restoreInventoryRow(
+    beforeFinalEmitterPromotionCsv, "raw_boundary,compemu_raw_maybe_do_nothing", publishedMaybeDoNothingRow,
+  )))));
 /* Mechanical one-row proof against the committed predecessor is supplied by
  * the exact published hash, not by selected-column comparison. */
 const maybeDoNothingPredecessorHash = createHash("sha256").update(reconstructedMaybeDoNothingBase).digest("hex");
@@ -7701,7 +7827,7 @@ for (const contract of [
 
 const addEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (const [name, expected] of [
-  ["ADD_wwi", 17], ["ADD_xxi", 10], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
+  ["ADD_wwi", 17], ["ADD_xxi", 11], ["ADD_wwwEX", 1], ["ADD_xxwEX", 9],
   ["ADD_www", 27], ["ADD_xxx", 3], ["ADD_wwwLSLi", 8],
 ] as const) {
   const found = (addEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
@@ -7717,7 +7843,7 @@ expectArgs("ADD_wwi imm12", lastArgs(/\bADD_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g
   "v", "v", "v", "tmp", "v", "live.state[s].val", "6", "0x60", "1", "1",
 ]);
 expectArgs("ADD_xxi imm12", lastArgs(/\bADD_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
-  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "1", "1", "1", "4", "4",
+  "offset", "offset", "i", "offset", "JIT_OBSERVER_SAVE_SIZE", "1", "1", "1", "1", "4", "4",
 ]);
 expectArgs("ADD_wwwEX extension", lastArgs(/\bADD_wwwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), ["EX_SXTH"]);
 expectArgs("ADD_xxwEX extension", lastArgs(/\bADD_xxwEX\([^,\n]+,[^,\n]+,[^,\n]+,\s*([^\)]+)\)/g), [
@@ -7770,7 +7896,7 @@ for (const contract of [
 
 const subEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (const [name, expected] of [
-  ["SUB_wwi", 54], ["SUB_xxi", 5], ["SUB_www", 36], ["SUB_xxx", 3],
+  ["SUB_wwi", 54], ["SUB_xxi", 6], ["SUB_www", 36], ["SUB_xxx", 3],
   ["SUBS_wwi", 6], ["SUBS_www", 3], ["SUBS_wwwLSLi", 3],
 ] as const) {
   const found = (subEmitterCallers.match(new RegExp(`\\b${name}\\(`, "g")) || []).length;
@@ -7783,7 +7909,7 @@ expectArgs("SUB_wwi imm12", [...subEmitterCallers.matchAll(/\bSUB_wwi\([^,\n]+,[
   "v & 0xff", "v", "v", "v", "6", "0x60", "6", "0x60", "cycles", "cycles", "cycles", "cycles",
 ]);
 expectArgs("SUB_xxi imm12", [...subEmitterCallers.matchAll(/\bSUB_xxi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
-  "-offset", "-offset", "i", "-offset", "JIT_OBSERVER_SAVE_SIZE",
+  "-offset", "-offset", "i", "-offset", "JIT_OBSERVER_SAVE_SIZE", "1",
 ]);
 expectArgs("SUBS_wwi imm12", [...subEmitterCallers.matchAll(/\bSUBS_wwi\([^,\n]+,[^,\n]+,\s*([^\)]+)\)/g)].map((match) => match[1].trim()), [
   "1", "1", "1", "v", "1", "1",
@@ -7889,8 +8015,8 @@ const memoryEmitterNames = [
   "STP_xxXi", "STP_xxXpre", "STR_wXi", "STR_wXx", "STR_wXxLSLi", "STR_xXi",
   "STR_xXpre", "STRB_wXx", "STRH_wXi", "STRH_wXx",
 ];
-const memoryInventoryReferences = [1,2,27,2,1,31,5,5,2,6,2,1,1,2,37,2,1,26,5,4,3,2];
-const memoryRawCallers = [2,2,31,2,1,25,4,5,2,7,2,1,2,2,45,2,1,20,4,4,4,2];
+const memoryInventoryReferences = [1,2,27,2,1,32,5,5,2,6,2,1,1,2,37,2,1,27,5,4,3,2];
+const memoryRawCallers = [2,2,31,2,1,26,4,5,2,7,2,1,2,2,45,2,1,21,4,4,4,2];
 const memoryEmitterCallers = `${midfuncSource}\n${midfunc2Source}\n${compatSource}\n${codegenSource}`;
 for (let i = 0; i < memoryEmitterNames.length; ++i) {
   const name = memoryEmitterNames[i];
@@ -11192,6 +11318,7 @@ console.log("METRIC structural_bfins_runtime_contract=1");
 console.log("METRIC structural_bfins_signed_wrapping_semantics=1");
 console.log("METRIC structural_helper_call_abi=1");
 console.log("METRIC structural_diagnostic_observer_abi=1");
+console.log("METRIC structural_strict_entry_counter_observer_split=1");
 console.log("METRIC structural_diagnostic_verifier_opcode_decode=1");
 console.log("METRIC structural_block_verifier_retirement_bound=1");
 console.log("METRIC structural_helper_allocator_barrier=1");
