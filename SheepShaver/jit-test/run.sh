@@ -12,6 +12,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/gate3-contract.sh"
+
 UNIX_DIR="$(cd "$SCRIPT_DIR/../src/Unix" && pwd)"
 RUN_DIR="/tmp/ss-jit-test-$$"
 mkdir -p "$RUN_DIR"

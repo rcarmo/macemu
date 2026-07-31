@@ -1193,13 +1193,11 @@ void powerpc_cpu::execute(uint32 entry)
 						ppc_jit_failprobe_note(jblk.ppc_start_pc, pc(), "partial_return");
 				  pdi_jit_post:
 					/* GATE 3: PC range check.
-					 * If the JIT produced an out-of-range PC, the block branched to
-					 * hardware-mapped Mac OS space (e.g. NuBus/MMIO) that SheepShaver
-					 * doesn't map. The interpreter handles these gracefully via the
-					 * SIGSEGV skip path (ignoresegv). So:
-					 *   1. Restore PC to block entry (safe interpreter start)
-					 *   2. Invalidate this block from JIT cache
-					 *   3. Fall through to interpreter (goto skip_jit)
+					 * A returned native block has already committed its supported prefix
+					 * and PPCR_PC is the next guest instruction. Replaying the block leader
+					 * would duplicate those architectural effects. Preserve that successor,
+					 * invalidate the offending native block, and enter the uncached
+					 * one-instruction interpreter loop, which decodes directly from pc().
 					 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md */
 					uint32 jit_pc = pc();
 					uint32 ram_start = RAMBase ? RAMBase : (uint32)(uintptr_t)RAMBaseHost;
@@ -1213,14 +1211,16 @@ void powerpc_cpu::execute(uint32 entry)
 						jit_skip_reason = PPC_JIT_SKIP_GATE3;
 						jit_skip_pc = jblk.ppc_start_pc;
 						jit_skip_opcode = vm_read_memory_4(jit_skip_pc);
-						if (ppc_jit_ratio_enabled()) ppc_jit_ratio_gate3_entries++;
+						if (ppc_jit_ratio_enabled()) {
+							ppc_jit_ratio_gate3_entries++;
+							ppc_jit_ratio_skip_jit_entries++;
+						}
 						fprintf(stderr, "PPC-JIT-A64: GATE3: out-of-range PC 0x%08x after block at 0x%08x — handing to interpreter\n",
 						        jit_pc, jblk.ppc_start_pc);
-						/* Reset to block entry so interpreter starts from a known-good PC */
-						set_register(powerpc_registers::PC, any_register(jblk.ppc_start_pc));
-						/* Evict from block cache so this block always goes to interpreter */
+						/* Preserve the JIT-produced successor: the native prefix is committed. */
 						ppc_jit_aarch64_invalidate_pc(jblk.ppc_start_pc);
-						goto skip_jit;
+						ppc_jit_skip_hist_record(jit_skip_pc, jit_skip_opcode, jit_skip_reason);
+						goto do_interpret;
 					}
 					if (!spcflags().empty()) {
 						if (!check_spcflags()) goto return_site;

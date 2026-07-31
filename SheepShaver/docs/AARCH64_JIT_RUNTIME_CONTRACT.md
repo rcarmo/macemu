@@ -115,12 +115,15 @@ There is exactly one PC representation: `regs.pc` at offset PPCR_PC.
 next instruction to execute (i.e. the instruction after the last compiled one, or the branch target
 for taken branches).
 
-**Contract consequence**: If a fault occurs mid-block, PPCR_PC contains the block entry PC.
-The SIGSEGV handler will restart from that PC. The interpreter will re-execute the entire block
-cleanly. This is correct (restartability = block-level granularity, not instruction-level).
+**Contract consequence**: If a host fault occurs mid-block, PPCR_PC still identifies the guest
+block entry for signal-context classification. Handled faults return `SIGSEGV_RETURN_SKIP_INSTRUCTION`,
+which skips the faulting host instruction and resumes the same native block; they do **not** restart
+the guest block. An unhandled fault is fatal. Therefore recovery code outside the signal handler
+must never infer that replaying the block from PPCR_PC is safe after a native prefix has committed.
 
 **Rule**: No path may read PPCR_PC mid-block and assume it reflects the currently executing
-instruction. Only the block entry PC is valid mid-block.
+instruction. Only the block entry PC is valid mid-block. Once a block returns normally, PPCR_PC is
+the committed successor and must not be rewound.
 
 ### 3. Flag model
 
@@ -385,15 +388,16 @@ If a compiled block faults (e.g., bad memory address from a LDR/STR in compiled 
 4. PPCR_PC = block entry PC (see PC model above).
 5. The handler can correctly identify the Mac context and either handle (known ROM faults) or dump+quit.
 
-### Restartability guarantee
+### Fault continuation guarantee
 
-A compiled block is restartable from its entry PC. The interpreter will re-execute the block
-cleanly from that PC. Because the JIT does not commit partial instruction results (each handler
-is atomic from the struct's perspective), there is no partial-commit hazard.
+A handled host fault skips the faulting host instruction and continues the current native block.
+The register struct must therefore be coherent at every potentially faulting memory boundary, and
+the generated instruction sequence must tolerate the skipped access. The block as a whole is **not**
+restartable: earlier guest instructions may already have committed register or memory effects.
 
-**Rule**: Any future instruction handler that spans multiple struct writes must either:
-1. Be atomic from a fault perspective (all writes or none), OR
-2. Emit an explicit PC update mid-handler to enable per-write restartability.
+**Rule**: Every potentially faulting generated access must expose coherent architectural state and
+have explicit skip semantics. Any dispatcher containment path reached after normal native return
+must continue from the committed successor in PPCR_PC; it must not replay the block leader.
 
 ---
 
@@ -411,8 +415,9 @@ is atomic from the struct's perspective), there is no partial-commit hazard.
 
 ### After fallback to interpreter
 
-- `pc()` = same value as before JIT call (JIT compilation does not modify struct)
-- All state = unchanged from pre-JIT-call
+- If compilation declines before execution, `pc()` and all state are unchanged from pre-JIT-call.
+- If a native prefix returns to containment (for example GATE3), `pc()` is its committed successor
+  and all prefix effects are architectural; uncached interpretation must start at that successor.
 
 ---
 
@@ -449,7 +454,7 @@ barrier. Not implemented in the current JIT.
 | 3 | Helper calls are semantic barriers | ✅ Guarded load/store, FP memory, fixed-count string/multiple, byte-reversed memory, dcbz, timebase, and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x29 + RA barrier / direct FPR/GPR-slot updates keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code`; containment/corrupt-entry invalidation is a full flush because per-PC unlinking cannot unpatch already-emitted direct branches. |
 | 5 | Interpreter and JIT builds agree on shared semantics | ✅ 299/299 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added RA-width, string/multiple, SPR/FPSCR/AltiVec, addis/lis, vsel, AltiVec FP compare and FP edge vectors, vperm control-mask, bcctr CTR-decrement, fres/vector-estimate delegation, FPSCR move/write delegation, FP Rc/FPSCR-producing-op delegation, AltiVec vector-sum delegation, AltiVec average/saturating add-sub delegation, AltiVec merge/multiply/conversion/shift delegation, AltiVec signed/pixel unpack and pack delegation, PPC64 Rc delegation, PPC64/G5 FP illegal-op delegation, AltiVec FP rounding and `vmladduhm` delegation, mixed-lane `vperm`/`vsplt` coverage, CR6 dotted-vector coverage, and corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro` plus related false-coverage vectors). `bcl` LR update fixed (2026-05). |
-| 6 | Fault recovery: restartable from coherent state | ✅ Block-level restartability. PPCR_PC = block entry on fault. Interpreter re-runs block. |
+| 6 | Fault recovery: continuation from coherent state | ✅ Potentially faulting memory operations are RA barriers; handled SIGSEGV skips the faulting host instruction and resumes native execution. Post-return containment preserves PPCR_PC's committed successor rather than replaying the block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 
 ---
