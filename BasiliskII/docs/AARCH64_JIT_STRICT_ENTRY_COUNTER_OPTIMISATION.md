@@ -55,8 +55,8 @@ policy and 799,865-2,600,198 kHz bounds were restored after each series.
 
 No Previous process appeared before, between, or after accepted trials. CPU
 series contamination logs are empty. Five samples per interpreter/JIT/kernel
-arm were alternated by order. Seven Finder/VNC pairs were similarly alternated.
-The binary SHA-256 for all accepted trials is
+arm were alternated by order. Seven historical VNC pairs were similarly alternated.
+The binary SHA-256 for all accepted CPU trials is
 `bbf72915527216a364ec542645545b7471a11a2d2de33e2645c30e78c2b61942`.
 Confidence intervals use 100,000 deterministic bootstrap resamples of median
 speedup with seed `0x5eed1234`.
@@ -74,25 +74,25 @@ All matched final register states are identical. Every substantive strict run
 emitted power-of-two summaries with `warmup=0 verify=0 opt0=0 fallback=0
 exec_nostats=0`.
 
-## Finder/VNC result and scope
+## Finder/VNC result and scope — correction
 
-The optimisation preserves real strict Finder operation but does not establish
-a boot-speed win:
+The optimisation preserves real strict Finder operation, but its original VNC
+performance numbers are **retracted**. Endpoint inspection on 2026-07-31 showed
+that the frames labelled “Finder desktop” were early boot/Welcome frames, not
+Finder. The 61.8/65.5 ms “disk window” classifier was already true at action
+poll zero because the splash/dialog white region exceeded its threshold; it did
+not prove a newly opened disk window.
 
-| Visual endpoint | Interpreter median | Strict JIT median | Speedup | 95% CI |
-|---|---:|---:|---:|---:|
-| Finder desktop | 1.194 s | 2.300 s | 0.519x | 0.508-0.530 |
-| Open boot-disk window | 61.8 ms | 65.5 ms | 0.944x | 0.623-1.056 |
+Those figures must not be used as Finder performance evidence. They do not
+affect the fixed-frequency CPU results above or the correctness gates below.
+The repaired visual oracle and a source-identical base/candidate Finder timing
+comparison are documented in
+`AARCH64_JIT_STRICT_ARCHITECTURAL_CACHE_VALIDATION.md`.
 
-The desktop series has 14 valid trials, fixed frequency throughout, zero host
-faults, and 21 zero-fallback strict summaries in each JIT trial. It demonstrates
-that the accepted claim is workload-specific: translated CPU kernels are
-faster, and the branch regression is removed, but strict Finder startup remains
-slower than the interpreter under this deterministic visual protocol.
-
-A separate interactive strict proof reached Finder and exercised keyboard,
-pointer, Apple menu, boot-disk window and close actions. It captured 11
-screenshots, emitted 25 valid strict summaries, and logged no host fault.
+A separate interactive strict proof did reach Finder, dismiss the shutdown
+dialog and exercise keyboard, pointer, menu and desktop-icon input. Its
+screenshots do not prove a disk window opened, so the earlier stronger wording
+is also withdrawn.
 
 ## Correctness and closure gates
 
@@ -119,7 +119,7 @@ to 8% use, and the complete clean rerun above passed.
 Accepted evidence is under:
 
 - `/workspace/reports/basiliskii-strict-entry-optimisation-d3a047c3/cpu-final`
-- `/workspace/reports/basiliskii-strict-entry-optimisation-d3a047c3/vnc-final`
+- `/workspace/reports/basiliskii-strict-entry-optimisation-d3a047c3/vnc-final` (historical, VNC timing labels retracted)
 - `/workspace/tmp/basiliskii-strict-entry-optimisation/full-harness-rerun.log`
 - `/workspace/tmp/basiliskii-strict-entry-optimisation/regalloc-pressure.log`
 - `/workspace/tmp/basiliskii-strict-entry-optimisation/finder-strict`

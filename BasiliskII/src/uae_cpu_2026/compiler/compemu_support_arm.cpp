@@ -2215,7 +2215,7 @@ extern const struct comptbl op_smalltbl_0_comp_ff[];
 static void flush_icache_hard(int);
 static void flush_icache_lazy(int);
 static void flush_icache_none(int);
-static inline void reset_lists(void);
+static inline void flush_icache_architectural(int); static inline void reset_lists(void);
 
 #ifdef JIT_DEBUG_MEM_CORRUPTION
 // JIT Page 0 DMA Guard
@@ -4629,7 +4629,7 @@ static void jit_runtime_cache_control(uae_u32 opcode)
        canonical core invalidates translated code only for instruction-cache
        forms (bit 7); data-cache-only forms have no additional host state. */
     if (opcode & 0x80)
-        flush_icache_hard(0);
+        flush_icache_architectural(0);
     m68k_incpc(2);
 }
 
@@ -6555,8 +6555,8 @@ static inline int block_check_checksum(blockinfo* bi)
            means we have to move it into the needs-to-be-flushed list */
         bi->handler_to_use = bi->handler;
         set_dhtu(bi, (jit_force_nondirect_handler_env() || jit_force_nondirect_target_env((uintptr)bi->pc_p)) ? bi->handler : bi->direct_handler);
-        bi->status = BI_CHECKING;
-        isgood = called_check_checksum(bi) != 0;
+        bi->status = BI_CHECKING; /* Strict lazy flush already gates every target's inbound edges. */
+        isgood = jit_strict_full_jit_env() || called_check_checksum(bi) != 0;
     }
     jit_diag_note_checksum_result(isgood != 0);
     if (isgood) {
@@ -8920,6 +8920,23 @@ endblock_done:
             flush_icache_hard(3);
 		jit_end_write_window();
     }
+}
+
+/* Instruction-cache invalidation requested through the core/host bridge is a
+   validation boundary, not a code-cache allocation boundary. This covers guest
+   CINV/CPUSH/CACR transitions and host code-patch notification. Strict mode uses
+   the repaired lazy lifecycle so unchanged RAM blocks reactivate only after
+   checksum validation; changed blocks invalidate and retrace. Ordinary mode
+   retains its configured hard/lazy policy. Allocation, teardown and code-cache
+   exhaustion continue to call flush_icache_hard() directly. Keep this definition
+   after inventoried boundaries so policy-only changes do not rewrite their
+   historical locations. */
+static inline void flush_icache_architectural(int reason)
+{
+    if (jit_strict_full_jit_env() || lazy_flush)
+        flush_icache_lazy(reason);
+    else
+        flush_icache_hard(reason);
 }
 
 #endif /* JIT */

@@ -9839,6 +9839,52 @@ const cacheControlBody = functionBody(
 );
 requireBefore(cacheControlBody, "if (!regs.s)", "flush_internals();", "cache-control privilege ordering");
 requireBefore(cacheControlBody, "if (opcode & 0x80)", "m68k_incpc(2);", "cache-control transition ordering");
+requireText(
+  cacheControlBody,
+  "flush_icache_architectural(0)",
+  "compiled cache-control architectural invalidation",
+);
+if (cacheControlBody.includes("flush_icache_hard(0)"))
+  fail("compiled cache-control bypasses the architectural invalidation selector");
+const architecturalFlushBody = functionBody(
+  allocatorSource,
+  "static inline void flush_icache_architectural(int reason)\n{",
+  "#endif /* JIT */",
+  "architectural instruction-cache invalidation selector",
+);
+for (const contract of [
+  "jit_strict_full_jit_env() || lazy_flush",
+  "flush_icache_lazy(reason)",
+  "flush_icache_hard(reason)",
+] as const) {
+  requireText(architecturalFlushBody, contract, "architectural instruction-cache invalidation selector");
+}
+requireBefore(
+  architecturalFlushBody,
+  "jit_strict_full_jit_env() || lazy_flush",
+  "flush_icache_lazy(reason)",
+  "strict architectural lazy-validation policy",
+);
+const flushBridgeBody = functionBody(
+  supportSource,
+  "static void flush_icache_bridge(void)",
+  "void (*flush_icache)(void)",
+  "generic instruction-cache invalidation bridge",
+);
+requireText(
+  flushBridgeBody,
+  "flush_icache_architectural(3)",
+  "generic instruction-cache invalidation bridge",
+);
+if (flushBridgeBody.includes("arm_flush_icache_impl"))
+  fail("generic instruction-cache invalidation bridge bypasses the architectural selector");
+for (const hardBoundary of [
+  "current_compile_p >= MAX_COMPILE_PTR)\n            flush_icache_hard(3)",
+  "void alloc_cache(void)\n{\n    if (compiled_code) {\n        flush_icache_hard(3)",
+  "void compiler_exit(void)",
+] as const) {
+  requireText(allocatorSource, hardBoundary, "non-architectural hard-flush boundary");
+}
 for (const contract of [
   'jit_abort("runtime semantic helper: missing exact opcode PC")',
   "jit_emit_runtime_helper_barrier((uintptr)jit_runtime_system_control,\n        jit_compile_current_op_host_pc, opcode, 0, false);",
@@ -10930,6 +10976,17 @@ requireText(
   checksumValidationBody,
   "isgood = bi->csi != NULL",
   "zero-valued checksum validity",
+);
+requireText(
+  checksumValidationBody,
+  "isgood = jit_strict_full_jit_env() || called_check_checksum(bi) != 0",
+  "strict per-target lazy validation",
+);
+requireBefore(
+  checksumValidationBody,
+  "set_dhtu(bi,",
+  "isgood = jit_strict_full_jit_env() || called_check_checksum(bi) != 0",
+  "strict per-target lazy validation after inbound-edge reactivation",
 );
 if (checksumValidationBody.includes("if (bi->c1 || bi->c2)")) {
   fail("zero-valued checksum validity: checksum value is still overloaded as presence");

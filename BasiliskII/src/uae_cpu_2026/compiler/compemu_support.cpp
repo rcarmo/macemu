@@ -44,8 +44,7 @@ void (*arm_flush_icache_impl)(int) = flush_icache_none;
 
 static void flush_icache_bridge(void)
 {
-	if (arm_flush_icache_impl)
-		arm_flush_icache_impl(3);
+	flush_icache_architectural(3);
 }
 
 void (*flush_icache)(void) = flush_icache_bridge;

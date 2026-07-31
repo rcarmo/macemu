@@ -1604,13 +1604,39 @@ fix, it achieves **100% reliability without external wrappers** like
 - At a fixed 2.600198 GHz on CPU 11, the branch kernel is **2.632x faster** than
   the interpreter: 3.391 s versus 1.288 s median, 95% bootstrap CI 2.627-2.636.
   Hot-block and 16-op DBRA kernels are 3.873x and 3.881x faster respectively.
-- Strict Finder remains operational and zero-fallback, but its deterministic
-  visual desktop endpoint is slower: 2.300 s versus 1.194 s (0.519x). The claim
-  is therefore CPU-workload-specific, not an unqualified desktop boot speedup.
-- Acceptance passes 16/16 focused DBcc vectors, branch-emitter and structural
-  gates, 904/904 maintained vectors, 33/33 allocator pressure, interactive
-  Finder/VNC proof, and 14 fixed-frequency VNC timing trials. Details:
+- The historical 1.194/2.300-second VNC “desktop” and 61.8/65.5 ms “disk
+  window” figures are retracted: endpoint inspection showed early boot/Welcome
+  frames and a classifier already true before the click. CPU-kernel results and
+  correctness gates remain valid; see the correction in
   `BasiliskII/docs/AARCH64_JIT_STRICT_ENTRY_COUNTER_OPTIMISATION.md`.
+- Acceptance passes 16/16 focused DBcc vectors, branch-emitter and structural
+  gates, 904/904 maintained vectors, 33/33 allocator pressure and interactive
+  strict Finder proof.
+
+### Strict architectural-cache validation (2026-07-31)
+
+- Generic and compiled guest instruction-cache invalidations now share
+  `flush_icache_architectural()`. Strict full-JIT uses lazy checksum validation;
+  ordinary policy is unchanged, while allocation, teardown and code-cache
+  exhaustion remain direct hard-flush boundaries.
+- Lazy flush gates every target's inbound edges through its own `direct_pcc`.
+  Strict reactivation therefore validates only the local block; outgoing edges
+  remain gated by their targets. Ordinary lazy mode retains recursive successor
+  validation. Independent review is **APPROVE**.
+- The repaired visual oracle requires the real Finder menu bar, then sends
+  `Tab` and requires the Macintosh HD icon/label to paint. Eleven fixtures reject
+  boot, Welcome, blank-desktop and shutdown-dialog frames and accept five real
+  Finder frames.
+- Seven rotating interpreter/base/candidate triplets at fixed 2.600198 GHz show
+  responsive Finder falling from **56.829 s** at `b9215b87` to **5.210 s**:
+  **10.908x faster**, **90.832% less elapsed time**, bootstrap 95% CI
+  **10.173-11.143x**. The interpreter median is **2.614 s**, so the candidate
+  remains about 2x slower than interpretation.
+- Acceptance passes 904/904 maintained vectors, 33/33 allocator pressure,
+  structural/closure gates, 21/21 visually verified timing trials, 25 clean
+  strict summaries per JIT trial, zero faults and clean Previous/Borg/frequency
+  controls. Details:
+  `BasiliskII/docs/AARCH64_JIT_STRICT_ARCHITECTURAL_CACHE_VALIDATION.md`.
 
 ### AArch64 ADDS emitter closure (2026-07-27)
 
