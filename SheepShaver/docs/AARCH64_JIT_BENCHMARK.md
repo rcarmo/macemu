@@ -57,7 +57,7 @@ decode or translation cache. No cold-process or first-compilation result is clai
 
 `SSBENCHCOVERAGE` reports:
 
-- `architectural`: exact `6*N + 2` denominator;
+- `architectural`: exact `6*N + 1` denominator;
 - `accounted`: native plus interpreter/fallback retirements;
 - `attempted`: native dispatches plus interpreted block attempts;
 - `native_dispatch`, `native_retired`;
@@ -68,7 +68,9 @@ decode or translation cache. No cold-process or first-compilation result is clai
 `SSBENCHCOMPILE` separately reports compile requests, cache hits, fresh
 attempts/successes, complete/partial blocks, failures, full flushes, and cache
 generation stability. Coverage is valid only when the denominator reconciles
-and the generation remains stable during the measured census pass.
+and the generation remains stable during the measured census pass. The schema
+does not expose evictions, peak code bytes, cache occupancy, or headroom; no
+claim may be made about those properties from this benchmark.
 
 ## Host controls
 
