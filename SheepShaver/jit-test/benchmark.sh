@@ -93,7 +93,8 @@ WORKLOAD_SHA=$(printf '%s\n' '38630001 7c841a14 7ca52278 54a6383e 7ce73214 4200f
 printf 'trial\tengine\telapsed_ns\tarchitectural\tstate_hash\tlog\n' >"$OUTDIR/timing.tsv"
 
 run_timing() {
-    local engine=$1 trial=$2 log="$OUTDIR/timing-${engine}-${trial}.log" active=0
+    local engine=$1 trial=$2
+    local log="$OUTDIR/timing-${engine}-${trial}.log" active=0
     [[ "$engine" == jit ]] && active=1
     timeout "$TIMEOUT_SEC" taskset -c "$BENCH_CPU" env -u SS_JIT_RATIO -u SS_JIT_HIST \
         -u SS_JIT_NATIVE_HIST -u SS_JIT_SKIP_HIST -u SS_JIT_SKIP_LOG -u SS_JIT_FAILPROBE \
@@ -118,7 +119,8 @@ for ((trial=1; trial<=TRIALS; trial++)); do
 done
 
 run_census() {
-    local engine=$1 log="$OUTDIR/census-${engine}.log" active=0
+    local engine=$1
+    local log="$OUTDIR/census-${engine}.log" active=0
     [[ "$engine" == jit ]] && active=1
     timeout "$TIMEOUT_SEC" taskset -c "$BENCH_CPU" env \
         SS_TEST_HEX="$WORKLOAD" SS_BENCH_MODE=census SS_BENCH_ITERATIONS="$CENSUS_ITERATIONS" \
