@@ -19,8 +19,13 @@ silently compiling as NOP.
 ## Running
 
 ```bash
-# Full harness
+# Full opcode and structural harness
 ./jit-test/run.sh
+
+# Bounded benchmark contract and binary build (host benchmark is a separate,
+# coordinated operation; see docs/AARCH64_JIT_BENCHMARK.md)
+./jit-test/benchmark-contract.sh
+./jit-test/build-benchmark-binaries.sh
 
 # Single vector (interpreter)
 SS_TEST_HEX="38600064 388000c8 7CA32214" SS_TEST_DUMP=1 src/Unix/SheepShaver

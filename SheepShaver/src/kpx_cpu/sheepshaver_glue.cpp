@@ -48,6 +48,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
 #ifdef HAVE_MALLOC_H
 #include <malloc.h>
 #endif
@@ -1532,15 +1533,134 @@ static bool ss_parse_hex_words(const char *hex, uint32 *out, size_t max, size_t 
 	return n > 0;
 }
 
+static bool ss_parse_positive_u32(const char *text, uint32 *value)
+{
+	if (!(text && *text)) return false;
+	char *end = NULL;
+	unsigned long v = strtoul(text, &end, 10);
+	if (end == text || *end || v == 0 || v > 0xffffffffUL) return false;
+	*value = (uint32)v;
+	return true;
+}
+
+static uint64 ss_bench_hash_u32(uint64 h, uint32 v)
+{
+	for (int i = 0; i < 4; i++) {
+		h ^= (uint8)(v >> (i * 8));
+		h *= UINT64_C(1099511628211);
+	}
+	return h;
+}
+
+static uint64 ss_bench_state_hash(const powerpc_registers &r)
+{
+	uint64 h = UINT64_C(1469598103934665603);
+	for (int i = 0; i < 32; i++) h = ss_bench_hash_u32(h, r.gpr[i]);
+	for (int i = 0; i < 32; i++) h = ss_bench_hash_u32(h, r.gpr_hi[i]);
+	for (int i = 0; i < 32; i++) {
+		h = ss_bench_hash_u32(h, (uint32)r.fpr[i].j);
+		h = ss_bench_hash_u32(h, (uint32)(r.fpr[i].j >> 32));
+	}
+	for (int i = 0; i < 32; i++)
+		for (int j = 0; j < 4; j++) h = ss_bench_hash_u32(h, r.vr[i].w[j]);
+	h = ss_bench_hash_u32(h, r.cr.get());
+	h = ss_bench_hash_u32(h, r.xer.get());
+	h = ss_bench_hash_u32(h, r.vscr.get());
+	h = ss_bench_hash_u32(h, r.vrsave);
+	h = ss_bench_hash_u32(h, r.fpscr);
+	h = ss_bench_hash_u32(h, r.lr);
+	h = ss_bench_hash_u32(h, r.ctr);
+	h = ss_bench_hash_u32(h, r.pc);
+	h = ss_bench_hash_u32(h, r.spcflags.get());
+	h = ss_bench_hash_u32(h, r.reserve_valid);
+#if KPX_MAX_CPUS != 1
+	h = ss_bench_hash_u32(h, r.reserve_addr);
+	h = ss_bench_hash_u32(h, r.reserve_data);
+#else
+	h = ss_bench_hash_u32(h, r.reserve_addr);
+#endif
+	return h;
+}
+
+static void ss_bench_seed(powerpc_registers *r, uint32 stack_addr, uint32 terminal_addr, uint32 iterations)
+{
+	memset(r, 0, sizeof(*r));
+	r->gpr[1] = stack_addr;
+	r->gpr[3] = 0x13579bdf;
+	r->gpr[4] = 0x2468ace0;
+	r->gpr[5] = 0xdeadbeef;
+	r->gpr[7] = 0x10203040;
+	r->lr = terminal_addr;
+	r->ctr = iterations;
+}
+
+static uint32 ss_bench_rotl32(uint32 v, unsigned n)
+{
+	return (v << n) | (v >> (32 - n));
+}
+
+static uint64 ss_bench_expected_hash(const powerpc_registers &seed, uint32 iterations, uint32 terminal_addr)
+{
+	powerpc_registers expected = seed;
+	for (uint32 i = 0; i < iterations; i++) {
+		expected.gpr[3]++;
+		expected.gpr[4] += expected.gpr[3];
+		expected.gpr[5] ^= expected.gpr[4];
+		expected.gpr[6] = ss_bench_rotl32(expected.gpr[5], 7);
+		expected.gpr[7] += expected.gpr[6];
+	}
+	expected.ctr = 0;
+	expected.pc = terminal_addr;
+	return ss_bench_state_hash(expected);
+}
+
+static uint64 ss_bench_elapsed_ns(const struct timespec &start, const struct timespec &end)
+{
+	return (uint64)(end.tv_sec - start.tv_sec) * UINT64_C(1000000000) +
+	       (uint64)(end.tv_nsec - start.tv_nsec);
+}
+
 bool ss_run_opcode_test(void)
 {
 	const char *hex = getenv("SS_TEST_HEX");
 	if (!(hex && *hex))
 		return false;
 
+	const char *bench_mode = getenv("SS_BENCH_MODE");
+	const bool bench_timing = bench_mode && strcmp(bench_mode, "timing") == 0;
+	const bool bench_census = bench_mode && strcmp(bench_mode, "census") == 0;
+	const bool bench = bench_timing || bench_census;
+	if (bench_mode && !bench) {
+		fprintf(stderr, "SSBENCHFAIL reason=invalid_mode\n");
+		exit(2);
+	}
+
+	uint32 bench_iterations = 0;
 	uint32 words[1024];
 	size_t n_words = 0;
-	if (!ss_parse_hex_words(hex, words, sizeof(words)/sizeof(words[0]), &n_words)) {
+	if (bench) {
+		if (strcmp(hex, "ss-ppc-register-loop-v1") != 0 ||
+		    !ss_parse_positive_u32(getenv("SS_BENCH_ITERATIONS"), &bench_iterations)) {
+			fprintf(stderr, "SSBENCHFAIL reason=invalid_workload_or_iterations\n");
+			exit(2);
+		}
+#ifndef SS_JIT_BENCH_CENSUS
+		if (bench_census) {
+			fprintf(stderr, "SSBENCHFAIL reason=census_binary_required\n");
+			exit(2);
+		}
+#endif
+		static const uint32 bench_words[] = {
+			0x38630001, /* addi r3,r3,1 */
+			0x7c841a14, /* add  r4,r4,r3 */
+			0x7ca52278, /* xor  r5,r5,r4 */
+			0x54a6383e, /* rlwinm r6,r5,7,0,31 */
+			0x7ce73214, /* add  r7,r7,r6 */
+			0x4200ffec  /* bdnz loop (-20 bytes), else zero terminal */
+		};
+		memcpy(words, bench_words, sizeof(bench_words));
+		n_words = sizeof(bench_words) / sizeof(bench_words[0]);
+	} else if (!ss_parse_hex_words(hex, words, sizeof(words)/sizeof(words[0]), &n_words)) {
 		fprintf(stderr, "SS_TEST_HEX parse failed\n");
 		return true;
 	}
@@ -1553,14 +1673,16 @@ bool ss_run_opcode_test(void)
 		PROT_READ | PROT_WRITE | PROT_EXEC,
 		MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
 		-1, 0);
-	if (test_ram == MAP_FAILED) {
-		/* Retry without FIXED hint */
+	if (test_ram == MAP_FAILED && !bench) {
+		/* Ordinary opcode tests may retry without the fixed hint. Benchmarks fail
+		 * closed: a variable guest address would change LR/PC and the state hash. */
 		test_ram = (uint8 *)mmap(NULL, test_ram_size,
 			PROT_READ | PROT_WRITE | PROT_EXEC,
 			MAP_PRIVATE | MAP_ANONYMOUS,
 			-1, 0);
 	}
-	if (test_ram == MAP_FAILED || (uintptr_t)test_ram > 0xFFFFFFFFUL) {
+	if (test_ram == MAP_FAILED || (uintptr_t)test_ram > 0xFFFFFFFFUL ||
+	    (bench && (uintptr_t)test_ram != 0x10000000UL)) {
 		fprintf(stderr, "SS_TEST: cannot allocate RAM in low 4GB\n");
 		if (test_ram != MAP_FAILED) munmap(test_ram, test_ram_size);
 		return true;
@@ -1584,8 +1706,9 @@ bool ss_run_opcode_test(void)
 		p[2] = (words[i] >> 8)  & 0xFF;
 		p[3] =  words[i]        & 0xFF;
 	}
-	/* Append blr (0x4E800020) */
-	{
+	/* Ordinary opcode vectors get an implicit BLR. The benchmark falls through
+	 * directly from its final BDNZ into the counted zero-word terminal sentinel. */
+	if (!bench) {
 		uint8 *p = test_ram + code_offset + n_words * 4;
 		p[0] = 0x4E; p[1] = 0x80; p[2] = 0x00; p[3] = 0x20;
 	}
@@ -1593,12 +1716,140 @@ bool ss_run_opcode_test(void)
 	/* Mac addresses = host addresses for REAL_ADDRESSING */
 	uint32 test_addr = (uint32)(uintptr_t)(test_ram + code_offset);
 	uint32 stack_addr = (uint32)(uintptr_t)(test_ram + stack_offset);
-	uint32 blr_addr = (uint32)(uintptr_t)(test_ram + code_offset + (n_words + 1) * 4);
+	uint32 terminal_addr = (uint32)(uintptr_t)(test_ram + code_offset + n_words * 4);
 	RAMBase = (uint32)(uintptr_t)test_ram;
 
 	/* Create CPU */
 	sheepshaver_cpu *cpu = new sheepshaver_cpu();
 	ppc_cpu = cpu;
+	powerpc_registers *raw_regs = (powerpc_registers *)cpu->regs_for_jit();
+	const char *init = getenv("SS_TEST_INIT");
+	if (!raw_regs) {
+		fprintf(stderr, "SSBENCHFAIL reason=register_state_unavailable\n");
+		exit(2);
+	}
+
+	if (bench) {
+		const char *use_jit = getenv("SS_USE_JIT");
+		if (!(use_jit && ((use_jit[0] == '0' || use_jit[0] == '1') && use_jit[1] == '\0')) ||
+		    getenv("SS_TEST_JIT") || getenv("SS_TEST_INIT")) {
+			fprintf(stderr, "SSBENCHFAIL reason=ambiguous_engine_or_seed\n");
+			exit(2);
+		}
+		const bool jit = use_jit[0] == '1';
+#ifdef SS_JIT_BENCH_CENSUS
+		if (bench_timing) {
+			fprintf(stderr, "SSBENCHFAIL reason=timing_binary_required\n");
+			exit(2);
+		}
+#else
+		if (bench_census) {
+			fprintf(stderr, "SSBENCHFAIL reason=census_binary_required\n");
+			exit(2);
+		}
+#endif
+		if (bench_timing && (getenv("SS_JIT_RATIO") || getenv("SS_JIT_HIST") ||
+		    getenv("SS_JIT_NATIVE_HIST") || getenv("SS_JIT_SKIP_HIST") ||
+		    getenv("SS_JIT_SKIP_LOG") || getenv("SS_JIT_FAILPROBE"))) {
+			fprintf(stderr, "SSBENCHFAIL reason=observer_enabled_in_timing\n");
+			exit(2);
+		}
+
+		/* Warm the decode/translation caches without timing it, then restore the
+		 * complete relevant architectural state before the measured/census pass. */
+		ss_bench_seed(raw_regs, stack_addr, terminal_addr, bench_iterations);
+		const powerpc_registers seed = *raw_regs;
+		const uint64 expected_hash = ss_bench_expected_hash(seed, bench_iterations, terminal_addr);
+		cpu->execute(test_addr);
+		if (ss_bench_state_hash(*raw_regs) != expected_hash) {
+			fprintf(stderr,
+				"SSBENCHFAIL reason=warmup_state_mismatch actual=%016llx expected=%016llx "
+				"r3=%08x r4=%08x r5=%08x r6=%08x r7=%08x lr=%08x ctr=%08x pc=%08x spc=%08x\n",
+				(unsigned long long)ss_bench_state_hash(*raw_regs),
+				(unsigned long long)expected_hash,
+				raw_regs->gpr[3], raw_regs->gpr[4], raw_regs->gpr[5], raw_regs->gpr[6], raw_regs->gpr[7],
+				raw_regs->lr, raw_regs->ctr, raw_regs->pc, raw_regs->spcflags.get());
+			exit(3);
+		}
+		*raw_regs = seed;
+#ifdef SS_JIT_BENCH_CENSUS
+		ppc_jit_aarch64_bench_stats_reset();
+		ppc_jit_aarch64_bench_exec_reset();
+#endif
+		struct timespec start = {}, end = {};
+		if (bench_timing && clock_gettime(CLOCK_MONOTONIC_RAW, &start) != 0) {
+			fprintf(stderr, "SSBENCHFAIL reason=clock_start\n");
+			exit(2);
+		}
+		cpu->execute(test_addr);
+		if (bench_timing && clock_gettime(CLOCK_MONOTONIC_RAW, &end) != 0) {
+			fprintf(stderr, "SSBENCHFAIL reason=clock_end\n");
+			exit(2);
+		}
+		const uint64 state_hash = ss_bench_state_hash(*raw_regs);
+		if (state_hash != expected_hash || raw_regs->pc != terminal_addr || raw_regs->ctr != 0) {
+			fprintf(stderr,
+				"SSBENCHFAIL reason=final_state_mismatch actual=%016llx expected=%016llx pc=%08x ctr=%08x\n",
+				(unsigned long long)state_hash, (unsigned long long)expected_hash,
+				raw_regs->pc, raw_regs->ctr);
+			exit(3);
+		}
+		const uint64 architectural = (uint64)bench_iterations * 6 + 1;
+		fprintf(stderr,
+			"SSBENCH mode=%s engine=%s workload=ss-ppc-register-loop-v1 iterations=%u "
+			"architectural=%llu terminal=1 state_hash=%016llx valid=1",
+			bench_timing ? "timing" : "census", jit ? "jit" : "interp",
+			bench_iterations, (unsigned long long)architectural,
+			(unsigned long long)state_hash);
+		if (bench_timing)
+			fprintf(stderr, " elapsed_ns=%llu\n", (unsigned long long)ss_bench_elapsed_ns(start, end));
+		else
+			fprintf(stderr, "\n");
+#ifdef SS_JIT_BENCH_CENSUS
+		if (bench_census) {
+			ppc_jit_bench_stats compile_stats = {};
+			ppc_jit_bench_exec_stats exec_stats = {};
+			ppc_jit_aarch64_bench_stats_snapshot(&compile_stats);
+			ppc_jit_aarch64_bench_exec_snapshot(&exec_stats);
+			const uint64 accounted = exec_stats.native_retired + exec_stats.interpreter_retired;
+			const uint64 attempted = exec_stats.native_dispatches + exec_stats.interpreter_blocks;
+			const bool reconciled = accounted == architectural;
+			fprintf(stderr,
+				"SSBENCHCOVERAGE engine=%s architectural=%llu accounted=%llu reconciled=%d "
+				"attempted=%llu native_dispatch=%llu native_retired=%llu "
+				"fallback_blocks=%llu fallback_retired=%llu terminal=1 "
+				"skip_disabled=%llu skip_region=%llu skip_compile_false=%llu skip_gate3=%llu\n",
+				jit ? "jit" : "interp", (unsigned long long)architectural,
+				(unsigned long long)accounted, reconciled ? 1 : 0,
+				(unsigned long long)attempted,
+				(unsigned long long)exec_stats.native_dispatches,
+				(unsigned long long)exec_stats.native_retired,
+				(unsigned long long)exec_stats.interpreter_blocks,
+				(unsigned long long)exec_stats.interpreter_retired,
+				(unsigned long long)exec_stats.skip_disabled,
+				(unsigned long long)exec_stats.skip_region,
+				(unsigned long long)exec_stats.skip_compile_false,
+				(unsigned long long)exec_stats.skip_gate3);
+			fprintf(stderr,
+				"SSBENCHCOMPILE requests=%llu cache_hits=%llu fresh_attempts=%llu fresh_success=%llu "
+				"fresh_complete=%llu fresh_partial=%llu failures=%llu full_flushes=%llu "
+				"generation_start=%llu generation_current=%llu stable=%d\n",
+				(unsigned long long)compile_stats.compile_requests,
+				(unsigned long long)compile_stats.cache_hits,
+				(unsigned long long)compile_stats.fresh_attempts,
+				(unsigned long long)compile_stats.fresh_success,
+				(unsigned long long)compile_stats.fresh_complete,
+				(unsigned long long)compile_stats.fresh_partial,
+				(unsigned long long)compile_stats.compile_failures,
+				(unsigned long long)compile_stats.full_flushes,
+				(unsigned long long)compile_stats.generation_start,
+				(unsigned long long)compile_stats.generation_current,
+				compile_stats.generation_start == compile_stats.generation_current ? 1 : 0);
+			if (!reconciled) exit(3);
+		}
+#endif
+		goto regdump;
+	}
 
 	for (int i = 0; i < 32; i++)
 		cpu->set_register(powerpc_registers::GPR(i), any_register((uint32)0));
@@ -1609,7 +1860,6 @@ bool ss_run_opcode_test(void)
 	cpu->set_register(powerpc_registers::XER, any_register((uint32)0));
 
 	/* Optional: seed registers */
-	const char *init = getenv("SS_TEST_INIT");
 	if (init && *init) {
 		uint32 init_vals[33];
 		size_t init_count = 0;
@@ -1621,8 +1871,7 @@ bool ss_run_opcode_test(void)
 		}
 	}
 
-	/* Execute */
-	/* Execute — either via JIT or interpreter */
+	/* Execute — either via direct single-block JIT or normal dispatch. */
 #if defined(__aarch64__) && defined(USE_AARCH64_JIT)
 	{
 		const char *use_jit = getenv("SS_TEST_JIT");

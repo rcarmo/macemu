@@ -86,6 +86,20 @@ static uint64 ppc_jit_ratio_skip_jit_entries = 0;
 static uint64 ppc_jit_ratio_gate3_entries = 0;
 static uint64 ppc_jit_ratio_next_report = 1000;
 
+#ifdef SS_JIT_BENCH_CENSUS
+static ppc_jit_bench_exec_stats ppc_jit_bench_exec = {};
+
+void ppc_jit_aarch64_bench_exec_reset(void)
+{
+	memset(&ppc_jit_bench_exec, 0, sizeof(ppc_jit_bench_exec));
+}
+
+void ppc_jit_aarch64_bench_exec_snapshot(ppc_jit_bench_exec_stats *out)
+{
+	if (out) *out = ppc_jit_bench_exec;
+}
+#endif
+
 static bool ppc_jit_ratio_enabled(void)
 {
 	static const char *env = getenv("SS_JIT_RATIO");
@@ -422,6 +436,15 @@ static void ppc_jit_skip_hist_report(bool force)
 static void ppc_jit_skip_hist_record(uint32 pc, uint32 opcode, int reason)
 {
 	if (reason == PPC_JIT_SKIP_NONE) return;
+#ifdef SS_JIT_BENCH_CENSUS
+	switch (reason) {
+	case PPC_JIT_SKIP_DISABLED: ppc_jit_bench_exec.skip_disabled++; break;
+	case PPC_JIT_SKIP_REGION: ppc_jit_bench_exec.skip_region++; break;
+	case PPC_JIT_SKIP_COMPILE_FALSE: ppc_jit_bench_exec.skip_compile_false++; break;
+	case PPC_JIT_SKIP_GATE3: ppc_jit_bench_exec.skip_gate3++; break;
+	default: break;
+	}
+#endif
 	if (!ppc_jit_skip_hist_enabled() && !ppc_jit_skip_log_enabled()) return;
 	ppc_jit_skip_hist_total++;
 	if (ppc_jit_skip_log_enabled()) {
@@ -1187,6 +1210,10 @@ void powerpc_cpu::execute(uint32 entry)
 						if (jblk.n_insns > 0) ppc_jit_ratio_native_insns_known += (uint64)jblk.n_insns;
 						ppc_jit_ratio_report(false);
 					}
+#ifdef SS_JIT_BENCH_CENSUS
+					ppc_jit_bench_exec.native_dispatches++;
+					if (jblk.n_insns > 0) ppc_jit_bench_exec.native_retired += (uint64)jblk.n_insns;
+#endif
 					if (jblk.n_insns > 0) ppc_jit_native_hist_record(jblk.ppc_start_pc, vm_read_memory_4(jblk.ppc_start_pc), (uint32)jblk.n_insns);
 					fn((void*)regs_ptr());
 					if (!jblk.complete)
@@ -1302,6 +1329,10 @@ void powerpc_cpu::execute(uint32 entry)
 							if (jblk.n_insns > 0) ppc_jit_ratio_native_insns_known += (uint64)jblk.n_insns;
 							ppc_jit_ratio_report(false);
 						}
+#ifdef SS_JIT_BENCH_CENSUS
+						ppc_jit_bench_exec.native_dispatches++;
+						if (jblk.n_insns > 0) ppc_jit_bench_exec.native_retired += (uint64)jblk.n_insns;
+#endif
 						if (jblk.n_insns > 0) ppc_jit_native_hist_record(jblk.ppc_start_pc, vm_read_memory_4(jblk.ppc_start_pc), (uint32)jblk.n_insns);
 						fn((void*)regs_ptr());
 						if (!jblk.complete)
@@ -1323,6 +1354,10 @@ void powerpc_cpu::execute(uint32 entry)
 					ppc_jit_ratio_exec_normal_insns += (uint64)bi->size;
 					ppc_jit_ratio_report(false);
 				}
+#ifdef SS_JIT_BENCH_CENSUS
+				ppc_jit_bench_exec.interpreter_blocks++;
+				ppc_jit_bench_exec.interpreter_retired += (uint64)bi->size;
+#endif
 				if (bi->di && bi->size > 0) {
 					ppc_jit_failprobe_exec_entry(bi->pc, bi->di[0].opcode, (uint32)bi->size);
 					ppc_jit_hist_record_exec_normal(bi->pc, bi->di[0].opcode, (uint32)bi->size);
@@ -1386,6 +1421,9 @@ void powerpc_cpu::execute(uint32 entry)
 			ppc_jit_ratio_exec_normal_insns++;
 			ppc_jit_ratio_report(false);
 		}
+#ifdef SS_JIT_BENCH_CENSUS
+		ppc_jit_bench_exec.interpreter_retired++;
+#endif
 		ppc_jit_failprobe_exec_entry(pc(), opcode, 1);
 		ppc_jit_hist_record_exec_normal(pc(), opcode, 1);
 		ii->execute(this, opcode);

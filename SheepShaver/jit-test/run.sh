@@ -13,6 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "$SCRIPT_DIR/gate3-contract.sh"
+"$SCRIPT_DIR/benchmark-contract.sh"
 
 UNIX_DIR="$(cd "$SCRIPT_DIR/../src/Unix" && pwd)"
 RUN_DIR="/tmp/ss-jit-test-$$"
@@ -54,8 +55,10 @@ JITDIR="../kpx_cpu/src/cpu/jit/aarch64"
 g++ -c -o obj/ppc-jit.o "$JITDIR/ppc-jit.cpp" -I"$JITDIR" -DHAVE_CONFIG_H -g -O2 -std=c++11 >>"$RUN_DIR/build.log" 2>&1
 g++ -c -o obj/ppc-cpu.o ../kpx_cpu/src/cpu/ppc/ppc-cpu.cpp -I../include -I. -I.. -I../CrossPlatform -I../kpx_cpu/include -I../kpx_cpu/src -DHAVE_CONFIG_H -DUSE_AARCH64_JIT -g -O2 >>"$RUN_DIR/build.log" 2>&1
 g++ -c -o obj/sheepshaver_glue.o ../kpx_cpu/sheepshaver_glue.cpp -I../include -I. -I.. -I../CrossPlatform -I../kpx_cpu/include -I../kpx_cpu/src -DHAVE_CONFIG_H -DUSE_AARCH64_JIT -g -O2 >>"$RUN_DIR/build.log" 2>&1
-# Final link
-if ! g++ -o SheepShaver obj/*.o -lpthread -lm -lSDL2 -lgtk-x11-2.0 -lgdk-x11-2.0 -lpangocairo-1.0 -latk-1.0 -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lpangoft2-1.0 -lpango-1.0 -lgobject-2.0 -lglib-2.0 -lharfbuzz -lvncserver -lfontconfig -lfreetype >>"$RUN_DIR/build.log" 2>&1; then
+# Final link. Benchmark census objects deliberately coexist in obj/ but must
+# never leak into the normal opcode-test binary.
+mapfile -t link_objects < <(find obj -maxdepth 1 -type f -name '*.o' ! -name '*-census.o' -print | sort)
+if ! g++ -o SheepShaver "${link_objects[@]}" -lpthread -lm -lSDL2 -lgtk-x11-2.0 -lgdk-x11-2.0 -lpangocairo-1.0 -latk-1.0 -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lpangoft2-1.0 -lpango-1.0 -lgobject-2.0 -lglib-2.0 -lharfbuzz -lvncserver -lfontconfig -lfreetype >>"$RUN_DIR/build.log" 2>&1; then
     echo "METRIC build_ok=0"
     echo "METRIC pass=0"
     echo "METRIC fail=0"

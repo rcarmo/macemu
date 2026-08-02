@@ -57,6 +57,10 @@ static size_t    jit_cache_size = 0;
 static uint32_t *jit_cache_wp   = NULL;
 static uint32_t *jit_cache_end  = NULL;
 
+#ifdef SS_JIT_BENCH_CENSUS
+static ppc_jit_bench_stats jit_bench_stats = {};
+#endif
+
 /* ---- Block address cache (PC → compiled code) ----
  *
  * CONTRACT (see SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md):
@@ -2663,19 +2667,23 @@ static bool compile_one(uint32_t op, uint32_t pc) {
 				emit32(0); /* placeholder CBZ */
 				lazy_flush_cr0();
 				emit_epilogue_with_pc(target_pc); /* taken path */
-				/* Patch skip: CBZ RTMP0, <here> */
+				/* Patch skip to the explicit not-taken epilogue. */
 				int32_t skip_off = (int32_t)((uint8_t *)jit_code_ptr - (uint8_t *)skip_loc);
 				*skip_loc = 0x34000000 | (((skip_off >> 2) & 0x7FFFF) << 5) | RTMP0;
+				lazy_flush_cr0();
+				emit_epilogue_with_pc(pc + 4); /* not-taken path */
 				return true;
 			} else {
 				/* bdz: branch if CTR == 0. Return to dispatcher for both paths. */
-				/* Not taken: CBNZ skips to after epilogue */
+				/* Not taken: CBNZ skips to the explicit fall-through epilogue. */
 				uint32_t *skip_loc = jit_code_ptr;
 				emit32(0); /* placeholder CBNZ */
 				lazy_flush_cr0();
 				emit_epilogue_with_pc(target_pc); /* taken path */
 				int32_t skip_off = (int32_t)((uint8_t *)jit_code_ptr - (uint8_t *)skip_loc);
 				*skip_loc = 0x35000000 | (((skip_off >> 2) & 0x7FFFF) << 5) | RTMP0;
+				lazy_flush_cr0();
+				emit_epilogue_with_pc(pc + 4); /* not-taken path */
 				return true;
 			}
 		}
@@ -3782,9 +3790,26 @@ void ppc_jit_aarch64_flush(void)
 	/* Reset code cache write pointer and invalidate block address cache.
 	 * Called on Mac OS icbi/isync events or when the JIT must start fresh.
 	 * Contract: see SheepShaver/docs/AARCH64_JIT_RUNTIME_CONTRACT.md — flush discipline. */
+#ifdef SS_JIT_BENCH_CENSUS
+	jit_bench_stats.full_flushes++;
+	jit_bench_stats.generation_current++;
+#endif
 	jit_cache_wp = (uint32_t *)jit_cache_base;
 	jit_bc_flush();
 }
+
+#ifdef SS_JIT_BENCH_CENSUS
+void ppc_jit_aarch64_bench_stats_reset(void)
+{
+	memset(&jit_bench_stats, 0, sizeof(jit_bench_stats));
+	jit_bench_stats.generation_start = jit_bench_stats.generation_current;
+}
+
+void ppc_jit_aarch64_bench_stats_snapshot(ppc_jit_bench_stats *out)
+{
+	if (out) *out = jit_bench_stats;
+}
+#endif
 
 /* icbi (instruction cache block invalidate) targeted handler.
  *
@@ -3898,6 +3923,9 @@ bool ppc_jit_aarch64_compile(
 	size_t region_size,
 	ppc_jit_block *out)
 {
+#ifdef SS_JIT_BENCH_CENSUS
+	jit_bench_stats.compile_requests++;
+#endif
 	/* Block address cache lookup — return cached block without recompiling.
 	 * Contract: see AARCH64_JIT_RUNTIME_CONTRACT.md — block lifecycle. */
 	const struct jit_bc_entry *cached = jit_bc_lookup(pc);
@@ -3909,6 +3937,9 @@ bool ppc_jit_aarch64_compile(
 		 * recompile fresh (safe: a block is always recompilable from guest RAM). */
 		uint8_t *cc = (uint8_t *)cached->code;
 		if (cc >= jit_cache_base && cc < jit_cache_base + jit_cache_size) {
+#ifdef SS_JIT_BENCH_CENSUS
+			jit_bench_stats.cache_hits++;
+#endif
 			out->code       = cached->code;
 			out->chain_code = cached->chain_code;
 			out->code_size    = 0; /* not tracked for cached entries */
@@ -3937,6 +3968,9 @@ bool ppc_jit_aarch64_compile(
 		if (!jit_cache_wp) return false;
 	}
 
+#ifdef SS_JIT_BENCH_CENSUS
+	jit_bench_stats.fresh_attempts++;
+#endif
 	uint32_t *code_start = jit_cache_wp;
 	jit_code_ptr = jit_cache_wp;
 	jit_compiling_block_pc = pc;
@@ -4006,9 +4040,12 @@ bool ppc_jit_aarch64_compile(
 			break;
 		}
 
-		/* Check if this is a block-terminating opcode */
+		/* Check if this is a block-terminating opcode. Conditional branches emit
+		 * both taken and fall-through return epilogues in compile_one(), so no
+		 * later instruction belongs to this compiled block. Keeping the dead
+		 * fall-through bytes in n_insns also makes retirement accounting wrong. */
 		uint32_t term_opc = op >> 26;
-		bool is_terminator = (term_opc == 18 || term_opc == 6); /* b/bl or SheepShaver helper */
+		bool is_terminator = (term_opc == 16 || term_opc == 18 || term_opc == 6); /* bc, b/bl, or SheepShaver helper */
 		if (term_opc == 19) {
 			uint32_t term_xo = (op >> 1) & 0x3FF;
 			if (term_xo == 16 || term_xo == 528) is_terminator = true; /* bclr/bcctr */
@@ -4017,7 +4054,12 @@ bool ppc_jit_aarch64_compile(
 		if (term_opc == 31 && ((op >> 1) & 0x3FF) == 982) is_terminator = true; /* icbi: flushes JIT cache + returns to dispatch; MUST end the block so the loop never emits live code (or compile-time chains) past the cache-reset point */
 
 		if (op == 0x00000000) { /* illegal — end of test code / zero-filled memory */
-			if (n_compiled == 0) return false; /* don't compile empty blocks */
+			if (n_compiled == 0) {
+#ifdef SS_JIT_BENCH_CENSUS
+				jit_bench_stats.compile_failures++;
+#endif
+				return false; /* don't compile empty blocks */
+			}
 			lazy_flush_cr0();
 			emit_epilogue_with_pc(cur_pc);
 			emitted_exit = true;
@@ -4148,6 +4190,15 @@ bool ppc_jit_aarch64_compile(
 
 	out->complete = complete;
 	if (complete && n_compiled > 0) jit_blocks_complete++;
+#ifdef SS_JIT_BENCH_CENSUS
+	if (n_compiled > 0) {
+		jit_bench_stats.fresh_success++;
+		if (complete) jit_bench_stats.fresh_complete++;
+		else jit_bench_stats.fresh_partial++;
+	} else {
+		jit_bench_stats.compile_failures++;
+	}
+#endif
 
 	/* Insert into block address cache so future executions skip recompilation.
 	 * chain_entry_start is the code position immediately after the prologue;

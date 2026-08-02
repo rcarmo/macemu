@@ -40,6 +40,8 @@ project.xcworkspace/
 BasiliskII/src/Unix/compemu.cpp
 SheepShaver/rom-harness/rom-harness
 SheepShaver/rom-harness/rom-harness
+SheepShaver/src/Unix/SheepShaver-bench-timing
+SheepShaver/src/Unix/SheepShaver-bench-census
 SheepShaver/rom-harness/*.o
 *.log
 
