@@ -142,8 +142,11 @@ run_census jit
 
 emit_stats() {
     local engine=$1
+    local -a vals=()
     mapfile -t vals < <(awk -F '\t' -v e="$engine" 'NR>1 && $2==e {print $3}' "$OUTDIR/timing.tsv" | sort -n)
-    local n=${#vals[@]} median min=${vals[0]} max=${vals[n-1]}
+    local n=${#vals[@]}
+    ((n > 0)) || { echo "no timing samples for $engine" >&2; return 1; }
+    local median min=${vals[0]} max=${vals[n-1]}
     if ((n % 2)); then median=${vals[n/2]}; else median=$(( (vals[n/2-1] + vals[n/2]) / 2 )); fi
     printf '%s_n=%s\n%s_median_ns=%s\n%s_min_ns=%s\n%s_max_ns=%s\n' "$engine" "$n" "$engine" "$median" "$engine" "$min" "$engine" "$max"
 }
