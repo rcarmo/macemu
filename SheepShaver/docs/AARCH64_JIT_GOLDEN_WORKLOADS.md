@@ -21,12 +21,10 @@ SS_USE_JIT=1 make test-opcodes
 ```
 
 **Pass condition**:
-- Each vector is run in interpreter mode (`SS_USE_JIT=0`) and production-JIT mode
-  (`SS_USE_JIT=1`); the two REGDUMPs must be identical
-- Production-JIT uses the real dispatch loop, so it re-dispatches through branches/loops
-  exactly like the interpreter (the single-block `SS_TEST_JIT` path stops at the first
-  branch terminator and is only used for the trailing single-block precision vectors)
-- `METRIC pass=N fail=0`, `score=100`
+- The 298 ordered vectors run once in interpreter mode (`SS_USE_JIT=0`) and once in production-JIT mode (`SS_USE_JIT=1`); the two `REGDUMP`s must be identical
+- Five focused regressions additionally compare interpreter mode with the single-block `SS_TEST_JIT=1` direct-JIT path
+- Production-JIT is the real dispatch-loop proof for branch/loop re-dispatch; the direct path stops at the first branch terminator
+- `METRIC pass=303 fail=0 total=303 score=100`
 
 **Important**: until 2026-06-22 the main loop ran each vector twice in the default
 (JIT) mode and compared the two runs — a JIT-vs-JIT *determinism* check that passed any
@@ -36,7 +34,7 @@ subfme double-counted carry; divw diverged on architecturally-undefined inputs),
 fixed. Always run this (the real equivalence form) before and after any opcode handler
 or codegen change.
 
-**Status**: ✅ 299/299 interp-vs-production-JIT equivalence (includes `shift_ra_upper_clean`, fixed-count and runtime-count string/multiple coverage, `mfmsr_basic`, SPR/FPSCR/FPU delegation vectors, PPC64 Rc/delegation coverage, AltiVec exclusion/delegation vectors, corrected logical `vec_vsrb_delegated`, relabelled `vec_vsrab_delegated`, corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro`/`vcmpgefp`/`vcmpbfp`/`vsum4ubs`/`vavgub`/`vaddubs`/`vmuleuh`/`vcfsx`, AltiVec FP edge vectors for signed-zero/NaN/fused cases, PPC64/G5 FP illegal-op delegation (`fctid`), AltiVec FP rounding delegation (`vrfi*`), `vmladduhm` delegation, mixed-lane `vperm`/`vsplt` coverage, `vec_vcmpequw_dot_cr6`, `vec_vpkuhum_delegated`, `vec_vpkuwum_delegated`, `vec_vupkhsb_delegated`, `vec_vupklpx_delegated`, `fuzz_lis_negative_ffff`, `vec_vsel_mask_allones`, `vec_vperm_control_mask`, and `fuzz_bcctr_ctr_decrement_not_taken`).
+**Status**: ✅ 303/303 interpreter-vs-JIT equivalence cases at the accepted 2026-08-02 gate: 298 ordered interpreter-vs-production-JIT vectors plus five focused interpreter-vs-direct-JIT regressions. Coverage includes RA-width, string/multiple, SPR/FPSCR/FPU, PPC64 and AltiVec delegation, FP edge cases, lane-order/control-mask cases, CR6 dotted-vector behaviour, signed `addis`/`lis`, `bcctr` CTR-decrement behaviour, and the focused `srawi`/overflow/memory regressions. `jit-test/run.sh` is the authoritative inventory.
 
 ---
 
@@ -74,13 +72,15 @@ make run-jit-tmux TMUX_SESSION=ss-boot-jit PREFS_DIR=/tmp/ss-boot-jit VNC_PORT=5
 
 **Status**: ✅ Under strict JIT (`SS_USE_JIT=1`) the emulator boots through ROM init, extension
 loading and Finder launch to a **holding desktop** (Finder menu bar + Apple menu navigable) with
-GATE3=0 (no bad-selector dispatch) and no crash markers. Latest gated run after the 299-vector
-fix batch captured VNC screenshots at 125/140/155s and held alive; JIT counters reported
-`blocks=100000 complete=89360 (89.4%)`, `hit=519213 miss=10640 (98.0% coverage)`, and one
-8 MB code-cache flush. Remaining misses are explicit interpreter-delegation/barrier paths, not
-bad-selector or crash fallbacks. Residual: a cosmetic QuickDraw text-blit divergence (“black
-blocks” behind dialog text) remains under investigation; it does not affect boot stability or
-desktop hold. Wall-clock performance is not yet benchmarked (pending an authorized spot run).
+GATE3=0 (no bad-selector dispatch) and no crash markers. An earlier gated run after the then-current
+299-vector fix batch captured VNC screenshots at 125/140/155s and held alive; its historical
+compile/lookup counters reported `blocks=100000 complete=89360`, `hit=519213 miss=10640`, and one
+8 MB code-cache flush. Do not interpret those compile/lookup counters as the later exact retired-instruction
+coverage schema. The canonical retained 900-second gate subsequently measured zero interpreter fallback
+for the bounded desktop/VNC workload (`AARCH64_JIT_ZERO_FALLBACK_GATE_20260704.md`). Residual: a
+cosmetic QuickDraw text-blit divergence (“black blocks” behind dialog text) remains under investigation;
+it does not affect boot stability or desktop hold. The later bounded register-loop benchmark is documented
+separately and does not quantify this boot/desktop workload; see `AARCH64_JIT_BENCHMARK_RESULT_20260802.md`.
 
 ---
 
@@ -143,15 +143,13 @@ make run-tmux PREFS_DIR=/tmp/ss-bench
 **Pass condition**: Completes all benchmark categories without crash. Reports valid scores.
 
 **JIT maturity ladder** (per JIT-APPROACH-RESET):
-- Interpreter score: baseline
-- JIT with containment gates: comparable to interpreter for full-system workloads (correctness first)
-- JIT with block cache/chaining: expected speedup on hot native PPC loops; tight-loop microbench is ~737 MIPS
-- Register allocation broadened to memory-touching blocks (~72% of compiled blocks) and icbi
-  cache-flush thrash eliminated (~3600 → ~54 flushes/boot): host-overhead reductions landed and
-  regression-verified; wall-clock/CPU% quantification pending an authorized spot benchmark
+- Interpreter score: historical baseline
+- JIT with containment gates: correctness first; no full-system speedup is inferred from coverage
+- JIT with block cache/chaining: hot-block reuse and direct chaining are implemented, but performance remains workload-dependent
+- Register allocation is broadened to memory-touching blocks (~72% of compiled blocks) through per-access barriers, and `icbi` cache-flush thrash was reduced (~3600 → ~54 flushes/boot)
+- The reviewed bounded `ss-ppc-register-loop-v1` result is warm steady-state and dispatch-heavy: direct JIT took 1.888748037× interpreter time. It is not a Speedometer or application result.
 
-**Status**: ⚠️ Block cache/chaining is implemented and the JIT holds the Finder desktop, but a
-repeatable in-guest MacBench/Speedometer run still requires an authorized benchmark window.
+**Status**: ⚠️ Block cache/chaining is implemented and the JIT holds the Finder desktop. Historical MacBench/Speedometer scores are not a current repeatable gate, and the 2026-08-02 microbenchmark must not be substituted for an in-guest application benchmark.
 
 ---
 
@@ -198,7 +196,7 @@ L1  JIT dispatch enabled, complete-block gate present  (Workload 3 progresses)
 L2  Block cache/chaining added                         (hot-loop + boot-progress workloads green)
 L3  Lazy CR0/register allocation revalidated           (all harnesses green + boot proof) — ACHIEVED:
     lazy CR0 active (callee-saved x19), RA broadened to memory-touching blocks via per-access
-    barrier; harness 299/299 + strict-JIT desktop holds
+    barrier; harness 303/303 + strict-JIT desktop holds
 L4  Complete-block policy revisited only with proof     (all fallback/barrier semantics audited)
 ```
 
@@ -211,5 +209,5 @@ Do not report performance numbers until the workload's maturity level is declare
 | Workload | Blocker |
 |----------|---------|
 | 3 (JIT boot) | Desktop holds under strict JIT; residual cosmetic QuickDraw text-blit divergence only |
-| 6 (Speedometer) | Authorized benchmark window for a repeatable in-guest run |
+| 6 (Speedometer) | No current repeatable in-guest score gate; the bounded register-loop result is not a substitute |
 | 7 (PoP) | PatchNativeResourceManager crash in ROM path |

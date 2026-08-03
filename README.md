@@ -243,21 +243,19 @@ The AArch64 JIT backend is under active development.
 - ✅ Mid-block branch side-exit fix (`daea9c94`) — both branch outcomes previously took side-exit path
 
 **SheepShaver (PPC):**
-- ✅ **Mac OS boots to "Welcome to Mac OS" with JIT** (JIT is default; use `SS_USE_JIT=0` to force interpreter mode)
-- ✅ **Mac OS boots to desktop** in interpreter mode (VNC on port 5999)
-- ✅ **209/209** opcode test vectors pass (score=100)
-- ✅ **1800/1825 ROM blocks pass** (98.6%) — headless ROM harness, 10K-block scan
-- ✅ **285+ PPC opcodes** inlined as native ARM64 (integer, FPU, AltiVec/NEON, CR, branches)
-- ✅ **~737 MIPS** on the tight `addi+bdnz` loop (intra-block CBNZ, Orange Pi 6 Plus)
-- ✅ Full FPU: double+single arithmetic, fused multiply-add, FPSCR rounding mode sync
+- ✅ **The default AArch64 JIT boots and holds the canonical OldWorld Mac OS desktop**; the retained 900-second gate measured zero interpreter fallback for that bounded desktop/VNC workload
+- ✅ `SS_USE_JIT=0` remains the interpreter-only diagnostic/comparison override
+- ✅ **303/303** interpreter-vs-JIT equivalence cases pass (score=100): 298 interpreter-vs-production-JIT vectors plus 5 focused interpreter-vs-direct-JIT regressions
+- ✅ **1800/1825 ROM blocks pass** (98.6%) — historical headless ROM harness, 10K-block scan
+- ✅ Broad direct ARM64 coverage across integer, FPU, AltiVec/NEON, CR, branch, and memory families; unsupported or semantic-barrier forms delegate to the interpreter rather than compiling as NOPs
+- ⚠️ The reviewed bounded benchmark found the direct JIT **1.889× slower than the interpreter** on one warm, dispatch-heavy six-instruction register loop; this is not a cold-start, boot, Finder, or application result
+- ✅ Exact FPU helper/codegen coverage for tested scalar surfaces, including FPSCR rounding-mode synchronisation; exactness-sensitive forms delegate
 - ✅ VNC keyboard + mouse input for remote control
-- ✅ Active JIT phases: hash+chaining block cache, fast dispatch, compile-time chaining, runtime back-patching, PPC64/rld correctness
-- ✅ Lazy CR0 re-enabled safely with an x19 pending-result copy; register allocation re-enabled conservatively for straight-line non-faultable blocks
-- ✅ ROM/opcode audits have fixed critical JIT bugs including `bcl`/`bclrl`, fallback-only terminators, privileged/trap fallback masking, XER struct layout, and AArch64 temp clobbers
+- ✅ Hash+chaining block cache, fast dispatch, compile-time chaining, runtime back-patching, lazy CR0, and GPR register allocation with guest-memory barriers are active
+- ✅ ROM/opcode audits have fixed critical JIT bugs including `bcl`/`bclrl`, fallback-only terminators, privileged/trap fallback masking, XER struct layout, and AArch64 temporary-register clobbers
 - ✅ Signal handler crash dumps fixed (stack overflow + missing arg + register shift)
-- ✅ Unix layer hardened: slirp pipe framing, XPRAM I/O, `strdup` null check, 17 bounds fixes
-- See [JIT-STATUS.md](JIT-STATUS.md), [BasiliskII/qa/README.md](BasiliskII/qa/README.md),
-[qa/README.md](qa/README.md), and [SheepShaver/AARCH64_JIT_PLAN.md](SheepShaver/AARCH64_JIT_PLAN.md) for details
+- ✅ Unix layer hardened: slirp pipe framing, XPRAM I/O, `strdup` null check, and bounds checks
+- See [JIT-STATUS.md](JIT-STATUS.md), [SheepShaver/AARCH64_JIT_PLAN.md](SheepShaver/AARCH64_JIT_PLAN.md), [the benchmark method](SheepShaver/docs/AARCH64_JIT_BENCHMARK.md), [the reviewed 2026-08-02 result](SheepShaver/docs/AARCH64_JIT_BENCHMARK_RESULT_20260802.md), [BasiliskII/qa/README.md](BasiliskII/qa/README.md), and [qa/README.md](qa/README.md) for details
 
 ### End-to-end QA and reporting
 

@@ -6,7 +6,7 @@
 
 Two app-coverage attempts kept the JIT ratio counters green, but the VNC automation evidence was not strong enough to declare a real application-workload gate met. Treat this as a harness-limited confidence attempt, not a new milestone.
 
-No JIT/source change was made for these attempts.
+No JIT/source change was made for these attempts. This remains the latest documented application-coverage evidence: the later bounded register-loop benchmark (`AARCH64_JIT_BENCHMARK_RESULT_20260802.md`) does not supersede or satisfy an application gate.
 
 ## Baseline already locked
 

@@ -1,22 +1,21 @@
 # MacEmu AArch64 JIT — Status
 
-## SheepShaver PPC JIT (2026-05-17)
+## SheepShaver PPC JIT (updated 2026-08-03)
 
 **Build:** ✅
-**Interpreter:** ✅ Boots Mac OS to desktop (VNC port 5999, ~324 MIPS on Orange Pi 6 Plus)
-**JIT boot:** ✅ Boots to "Welcome to Mac OS" splash screen with JIT active
-**JIT harness:** ✅ 209/209 opcode vectors pass (score=100)
-**ROM harness:** ✅ 1800/1825 ROM blocks pass (98.6%) on 10K-block scan
-**Tight-loop benchmark:** ✅ ~737 MIPS (addi+bdnz 100M, intra-block CBNZ, Orange Pi 6 Plus)
-**Regression harness:** ✅ 13/13 Rc=1 + rld* regression vectors pass (`ss-record-regression.sh`)
+**Interpreter:** ✅ Boots the canonical OldWorld Mac OS workload to desktop
+**JIT boot:** ✅ Default AArch64 JIT reaches and holds the canonical Finder/VNC desktop; the retained 900-second gate measured zero interpreter fallback for that bounded workload
+**JIT harness:** ✅ 303/303 equivalence cases pass (score=100): 298 interpreter-vs-production-JIT vectors plus 5 focused direct-JIT regressions
+**ROM harness:** ✅ Historical 1800/1825 ROM blocks pass (98.6%) on a 10K-block scan
+**Bounded benchmark:** ⚠️ Warm steady-state direct JIT took 1.888748037× interpreter time on the dispatch-heavy `ss-ppc-register-loop-v1`; not a cold-start, boot, Finder, or application result
+**Regression harness:** ✅ Focused regressions are included in the current 303-case gate; the older 13-case `ss-record-regression.sh` remains available
 
 ### JIT Boot Status
 
-With JIT active, SheepShaver boots Mac OS to the Welcome splash screen.
-Block cache and chaining are active; lazy CR0 has been re-enabled with a stable callee-saved pending-result copy, and register allocation is active only for straight-line non-faultable blocks:
+The default JIT reaches and holds the canonical OldWorld Finder/VNC desktop. Block cache and chaining are active; lazy CR0 uses a stable callee-saved pending-result copy, and register allocation covers straight-line blocks, including guest-memory accesses through per-access RA barriers. Internal conditional-branch blocks remain excluded pending per-label RA state:
 1. **Phase 1:** Hash + chaining block cache (8192 buckets)
 2. **Phase 2:** Lazy CR0 flags active again: Rc=1 results are copied to x19 and materialized on CR consumers/block exits
-3. **Phase 3:** Register allocation active conservatively for straight-line non-memory blocks; path-sensitive/faultable blocks still use direct struct LDR/STR
+3. **Phase 3:** Register allocation active for straight-line blocks; guest-memory accesses use flush/reset barriers, while internal conditional-branch blocks still use direct struct access
 4. **Phase 4a:** Fast JIT dispatch inner loop (`a8afdf92`)
 5. **Phase 4b:** Compile-time block chaining — `chain_code` entry points (`4bcd9336`)
 6. **Phase 4c:** Runtime back-patching — chain site pool, `patch_chain_sites` on insert (`e1f11657`)
@@ -24,9 +23,9 @@ Block cache and chaining are active; lazy CR0 has been re-enabled with a stable 
 8. **Phase 4e:** Rc=1 CR0 audit — rlwinm./rlwimi./cntlzw./extsh./extsb./mullw./mulhw./mulhwu./divw. all fixed (`10e8f719`)
 9. **Phase 4f:** `rld*` sub-decode fix, dead mask code fix, `rldimi` implemented (`77004daa`, `de8b850a`)
 
-Historical MacBench results from the optimization tranche: CPU 835, FPU 1027.
-Tight-loop benchmark (after Phase 4b): ~737 MIPS (intra-block CBNZ).
-Latest targeted timing after lazy CR0 re-enable: Rc=1 1B loop improved from a warmed immediate-CR0 baseline of ~2.84s to ~2.39–2.63s; the earlier cold baseline was ~5.97s.
+Historical, non-current performance observations from earlier optimisation tranches include MacBench CPU 835/FPU 1027, the old ~737 MIPS intra-block `addi+bdnz` probe, and targeted Rc=1 loop timings. They used different scopes and controls and must not be compared directly with the accepted benchmark.
+
+The current reviewed result is [`SheepShaver/docs/AARCH64_JIT_BENCHMARK_RESULT_20260802.md`](SheepShaver/docs/AARCH64_JIT_BENCHMARK_RESULT_20260802.md): on a fixed-frequency Orange Pi 6 Plus CPU11, nine alternating warm steady-state samples per engine gave interpreter median 99.411010 ms and JIT median 187.762350 ms (`JIT/interpreter=1.888748037×`). The workload deliberately ends a native block at every `bdnz`, so this is a dispatch-heavy microbenchmark, not general JIT performance.
 
 ### ROM Harness
 
@@ -41,16 +40,18 @@ hardware, no SheepShaver runtime dependencies.
 Remaining 25 failures: CR field interactions in multi-instruction blocks
 and complex branch BO patterns (CTR+condition combo).
 
-### Recent bug fixes / optimization repairs (2026-06)
+### Recent bug fixes / optimisation repairs (2026-06–08)
 
-- **Lazy CR0 re-enabled safely** (2026-06-13): Rc=1 handlers now copy the result to x19
-  (`RCR0`, callee-saved) and defer CR0 materialization until a CR consumer or block exit.
-  This avoids the earlier boot-hang class where the pending result lived in a scratch register
-  that later code clobbered.
-- **Conservative register allocation re-enabled** (2026-06-13): the x21–x28 GPR cache is now
-  used only for straight-line, non-faultable blocks. Blocks with conditional branches or
-  guest-memory accesses stay on direct struct LDR/STR until per-label/per-fault RA state is
-  implemented.
+- **Lazy CR0 re-enabled safely** (2026-06-13): Rc=1 handlers copy the result to x19
+  (`RCR0`, callee-saved) and defer CR0 materialisation until a CR consumer or block exit.
+  This avoids the earlier boot-hang class where pending state lived in a scratch register.
+- **Register allocation broadened safely**: the x21–x28 GPR cache is used in straight-line
+  blocks; guest-memory operations flush/reset it at each access so helpers, MMIO re-entry,
+  and fault paths observe an authoritative register struct. Internal conditional branches
+  remain excluded until per-label RA state exists.
+- **Bounded benchmark and census** (2026-08-02): separate uninstrumented timing and instrumented
+  census binaries, exact `6*N+1` denominator, complete-state oracle, fixed-frequency ABBA runner,
+  fail-closed host restoration, and reviewed result documentation.
 
 ### Recent bug fixes (2026-05)
 
@@ -62,9 +63,9 @@ and complex branch BO patterns (CTR+condition combo).
   the actual containment contract: incomplete compile probes are skipped and interpreted.
 - **Fallback-only JIT terminators** (2026-05-17): `lswx`/`stswx`, `tw`, and `sc` emitted
   an epilogue at their own PC but still returned `true` from `compile_one()`, allowing the
-  containing block to be marked complete and cached as a self-returning native block. These
-  now return `false` so compilation truncates cleanly and the interpreter executes the
-  fallback-only instruction.
+  containing block to be marked complete and cached as a self-returning native block. They
+  were first made fail-closed by returning `false`; `tw`/`sc` remain delegated, while
+  `lswx`/`stswx` later gained proven inline runtime-count generators with RA barriers.
 - **SS_TEST cleanup crash** (2026-05-17): opcode-test RAM is allocated with `mmap()` but was
   released with `free()`, causing the recurring harness `Segmentation fault` noise after
   successful `REGDUMP`s. The test path now uses `munmap()`.
@@ -116,46 +117,22 @@ VNC keyboard and mouse work for remote control:
 - Mouse: direct ADB injection from VNC server thread (bypasses SDL for reliability)
 - Port 5999 (configurable via `vncport` pref)
 
-### Opcode Census — 285+ Unique PPC Opcodes Inlined as ARM64
+### Opcode coverage policy
 
-| Category | Count | Status |
-|----------|-------|--------|
-| Integer ALU (immediate) | 12 | ✅ addi/lis/addic/subfic/mulli/ori/oris/xori/xoris/andi./andis. |
-| Integer ALU (register) | 15 | ✅ add/addc/adde/addme/addze/subf/subfc/subfe/subfme/subfze/neg/mullw/mulhw/divw |
-| Logical (register) | 10 | ✅ and/andc/or/nor/xor/eqv/orc/nand/slw/srw |
-| Shift/Rotate | 6 | ✅ sraw/srawi/rlwinm/rlwimi/rlwnm/cntlzw |
-| Sign extend | 2 | ✅ extsh/extsb |
-| Compare | 4 | ✅ cmp/cmpl/cmpi/cmpli (all with CR field + XER[SO]) |
-| Load/Store integer | 14 | ✅ lwz/lwzu/lbz/lbzu/lhz/lhzu/lha/lhau/stw/stwu/stb/stbu/sth/sthu |
-| Load/Store indexed | 8 | ✅ lwzx/lbzx/lhzx/lhax/stwx/stbx/sthx/lwbrx/sthbrx |
-| Load/Store atomic | 2 | ✅ lwarx/stwcx. |
-| Load/Store string | 2 | ✅ lswi/stswi |
-| Load/Store FP | 8 | ✅ lfs/lfd/stfs/stfd + indexed variants |
-| Branch unconditional | 2 | ✅ b/bl |
-| Branch conditional | 5 | ✅ bc (all BO variants)/bdnz/bdz/bclr/bcctr |
-| CR logical | 9 | ✅ mcrf/crand/cror/crxor/crnor/crandc/creqv/crorc/crnand |
-| SPR/CR move | 5 | ✅ mfspr/mtspr (with XER pack/unpack)/mfcr/mtcrf/mftb |
-| FP double arithmetic | 6 | ✅ fadd/fsub/fmul/fdiv/fmadd/fmsub/fnmadd/fnmsub |
-| FP single arithmetic | 9 | ✅ fadds/fsubs/fmuls/fdivs/fmadds/fmsubs/fnmadds/fnmsubs/fres |
-| FP move/convert | 7 | ✅ fmr/fneg/fabs/fnabs/frsp/fctiw/fctiwz/fsel/frsqrte |
-| FP compare | 2 | ✅ fcmpu/fcmpo |
-| FPSCR | 5 | ✅ mffs/mtfsf/mtfsfi/mtfsb0/mtfsb1/mcrfs — syncs ARM64 FPCR rounding |
-| AltiVec (NEON) | 140 | ✅ Full VMX via AArch64 NEON intrinsics |
-| Cache/Sync/NOP | 8 | ✅ dcbf/dcbst/dcbt/dcbtst/dcba/icbi/isync/sync/eieio |
-| System | 4 | ✅ sc/mfmsr/eciwx/ecowx (terminators/NOPs) |
-| **Total** | **285** | **+ all record forms (. suffix)** |
+The former “285+ native opcodes / full VMX” census is retired. It predated the exactness audits that deliberately moved several FPU, AltiVec, PPC64/G5, trap, string, and privileged forms back to interpreter delegation. A raw switch-label count would now conflate exact native handlers, helper-backed continuations, aliases, architectural hints, and excluded forms.
 
-### FPU Coverage
+Current source-of-truth rules:
 
-| Feature | Status |
-|---------|--------|
-| Double-precision arithmetic | ✅ fadd/fsub/fmul/fdiv/fmadd/fmsub/fnmadd/fnmsub |
-| Single-precision (round-to-single) | ✅ fadds/fsubs/fmuls/fdivs/fmadds/fmsubs/fnmadds/fnmsubs/fres |
-| FP move/convert | ✅ fmr/fneg/fabs/fnabs/frsp/fctiw/fctiwz/fsel/frsqrte |
-| FP compare → CR | ✅ fcmpu/fcmpo with XER[SO] |
-| FPSCR rounding modes | ✅ PPC RN → ARM64 FPCR RMode mapping (nearest/zero/+inf/-inf) |
-| FP load/store | ✅ lfs (single→double)/lfd/stfs (double→single)/stfd + indexed |
-| FP exceptions | ⚠️ Not tracked (ARM64 defaults match PPC defaults) |
+- exact native/helper-backed coverage remains broad across integer ALU, CR/XER, branches, guarded memory, scalar FPU, and AltiVec/NEON families;
+- `compile_one()` returns `false` for unsupported, out-of-profile, or exactness-sensitive forms so the interpreter owns their semantics;
+- unknown instructions must not compile as NOPs;
+- only `jblk.complete` blocks may execute natively;
+- `jit-test/run.sh` is the executable semantic inventory: 303/303 equivalence cases at the accepted 2026-08-02 gate;
+- runtime workload coverage is reported separately: the retained canonical desktop gate measured zero interpreter fallback, while the bounded register-loop census measured 600,000 native loop instructions plus one designed terminal fallback.
+
+### FPU coverage
+
+Exact tested surfaces include scalar loads/stores, comparisons, arithmetic/helper paths, selected conversions/moves, and FPSCR-to-FPCR rounding synchronisation. Forms whose CR1, FPSCR exception, estimate, fused, or out-of-profile PPC64 semantics are not exact delegate to the interpreter. Do not infer full FPU-family coverage from the presence of a nearby native handler; the source exclusions and equivalence vectors are authoritative.
 
 ### XER (Carry/Overflow) Implementation
 

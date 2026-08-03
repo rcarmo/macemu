@@ -4,7 +4,7 @@
 
 **DONE / PARKED** for the canonical SheepShaver OldWorld HD200MB desktop/VNC completion gate.
 
-Rui's close-out direction is to stop SheepShaver JIT active work here. Do not pursue broader application-launch coverage, performance measurements, CPU/RAM comparisons, or further optimisation unless Rui explicitly opens a follow-up.
+Rui's close-out direction at this date was to stop SheepShaver JIT active work here. Do not read this dated record as cancelling later explicitly authorised work: the bounded interpreter/JIT benchmark tranche was subsequently opened and completed in `AARCH64_JIT_BENCHMARK_RESULT_20260802.md`. Broader application coverage and CPU/RAM claims remain outside both gates.
 
 ## Completion commits
 

@@ -5,25 +5,27 @@
 Bring SheepShaver's PPC emulation to full native performance on AArch64,
 starting with an optimized interpreter and progressing to a direct-codegen JIT.
 
-## Current Status (May 2026)
+## Current Status (August 2026)
 
-**Mac OS boots to "Welcome to Mac OS" splash screen with JIT active (`SS_USE_JIT=1`). The interpreter boots to desktop and remains the exact fallback path for incomplete/barrier blocks.**
+**The default AArch64 JIT reaches and holds the canonical OldWorld Mac OS desktop. The retained 900-second desktop/VNC gate measured zero interpreter fallback for that bounded workload. The interpreter remains the exact fallback for incomplete or semantic-barrier blocks and can be forced with `SS_USE_JIT=0`.**
 
 | Metric | Value |
 |--------|-------|
-| Opcode test harness | **209/209** pass (score=100) |
-| ROM harness (10K blocks) | **1800/1825** pass (98.6%) on PowerMac 9500 OldWorld ROM |
-| Unique opcodes inlined | **285+** PPC opcodes as native ARM64 |
+| Opcode equivalence harness | **303/303** pass (score=100): 298 ordered interpreter-vs-production-JIT vectors plus 5 focused direct-JIT regressions |
+| Canonical desktop gate | 900-second Finder/VNC hold with measured zero interpreter fallback (bounded workload; 2026-07-04) |
+| ROM harness (historical 10K-block scan) | **1800/1825** pass (98.6%) on PowerMac 9500 OldWorld ROM |
+| Native coverage | Broad integer, FPU, AltiVec/NEON, CR, branch, and memory codegen; unsupported/barrier forms delegate exactly |
 | Block completion policy | Only `jblk.complete` blocks execute natively; fallback-only/incomplete blocks are interpreted |
-| Lazy CR0 | ✅ Active again with x19 pending-result copy; materialized at consumers/exits |
-| Register allocation | ✅ Conservative: active only for straight-line, non-faultable blocks |
-| JIT benchmark (addi+bdnz 100M) | **~737 MIPS** (intra-block CBNZ tight loop, Orange Pi 6 Plus) |
-| Interpreter benchmark | 167 MIPS |
-| FPU | ✅ double + single + fused multiply-add + FPSCR rounding modes |
-| AltiVec (NEON) | ✅ 140 opcodes via AArch64 NEON intrinsics |
+| Lazy CR0 | ✅ Active with x19 pending-result copy; materialised at consumers/exits |
+| Register allocation | ✅ Active for straight-line blocks, including memory-touching blocks through per-access RA barriers; internal conditional-branch blocks remain excluded |
+| Reviewed bounded benchmark | On `ss-ppc-register-loop-v1`, warm steady-state direct JIT took **1.888748037×** interpreter time; dispatch-heavy microbenchmark only |
+| FPU | ✅ Tested scalar arithmetic/helper paths plus FPSCR rounding-mode synchronisation; unsupported exact-semantics forms delegate |
+| AltiVec (NEON) | ✅ Broad native coverage; unsupported/exactness-sensitive forms delegate |
 | XER carry/overflow | ✅ byte-level LDRB/STRB (struct-aware, not packed uint32) |
 | VNC input | ✅ keyboard + mouse via direct ADB injection |
-| Boot tested | Mac OS 7.5 to "Welcome to Mac OS" splash (JIT), desktop (interpreter) |
+| Boot tested | Canonical OldWorld Mac OS Finder desktop with default JIT and interpreter |
+
+The benchmark method is in [`docs/AARCH64_JIT_BENCHMARK.md`](docs/AARCH64_JIT_BENCHMARK.md); the independently reviewed result is in [`docs/AARCH64_JIT_BENCHMARK_RESULT_20260802.md`](docs/AARCH64_JIT_BENCHMARK_RESULT_20260802.md). It is not a cold-start, boot, Finder, or application-performance result.
 
 ### Screenshots
 
@@ -54,7 +56,7 @@ Subsequent audits (May 2026) found and fixed further JIT bugs:
 - `ppc-execute.cpp`: duplicate VXISI mask in `record_fpscr`; incorrect `(uint32)d` cast in multiply
 - AArch64 PPC64 temp-register/EA clobbers in `mulld`/`mulhdu`/`mulhd`/`divdu`/`divd`, `stdx`/`stdux`/`stdcx.`, `std`/`stdu`, and `lq`
 - `bclrl` old-LR target ordering and full `bclr` BO CTR/condition semantics (`bdnzlr`-style forms)
-- Fallback-only/barrier opcodes (`sc`, `tw`, `twi`/`tdi`, `lswx`/`stswx`, unknown SPR) now delegate to the interpreter instead of compiling as NOP/self-return blocks
+- Fallback-only/barrier opcodes (`sc`, `tw`, `twi`/`tdi`, unknown SPR) delegate to the interpreter instead of compiling as NOP/self-return blocks; runtime-count `lswx`/`stswx` later gained proven inline generators with RA barriers
 - Opcode-test cleanup fixed: `mmap()`-allocated test RAM is released with `munmap()`
 
 ## Architecture
@@ -146,46 +148,45 @@ CR/FPSCR/LR/CTR/PC and byte-addressed XER fields at known offsets from x20
 ## Completed Phases
 
 ### Phase 1: Interpreter baseline ✅
-- Interpreter achieves 167 MIPS with Duff's device + block cache
-- Test harness with **209** PPC opcode vectors (score=100)
+- Duff's-device interpreter plus block cache remains the exact comparison/fallback engine
+- Current equivalence harness: **303/303** cases (score=100)
 
 ### Phase 2: JIT scaffolding ✅
 - Direct codegen compiler: `ppc-jit.cpp`
 - ARM64 instruction encoding: `ppc-codegen-aarch64.h`
-- Code cache: 4MB RWX mmap with icache flush
+- Production code cache: 8 MB RWX mapping with explicit host icache maintenance
 - Integration into `ppc-cpu.cpp` execute loop
 
 ### Phase 3: Integer opcode handlers ✅
-- All integer ALU, logical, shift/rotate, compare, branch
-- Load/store word/byte/halfword with byte-swap
-- SPR access, CR move; intra-block bdnz loop chaining; record forms (CR0)
+- Broad tested integer ALU, logical, shift/rotate, compare, and branch codegen
+- Guarded word/byte/halfword and string/multiple memory paths with exact byte order
+- SPR/CR moves, intra-block `bdnz` handling, record forms, and explicit delegation for unsupported/barrier forms
 
-### Phase 4: FPU ✅
-- Double-precision: fadd/fsub/fmul/fdiv + fused multiply-add
-- FP move/negate/abs; FP compare → CR field
-- Single-precision round-to-single via FCVT; FP load/store with byte-swap
+### Phase 4: FPU ✅ bounded implementation
+- Exact tested arithmetic/helper, compare, load/store, move, selected conversion, and FPSCR rounding-sync paths
+- Exactness-sensitive CR1/FPSCR, estimate, fused, and out-of-profile forms delegate where required
+- The equivalence harness, not a family-level “full FPU” label, is authoritative
 
 ### Phase 4b: Hash + chaining block cache ✅
-- 8192 buckets, 16384 pool entries
-- PC → compiled code lookup; invalidate-by-PC; full flush on icbi
+- 8192 buckets, 16384 pool entries, 8 MB production code cache
+- PC → compiled-code lookup; cache/containment invalidations full-flush where direct-chain safety requires it; `icbi` flushes only on overlap with live compiled guest ranges
 
-### Phase 4c: Lazy CR0 flags ✅ re-enabled conservatively
-- Rc=1 results are copied to x19 (`RCR0`, callee-saved) and CR0 is materialized at CR consumers or block exits
+### Phase 4c: Lazy CR0 flags ✅
+- Rc=1 results are copied to x19 (`RCR0`, callee-saved) and CR0 is materialised at CR consumers or block exits
 - This fixes the earlier boot-regression risk where the pending result lived in scratch state
-- Targeted Rc=1 1B-loop timing improved from a warmed immediate-CR0 baseline of ~2.84s to ~2.39–2.63s
 
-### Phase 4d: Register allocation ✅ re-enabled conservatively
-- x21–x28 register-cache scaffolding is active only for straight-line, non-faultable blocks
-- Blocks with conditional branches or guest-memory accesses keep direct struct LDR/STR until per-label/per-fault RA state is implemented
-- LRU/dirty-flush code is active under that gate
+### Phase 4d: Register allocation ✅
+- x21–x28 GPR caching is active in straight-line blocks
+- Guest-memory instructions use an RA barrier (`ra_flush_all()` + `ra_reset()`), allowing memory-touching blocks while keeping the register struct authoritative at every helper/fault boundary
+- Internal conditional-branch blocks remain excluded until per-label RA state exists
 
 ## Remaining Work
 
 ### Phase 5: Region JIT / optimization hardening
 - [x] Block-to-block chaining (compile-time `chain_code` plus runtime back-patching)
 - [x] Revalidate and re-enable lazy CR0 with targeted harness/regression proof
-- [x] Revalidate and re-enable register allocation for straight-line non-faultable blocks
-- [ ] Broaden register allocation to branch/faultable blocks only after per-label/per-fault RA state exists
+- [x] Revalidate and re-enable register allocation for straight-line blocks, including memory-touching blocks via per-access RA barriers
+- [ ] Broaden register allocation to internal conditional-branch blocks only after per-label RA state exists
 - [ ] Profile-guided hot-block prioritization
 - [ ] Raise 512-instruction block limit if needed
 
@@ -204,8 +205,12 @@ CR/FPSCR/LR/CTR/PC and byte-addressed XER fields at known offsets from x20
 ## Test Harness
 
 ```bash
-# Run opcode equivalence tests (interpreter determinism) — 209/209 pass
+# Run the accepted 303-case interpreter-vs-JIT equivalence gate
+# (298 production-JIT vectors + 5 interpreter-vs-direct-JIT regressions)
 ./jit-test/run.sh
+
+# Validate the bounded benchmark schema without acquiring the host benchmark slot
+./jit-test/benchmark-contract.sh
 
 # Run Rc=1 record-form + rld* regression tests (JIT vs interpreter)
 ./jit-test/ss-record-regression.sh src/Unix/SheepShaver
@@ -252,13 +257,13 @@ The JIT must not compile uncertain semantics as harmless NOPs. Current policy:
 | `DSS`, `DST`, `DSTST` | Data-stream/prefetch hints only. |
 | `ECIWX`, `ECOWX` | External-control I/O is not used by the supported Power Mac workloads. |
 
-### Exact interpreter fallback classes
+### Interpreter fallback and exact-handling classes
 
 | Instruction class | Current handling |
 |---|---|
 | `SC` | `compile_one()` returns `false`; interpreter raises/handles the system-call path. |
 | `TW`, `TWI`, `TDI` | `compile_one()` returns `false`; interpreter evaluates trap conditions. |
-| `LSWX`, `STSWX` | `compile_one()` returns `false`; runtime byte count comes from XER and remains interpreter-owned. |
+| `LSWX`, `STSWX` | Implemented by proven inline runtime-count generators; call sites flush/reset RA and read the byte count from XER. |
 | Unknown `MFSPR`/`MTSPR` | `compile_one()` returns `false`; interpreter owns privileged/CPU-specific semantics. |
 | Unknown/secondary AltiVec forms | `compile_one()` returns `false`; no silent compiled NOP masking. |
 | EMUL_OP / helper-style runtime operations | No inline codegen; interpreter provides the semantic barrier. |

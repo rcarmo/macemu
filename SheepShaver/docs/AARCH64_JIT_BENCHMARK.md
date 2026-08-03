@@ -2,6 +2,8 @@
 
 ## Scope
 
+The accepted independently reviewed run of this method is recorded in [`AARCH64_JIT_BENCHMARK_RESULT_20260802.md`](AARCH64_JIT_BENCHMARK_RESULT_20260802.md).
+
 This is a deterministic, register-only PPC microbenchmark for comparing the
 SheepShaver interpreter and AArch64 direct JIT. **This is not a Mac OS or
 application benchmark.** It does not measure boot, Finder, devices, memory,
@@ -93,10 +95,15 @@ cores. Coordination with other benchmark owners is mandatory before running.
 
 ```bash
 cd /workspace/projects/macemu/SheepShaver
+
+# Required pre-benchmark equivalence gate: 303/303
+# (298 ordered production-JIT vectors + 5 focused direct-JIT regressions)
+./jit-test/run.sh
 ./jit-test/benchmark-contract.sh
 ./jit-test/build-benchmark-binaries.sh
 
 # Only after the shared CPU/build slot is explicitly released:
+# Example run. The accepted 2026-08-02 series used ITERATIONS=5000000.
 ITERATIONS=1000000 CENSUS_ITERATIONS=100000 TRIALS=9 BENCH_CPU=11 \
 OUTDIR=/workspace/tmp/sheepshaver-jit-benchmark-$(git rev-parse --short HEAD)-$(date +%Y%m%d-%H%M%S) \
   ./jit-test/benchmark.sh

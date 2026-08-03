@@ -234,7 +234,7 @@ The two paths are observationally equivalent for any block that reaches this fal
 
 **Replacement**: None needed for production packaging; default execution uses the JIT and `SS_USE_JIT=0` is opt-out.
 
-**Proof workload**: boot-to-desktop + Speedometer benchmark green.
+**Proof workload**: interpreter/JIT opcode equivalence plus the canonical desktop/VNC hold. Performance is a separate gate; the bounded 2026-08-02 register-loop result must not be treated as Speedometer or application evidence.
 
 ---
 
@@ -247,8 +247,7 @@ The two paths are observationally equivalent for any block that reaches this fal
 **What it protects**: Correctness of interpreter fallback and fallback-only instructions.
 A failed compilation is a compile-time probe only; generated code from that probe is not executed.
 The interpreter starts from the original block PC and owns the uncompiled instruction semantics.
-This is required for barrier-worthy/fallback-only instructions such as `sc`, `tw`, `twi`/`tdi`,
-`lswx`/`stswx`, and unknown SPR access.
+This is required for barrier-worthy/fallback-only instructions such as `sc`, `tw`, `twi`/`tdi`, and unknown SPR access. Runtime-count `lswx`/`stswx` are no longer examples: they use proven inline generators with RA barriers.
 
 **Invariant guarded**: Exact fallback semantics for privileged, trap, runtime-helper, and
 unimplemented instructions.
@@ -438,10 +437,9 @@ unimplemented/excluded AltiVec families, unimplemented FPU families, out-of-ISA 
 opcodes under the current 32-bit PPC CPU profile, and PPC64 memory handlers that still lack exact
 guarded 64-bit helper coverage.
 
-### Category C: (Not yet present) Helper dispatch
+### Category C: Exact helper-backed continuation
 
-Future use: for complex opcodes that can be compiled to a helper call with a mandatory block
-barrier. Not implemented in the current JIT.
+The compiler may emit a call to a proven out-of-line helper and continue the native block when the helper contract keeps architectural state coherent. Current examples include guarded scalar/FP/byte-reversed memory, fixed-count string/multiple operations, `dcbz`, timebase, atomics, and selected exact FP operations. Call sites apply the required RA barrier or direct register-slot discipline. Helpers that cannot satisfy that continuation contract remain Category B interpreter delegation; a future mandatory full-block helper barrier would need a separate contract.
 
 ---
 
@@ -451,9 +449,9 @@ barrier. Not implemented in the current JIT.
 |---|-----------|---------------------------|
 | 1 | Exactly one authoritative PC at each boundary | ✅ PPCR_PC is the single source of truth. Written at block exit by epilogue. Block entry PC is stale mid-block (see note). |
 | 2 | Lazy flags valid only while ownership is unambiguous | ✅ Lazy CR0 active with pending result in callee-saved x19; `lazy_flush_cr0()` at consumers/epilogues. XER/FPSCR always immediate. |
-| 3 | Helper calls are semantic barriers | ✅ Guarded load/store, FP memory, fixed-count string/multiple, byte-reversed memory, dcbz, timebase, and lwarx/stwcx helpers are localized H2 calls (callee-saved x19–x29 + RA barrier / direct FPR/GPR-slot updates keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
+| 3 | Helper boundaries preserve the declared state contract | ✅ Guarded load/store, FP memory, fixed-count string/multiple, byte-reversed memory, dcbz, timebase, and lwarx/stwcx helpers are localised H2 calls (callee-saved x19–x29 + RA barrier / direct FPR/GPR-slot updates keep the struct coherent across re-entry). EMUL_OP and unhandled ops remain full block barriers via interpreter delegation. |
 | 4 | Block chaining must not bypass validation | ✅ Compile-time chaining and runtime back-patching are implemented; chained targets use `chain_code`; containment/corrupt-entry invalidation is a full flush because per-PC unlinking cannot unpatch already-emitted direct branches. |
-| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 299/299 interp-vs-production-JIT opcode equivalence (the harness compares interpreter mode against the real JIT dispatch loop; 2026-06-22 this replaced a JIT-vs-JIT determinism check and surfaced+fixed nand/addme/subfme/divw codegen bugs; later added RA-width, string/multiple, SPR/FPSCR/AltiVec, addis/lis, vsel, AltiVec FP compare and FP edge vectors, vperm control-mask, bcctr CTR-decrement, fres/vector-estimate delegation, FPSCR move/write delegation, FP Rc/FPSCR-producing-op delegation, AltiVec vector-sum delegation, AltiVec average/saturating add-sub delegation, AltiVec merge/multiply/conversion/shift delegation, AltiVec signed/pixel unpack and pack delegation, PPC64 Rc delegation, PPC64/G5 FP illegal-op delegation, AltiVec FP rounding and `vmladduhm` delegation, mixed-lane `vperm`/`vsplt` coverage, CR6 dotted-vector coverage, and corrected AltiVec XO/harness coverage for `vexptefp`/`vlogefp`/`vsl`/`vslo`/`vsro` plus related false-coverage vectors). `bcl` LR update fixed (2026-05). |
+| 5 | Interpreter and JIT builds agree on shared semantics | ✅ 303/303 equivalence cases at the accepted 2026-08-02 gate: 298 vectors compare interpreter mode against the production JIT dispatch loop, and five focused regressions compare interpreter against direct single-block JIT. The 2026-06-22 conversion from JIT-vs-JIT determinism exposed and fixed masked `nand`/`addme`/`subfme`/`divw` defects; subsequent vectors cover RA width, string/multiple, SPR/FPSCR/FPU, PPC64/AltiVec delegation and edge cases, branch/CTR behaviour, and focused codegen regressions. `jit-test/run.sh` is authoritative. |
 | 6 | Fault recovery: continuation from coherent state | ✅ Potentially faulting memory operations are RA barriers; handled SIGSEGV skips the faulting host instruction and resumes native execution. Post-return containment preserves PPCR_PC's committed successor rather than replaying the block. |
 | 7 | Every exception path chooses exact model or barrier | ✅ EMUL_OP and unhandled opcodes → interpreter delegation (Category B). |
 

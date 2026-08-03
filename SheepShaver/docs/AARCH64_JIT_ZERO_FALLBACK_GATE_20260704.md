@@ -136,7 +136,7 @@ The live wrapper mistakenly copied zero-valued histogram status lines into `forb
 
 This confirms that the earlier 2026-06-24 “desktop interpreter-dominant” histogram is stale for current `master`. That histogram was valid for the pre-fix path, but current default execution includes the later fixes for interpreter-chain retry, FPSCR/FP helper coverage, slow-path store byte order, and default-on reentrant direct-JIT.
 
-For the canonical idle desktop/VNC workload, the no-interpreter-fallback gate is met. The next broader-confidence gate should be application coverage under the same zero-fallback instrumentation, for example launching a small representative set of Mac OS applications from the desktop and requiring the same zero counters and clean marker report.
+For the canonical idle desktop/VNC workload, the no-interpreter-fallback gate is met. At the time, application coverage was proposed as the next broader-confidence gate; the subsequent attempt did not meet its evidence threshold (`AARCH64_JIT_APP_COVERAGE_ATTEMPT_20260704.md`). A later, separately authorised bounded register-loop benchmark measured performance without making any application-coverage claim (`AARCH64_JIT_BENCHMARK_RESULT_20260802.md`).
 
 ## Safe wording
 
