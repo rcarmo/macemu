@@ -4482,13 +4482,14 @@ for (const contract of [
   "${direct:-0} -eq 0 && ${calls:-0} -eq 0 && ${good:-0} -eq 0 && ${bad:-0} -eq 0",
   "${direct:-0} -eq 1 && ${calls:-0} -eq 1",
   "${good:-0} -eq 1 && ${bad:-0} -eq 0", "${good:-0} -eq 0 && ${bad:-0} -eq 1",
-  "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=3", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=1",
+  "run_case permuted", "B2_TEST_REPLAY_BYTES='1001 02 1005 01'", '"$actual" == "$oracle"',
+  "raw_checksum_boundaries=1", "raw_checksum_runtime_cases=4", "raw_checksum_unforced_direct=0", "raw_checksum_good=1", "raw_checksum_bad=2",
 ]) requireText(rawChecksumHarnessSource, contract, "raw checksum native matrix");
 requireText(harnessSource, 'timeout -k 5s 120s "$SCRIPT_DIR/raw-checksum-boundary-matrix.sh"', "raw checksum bounded acceptance gate");
 console.log("METRIC structural_raw_checksum_boundaries=1");
 console.log("METRIC structural_raw_checksum_configured_references=3");
-console.log("METRIC structural_raw_checksum_runtime_cases=3");
-console.log("METRIC structural_raw_checksum_forced_direct_entries=2");
+console.log("METRIC structural_raw_checksum_runtime_cases=4");
+console.log("METRIC structural_raw_checksum_forced_direct_entries=3");
 console.log("METRIC structural_raw_checksum_unforced_direct_entries=0");
 
 /* Host metadata RMW cluster: dec_m must write a 32-bit wrapped decrement and
@@ -5112,7 +5113,19 @@ const restoreInventoryRow = (csv: string, prefix: string, published: string) => 
   if (!current) fail(`predecessor row missing: ${prefix}`);
   return csv.replace(`${current}\n`, `${published}\n`);
 };
-const beforeFinalEmitterPromotionCsv = restorePublishedFinalEmitterRows(restoreStrictEntryInventoryRows(closureInventoryCsv));
+// September constant-fold fixes add one local u32 at each long rotate body.
+// Restore only source coordinates for historical predecessor hashes; current
+// inventory rows/classification and regenerated source locations stay intact.
+const restoreSeptemberConstfoldLines = (csv: string) => csv.split("\n").map((line) => {
+  const columns = line.split(",");
+  if (columns[6] === "BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp") {
+    const n = Number(columns[7]);
+    if (n >= 6900) columns[7] = String(n - 2);
+    else if (n >= 6237) columns[7] = String(n - 1);
+  }
+  return columns.join(",");
+}).join("\n");
+const beforeFinalEmitterPromotionCsv = restorePublishedFinalEmitterRows(restoreStrictEntryInventoryRows(restoreSeptemberConstfoldLines(closureInventoryCsv)));
 /* Later tranches must not invalidate the raw-JCC predecessor proof. Restore
  * every subsequently promoted row before hashing the published JCC base. */
 const rawJccPredecessorCsv = restoreInventoryRow(

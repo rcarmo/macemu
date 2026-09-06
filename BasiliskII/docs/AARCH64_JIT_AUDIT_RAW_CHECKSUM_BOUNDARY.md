@@ -2,6 +2,13 @@
 
 Date: 2026-07-27
 
+September follow-up: the retained matrix now has **4 cases**, compares the full
+interpreter REGDUMP/sentinel, and includes an instruction-group permutation
+that previously ran stale native code. The secondary checksum is bytewise and
+order-sensitive; invalid spans return explicit failure separately from valid
+zero source. See [implementation review](AARCH64_JIT_IMPLEMENTATION_REVIEW_20260906.md).
+The three-case results below are the historical boundary acceptance.
+
 Base: `251f4fc1` (`master`, published scalar-transform emitter closure)
 
 ## Scope

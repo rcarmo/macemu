@@ -11,7 +11,7 @@ NPROC      := $(shell nproc)
 VNC_PORT   := 5900
 TMX        := emu
 
-.PHONY: build clean test test-jit test-headless run run-vnc start stop kill screenshot status help
+.PHONY: build clean test test-jit test-constfold test-checksum test-headless run run-vnc start stop kill screenshot status help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -33,7 +33,13 @@ clean: ## Clean build artifacts
 
 # ── Test ──────────────────────────────────────────────────────────
 
-test: test-jit ## Run all tests
+test: test-constfold test-checksum test-jit ## Run all tests
+
+test-constfold: ## Check actual ARM64 constant-fold bodies under UBSan
+	bun jit-test/constfold-regression.ts
+
+test-checksum: ## Check actual source checksum body under ASan/UBSan
+	bun jit-test/checksum-regression.ts
 
 test-jit: build ## Run JIT opcode equivalence harness (421 vectors)
 	./jit-test/run.sh

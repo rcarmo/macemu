@@ -4160,7 +4160,7 @@ MIDFUNC(2,jnf_LSL_b_imm,(RW1 d, IM8 i))
 {
 	if(i) {
 		if (isconst(d)) {
-			const uae_u32 result = i >= 8 ? 0 : ((live.state[d].val & 0xff) << i);
+			const uae_u32 result = i >= 8 ? 0 : (((uae_u32)live.state[d].val << i) & 0xff);
 			live.state[d].val = (live.state[d].val & 0xffffff00) | result;
 			return;
 		}
@@ -4181,7 +4181,7 @@ MIDFUNC(2,jnf_LSL_w_imm,(RW2 d, IM8 i))
 {
 	if(i) {
 		if (isconst(d)) {
-			const uae_u32 result = i >= 16 ? 0 : ((live.state[d].val & 0xffff) << i);
+			const uae_u32 result = i >= 16 ? 0 : (((uae_u32)live.state[d].val << i) & 0xffff);
 			live.state[d].val = (live.state[d].val & 0xffff0000) | result;
 			return;
 		}
@@ -4202,7 +4202,7 @@ MIDFUNC(2,jnf_LSL_l_imm,(RW4 d, IM8 i))
 {
 	if(i) {
 		if (isconst(d)) {
-			live.state[d].val = i >= 32 ? 0 : live.state[d].val << i;
+			live.state[d].val = i >= 32 ? 0 : (uae_u32)live.state[d].val << i;
 			return;
 		}
 
@@ -6220,7 +6220,8 @@ MIDFUNC(2,jnf_ROL_l_imm,(RW4 d, IM8 i))
 	if(i & 0x1f) {
 		if (isconst(d)) {
 			i = i & 31;
-			live.state[d].val = (live.state[d].val << i) | (live.state[d].val >> (32-i));
+			const uae_u32 value = (uae_u32)live.state[d].val;
+			live.state[d].val = (value << i) | (value >> (32-i));
 			return;
 		}
 
@@ -6883,7 +6884,8 @@ MIDFUNC(2,jnf_ROR_l_imm,(RW4 d, IM8 i))
 	if(i & 0x1f) {
 		if (isconst(d)) {
 			i = i & 31;
-			live.state[d].val = (live.state[d].val >> i) | (live.state[d].val << (32-i));
+			const uae_u32 value = (uae_u32)live.state[d].val;
+			live.state[d].val = (value >> i) | (value << (32-i));
 			return;
 		}
 

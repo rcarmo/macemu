@@ -32,17 +32,37 @@ nocdrom true
 nogui true
 ignoresegv true
 EOF
+sed 's/^jit true$/jit false/' "$RUN/prefs" >"$RUN/interpreter.prefs"
 run_case(){
   local name=$1 rewrite=$2 expect=$3 force=${4:-1}
+  local original=${5:-'7001 5280 2C7C A6A0 0001'}
   local log="$RUN/$name.log"
+  env -u B2_TEST_FORCE_DIRECT_CHECKSUM SDL_VIDEODRIVER=x11 DISPLAY="$D" HOME="$RUN/home" \
+    B2_TEST_HEX="$original" B2_TEST_REWRITE_HEX="$rewrite" \
+    B2_TEST_DUMP=1 B2_TEST_TWO_PASS=1 B2_TEST_REPLAY_COUNT=1 \
+    timeout -k 5s 30s "$BIN" --config "$RUN/interpreter.prefs" >"$RUN/$name.interpreter.log" 2>&1
   local -a force_env=()
   [[ "$force" == 0 ]] || force_env+=(B2_TEST_FORCE_DIRECT_CHECKSUM=1)
+  if [[ "$name" == permuted ]]; then
+    # Restore guest RAM without the host-write hook, retaining the compiled body.
+    # The forced direct_pcc still performs the normal lazy source revalidation.
+    force_env+=(B2_TEST_REWRITE_HEX= B2_TEST_REPLAY_BYTES='1001 02 1005 01')
+  fi
   env -u B2_TEST_FORCE_DIRECT_CHECKSUM SDL_VIDEODRIVER=x11 DISPLAY="$D" HOME="$RUN/home" \
-    B2_TEST_HEX='7001 5280 2C7C A6A0 0001' B2_TEST_REWRITE_HEX="$rewrite" \
+    B2_TEST_HEX="$original" B2_TEST_REWRITE_HEX="$rewrite" \
     B2_TEST_DUMP=1 B2_TEST_TWO_PASS=1 B2_TEST_REPLAY_COUNT=1 \
     B2_JIT_FORCE_TRANSLATE=1 B2_TEST_FORCE_L2_RAM=1 \
     B2_JIT_PREFER_DIRECT_SUCCESSOR_HANDLER=1 B2_JIT_DIAG=1 B2_TEST_DISPATCH_SUMMARY=1 \
     ${force_env[@]+"${force_env[@]}"} timeout -k 5s 30s "$BIN" --config "$RUN/prefs" >"$log" 2>&1
+  local actual oracle
+  actual=$(grep '^REGDUMP:' "$log" | tail -1 || true)
+  oracle=$(grep '^REGDUMP:' "$RUN/$name.interpreter.log" | tail -1 || true)
+  [[ "$oracle" == *'A6=a6a00001 '* && "$actual" == "$oracle" ]] || {
+    echo "RAW_DISPATCH_FAIL $name guest mismatch" >&2
+    echo "interpreter: $oracle" >&2; echo "JIT: $actual" >&2
+    grep '^JIT_TEST_DISPATCH ' "$log" >&2 || true
+    return 1
+  }
   local summary; summary=$(grep '^JIT_TEST_DISPATCH ' "$log" | tail -1 || true)
   [[ -n "$summary" ]] || { echo "RAW_DISPATCH_FAIL $name missing summary" >&2; tail -30 "$log" >&2; return 1; }
   local direct calls good bad
@@ -64,4 +84,7 @@ run_case(){
 run_case unforced  '7001 5280 2C7C A6A0 0001' control 0
 run_case unchanged '7001 5280 2C7C A6A0 0001' good
 run_case changed   '7002 5280 2C7C A6A0 0001' bad
-printf 'METRIC raw_checksum_boundaries=1\nMETRIC raw_checksum_runtime_cases=3\nMETRIC raw_checksum_unforced_direct=0\nMETRIC raw_checksum_good=1\nMETRIC raw_checksum_bad=1\n'
+# Permute two aligned 32-bit groups: old sum/XOR is identical, but D0 changes.
+run_case permuted '7002 4E71 7001 4E71 2C7C A6A0 0001' bad 1 \
+                  '7001 4E71 7002 4E71 2C7C A6A0 0001'
+printf 'METRIC raw_checksum_boundaries=1\nMETRIC raw_checksum_runtime_cases=4\nMETRIC raw_checksum_unforced_direct=0\nMETRIC raw_checksum_good=1\nMETRIC raw_checksum_bad=2\n'

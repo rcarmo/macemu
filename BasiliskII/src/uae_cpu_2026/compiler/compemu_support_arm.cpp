@@ -6420,26 +6420,38 @@ void alloc_cache(void)
     }
 }
 
-static void calc_checksum(blockinfo* bi, uae_u32* c1, uae_u32* c2)
+static bool calc_checksum(blockinfo* bi, uae_u32* c1, uae_u32* c2)
 {
     uae_u32 k1 = 0;
     uae_u32 k2 = 0;
 
+    *c1 = *c2 = 0;
     checksum_info* csi = bi->csi;
-    Dif(!csi) abort();
+    if (!csi)
+        return false;
     while (csi) {
         uae_s32 len = csi->length;
         uintptr tmp = (uintptr)csi->start_p;
         uae_u32* pos;
 
+        // Validate before adding alignment padding (including signed overflow).
+        // Invalid spans must never masquerade as valid all-zero guest source.
+        if (!tmp || len <= 0 || len > MAX_CHECKSUM_LEN - (uae_s32)(tmp & 3))
+            return false;
         len += (tmp & 3);
         tmp &= ~((uintptr)3);
         pos = (uae_u32*)tmp;
 
         if (len >= 0 && len <= MAX_CHECKSUM_LEN) {
             while (len > 0) {
-                k1 += *pos;
-                k2 ^= *pos;
+                const uae_u32 word = *pos;
+                k1 += word;
+                // Source order matters: sum/XOR accepts permuted instructions.
+                // Mix each byte, not whole words (odd multiplication alone
+                // cannot distinguish a transposition differing only in bit 31).
+                // Preserve zero-source checksums and carry across span links.
+                for (unsigned shift = 0; shift < 32; shift += 8)
+                    k2 = (k2 ^ ((word >> shift) & 0xff)) * 16777619u;
                 pos++;
                 len -= 4;
             }
@@ -6450,6 +6462,7 @@ static void calc_checksum(blockinfo* bi, uae_u32* c1, uae_u32* c2)
 
     *c1 = k1;
     *c2 = k2;
+    return true;
 }
 
 int check_for_cache_miss(void)
@@ -6546,8 +6559,8 @@ static inline int block_check_checksum(blockinfo* bi)
        checksum span chain; ROM blocks deliberately have no chain. */
     isgood = bi->csi != NULL;
     if (isgood) {
-        calc_checksum(bi, &c1, &c2);
-        isgood = (c1 == bi->c1 && c2 == bi->c2);
+        isgood = calc_checksum(bi, &c1, &c2) &&
+            (c1 == bi->c1 && c2 == bi->c2);
     }
 
     if (isgood) {

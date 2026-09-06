@@ -189,8 +189,10 @@ else
     echo "METRIC build_skipped=1"
 fi
 
-if phase_enabled structural && ! bun "$SCRIPT_DIR/structural-audit.ts"; then
-    emit_failure_metrics 1 "ARM64 JIT structural audit failed" 0
+if phase_enabled structural; then
+    bun "$SCRIPT_DIR/structural-audit.ts" || emit_failure_metrics 1 "ARM64 JIT structural audit failed" 0
+    timeout -k 5s 60s bun "$SCRIPT_DIR/constfold-regression.ts" || emit_failure_metrics 1 "ARM64 constant-fold regression failed" 0
+    timeout -k 5s 60s bun "$SCRIPT_DIR/checksum-regression.ts" || emit_failure_metrics 1 "ARM64 source-checksum regression failed" 0
 fi
 if phase_enabled emitters; then
     # Keep explicit bounded calls: structural-audit.ts pins each accepted gate
@@ -367,11 +369,9 @@ EOF
     if [ -n "$memory_bytes" ]; then
         env_vars+=(B2_TEST_MEMORY_BYTES="$memory_bytes")
     fi
-    if ! env "${env_vars[@]}" \
+    env "${env_vars[@]}" \
       timeout -k 5s 30s "$UNIX_DIR/BasiliskII" --config "$td/prefs" \
-      > "$td/emu.log" 2>&1; then
-        emu_rc=$?
-    fi
+      > "$td/emu.log" 2>&1 || emu_rc=$?
 
     pkill -f "$UNIX_DIR/BasiliskII --config $td/prefs" 2>/dev/null || true
     sleep 0.2

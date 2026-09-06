@@ -148,6 +148,15 @@ All JIT access uses byte-level LDRB/STRB at individual field offsets:
 
 ## BasiliskII 68K JIT
 
+### Implementation review — 2026-09-06
+
+Fixed stale-code acceptance after instruction-group permutations, five
+host-width no-flags constant folds, and invalid checksum-span acceptance.
+Validation: 904/904 vectors, 48 emitter/boundary suites, 33/33 pressure cells,
+7,488 actual-body constant checks and 8,237 checksum checks; structural and
+999-row closure gates pass. No new boot/performance claim. Details and limitations:
+[`AARCH64_JIT_IMPLEMENTATION_REVIEW_20260906.md`](BasiliskII/docs/AARCH64_JIT_IMPLEMENTATION_REVIEW_20260906.md).
+
 **Current structural-audit gate (2026-07-19):** ✅
 **Build and generator:** ✅ clean AArch64 `uae_cpu_2026` / `USE_JIT_FPU` build; generated `compemu.cpp` is byte-reproducible at SHA-256 `90b3064253b7d2894cd9ecaed738687ba6b2ff7aec5ec75586afa212db7dd1ee`
 **JIT harness:** ✅ 904/904 active-risky vectors, `fail_equiv=0`, `infra_fail=0`, score 100

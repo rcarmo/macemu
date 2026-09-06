@@ -483,7 +483,7 @@ midfunc,fsgldiv_rr,unreachable,fsgldiv_rr,68,0,BasiliskII/src/uae_cpu_2026/compi
 midfunc,fsglmul_rr,unreachable,fsglmul_rr,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1205,no path from configured generated/support/FPU compiler roots
 midfunc,fsqrt_rr,unreachable,fsqrt_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1077,all configured AArch64 FSQRT/FSSQRT/FDSQRT selectors enter semantic service before operand acquisition or the retained native MIDFUNC call
 midfunc,fsub_rr,unreachable,fsub_rr,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,1137,all configured AArch64 FSUB/FSSUB/FDSUB selectors enter semantic service before operand acquisition or the retained native MIDFUNC call; configured FCMP uses fcompare_result_rr
-midfunc,jff_ABCD_b,audited,ABCD,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8103,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
+midfunc,jff_ABCD_b,audited,ABCD,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8105,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
 midfunc,jff_ADD_b,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,255,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jff_ADD_b_imm,audited,ADD_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,240,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jff_ADD_l,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,329,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
@@ -594,8 +594,8 @@ midfunc,jff_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jff_MULU,unreachable,MULU,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5452,no path from configured generated/support/FPU compiler roots
 midfunc,jff_MULU32,audited,MULU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5491,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jff_MULU64,audited,MULU,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5525,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-midfunc,jff_MV2SCCR,audited,MV2SCCR,68,24,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8906,BasiliskII/docs/AARCH64_JIT_AUDIT_MV2SCCR_LIFECYCLE.md
-midfunc,jff_NBCD_b,audited,NBCD,68,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8131,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
+midfunc,jff_MV2SCCR,audited,MV2SCCR,68,24,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8908,BasiliskII/docs/AARCH64_JIT_AUDIT_MV2SCCR_LIFECYCLE.md
+midfunc,jff_NBCD_b,audited,NBCD,68,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8133,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
 midfunc,jff_NEG_b,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5588,no path from configured generated/support/FPU compiler roots
 midfunc,jff_NEG_l,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5618,no path from configured generated/support/FPU compiler roots
 midfunc,jff_NEG_w,unreachable,NEG,88,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5603,no path from configured generated/support/FPU compiler roots
@@ -612,46 +612,46 @@ midfunc,jff_OR_l_imm,audited,OR_l_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/
 midfunc,jff_OR_w,audited,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6085,BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md
 midfunc,jff_OR_w_imm,audited,OR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6065,BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md
 midfunc,jff_ORSR,audited,ORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6153,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-midfunc,jff_ROL_b,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6386,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROL_b_imm,audited,ROL_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6236,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROL_l,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6473,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROL_l_imm,audited,ROL_l_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6292,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROL_w,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6430,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROL_w_imm,audited,ROL_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6265,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROLW,audited,ROLW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6537,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROR_b,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7027,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROR_b_imm,audited,ROR_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6899,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROR_l,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7084,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROR_l_imm,audited,ROR_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6946,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROR_w,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7056,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROR_w_imm,audited,ROR_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6923,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_RORW,audited,RORW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7134,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jff_ROXL_b,audited,ROXL,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6676,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXL_l,audited,ROXL,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6786,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXL_w,audited,ROXL,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6732,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXLW,audited,ROXLW,68,14,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8831,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXR_b,audited,ROXR,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7263,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXR_l,audited,ROXR,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7368,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXR_w,audited,ROXR,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7317,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_ROXRW,audited,ROXRW,68,14,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8868,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jff_SBCD_b,audited,SBCD,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8117,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
-midfunc,jff_SUB_b,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7608,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jff_SUB_b_imm,audited,SUB_b_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7592,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jff_SUB_l,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7682,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jff_SUB_l_imm,audited,SUB_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7664,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jff_SUB_w,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7644,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jff_SUB_w_imm,audited,SUB_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7628,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jff_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7851,no path from configured generated/support/FPU compiler roots
-midfunc,jff_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7931,no path from configured generated/support/FPU compiler roots
-midfunc,jff_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7891,no path from configured generated/support/FPU compiler roots
-midfunc,jff_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8252,no path from configured generated/support/FPU compiler roots
-midfunc,jff_TAS,audited,TAS,97,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8795,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
-midfunc,jff_TST_b,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8298,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
-midfunc,jff_TST_b_imm,audited,TST_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8290,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
-midfunc,jff_TST_l,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8346,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
-midfunc,jff_TST_l_imm,audited,TST_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8338,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
-midfunc,jff_TST_w,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8322,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
-midfunc,jff_TST_w_imm,audited,TST_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8314,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_ROL_b,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6387,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROL_b_imm,audited,ROL_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6237,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROL_l,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6474,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROL_l_imm,audited,ROL_l_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6293,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROL_w,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6431,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROL_w_imm,audited,ROL_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6266,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROLW,audited,ROLW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6538,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROR_b,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7029,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROR_b_imm,audited,ROR_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6901,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROR_l,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7086,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROR_l_imm,audited,ROR_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6948,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROR_w,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7058,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROR_w_imm,audited,ROR_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6925,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_RORW,audited,RORW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7136,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jff_ROXL_b,audited,ROXL,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6677,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXL_l,audited,ROXL,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6787,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXL_w,audited,ROXL,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6733,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXLW,audited,ROXLW,68,14,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8833,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXR_b,audited,ROXR,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7265,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXR_l,audited,ROXR,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7370,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXR_w,audited,ROXR,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7319,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_ROXRW,audited,ROXRW,68,14,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8870,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
+midfunc,jff_SBCD_b,audited,SBCD,68,4,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8119,BasiliskII/docs/AARCH64_JIT_AUDIT_BCD.md
+midfunc,jff_SUB_b,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7610,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jff_SUB_b_imm,audited,SUB_b_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7594,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jff_SUB_l,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7684,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jff_SUB_l_imm,audited,SUB_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7666,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jff_SUB_w,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7646,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jff_SUB_w_imm,audited,SUB_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7630,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jff_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7853,no path from configured generated/support/FPU compiler roots
+midfunc,jff_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7933,no path from configured generated/support/FPU compiler roots
+midfunc,jff_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7893,no path from configured generated/support/FPU compiler roots
+midfunc,jff_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8254,no path from configured generated/support/FPU compiler roots
+midfunc,jff_TAS,audited,TAS,97,16,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8797,BasiliskII/docs/AARCH64_JIT_AUDIT_TAS_LIFECYCLE.md
+midfunc,jff_TST_b,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8300,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_b_imm,audited,TST_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8292,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_l,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8348,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_l_imm,audited,TST_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8340,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_w,audited,TST,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8324,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
+midfunc,jff_TST_w_imm,audited,TST_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8316,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
 midfunc,jnf_ADD_b,audited,ADD,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,135,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jnf_ADD_b_imm,audited,ADD_b_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,115,BasiliskII/docs/AARCH64_JIT_AUDIT_ADD_LIFECYCLE.md
 midfunc,jnf_ADD_im8,unreachable,ADD_im8,80,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,99,no path from configured generated/support/FPU compiler roots
@@ -672,7 +672,7 @@ midfunc,jnf_AND_l,audited,AND,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_
 midfunc,jnf_AND_l_imm,audited,AND_l_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,742,BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md
 midfunc,jnf_AND_w,audited,AND,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,722,BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md
 midfunc,jnf_AND_w_imm,audited,AND_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,706,BasiliskII/docs/AARCH64_JIT_AUDIT_AND_LIFECYCLE.md
-midfunc,jnf_ANDSR_w,audited,ANDSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9107,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
+midfunc,jnf_ANDSR_w,audited,ANDSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9109,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 midfunc,jnf_ASLW,audited,ASLW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1206,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jnf_ASR_b_imm,audited,ASR_b_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1260,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jnf_ASR_b_reg,audited,ASR_b_reg,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,1395,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
@@ -701,8 +701,8 @@ midfunc,jnf_BSET_b,audited,BSET,90,18,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jnf_BSET_b_imm,audited,BSET_b_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2465,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
 midfunc,jnf_BSET_l,audited,BSET,90,3,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2502,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
 midfunc,jnf_BSET_l_imm,audited,BSET_l_imm,90,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2473,BasiliskII/docs/AARCH64_JIT_AUDIT_CLASSIC_BITOPS.md
-midfunc,jnf_CHK_l,audited,CHK,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8195,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
-midfunc,jnf_CHK_w,audited,CHK,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8162,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
+midfunc,jnf_CHK_l,audited,CHK,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8197,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
+midfunc,jnf_CHK_w,audited,CHK,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8164,BasiliskII/docs/AARCH64_JIT_AUDIT_CHK_EXCEPTIONS.md
 midfunc,jnf_CLR_b,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2713,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_CLR_l,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2741,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_CLR_w,unreachable,CLR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,2727,no path from configured generated/support/FPU compiler roots
@@ -718,7 +718,7 @@ midfunc,jnf_EOR_l,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_
 midfunc,jnf_EOR_l_imm,audited,EOR_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3840,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
 midfunc,jnf_EOR_w,audited,EOR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3824,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
 midfunc,jnf_EOR_w_imm,audited,EOR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,3813,BasiliskII/docs/AARCH64_JIT_AUDIT_EOR_LIFECYCLE.md
-midfunc,jnf_EORSR_w,audited,EORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9132,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
+midfunc,jnf_EORSR_w,audited,EORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9134,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
 midfunc,jnf_EXT_b,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4036,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_EXT_l,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4067,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_EXT_w,unreachable,EXT,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4051,no path from configured generated/support/FPU compiler roots
@@ -736,23 +736,23 @@ midfunc,jnf_LSR_l_reg,audited,LSR_l_reg,68,1,BasiliskII/src/uae_cpu_2026/compile
 midfunc,jnf_LSR_w_imm,audited,LSR_w_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4560,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jnf_LSR_w_reg,audited,LSR_w_reg,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4704,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
 midfunc,jnf_LSRW,audited,LSRW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4878,BasiliskII/docs/AARCH64_JIT_AUDIT_REGISTER_SHIFTS.md; AARCH64_JIT_AUDIT_MEMORY_SHIFTS_ROX.md
-midfunc,jnf_MEM_GETADR_JMP_OFF,audited,MEM_GETADR_JMP_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8701,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_GETADR_OFF,audited,MEM_GETADR_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8676,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_GETADR24_OFF,audited,MEM_GETADR24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8688,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READ_OFF_b,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8489,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READ_OFF_l,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8531,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READ_OFF_w,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8514,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READ24_OFF_b,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8623,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READ24_OFF_l,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8661,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READ24_OFF_w,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8647,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_READMEMBANK,audited,MEM_READMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8719,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITE_OFF_b,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8419,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITE_OFF_l,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8463,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITE_OFF_w,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8445,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITE24_OFF_b,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8549,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITE24_OFF_l,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8599,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITE24_OFF_w,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8584,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
-midfunc,jnf_MEM_WRITEMEMBANK,audited,MEM_WRITEMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8755,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_GETADR_JMP_OFF,audited,MEM_GETADR_JMP_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8703,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_GETADR_OFF,audited,MEM_GETADR_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8678,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_GETADR24_OFF,audited,MEM_GETADR24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8690,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READ_OFF_b,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8491,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READ_OFF_l,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8533,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READ_OFF_w,audited,MEM_READ_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8516,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READ24_OFF_b,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8625,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READ24_OFF_l,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8663,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READ24_OFF_w,audited,MEM_READ24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8649,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_READMEMBANK,audited,MEM_READMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8721,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITE_OFF_b,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8421,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITE_OFF_l,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8465,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITE_OFF_w,audited,MEM_WRITE_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8447,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITE24_OFF_b,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8551,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITE24_OFF_l,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8601,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITE24_OFF_w,audited,MEM_WRITE24_OFF,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8586,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
+midfunc,jnf_MEM_WRITEMEMBANK,audited,MEM_WRITEMEMBANK,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8757,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA6_MEMORY_ACCESS_CONTRACTS.md
 midfunc,jnf_MOVE_b,audited,MOVE,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4957,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 midfunc,jnf_MOVE_b_imm,audited,MOVE_b_imm,94,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4924,BasiliskII/docs/AARCH64_JIT_AUDIT_MOVE_LIFECYCLE.md
 midfunc,jnf_MOVE_l,unreachable,MOVE,94,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,4991,no path from configured generated/support/FPU compiler roots
@@ -768,7 +768,7 @@ midfunc,jnf_MULS64,audited,MULS,68,12,BasiliskII/src/uae_cpu_2026/compiler/compe
 midfunc,jnf_MULU,audited,MULU,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5428,BasiliskII/docs/AARCH64_JIT_AUDIT_INTEGER_TAIL_LIFECYCLES.md
 midfunc,jnf_MULU32,audited,MULU,68,11,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5480,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
 midfunc,jnf_MULU64,audited,MULU,68,12,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5516,BasiliskII/docs/AARCH64_JIT_AUDIT_MULL_LIFECYCLE.md
-midfunc,jnf_MV2SR_w,unreachable,MV2SR,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9049,post-registration AArch64 semantic-service override
+midfunc,jnf_MV2SR_w,unreachable,MV2SR,68,22,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9051,post-registration AArch64 semantic-service override
 midfunc,jnf_MVMEL_l,unreachable,MVMEL,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5148,i_MVMEL selects repaired genmovemel cursor/read primitives; the legacy fixed-offset MIDFUNC is not selected
 midfunc,jnf_MVMEL_w,unreachable,MVMEL,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5134,no path from configured generated/support/FPU compiler roots
 midfunc,jnf_MVMLE_l,unreachable,MVMLE,100,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5191,no path from configured generated/support/FPU compiler roots
@@ -790,44 +790,44 @@ midfunc,jnf_OR_l,audited,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_mi
 midfunc,jnf_OR_l_imm,audited,OR_l_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5989,BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md
 midfunc,jnf_OR_w,audited,OR,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5969,BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md
 midfunc,jnf_OR_w_imm,audited,OR_w_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,5953,BasiliskII/docs/AARCH64_JIT_AUDIT_OR_LIFECYCLE.md
-midfunc,jnf_ORSR_w,audited,ORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9060,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
-midfunc,jnf_ROL_b,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6316,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ORSR_w,audited,ORSR,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,9062,BasiliskII/docs/AARCH64_JIT_AUDIT_ADDX_SUBX_CCR.md
+midfunc,jnf_ROL_b,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6317,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
 midfunc,jnf_ROL_b_imm,audited,ROL_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6187,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROL_l,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6365,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROL_l,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6366,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
 midfunc,jnf_ROL_l_imm,audited,ROL_l_imm,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6218,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROL_w,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6341,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROL_w,audited,ROL,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6342,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
 midfunc,jnf_ROL_w_imm,audited,ROL_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6203,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROLW,audited,ROLW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6526,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROR_b,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6966,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROR_b_imm,audited,ROR_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6851,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROR_l,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7009,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROR_l_imm,audited,ROR_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6881,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROR_w,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6988,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROR_w_imm,audited,ROR_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6866,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_RORW,audited,RORW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7123,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
-midfunc,jnf_ROXL_b,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6569,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_ROXL_l,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6644,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_ROXL_w,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6608,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_ROXR_b,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7164,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_ROXR_l,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7233,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_ROXR_w,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7200,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SCC,audited,SCC,92,256,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7418,BasiliskII/docs/AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md
-midfunc,jnf_SUB_b,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7496,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jnf_SUB_b_imm,audited,SUB_b_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7476,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jnf_SUB_l,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7577,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jnf_SUB_l_imm,audited,SUB_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7557,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jnf_SUB_w,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7537,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jnf_SUB_w_imm,audited,SUB_w_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7516,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
-midfunc,jnf_SUBA_l,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7763,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SUBA_l_imm,unreachable,SUBA_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7743,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SUBA_w,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7728,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SUBA_w_imm,unreachable,SUBA_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7710,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7794,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7834,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7814,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8237,no path from configured generated/support/FPU compiler roots
-midfunc,jnf_TAS,unreachable,TAS,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8786,i_TAS unconditionally selects jff_TAS because TAS defines CCR; no no-flags TAS path is selected
-midfunc,jnf_TRAPV,audited,TRAPV,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8813,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
+midfunc,jnf_ROLW,audited,ROLW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6527,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROR_b,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6968,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROR_b_imm,audited,ROR_b_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6852,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROR_l,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7011,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROR_l_imm,audited,ROR_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6882,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROR_w,audited,ROR,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6990,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROR_w_imm,audited,ROR_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6867,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_RORW,audited,RORW,68,7,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7125,BasiliskII/docs/AARCH64_JIT_AUDIT_ROTATES.md
+midfunc,jnf_ROXL_b,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6570,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXL_l,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6645,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXL_w,unreachable,ROXL,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,6609,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXR_b,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7166,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXR_l,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7235,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_ROXR_w,unreachable,ROXR,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7202,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SCC,audited,SCC,92,256,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7420,BasiliskII/docs/AARCH64_JIT_AUDIT_DBCC_SCC_LIFECYCLE.md
+midfunc,jnf_SUB_b,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7498,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jnf_SUB_b_imm,audited,SUB_b_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7478,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jnf_SUB_l,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7579,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jnf_SUB_l_imm,audited,SUB_l_imm,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7559,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jnf_SUB_w,audited,SUB,80,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7539,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jnf_SUB_w_imm,audited,SUB_w_imm,80,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7518,BasiliskII/docs/AARCH64_JIT_AUDIT_SUB_LIFECYCLE.md
+midfunc,jnf_SUBA_l,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7765,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBA_l_imm,unreachable,SUBA_l_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7745,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBA_w,unreachable,SUBA,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7730,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBA_w_imm,unreachable,SUBA_w_imm,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7712,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBX_b,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7796,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBX_l,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7836,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SUBX_w,unreachable,SUBX,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,7816,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_SWAP,unreachable,SWAP,68,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8239,no path from configured generated/support/FPU compiler roots
+midfunc,jnf_TAS,unreachable,TAS,97,0,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8788,i_TAS unconditionally selects jff_TAS because TAS defines CCR; no no-flags TAS path is selected
+midfunc,jnf_TRAPV,audited,TRAPV,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64_2.cpp,8815,BasiliskII/docs/AARCH64_JIT_AUDIT_DIVISION_LIFECYCLE.md
 midfunc,lea_l_brr,audited,lea_l_brr,68,1171,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,315,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,lea_l_brr_indexed,audited,lea_l_brr_indexed,68,2,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,366,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md
 midfunc,lea_l_rr_indexed,audited,lea_l_rr_indexed,68,1,BasiliskII/src/uae_cpu_2026/compiler/compemu_midfunc_arm64.cpp,408,BasiliskII/docs/AARCH64_JIT_AUDIT_AREA5_VALUE_AND_POINTER_CONTRACTS.md

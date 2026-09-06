@@ -1,5 +1,16 @@
 # BasiliskII AArch64 JIT — Opcode Equivalence Harness
 
+## Direct implementation regressions (September 2026)
+
+`make test-constfold test-checksum` compiles extracted production bodies and
+checks host-width folding under UBSan (7,488 checks) and ordered source checksums
+under ASan/UBSan (8,237 checks). Both also run in the `structural` phase. They
+exercise paths that full-flags opcode execution alone cannot establish.
+`raw-checksum-boundary-matrix.sh` additionally compares complete interpreter/JIT
+REGDUMPs in four cases, including cached instruction-group permutation without
+the host rewrite invalidation hook. See the
+[implementation review](../BasiliskII/docs/AARCH64_JIT_IMPLEMENTATION_REVIEW_20260906.md).
+
 ## Goal
 
 Keep `jit-test/run.sh` trustworthy and deterministic so every run emits numeric metrics:
